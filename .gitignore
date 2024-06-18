@@ -1,0 +1,26 @@
+/.yarn/*
+!/.yarn/releases
+!/.yarn/plugins
+!/.yarn/sdks
+
+# Swap the comments on the following lines if you don't wish to use zero-installs
+# Documentation here: https://yarnpkg.com/features/zero-installs
+!/.yarn/cache
+#/.pnp.*
+
+lib/
+build/
+dist/
+node_modules/
+
+/.vscode/
+
+# blender backups
+*.blend?
+
+.DS_Store
+
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+src/version.ts

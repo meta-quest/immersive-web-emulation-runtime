@@ -1,0 +1,75 @@
+<!-- 
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+
+  This source code is licensed under the MIT license found in the
+  LICENSE file in the root directory of this source tree.
+-->
+
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, shrink-to-fit=no"
+		/>
+		<title>IWER Demo</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				margin: 0;
+				line-height: 1.2;
+			}
+			ul {
+				list-style-type: none;
+				padding: 0;
+			}
+			li {
+				background: #f9f9f9;
+				padding: 5px;
+				margin-bottom: 5px;
+				border-radius: 5px;
+			}
+			strong {
+				font-weight: bold;
+			}
+			.desc {
+				position: fixed;
+				top: 10px;
+				left: 10px;
+				right: 10px;
+			}
+			#scene-container {
+				display: block;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="scene-container"></div>
+		<div class="desc">
+			<h1>Immersive Web Emulation Runtime Demo</h1>
+
+			<ul>
+				<li class="emulated">
+					<strong>No Native WebXR Support Detected: </strong>
+					IWER has created an emulated Meta Quest 3 device and injected its
+					WebXR runtime, you can now enter WebXR in emulation mode and control
+					the emulated device via the GUI.
+				</li>
+
+				<li class="emulated">
+					<strong>Action Playback Demo:</strong>
+					This demo is loaded with a pre-recorded input session captured on a
+					Meta Quest 3 device, you can view the playback by entering VR in
+					emulation mode and click the "Play Action" button.
+				</li>
+
+				<li class="native">
+					<strong>Native WebXR Support Detected: </strong>
+					Enter VR and record your input session by pressing trigger on your
+					right controller to start/end recording
+				</li>
+			</ul>
+		</div>
+	</body>
+</html>
