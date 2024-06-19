@@ -43,6 +43,10 @@ export default defineConfig({
 						text: 'Platform Features',
 						link: '/getting-started#platform-features',
 					},
+					{
+						text: 'XPlat Controls',
+						link: '/xplat',
+					},
 				],
 			},
 			{
