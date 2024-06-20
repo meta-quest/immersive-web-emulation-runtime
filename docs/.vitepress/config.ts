@@ -1,10 +1,16 @@
+import { VERSION } from '../../src/version';
 import { defineConfig } from 'vitepress';
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
 	title: 'IWER',
 	description: 'Javascript WebXR Runtime Library for Emulation',
-	head: [['link', { rel: 'icon', href: '/iwer.png' }]],
+	head: [
+		[
+			'link',
+			{ rel: 'icon', href: '/immersive-web-emulation-runtime/iwer.png' },
+		],
+	],
 	base: '/immersive-web-emulation-runtime/',
 	themeConfig: {
 		// https://vitepress.dev/reference/default-theme-config
@@ -12,6 +18,16 @@ export default defineConfig({
 		nav: [
 			{ text: 'About', link: '/about' },
 			{ text: 'Guide', link: '/getting-started' },
+			{
+				text: `v${VERSION}`,
+				items: [
+					{ text: 'NPM', link: 'https://www.npmjs.com/package/iwer' },
+					{
+						text: 'License',
+						link: 'https://github.com/meta-quest/immersive-web-emulation-runtime/blob/main/LICENSE',
+					},
+				],
+			},
 		],
 
 		sidebar: [
