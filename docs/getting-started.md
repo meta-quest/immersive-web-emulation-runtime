@@ -9,7 +9,7 @@ This guide introduces the Immersive Web Emulation Runtime (IWER), detailing how 
 
 ## Adding IWER to Your Project
 
-### Install IWER via npm:
+### Install IWER via NPM
 
 To incorporate IWER into your project, start by installing it through npm with the following command:
 
@@ -17,9 +17,23 @@ To incorporate IWER into your project, start by installing it through npm with t
 npm install iwer
 ```
 
-### Import IWER from a CDN:
+### Import IWER from a CDN
 
-Alternatively, you can import IWER directly into your project using a CDN. Add the following script tag to your HTML, ensuring to replace `<version>` with the specific version number you wish to use:
+Alternatively, you can import IWER directly into your project from a CDN using either the UMD build or an import map.
+
+#### Using the UMD Build
+
+Include the UMD build script in the `<head>` of your HTML file, ensuring to replace `<version>` with the specific version number you wish to use:
+
+```html
+<head>
+	<script src="https://unpkg.com/iwer@<version>/build/iwer.min.js"></script>
+</head>
+```
+
+#### Using an Import Map
+
+Alternatively, you can use an import map. Add the following script tag to your HTML, ensuring to replace `<version>` with the specific version number you wish to use:
 
 ```html
 <script type="importmap">
@@ -30,6 +44,12 @@ Alternatively, you can import IWER directly into your project using a CDN. Add t
 	}
 </script>
 ```
+
+#### Try It Live on Glitch!
+
+- **Three.js**: [https://glitch.com/edit/#!/iwer-three-example](https://glitch.com/edit/#!/iwer-three-example)
+- **Babylon.js**: [https://glitch.com/edit/#!/iwer-babylon-example](https://glitch.com/edit/#!/iwer-babylon-example)
+- **A-Frame**: [https://glitch.com/edit/#!/iwer-aframe-example](https://glitch.com/edit/#!/iwer-aframe-example)
 
 ## Creating an XRDevice and Installing the Runtime
 
