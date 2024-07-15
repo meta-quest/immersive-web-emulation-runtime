@@ -36,6 +36,8 @@ export const oculusQuest1: XRDeviceConfig = {
 	supportedFrameRates: [72, 80, 90],
 	isSystemKeyboardSupported: true,
 	internalNominalFrameRate: 72,
+	userAgent:
+		'Mozilla/5.0 (X11; Linux x86_64; Quest 1) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
 };
 
 export const metaQuest2: XRDeviceConfig = {
@@ -61,6 +63,8 @@ export const metaQuest2: XRDeviceConfig = {
 	supportedFrameRates: [72, 80, 90, 120],
 	isSystemKeyboardSupported: true,
 	internalNominalFrameRate: 72,
+	userAgent:
+		'Mozilla/5.0 (X11; Linux x86_64; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
 };
 
 export const metaQuestPro: XRDeviceConfig = {
@@ -86,6 +90,8 @@ export const metaQuestPro: XRDeviceConfig = {
 	supportedFrameRates: [72, 80, 90, 120],
 	isSystemKeyboardSupported: true,
 	internalNominalFrameRate: 90,
+	userAgent:
+		'Mozilla/5.0 (X11; Linux x86_64; Quest Pro) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
 };
 
 export const metaQuest3: XRDeviceConfig = {
@@ -112,4 +118,6 @@ export const metaQuest3: XRDeviceConfig = {
 	supportedFrameRates: [72, 80, 90, 120],
 	isSystemKeyboardSupported: true,
 	internalNominalFrameRate: 90,
+	userAgent:
+		'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
 };

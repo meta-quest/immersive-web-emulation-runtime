@@ -75,6 +75,7 @@ export interface XRDeviceConfig {
 	supportedFrameRates: number[];
 	isSystemKeyboardSupported: boolean;
 	internalNominalFrameRate: number;
+	userAgent: string;
 }
 
 export interface XRDeviceOptions {
@@ -109,6 +110,7 @@ export class XRDevice {
 		supportedFrameRates: number[];
 		isSystemKeyboardSupported: boolean;
 		internalNominalFrameRate: number;
+		userAgent: string;
 
 		// device state
 		position: Vector3;
@@ -206,6 +208,7 @@ export class XRDevice {
 			supportedFrameRates: deviceConfig.supportedFrameRates,
 			isSystemKeyboardSupported: deviceConfig.isSystemKeyboardSupported,
 			internalNominalFrameRate: deviceConfig.internalNominalFrameRate,
+			userAgent: deviceConfig.userAgent,
 
 			position:
 				deviceOptions.headsetPosition ?? DEFAULTS.headsetPosition.clone(),
@@ -365,6 +368,12 @@ export class XRDevice {
 		Object.defineProperty(globalThis.navigator, 'xr', {
 			value: new XRSystem(this),
 			configurable: true,
+		});
+		Object.defineProperty(navigator, 'userAgent', {
+			value: this[PRIVATE].userAgent,
+			writable: false,
+			configurable: false,
+			enumerable: true,
 		});
 		globalObject['XRSystem'] = XRSystem;
 		globalObject['XRSession'] = XRSession;
