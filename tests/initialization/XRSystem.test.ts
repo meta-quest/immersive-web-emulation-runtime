@@ -31,6 +31,7 @@ describe('XRSystem', () => {
 		supportedFrameRates: [72, 80, 90, 120],
 		isSystemKeyboardSupported: true,
 		internalNominalFrameRate: 90,
+		userAgent: 'Test user agent',
 	};
 
 	const vrOnlyDeviceConfig = {
@@ -41,6 +42,7 @@ describe('XRSystem', () => {
 		supportedFrameRates: arvrDeviceConfig.supportedFrameRates,
 		isSystemKeyboardSupported: true,
 		internalNominalFrameRate: 90,
+		userAgent: 'Test user agent',
 	};
 
 	test('isSessionSupported should resolve with correct value for ARVR device', async () => {

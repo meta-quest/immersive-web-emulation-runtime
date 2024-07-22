@@ -80,6 +80,7 @@ describe('XRSession', () => {
 			supportedFrameRates: [72, 80, 90, 120],
 			isSystemKeyboardSupported: true,
 			internalNominalFrameRate: 90,
+			userAgent: 'Test user agent',
 		};
 		xrDevice = new XRDevice(testDeviceConfig);
 		xrSystem = new XRSystem(xrDevice);
