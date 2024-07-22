@@ -19,6 +19,14 @@ export default defineConfig({
 			{ text: 'About', link: '/about' },
 			{ text: 'Guide', link: '/getting-started' },
 			{
+				text: 'Terms',
+				link: 'https://opensource.fb.com/legal/terms/',
+			},
+			{
+				text: 'Privacy',
+				link: 'https://opensource.fb.com/legal/privacy/',
+			},
+			{
 				text: `v${VERSION}`,
 				items: [
 					{ text: 'NPM', link: 'https://www.npmjs.com/package/iwer' },
