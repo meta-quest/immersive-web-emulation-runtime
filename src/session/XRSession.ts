@@ -396,8 +396,27 @@ export class XRSession extends EventTarget {
 			);
 		}
 
+		const compoundStateInit: XRRenderStateInit = {
+			baseLayer:
+				state.baseLayer ||
+				this[PRIVATE].pendingRenderState?.baseLayer ||
+				undefined,
+			depthFar:
+				state.depthFar ||
+				this[PRIVATE].pendingRenderState?.depthFar ||
+				undefined,
+			depthNear:
+				state.depthNear ||
+				this[PRIVATE].pendingRenderState?.depthNear ||
+				undefined,
+			inlineVerticalFieldOfView:
+				state.inlineVerticalFieldOfView ||
+				this[PRIVATE].pendingRenderState?.inlineVerticalFieldOfView ||
+				undefined,
+		};
+
 		this[PRIVATE].pendingRenderState = new XRRenderState(
-			state,
+			compoundStateInit,
 			this[PRIVATE].renderState,
 		);
 	}
