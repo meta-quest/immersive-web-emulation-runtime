@@ -11,14 +11,19 @@ import {
 	GamepadConfig,
 } from '../gamepad/Gamepad.js';
 import { GlobalSpace, XRSpace } from '../spaces/XRSpace.js';
-import { PRIVATE, XRTrackedInput } from './XRTrackedInput.js';
 import {
 	XRHandedness,
 	XRInputSource,
 	XRTargetRayMode,
 } from '../input/XRInputSource.js';
+import {
+	PRIVATE as XRTRACKEDINPUT_PRIVATE,
+	XRTrackedInput,
+} from './XRTrackedInput.js';
 
 import { mat4 } from 'gl-matrix';
+
+export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-controller');
 
 export interface XRControllerConfig {
 	profileId: string;
@@ -33,6 +38,10 @@ export interface XRControllerConfig {
 }
 
 export class XRController extends XRTrackedInput {
+	[PRIVATE]: {
+		gamepadConfig: GamepadConfig;
+	};
+
 	constructor(
 		controllerConfig: XRControllerConfig,
 		handedness: XRHandedness,
@@ -62,6 +71,13 @@ export class XRController extends XRTrackedInput {
 		);
 
 		super(inputSource);
+		this[PRIVATE] = {
+			gamepadConfig: controllerConfig.layout[handedness]!.gamepad,
+		};
+	}
+
+	get gamepadConfig() {
+		return this[PRIVATE].gamepadConfig;
 	}
 
 	updateButtonValue(id: string, value: number) {
@@ -70,7 +86,8 @@ export class XRController extends XRTrackedInput {
 			return;
 		}
 		const gamepadButton =
-			this[PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE].buttonsMap[id];
+			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
+				.buttonsMap[id];
 		if (gamepadButton) {
 			if (
 				gamepadButton[GAMEPAD_PRIVATE].type === 'binary' &&
@@ -90,7 +107,8 @@ export class XRController extends XRTrackedInput {
 
 	updateButtonTouch(id: string, touched: boolean) {
 		const gamepadButton =
-			this[PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE].buttonsMap[id];
+			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
+				.buttonsMap[id];
 		if (gamepadButton) {
 			gamepadButton[GAMEPAD_PRIVATE].touched = touched;
 		} else {
@@ -104,7 +122,8 @@ export class XRController extends XRTrackedInput {
 			return;
 		}
 		const axesById =
-			this[PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE].axesMap[id];
+			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
+				.axesMap[id];
 		if (axesById) {
 			if (type === 'x-axis') {
 				axesById.x = value;
@@ -124,7 +143,8 @@ export class XRController extends XRTrackedInput {
 			return;
 		}
 		const axesById =
-			this[PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE].axesMap[id];
+			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
+				.axesMap[id];
 		if (axesById) {
 			axesById.x = x;
 			axesById.y = y;
