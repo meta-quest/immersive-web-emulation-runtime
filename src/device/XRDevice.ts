@@ -31,6 +31,10 @@ import {
 	XRSessionMode,
 	XRVisibilityState,
 } from '../session/XRSession.js';
+import {
+	PRIVATE as XRSYSTEM_PRIVATE,
+	XRSystem,
+} from '../initialization/XRSystem.js';
 import { mat4, vec3 } from 'gl-matrix';
 
 import { ActionPlayer } from '../action/ActionPlayer.js';
@@ -47,7 +51,6 @@ import { XRReferenceSpaceEvent } from '../events/XRReferenceSpaceEvent.js';
 import { XRRenderState } from '../session/XRRenderState.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSessionEvent } from '../events/XRSessionEvent.js';
-import { XRSystem } from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
@@ -124,6 +127,7 @@ export class XRDevice {
 		pendingReferenceSpaceReset: boolean;
 		visibilityState: XRVisibilityState;
 		pendingVisibilityState: XRVisibilityState | null;
+		xrSystem: XRSystem | null;
 
 		matrix: mat4;
 		globalSpace: GlobalSpace;
@@ -223,6 +227,7 @@ export class XRDevice {
 			pendingReferenceSpaceReset: false,
 			visibilityState: XRVisibilityState.Visible,
 			pendingVisibilityState: null,
+			xrSystem: null,
 
 			matrix: mat4.create(),
 			globalSpace,
@@ -365,8 +370,9 @@ export class XRDevice {
 				configurable: true,
 			},
 		);
+		this[PRIVATE].xrSystem = new XRSystem(this);
 		Object.defineProperty(globalThis.navigator, 'xr', {
-			value: new XRSystem(this),
+			value: this[PRIVATE].xrSystem,
 			configurable: true,
 		});
 		Object.defineProperty(navigator, 'userAgent', {
@@ -508,6 +514,10 @@ export class XRDevice {
 
 	get canvasContainer(): HTMLDivElement {
 		return this[PRIVATE].canvasContainer;
+	}
+
+	get activeSession(): XRSession | undefined {
+		return this[PRIVATE].xrSystem?.[XRSYSTEM_PRIVATE].activeSession;
 	}
 
 	recenter() {
