@@ -16,6 +16,7 @@
 		"serve": "webpack serve"
 	},
 	"dependencies": {
+		"@iwer/devui": "file:../devui",
 		"dat.gui": "0.7.9",
 		"iwer": "file:../",
 		"three": "npm:super-three@0.158.0"

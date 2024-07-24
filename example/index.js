@@ -6,10 +6,10 @@
  */
 
 import * as THREE from 'three';
-import * as dat from 'dat.gui';
 
 import { ActionRecorder, XRDevice, metaQuest3 } from 'iwer';
 
+import { DevUI } from '@iwer/devui';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
@@ -25,7 +25,6 @@ let controls;
 let xrdevice;
 let recorder;
 let recording = false;
-let gui;
 
 const prepare = async () => {
 	const nativeVRSupport = navigator.xr
@@ -36,80 +35,7 @@ const prepare = async () => {
 		xrdevice.ipd = 0;
 		xrdevice.installRuntime();
 
-		gui = new dat.GUI({ name: 'My GUI' });
-		gui.domElement.parentElement.style.zIndex = '999999';
-		gui.domElement.style.display = 'none';
-		const deviceState = {
-			blurred: false,
-			hands: false,
-			left: true,
-			right: true,
-		};
-		const stereoControl = gui
-			.add(xrdevice, 'stereoEnabled')
-			.name('stereo rendering');
-		stereoControl.onChange(() => {
-			ipdControl.domElement.parentElement.parentElement.style.display =
-				xrdevice.stereoEnabled ? 'block' : 'none';
-		});
-		const ipdControl = gui.add(xrdevice, 'ipd', 0, 0.08, 0.001);
-		gui.add(xrdevice, 'fovy', Math.PI / 4, Math.PI / 1.1, 0.01).name('fov-y');
-		gui.add(deviceState, 'blurred').onChange(() => {
-			xrdevice.updateVisibilityState(
-				deviceState.blurred ? 'visible-blurred' : 'visible',
-			);
-		});
-		gui.add(deviceState, 'hands').onChange(() => {
-			xrdevice.primaryInputMode = deviceState.hands ? 'hand' : 'controller';
-		});
-
-		const selectValues = {
-			left: 0,
-			right: 0,
-		};
-
-		const createInputControl = (handedness, step) => {
-			const inputSwitch = gui
-				.add(deviceState, handedness)
-				.name(handedness + ' connected');
-			const selectControl = gui
-				.add(selectValues, handedness, 0, 1, step)
-				.name(handedness + ' select');
-			selectControl.onChange(() => {
-				if (deviceState.hands) {
-					xrdevice.hands[handedness].updatePinchValue(selectValues[handedness]);
-				} else {
-					xrdevice.controllers[handedness].updateButtonValue(
-						'trigger',
-						selectValues[handedness],
-					);
-				}
-			});
-			inputSwitch.onChange(() => {
-				selectControl.domElement.parentElement.parentElement.style.display =
-					deviceState[handedness] ? 'block' : 'none';
-				if (deviceState.hands) {
-					xrdevice.hands[handedness].connected = deviceState[handedness];
-				} else {
-					xrdevice.controllers[handedness].connected = deviceState[handedness];
-				}
-			});
-		};
-
-		['left', 'right'].forEach((handedness) => {
-			createInputControl(handedness, 0.01);
-		});
-
-		const playRecording = () => {
-			window.player.play();
-		};
-		gui.add({ playRecording }, 'playRecording').name('play input recording');
-
-		const exitVR = () => {
-			const session = renderer.xr?.getSession();
-			session?.end();
-		};
-		gui.add({ exitVR }, 'exitVR').name('exit immersive');
+		const devui = new DevUI(xrdevice);
 	}
 	Array.from(document.getElementsByClassName('native')).forEach((el) => {
 		el.style.display = nativeVRSupport ? 'block' : 'none';
@@ -125,7 +51,7 @@ prepare().then(() => {
 });
 
 function init() {
-	container = document.createElement('div');
+	container = document.getElementById('scene-container');
 	document.body.appendChild(container);
 
 	scene = new THREE.Scene();
@@ -235,7 +161,6 @@ function init() {
 
 		if (xrdevice) {
 			window.player = xrdevice.createActionPlayer(refSpace, capture);
-			gui.domElement.style.display = 'block';
 		} else {
 			recorder = new ActionRecorder(session, refSpace);
 			session.onselect = (event) => {
@@ -250,12 +175,6 @@ function init() {
 					}
 				}
 			};
-		}
-	});
-
-	renderer.xr.addEventListener('sessionend', () => {
-		if (xrdevice) {
-			gui.domElement.style.display = 'none';
 		}
 	});
 }
