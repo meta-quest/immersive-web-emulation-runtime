@@ -33,7 +33,7 @@
 		"three": "^0.166.1"
 	},
 	"peerDependencies": {
-		"iwer": "1.0.2"
+		"iwer": "^1.0.2"
 	},
 	"devDependencies": {
 		"@rollup/plugin-babel": "^6.0.4",
