@@ -307,6 +307,8 @@ export class XRSession extends EventTarget {
 				const added = currInputs.filter((item) => !prevInputs.includes(item));
 				const removed = prevInputs.filter((item) => !currInputs.includes(item));
 
+				this[PRIVATE].activeInputSources = currInputs;
+
 				if (added.length > 0 || removed.length > 0) {
 					this.dispatchEvent(
 						new XRInputSourcesChangeEvent('inputsourceschange', {
@@ -316,8 +318,6 @@ export class XRSession extends EventTarget {
 						}),
 					);
 				}
-
-				this[PRIVATE].activeInputSources = currInputs;
 			},
 			onend: null,
 			oninputsourceschange: null,
