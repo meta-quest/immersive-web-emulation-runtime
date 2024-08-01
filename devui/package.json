@@ -1,6 +1,6 @@
 {
 	"name": "@iwer/devui",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Dev UI for IWER",
 	"type": "module",
 	"main": "lib/index.js",
@@ -33,7 +33,7 @@
 		"three": "^0.166.1"
 	},
 	"peerDependencies": {
-		"iwer": "^1.0.2"
+		"iwer": "^1.0.3"
 	},
 	"devDependencies": {
 		"@rollup/plugin-babel": "^6.0.4",
