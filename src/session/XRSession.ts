@@ -49,6 +49,17 @@ export type XRSessionInit = {
 	optionalFeatures?: string[];
 };
 
+export enum XREnvironmentBlendMode {
+	Opaque = 'opaque',
+	AlphaBlend = 'alpha-blend',
+	Additive = 'additive',
+}
+
+export enum XRInteractionMode {
+	ScreenSpace = 'screen-space',
+	WorldSpace = 'world-space',
+}
+
 type XRFrameRequestCallback = (
 	time: DOMHighResTimeStamp,
 	frame: XRFrame,
@@ -366,6 +377,18 @@ export class XRSession extends EventTarget {
 
 	get isSystemKeyboardSupported(): boolean {
 		return this[PRIVATE].isSystemKeyboardSupported;
+	}
+
+	get environmentBlendMode(): XREnvironmentBlendMode {
+		return (
+			this[PRIVATE].device[XRDEVICE_PRIVATE].environmentBlendModes[
+				this[PRIVATE].mode
+			] ?? XREnvironmentBlendMode.Opaque
+		);
+	}
+
+	get interactionMode(): XRInteractionMode {
+		return this[PRIVATE].device[XRDEVICE_PRIVATE].interactionMode;
 	}
 
 	updateRenderState(state: XRRenderStateInit = {}): void {

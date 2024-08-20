@@ -12,6 +12,14 @@ import {
 } from '../spaces/XRSpace.js';
 import { Quaternion, Vector3 } from '../utils/Math.js';
 import { XRController, XRControllerConfig } from './XRController.js';
+import {
+	XREnvironmentBlendMode,
+	XRInteractionMode,
+	PRIVATE as XRSESSION_PRIVATE,
+	XRSession,
+	XRSessionMode,
+	XRVisibilityState,
+} from '../session/XRSession.js';
 import { XREye, XRView } from '../views/XRView.js';
 import { XRHandInput, oculusHandConfig } from './XRHandInput.js';
 import {
@@ -25,12 +33,6 @@ import {
 	XRReferenceSpace,
 	XRReferenceSpaceType,
 } from '../spaces/XRReferenceSpace.js';
-import {
-	PRIVATE as XRSESSION_PRIVATE,
-	XRSession,
-	XRSessionMode,
-	XRVisibilityState,
-} from '../session/XRSession.js';
 import {
 	PRIVATE as XRSYSTEM_PRIVATE,
 	XRSystem,
@@ -78,6 +80,10 @@ export interface XRDeviceConfig {
 	supportedFrameRates: number[];
 	isSystemKeyboardSupported: boolean;
 	internalNominalFrameRate: number;
+	environmentBlendModes: Partial<{
+		[sessionMode in XRSessionMode]: XREnvironmentBlendMode;
+	}>;
+	interactionMode: XRInteractionMode;
 	userAgent: string;
 }
 
@@ -113,6 +119,10 @@ export class XRDevice {
 		supportedFrameRates: number[];
 		isSystemKeyboardSupported: boolean;
 		internalNominalFrameRate: number;
+		environmentBlendModes: Partial<{
+			[sessionMode in XRSessionMode]: XREnvironmentBlendMode;
+		}>;
+		interactionMode: XRInteractionMode;
 		userAgent: string;
 
 		// device state
@@ -212,6 +222,8 @@ export class XRDevice {
 			supportedFrameRates: deviceConfig.supportedFrameRates,
 			isSystemKeyboardSupported: deviceConfig.isSystemKeyboardSupported,
 			internalNominalFrameRate: deviceConfig.internalNominalFrameRate,
+			environmentBlendModes: deviceConfig.environmentBlendModes,
+			interactionMode: deviceConfig.interactionMode,
 			userAgent: deviceConfig.userAgent,
 
 			position:

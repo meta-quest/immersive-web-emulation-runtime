@@ -6,8 +6,12 @@
  */
 
 import { WebXRFeatures, XRDevice } from '../../src/device/XRDevice';
+import {
+	XREnvironmentBlendMode,
+	XRInteractionMode,
+	XRSessionMode,
+} from '../../src/session/XRSession';
 
-import { XRSessionMode } from '../../src/session/XRSession';
 import { XRSystem } from '../../src/initialization/XRSystem';
 import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta';
 
@@ -31,6 +35,11 @@ describe('XRSystem', () => {
 		supportedFrameRates: [72, 80, 90, 120],
 		isSystemKeyboardSupported: true,
 		internalNominalFrameRate: 90,
+		environmentBlendModes: {
+			[XRSessionMode.ImmersiveVR]: XREnvironmentBlendMode.Opaque,
+			[XRSessionMode.ImmersiveAR]: XREnvironmentBlendMode.AlphaBlend,
+		},
+		interactionMode: XRInteractionMode.WorldSpace,
 		userAgent: 'Test user agent',
 	};
 
@@ -42,6 +51,11 @@ describe('XRSystem', () => {
 		supportedFrameRates: arvrDeviceConfig.supportedFrameRates,
 		isSystemKeyboardSupported: true,
 		internalNominalFrameRate: 90,
+		environmentBlendModes: {
+			[XRSessionMode.ImmersiveVR]: XREnvironmentBlendMode.Opaque,
+			[XRSessionMode.ImmersiveAR]: XREnvironmentBlendMode.AlphaBlend,
+		},
+		interactionMode: XRInteractionMode.WorldSpace,
 		userAgent: 'Test user agent',
 	};
 

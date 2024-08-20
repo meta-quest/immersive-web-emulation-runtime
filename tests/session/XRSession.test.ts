@@ -11,6 +11,13 @@ import {
 	XRDeviceConfig,
 } from '../../src/device/XRDevice';
 import {
+	XREnvironmentBlendMode,
+	XRInteractionMode,
+	XRSession,
+	XRSessionMode,
+	XRVisibilityState,
+} from '../../src/session/XRSession';
+import {
 	XRReferenceSpace,
 	XRReferenceSpaceType,
 } from '../../src/spaces/XRReferenceSpace';
@@ -18,11 +25,6 @@ import {
 	XRRenderState,
 	XRRenderStateInit,
 } from '../../src/session/XRRenderState';
-import {
-	XRSession,
-	XRSessionMode,
-	XRVisibilityState,
-} from '../../src/session/XRSession';
 
 import { XRFrame } from '../../src/frameloop/XRFrame';
 import { XRInputSourceArray } from '../../src/input/XRInputSource';
@@ -71,7 +73,11 @@ describe('XRSession', () => {
 		const testDeviceConfig: XRDeviceConfig = {
 			name: 'Test Device',
 			controllerConfig: metaQuestTouchPlus,
-			supportedSessionModes: [XRSessionMode.Inline, XRSessionMode.ImmersiveVR],
+			supportedSessionModes: [
+				XRSessionMode.Inline,
+				XRSessionMode.ImmersiveVR,
+				XRSessionMode.ImmersiveAR,
+			],
 			supportedFeatures: [
 				WebXRFeatures.Viewer,
 				WebXRFeatures.Local,
@@ -80,6 +86,11 @@ describe('XRSession', () => {
 			supportedFrameRates: [72, 80, 90, 120],
 			isSystemKeyboardSupported: true,
 			internalNominalFrameRate: 90,
+			environmentBlendModes: {
+				[XRSessionMode.ImmersiveVR]: XREnvironmentBlendMode.Opaque,
+				[XRSessionMode.ImmersiveAR]: XREnvironmentBlendMode.AlphaBlend,
+			},
+			interactionMode: XRInteractionMode.WorldSpace,
 			userAgent: 'Test user agent',
 		};
 		xrDevice = new XRDevice(testDeviceConfig);
@@ -338,5 +349,18 @@ describe('XRSession', () => {
 		expect(mockOnSqueeze).toHaveBeenCalled();
 		expect(mockOnSqueezeStart).toHaveBeenCalled();
 		expect(mockOnSqueezeEnd).toHaveBeenCalled();
+	});
+
+	test('XRSession.environmentBlendMode returns the correct value', async () => {
+		expect(xrSession.environmentBlendMode).toBe(XREnvironmentBlendMode.Opaque);
+		xrSession.end();
+		xrSession = await xrSystem.requestSession(XRSessionMode.ImmersiveAR);
+		expect(xrSession.environmentBlendMode).toBe(
+			XREnvironmentBlendMode.AlphaBlend,
+		);
+	});
+
+	test('XRSession.interactionMode returns the correct value', async () => {
+		expect(xrSession.interactionMode).toBe(XRInteractionMode.WorldSpace);
 	});
 });
