@@ -12,7 +12,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { GamepadIcon } from './icons.js';
 import { MappedKeyDisplay } from './keys.js';
 import { faBan } from '@fortawesome/free-solid-svg-icons';
-import styled from 'styled-components';
+import { styled } from 'styled-components';
 
 export type KeyMapType = Partial<
 	Record<XRHandedness, { [key: string]: string }>

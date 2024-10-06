@@ -10,7 +10,7 @@ import React, { useState } from 'react';
 
 import { InputLayer } from '../scene.js';
 import { XRDevice } from 'iwer';
-import styled from 'styled-components';
+import { styled } from 'styled-components';
 
 interface FOVMenuProps {
 	xrDevice: XRDevice;

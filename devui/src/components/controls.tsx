@@ -13,7 +13,7 @@ import { Joystick } from './joystick.js';
 import { KeyMapType } from './mapper.js';
 import React from 'react';
 import { XRDevice } from 'iwer';
-import styled from 'styled-components';
+import { styled } from 'styled-components';
 
 const ControlsContainer = styled.div<{ $reverse: boolean }>`
 	padding: ${({ $reverse }) =>
