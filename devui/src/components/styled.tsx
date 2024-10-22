@@ -6,7 +6,7 @@
  */
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import styled from 'styled-components';
+import { styled } from 'styled-components';
 
 export const Button = styled.button<{ $reverse: boolean }>`
 	background-color: rgba(255, 255, 255, 0.3);

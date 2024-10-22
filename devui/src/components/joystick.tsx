@@ -19,7 +19,7 @@ import { GamepadIcon } from './icons.js';
 import { MappedKeyDisplay } from './keys.js';
 import { XRController } from '../../../lib/device/XRController';
 import { faFingerprint } from '@fortawesome/free-solid-svg-icons';
-import styled from 'styled-components';
+import { styled } from 'styled-components';
 
 interface JoystickProps {
 	xrController: XRController;

@@ -22,7 +22,7 @@ import { IWERIcon } from './icons.js';
 import { InputLayer } from '../scene.js';
 import React from 'react';
 import { XRDevice } from 'iwer';
-import styled from 'styled-components';
+import { styled } from 'styled-components';
 
 const HeaderButtonsContainer = styled.div`
 	padding: 6px 5px;
