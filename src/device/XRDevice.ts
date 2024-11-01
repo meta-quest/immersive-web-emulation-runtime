@@ -370,18 +370,20 @@ export class XRDevice {
 	}
 
 	installRuntime(globalObject: any = globalThis) {
-		Object.defineProperty(
-			WebGL2RenderingContext.prototype,
-			'makeXRCompatible',
-			{
-				value: function () {
-					return new Promise((resolve, _reject) => {
-						resolve(true);
-					});
+		if (WebGL2RenderingContext) {
+			Object.defineProperty(
+				WebGL2RenderingContext.prototype,
+				'makeXRCompatible',
+				{
+					value: function () {
+						return new Promise((resolve, _reject) => {
+							resolve(true);
+						});
+					},
+					configurable: true,
 				},
-				configurable: true,
-			},
-		);
+			);
+		}
 		this[PRIVATE].xrSystem = new XRSystem(this);
 		Object.defineProperty(globalThis.navigator, 'xr', {
 			value: this[PRIVATE].xrSystem,
