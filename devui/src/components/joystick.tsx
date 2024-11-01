@@ -17,9 +17,10 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import { GamepadIcon } from './icons.js';
 import { MappedKeyDisplay } from './keys.js';
-import { XRController } from '../../../lib/device/XRController';
+import { XRController } from 'iwer/lib/device/XRController';
 import { faFingerprint } from '@fortawesome/free-solid-svg-icons';
 import { styled } from 'styled-components';
+import { useDevUIConfig } from '../index.js';
 
 interface JoystickProps {
 	xrController: XRController;
@@ -105,6 +106,7 @@ export const Joystick: React.FC<JoystickProps> = ({
 	mappedKeyRight,
 	mappedKeyPressed,
 }) => {
+	const devuiConfig = useDevUIConfig();
 	const joystickRef = useRef<HTMLDivElement>(null);
 	const [isDragging, setIsDragging] = useState(false);
 	const [isTouched, setIsTouched] = useState(false);
@@ -318,7 +320,7 @@ export const Joystick: React.FC<JoystickProps> = ({
 								setTimeout(() => {
 									setIsPressed(false);
 									xrController.updateButtonValue(buttonId, 0);
-								}, 500);
+								}, devuiConfig.buttonPressDuration);
 							}}
 						>
 							Press

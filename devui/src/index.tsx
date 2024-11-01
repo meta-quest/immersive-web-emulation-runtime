@@ -6,7 +6,7 @@
  */
 
 import { DEFAULT_KEYMAP, KeyMapMenu, KeyMapType } from './components/mapper.js';
-import React, { useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 import { ControlsUI } from './components/controls.js';
 import { FOVMenu } from './components/fov.js';
@@ -17,13 +17,27 @@ import { createRoot } from 'react-dom/client';
 
 const PRIVATE = Symbol('@@iwer/devui/devui');
 
+type DevUIConfig = {
+	buttonPressDuration: number;
+};
+
+const DefaultConfig: DevUIConfig = {
+	buttonPressDuration: 250,
+};
+
+const DevUIConfigContext = createContext<DevUIConfig>(DefaultConfig);
+
+export const useDevUIConfig = () => {
+	return useContext(DevUIConfigContext);
+};
+
 export class DevUI {
 	[PRIVATE]: {
 		xrDevice: XRDevice;
 		inputLayer: InputLayer;
 	};
 
-	constructor(xrDevice: XRDevice) {
+	constructor(xrDevice: XRDevice, options: Partial<DevUIConfig> = {}) {
 		xrDevice.ipd = 0;
 		const canvasContainer = xrDevice.canvasContainer;
 		const devuiContainer = document.createElement('div');
@@ -49,7 +63,9 @@ export class DevUI {
 		inputLayerElement.style.zIndex = '2';
 		canvasContainer.appendChild(inputLayerElement);
 		const root = createRoot(devuiContainer);
-		root.render(<Overlay xrDevice={xrDevice} inputLayer={inputLayer} />);
+		root.render(
+			<Overlay xrDevice={xrDevice} inputLayer={inputLayer} options={options} />,
+		);
 		this[PRIVATE] = {
 			xrDevice,
 			inputLayer,
@@ -60,15 +76,21 @@ export class DevUI {
 interface OverlayProps {
 	xrDevice: XRDevice;
 	inputLayer: InputLayer;
+	options: Partial<DevUIConfig>;
 }
 
-const Overlay: React.FC<OverlayProps> = ({ xrDevice, inputLayer }) => {
+const Overlay: React.FC<OverlayProps> = ({ xrDevice, inputLayer, options }) => {
 	const [pointerLocked, setPointerLocked] = useState(false);
 	const [keyMap, setKeyMap] = useState<KeyMapType>(DEFAULT_KEYMAP);
 	const [keyMapOpen, setKeyMapOpen] = useState(false);
 	const [fovSettingOpen, setFovSettingOpen] = useState(false);
+	const [devuiConfig, setConfig] = useState(DefaultConfig);
 
 	useEffect(() => {
+		setConfig({
+			buttonPressDuration:
+				options.buttonPressDuration ?? DefaultConfig.buttonPressDuration,
+		});
 		const pointerLockChangeHandler = () => {
 			const locked =
 				document.pointerLockElement ||
@@ -114,32 +136,34 @@ const Overlay: React.FC<OverlayProps> = ({ xrDevice, inputLayer }) => {
 	}, []);
 
 	return (
-		<div
-			style={{
-				width: '100vw',
-				height: '100vh',
-				display: 'flex',
-				flexDirection: 'column',
-				justifyContent: 'space-between',
-			}}
-		>
-			<HeaderUI
-				xrDevice={xrDevice}
-				inputLayer={inputLayer}
-				keyMapOpen={keyMapOpen}
-				setKeyMapOpen={setKeyMapOpen}
-				fovSettingOpen={fovSettingOpen}
-				setFovSettingOpen={setFovSettingOpen}
-			/>
-			{keyMapOpen && <KeyMapMenu keyMap={keyMap} setKeyMap={setKeyMap} />}
-			{fovSettingOpen && (
-				<FOVMenu xrDevice={xrDevice} inputLayer={inputLayer} />
-			)}
-			<ControlsUI
-				xrDevice={xrDevice}
-				keyMap={keyMap}
-				pointerLocked={pointerLocked}
-			/>
-		</div>
+		<DevUIConfigContext.Provider value={devuiConfig}>
+			<div
+				style={{
+					width: '100vw',
+					height: '100vh',
+					display: 'flex',
+					flexDirection: 'column',
+					justifyContent: 'space-between',
+				}}
+			>
+				<HeaderUI
+					xrDevice={xrDevice}
+					inputLayer={inputLayer}
+					keyMapOpen={keyMapOpen}
+					setKeyMapOpen={setKeyMapOpen}
+					fovSettingOpen={fovSettingOpen}
+					setFovSettingOpen={setFovSettingOpen}
+				/>
+				{keyMapOpen && <KeyMapMenu keyMap={keyMap} setKeyMap={setKeyMap} />}
+				{fovSettingOpen && (
+					<FOVMenu xrDevice={xrDevice} inputLayer={inputLayer} />
+				)}
+				<ControlsUI
+					xrDevice={xrDevice}
+					keyMap={keyMap}
+					pointerLocked={pointerLocked}
+				/>
+			</div>
+		</DevUIConfigContext.Provider>
 	);
 };

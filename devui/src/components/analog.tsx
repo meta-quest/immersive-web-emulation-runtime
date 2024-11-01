@@ -17,8 +17,9 @@ import React, { useEffect, useState } from 'react';
 
 import { GamepadIcon } from './icons.js';
 import { MappedKeyDisplay } from './keys.js';
-import { XRController } from '../../../lib/device/XRController';
+import { XRController } from 'iwer/lib/device/XRController';
 import { faFingerprint } from '@fortawesome/free-solid-svg-icons';
+import { useDevUIConfig } from '../index.js';
 
 interface AnalogButtonProps {
 	xrController: XRController;
@@ -33,6 +34,7 @@ export const AnalogButton: React.FC<AnalogButtonProps> = ({
 	pointerLocked,
 	mappedKey,
 }) => {
+	const devuiConfig = useDevUIConfig();
 	const [isTouched, setIsTouched] = useState(false);
 	const [isPressed, setIsPressed] = useState(false);
 	const [isKeyPressed, setIsKeyPressed] = useState(false);
@@ -128,7 +130,7 @@ export const AnalogButton: React.FC<AnalogButtonProps> = ({
 								setTimeout(() => {
 									setIsPressed(false);
 									xrController.updateButtonValue(buttonId, 0);
-								}, 500);
+								}, devuiConfig.buttonPressDuration);
 							}}
 						>
 							Press

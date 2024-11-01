@@ -16,8 +16,9 @@ import React, { useEffect, useState } from 'react';
 
 import { GamepadIcon } from './icons.js';
 import { MappedKeyDisplay } from './keys.js';
-import { XRController } from '../../../lib/device/XRController';
+import { XRController } from 'iwer/lib/device/XRController';
 import { faFingerprint } from '@fortawesome/free-solid-svg-icons';
+import { useDevUIConfig } from '../index.js';
 
 interface BinaryButtonProps {
 	xrController: XRController;
@@ -32,6 +33,7 @@ export const BinaryButton: React.FC<BinaryButtonProps> = ({
 	pointerLocked,
 	mappedKey,
 }) => {
+	const devuiConfig = useDevUIConfig();
 	const [isTouched, setIsTouched] = useState(false);
 	const [isOnHold, setIsOnHold] = useState(false);
 	const [isPressed, setIsPressed] = useState(false);
@@ -92,7 +94,7 @@ export const BinaryButton: React.FC<BinaryButtonProps> = ({
 								setTimeout(() => {
 									setIsPressed(false);
 									xrController.updateButtonValue(buttonId, 0);
-								}, 500);
+								}, devuiConfig.buttonPressDuration);
 							}}
 						>
 							Press
