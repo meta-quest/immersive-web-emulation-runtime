@@ -107,19 +107,29 @@ export class InputLayer {
 		renderer.setClearColor(0x000000, 0);
 		canvasContainer.appendChild(renderer.domElement);
 
+		const addTransformControls = (controls: TransformControls) => {
+			// In three.js r169+ TransformControls is no longer derived from
+			// Object3D, so we need getHelper() to access the gizmos object.
+			if (typeof controls.getHelper === 'function') {
+				scene.add(controls.getHelper());
+			} else {
+				scene.add(controls);
+			}
+		};
+
 		const leftTransformControls = new TransformControls(
 			camera,
 			renderer.domElement,
 		);
 		leftTransformControls.attach(leftControllerIndicator);
-		scene.add(leftTransformControls);
+		addTransformControls(leftTransformControls);
 
 		const rightTransformControls = new TransformControls(
 			camera,
 			renderer.domElement,
 		);
 		rightTransformControls.attach(rightControllerIndicator);
-		scene.add(rightTransformControls);
+		addTransformControls(rightTransformControls);
 
 		const resizeObserver = new ResizeObserver(() => {
 			this.resize();
