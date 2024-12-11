@@ -51,6 +51,9 @@ export { XRWebGLLayer, XRLayer } from './layers/XRWebGLLayer.js';
 // Planes
 export { XRPlane } from './planes/XRPlane.js';
 
+// Meshes
+export { XRMesh } from './meshes/XRMesh.js';
+
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';

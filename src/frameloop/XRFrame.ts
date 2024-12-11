@@ -23,6 +23,7 @@ import {
 import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { XRJointPose } from '../pose/XRJointPose.js';
+import { XRMeshSet } from '../meshes/XRMesh.js';
 import { XRPlaneSet } from '../planes/XRPlane.js';
 import { XRPose } from '../pose/XRPose.js';
 import { XRReferenceSpace } from '../spaces/XRReferenceSpace.js';
@@ -55,6 +56,7 @@ export class XRFrame {
 		predictedDisplayTime: number;
 		tempMat4: mat4;
 		detectedPlanes: XRPlaneSet;
+		detectedMeshes: XRMeshSet;
 	};
 
 	constructor(
@@ -72,6 +74,7 @@ export class XRFrame {
 			predictedDisplayTime,
 			tempMat4: mat4.create(),
 			detectedPlanes: new Set(),
+			detectedMeshes: new Set(),
 		};
 	}
 
@@ -200,6 +203,22 @@ export class XRFrame {
 	}
 
 	get detectedPlanes() {
+		if (!this[PRIVATE].active) {
+			throw new DOMException(
+				'XRFrame access outside the callback that produced it is invalid.',
+				'InvalidStateError',
+			);
+		}
 		return this[PRIVATE].detectedPlanes;
+	}
+
+	get detectedMeshes() {
+		if (!this[PRIVATE].active) {
+			throw new DOMException(
+				'XRFrame access outside the callback that produced it is invalid.',
+				'InvalidStateError',
+			);
+		}
+		return this[PRIVATE].detectedMeshes;
 	}
 }
