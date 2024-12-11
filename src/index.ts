@@ -54,6 +54,9 @@ export { XRPlane } from './planes/XRPlane.js';
 // Meshes
 export { XRMesh } from './meshes/XRMesh.js';
 
+// Anchors
+export { XRAnchor } from './anchors/XRAnchor.js';
+
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';

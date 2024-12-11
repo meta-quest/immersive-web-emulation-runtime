@@ -55,4 +55,4 @@ export class XRMesh {
 	}
 }
 
-export type XRMeshSet = Set<XRMesh>;
+export class XRMeshSet extends Set<XRMesh> {}

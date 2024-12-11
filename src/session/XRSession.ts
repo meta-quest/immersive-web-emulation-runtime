@@ -10,6 +10,12 @@ import {
 	PRIVATE as XRDEVICE_PRIVATE,
 	XRDevice,
 } from '../device/XRDevice.js';
+import {
+	PRIVATE as XRANCHOR_PRIVATE,
+	XRAnchor,
+	XRAnchorSet,
+	XRAnchorUtils,
+} from '../anchors/XRAnchor.js';
 import { PRIVATE as XRFRAME_PRIVATE, XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSource, XRInputSourceArray } from '../input/XRInputSource.js';
 import {
@@ -104,6 +110,18 @@ export class XRSession extends EventTarget {
 		inputSourceArray: XRInputSourceArray;
 		activeInputSources: XRInputSource[];
 		updateActiveInputSources: () => void;
+		// tracked anchors
+		trackedAnchors: XRAnchorSet;
+		persistentAnchors: Map<string, XRAnchor>;
+		newAnchors: Map<
+			XRAnchor,
+			{
+				resolve: (value: XRAnchor | PromiseLike<XRAnchor>) => void;
+				reject: (reason?: any) => void;
+			}
+		>;
+		frameTrackedAnchors: XRAnchorSet; // https://immersive-web.github.io/anchors/#anchor-updates specifies same object
+		updateTrackedAnchors: () => void;
 		// event handlers
 		onend: XRSessionEventHandler | null;
 		oninputsourceschange: XRInputSourcesChangeEventHandler | null;
@@ -264,6 +282,8 @@ export class XRSession extends EventTarget {
 					);
 				}
 
+				this[PRIVATE].updateTrackedAnchors();
+
 				const frame = new XRFrame(
 					this,
 					this[PRIVATE].frameHandle,
@@ -330,6 +350,36 @@ export class XRSession extends EventTarget {
 					);
 				}
 			},
+			trackedAnchors: new XRAnchorSet(),
+			persistentAnchors: new Map(),
+			newAnchors: new Map(),
+			frameTrackedAnchors: new XRAnchorSet(),
+			updateTrackedAnchors: () => {
+				if (this[PRIVATE].enabledFeatures.includes('anchors')) {
+					this[PRIVATE].frameTrackedAnchors.clear();
+					Array.from(this[PRIVATE].trackedAnchors).forEach((anchor) => {
+						if (anchor[XRANCHOR_PRIVATE].deleted) {
+							this[PRIVATE].trackedAnchors.delete(anchor);
+							if (this[PRIVATE].newAnchors.has(anchor)) {
+								const { reject } = this[PRIVATE].newAnchors.get(anchor)!;
+								reject(
+									new DOMException(
+										'Anchor is no longer tracked',
+										'InvalidStateError',
+									),
+								);
+							}
+						} else {
+							this[PRIVATE].frameTrackedAnchors.add(anchor);
+							if (this[PRIVATE].newAnchors.has(anchor)) {
+								const { resolve } = this[PRIVATE].newAnchors.get(anchor)!;
+								resolve(anchor);
+								this[PRIVATE].newAnchors.delete(anchor);
+							}
+						}
+					});
+				}
+			},
 			onend: null,
 			oninputsourceschange: null,
 			onselect: null,
@@ -341,6 +391,8 @@ export class XRSession extends EventTarget {
 			onvisibilitychange: null,
 			onframeratechange: null,
 		};
+
+		XRAnchorUtils.recoverPersistentAnchorsFromStorage(this);
 
 		// start the frameloop
 		this[PRIVATE].onDeviceFrame();
@@ -564,6 +616,59 @@ export class XRSession extends EventTarget {
 				this[PRIVATE].device[XRDEVICE_PRIVATE].onSessionEnd();
 				this.dispatchEvent(new XRSessionEvent('end', { session: this }));
 				resolve();
+			}
+		});
+	}
+
+	// anchors
+	get persistentAnchors(): Readonly<string[]> {
+		return Array.from(this[PRIVATE].persistentAnchors.keys());
+	}
+
+	restorePersistentAnchor(uuid: string): Promise<XRAnchor> {
+		return new Promise<XRAnchor>((resolve, reject) => {
+			if (!this[PRIVATE].persistentAnchors.has(uuid)) {
+				reject(
+					new DOMException(
+						`Persistent anchor with uuid ${uuid} not found.`,
+						'InvalidStateError',
+					),
+				);
+			} else if (this[PRIVATE].ended) {
+				reject(
+					new DOMException('XRSession has already ended.', 'InvalidStateError'),
+				);
+			} else {
+				const anchor = this[PRIVATE].persistentAnchors.get(uuid)!;
+				if (this[PRIVATE].newAnchors.has(anchor)) {
+					reject(
+						new DOMException(
+							`Multiple concurrent attempts detected to restore the anchor with UUID: ${uuid}.`,
+							'InvalidStateError',
+						),
+					);
+				} else {
+					this[PRIVATE].trackedAnchors.add(anchor);
+					this[PRIVATE].newAnchors.set(anchor, { resolve, reject });
+				}
+			}
+		});
+	}
+
+	deletePersistentAnchor(uuid: string): Promise<undefined> {
+		return new Promise<undefined>((resolve, reject) => {
+			if (!this[PRIVATE].persistentAnchors.has(uuid)) {
+				reject(
+					new DOMException(
+						`Persistent anchor with uuid ${uuid} not found.`,
+						'InvalidStateError',
+					),
+				);
+			} else {
+				const anchor = this[PRIVATE].persistentAnchors.get(uuid)!;
+				this[PRIVATE].persistentAnchors.delete(uuid);
+				anchor.delete();
+				resolve(undefined);
 			}
 		});
 	}

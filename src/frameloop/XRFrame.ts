@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
 import { XREye, XRView } from '../views/XRView.js';
 import {
 	PRIVATE as XRJOINTSPACE_PRIVATE,
@@ -22,6 +23,7 @@ import {
 } from '../spaces/XRSpace.js';
 import { mat4, quat, vec3 } from 'gl-matrix';
 
+import { PRIVATE as XRDEVICE_PRIVATE } from '../device/XRDevice.js';
 import { XRJointPose } from '../pose/XRJointPose.js';
 import { XRMeshSet } from '../meshes/XRMesh.js';
 import { XRPlaneSet } from '../planes/XRPlane.js';
@@ -57,6 +59,7 @@ export class XRFrame {
 		tempMat4: mat4;
 		detectedPlanes: XRPlaneSet;
 		detectedMeshes: XRMeshSet;
+		trackedAnchors: XRAnchorSet;
 	};
 
 	constructor(
@@ -73,8 +76,9 @@ export class XRFrame {
 			animationFrame,
 			predictedDisplayTime,
 			tempMat4: mat4.create(),
-			detectedPlanes: new Set(),
-			detectedMeshes: new Set(),
+			detectedPlanes: new XRPlaneSet(),
+			detectedMeshes: new XRMeshSet(),
+			trackedAnchors: session[XRSESSION_PRIVATE].frameTrackedAnchors,
 		};
 	}
 
@@ -220,5 +224,42 @@ export class XRFrame {
 			);
 		}
 		return this[PRIVATE].detectedMeshes;
+	}
+
+	get trackedAnchors() {
+		if (!this[PRIVATE].active) {
+			throw new DOMException(
+				'XRFrame access outside the callback that produced it is invalid.',
+				'InvalidStateError',
+			);
+		}
+		return this[PRIVATE].trackedAnchors;
+	}
+
+	createAnchor(pose: XRRigidTransform, space: XRSpace) {
+		return new Promise<XRAnchor>((resolve, reject) => {
+			if (!this[PRIVATE].active) {
+				reject(
+					new DOMException(
+						'XRFrame access outside the callback that produced it is invalid.',
+						'InvalidStateError',
+					),
+				);
+			} else {
+				const globalSpace =
+					this[PRIVATE].session[XRSESSION_PRIVATE].device[XRDEVICE_PRIVATE]
+						.globalSpace;
+				const tempSpace = new XRSpace(space, pose.matrix);
+				const globalOffsetMatrix =
+					XRSpaceUtils.calculateGlobalOffsetMatrix(tempSpace);
+				const anchorSpace = new XRSpace(globalSpace, globalOffsetMatrix);
+				const anchor = new XRAnchor(anchorSpace, this[PRIVATE].session);
+				this[PRIVATE].session[XRSESSION_PRIVATE].trackedAnchors.add(anchor);
+				this[PRIVATE].session[XRSESSION_PRIVATE].newAnchors.set(anchor, {
+					resolve,
+					reject,
+				});
+			}
+		});
 	}
 }

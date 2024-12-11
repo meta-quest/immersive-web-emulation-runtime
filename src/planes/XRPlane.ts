@@ -84,4 +84,4 @@ export class XRPlane {
 	}
 }
 
-export type XRPlaneSet = Set<XRPlane>;
+export class XRPlaneSet extends Set<XRPlane> {}
