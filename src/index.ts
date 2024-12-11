@@ -48,6 +48,9 @@ export { XRHand } from './input/XRHand.js';
 // Layers
 export { XRWebGLLayer, XRLayer } from './layers/XRWebGLLayer.js';
 
+// Planes
+export { XRPlane } from './planes/XRPlane.js';
+
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';

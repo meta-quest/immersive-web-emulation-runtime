@@ -23,6 +23,7 @@ import {
 import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { XRJointPose } from '../pose/XRJointPose.js';
+import { XRPlaneSet } from '../planes/XRPlane.js';
 import { XRPose } from '../pose/XRPose.js';
 import { XRReferenceSpace } from '../spaces/XRReferenceSpace.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
@@ -53,6 +54,7 @@ export class XRFrame {
 		animationFrame: boolean;
 		predictedDisplayTime: number;
 		tempMat4: mat4;
+		detectedPlanes: XRPlaneSet;
 	};
 
 	constructor(
@@ -69,6 +71,7 @@ export class XRFrame {
 			animationFrame,
 			predictedDisplayTime,
 			tempMat4: mat4.create(),
+			detectedPlanes: new Set(),
 		};
 	}
 
@@ -194,5 +197,9 @@ export class XRFrame {
 			}
 		});
 		return true;
+	}
+
+	get detectedPlanes() {
+		return this[PRIVATE].detectedPlanes;
 	}
 }
