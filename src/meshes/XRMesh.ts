@@ -5,13 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { XRSemanticLabels } from '../labels/labels';
-import { XRSpace } from '../spaces/XRSpace';
-
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-mesh');
+import { P_MESH } from '../private.js';
+import { XRSemanticLabels } from '../labels/labels.js';
+import { XRSpace } from '../spaces/XRSpace.js';
 
 export class XRMesh {
-	[PRIVATE]: {
+	[P_MESH]: {
 		meshSpace: XRSpace;
 		vertices: Float32Array;
 		indices: Uint32Array;
@@ -25,7 +24,7 @@ export class XRMesh {
 		indices: Uint32Array,
 		semanticLabel?: XRSemanticLabels,
 	) {
-		this[PRIVATE] = {
+		this[P_MESH] = {
 			meshSpace,
 			vertices,
 			indices,
@@ -35,23 +34,23 @@ export class XRMesh {
 	}
 
 	get meshSpace() {
-		return this[PRIVATE].meshSpace;
+		return this[P_MESH].meshSpace;
 	}
 
 	get vertices(): Readonly<Float32Array> {
-		return this[PRIVATE].vertices;
+		return this[P_MESH].vertices;
 	}
 
 	get indices(): Readonly<Uint32Array> {
-		return this[PRIVATE].indices;
+		return this[P_MESH].indices;
 	}
 
 	get lastChangedTime() {
-		return this[PRIVATE].lastChangedTime;
+		return this[P_MESH].lastChangedTime;
 	}
 
 	get semanticLabel() {
-		return this[PRIVATE].semanticLabel;
+		return this[P_MESH].semanticLabel;
 	}
 }
 

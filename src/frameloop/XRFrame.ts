@@ -5,34 +5,27 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import {
+	P_DEVICE,
+	P_FRAME,
+	P_JOINT_SPACE,
+	P_SESSION,
+	P_SPACE,
+} from '../private.js';
 import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
 import { XREye, XRView } from '../views/XRView.js';
-import {
-	PRIVATE as XRJOINTSPACE_PRIVATE,
-	XRJointSpace,
-} from '../spaces/XRJointSpace.js';
-import {
-	PRIVATE as XRSESSION_PRIVATE,
-	XRSession,
-	XRSessionMode,
-} from '../session/XRSession.js';
-import {
-	PRIVATE as XRSPACE_PRIVATE,
-	XRSpace,
-	XRSpaceUtils,
-} from '../spaces/XRSpace.js';
+import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
 import { mat4, quat, vec3 } from 'gl-matrix';
 
-import { PRIVATE as XRDEVICE_PRIVATE } from '../device/XRDevice.js';
 import { XRJointPose } from '../pose/XRJointPose.js';
+import { XRJointSpace } from '../spaces/XRJointSpace.js';
 import { XRMeshSet } from '../meshes/XRMesh.js';
 import { XRPlaneSet } from '../planes/XRPlane.js';
 import { XRPose } from '../pose/XRPose.js';
 import { XRReferenceSpace } from '../spaces/XRReferenceSpace.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
+import { XRSession } from '../session/XRSession.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
-
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-frame');
 
 const spaceGlobalMatrix = mat4.create();
 const baseSpaceGlobalMatrix = mat4.create();
@@ -50,7 +43,7 @@ const getOffsetMatrix = (
 };
 
 export class XRFrame {
-	[PRIVATE]: {
+	[P_FRAME]: {
 		session: XRSession;
 		id: number;
 		active: boolean;
@@ -69,7 +62,7 @@ export class XRFrame {
 		animationFrame: boolean,
 		predictedDisplayTime: number,
 	) {
-		this[PRIVATE] = {
+		this[P_FRAME] = {
 			session,
 			id,
 			active,
@@ -78,30 +71,30 @@ export class XRFrame {
 			tempMat4: mat4.create(),
 			detectedPlanes: new XRPlaneSet(),
 			detectedMeshes: new XRMeshSet(),
-			trackedAnchors: session[XRSESSION_PRIVATE].frameTrackedAnchors,
+			trackedAnchors: session[P_SESSION].frameTrackedAnchors,
 		};
 	}
 
 	get session() {
-		return this[PRIVATE].session;
+		return this[P_FRAME].session;
 	}
 
 	get predictedDisplayTime() {
-		return this[PRIVATE].predictedDisplayTime;
+		return this[P_FRAME].predictedDisplayTime;
 	}
 
 	getPose(space: XRSpace, baseSpace: XRSpace) {
-		if (!this[PRIVATE].active) {
+		if (!this[P_FRAME].active) {
 			throw new DOMException(
 				'XRFrame access outside the callback that produced it is invalid.',
 				'InvalidStateError',
 			);
 		}
-		getOffsetMatrix(this[PRIVATE].tempMat4, space, baseSpace);
+		getOffsetMatrix(this[P_FRAME].tempMat4, space, baseSpace);
 		const position = vec3.create();
-		mat4.getTranslation(position, this[PRIVATE].tempMat4);
+		mat4.getTranslation(position, this[P_FRAME].tempMat4);
 		const orientation = quat.create();
-		mat4.getRotation(orientation, this[PRIVATE].tempMat4);
+		mat4.getRotation(orientation, this[P_FRAME].tempMat4);
 		return new XRPose(
 			new XRRigidTransform(
 				{ x: position[0], y: position[1], z: position[2], w: 1.0 },
@@ -112,22 +105,22 @@ export class XRFrame {
 					w: orientation[3],
 				},
 			),
-			space[XRSPACE_PRIVATE].emulated,
+			space[P_SPACE].emulated,
 		);
 	}
 
 	getViewerPose(referenceSpace: XRReferenceSpace) {
-		if (!this[PRIVATE].animationFrame) {
+		if (!this[P_FRAME].animationFrame) {
 			throw new DOMException(
 				'getViewerPose can only be called on XRFrame objects passed to XRSession.requestAnimationFrame callbacks.',
 				'InvalidStateError',
 			);
 		}
-		const session = this[PRIVATE].session;
-		const device = session[XRSESSION_PRIVATE].device;
+		const session = this[P_FRAME].session;
+		const device = session[P_SESSION].device;
 		const pose = this.getPose(device.viewerSpace, referenceSpace);
 		const eyes =
-			session[XRSESSION_PRIVATE].mode === XRSessionMode.Inline
+			session[P_SESSION].mode === 'inline'
 				? [XREye.None]
 				: [XREye.Left, XREye.Right];
 
@@ -135,8 +128,7 @@ export class XRFrame {
 		eyes.forEach((eye) => {
 			const viewSpace = device.viewSpaces[eye];
 			const viewPose = this.getPose(viewSpace, referenceSpace);
-			const projectionMatrix =
-				session[XRSESSION_PRIVATE].getProjectionMatrix(eye);
+			const projectionMatrix = session[P_SESSION].getProjectionMatrix(eye);
 			const view = new XRView(
 				eye,
 				new Float32Array(projectionMatrix),
@@ -151,14 +143,14 @@ export class XRFrame {
 
 	getJointPose(joint: XRJointSpace, baseSpace: XRSpace) {
 		const xrPose = this.getPose(joint, baseSpace);
-		const radius = joint[XRJOINTSPACE_PRIVATE].radius;
+		const radius = joint[P_JOINT_SPACE].radius;
 		return new XRJointPose(xrPose.transform, radius, false);
 	}
 
 	fillJointRadii(jointSpaces: XRJointSpace[], radii: Float32Array) {
 		// converting from sequence type to array
 		jointSpaces = Array.from(jointSpaces);
-		if (!this[PRIVATE].active) {
+		if (!this[P_FRAME].active) {
 			throw new DOMException(
 				'XRFrame access outside the callback that produced it is invalid.',
 				'InvalidStateError',
@@ -172,11 +164,11 @@ export class XRFrame {
 		}
 		let allValid = true;
 		for (let offset = 0; offset < jointSpaces.length; offset++) {
-			if (!jointSpaces[offset][XRJOINTSPACE_PRIVATE].radius) {
+			if (!jointSpaces[offset][P_JOINT_SPACE].radius) {
 				radii[offset] = NaN;
 				allValid = false;
 			} else {
-				radii[offset] = jointSpaces[offset][XRJOINTSPACE_PRIVATE].radius;
+				radii[offset] = jointSpaces[offset][P_JOINT_SPACE].radius;
 			}
 		}
 		return allValid;
@@ -185,7 +177,7 @@ export class XRFrame {
 	fillPoses(spaces: XRSpace[], baseSpace: XRSpace, transforms: Float32Array) {
 		// converting from sequence type to array
 		spaces = Array.from(spaces);
-		if (!this[PRIVATE].active) {
+		if (!this[P_FRAME].active) {
 			throw new DOMException(
 				'XRFrame access outside the callback that produced it is invalid.',
 				'InvalidStateError',
@@ -198,47 +190,47 @@ export class XRFrame {
 			);
 		}
 		spaces.forEach((space, i) => {
-			getOffsetMatrix(this[PRIVATE].tempMat4, space, baseSpace);
+			getOffsetMatrix(this[P_FRAME].tempMat4, space, baseSpace);
 			for (let j = 0; j < 16; j++) {
-				transforms[i * 16 + j] = this[PRIVATE].tempMat4[j];
+				transforms[i * 16 + j] = this[P_FRAME].tempMat4[j];
 			}
 		});
 		return true;
 	}
 
 	get detectedPlanes() {
-		if (!this[PRIVATE].active) {
+		if (!this[P_FRAME].active) {
 			throw new DOMException(
 				'XRFrame access outside the callback that produced it is invalid.',
 				'InvalidStateError',
 			);
 		}
-		return this[PRIVATE].detectedPlanes;
+		return this[P_FRAME].detectedPlanes;
 	}
 
 	get detectedMeshes() {
-		if (!this[PRIVATE].active) {
+		if (!this[P_FRAME].active) {
 			throw new DOMException(
 				'XRFrame access outside the callback that produced it is invalid.',
 				'InvalidStateError',
 			);
 		}
-		return this[PRIVATE].detectedMeshes;
+		return this[P_FRAME].detectedMeshes;
 	}
 
 	get trackedAnchors() {
-		if (!this[PRIVATE].active) {
+		if (!this[P_FRAME].active) {
 			throw new DOMException(
 				'XRFrame access outside the callback that produced it is invalid.',
 				'InvalidStateError',
 			);
 		}
-		return this[PRIVATE].trackedAnchors;
+		return this[P_FRAME].trackedAnchors;
 	}
 
 	createAnchor(pose: XRRigidTransform, space: XRSpace) {
 		return new Promise<XRAnchor>((resolve, reject) => {
-			if (!this[PRIVATE].active) {
+			if (!this[P_FRAME].active) {
 				reject(
 					new DOMException(
 						'XRFrame access outside the callback that produced it is invalid.',
@@ -247,15 +239,14 @@ export class XRFrame {
 				);
 			} else {
 				const globalSpace =
-					this[PRIVATE].session[XRSESSION_PRIVATE].device[XRDEVICE_PRIVATE]
-						.globalSpace;
+					this[P_FRAME].session[P_SESSION].device[P_DEVICE].globalSpace;
 				const tempSpace = new XRSpace(space, pose.matrix);
 				const globalOffsetMatrix =
 					XRSpaceUtils.calculateGlobalOffsetMatrix(tempSpace);
 				const anchorSpace = new XRSpace(globalSpace, globalOffsetMatrix);
-				const anchor = new XRAnchor(anchorSpace, this[PRIVATE].session);
-				this[PRIVATE].session[XRSESSION_PRIVATE].trackedAnchors.add(anchor);
-				this[PRIVATE].session[XRSESSION_PRIVATE].newAnchors.set(anchor, {
+				const anchor = new XRAnchor(anchorSpace, this[P_FRAME].session);
+				this[P_FRAME].session[P_SESSION].trackedAnchors.add(anchor);
+				this[P_FRAME].session[P_SESSION].newAnchors.set(anchor, {
 					resolve,
 					reject,
 				});

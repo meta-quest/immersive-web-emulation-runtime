@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { WebXRFeatures, XRDevice } from '../../src/device/XRDevice';
+import { XRDevice, XRDeviceConfig } from '../../src/device/XRDevice';
 import {
 	XREnvironmentBlendMode,
 	XRInteractionMode,
@@ -18,42 +18,33 @@ import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta';
 describe('XRSystem', () => {
 	let xrDevice: XRDevice;
 	let xrSystem: XRSystem;
-	const arvrDeviceConfig = {
+	const arvrDeviceConfig: XRDeviceConfig = {
 		name: 'AR VR Device',
 		controllerConfig: metaQuestTouchPlus,
-		supportedSessionModes: [
-			XRSessionMode.Inline,
-			XRSessionMode.ImmersiveVR,
-			XRSessionMode.ImmersiveAR,
-		],
-		supportedFeatures: [
-			WebXRFeatures.Viewer,
-			WebXRFeatures.Local,
-			WebXRFeatures.LocalFloor,
-			WebXRFeatures.HandTracking,
-		],
+		supportedSessionModes: ['inline', 'immersive-vr', 'immersive-ar'],
+		supportedFeatures: ['viewer', 'local', 'local-floor', 'hand-tracking'],
 		supportedFrameRates: [72, 80, 90, 120],
 		isSystemKeyboardSupported: true,
 		internalNominalFrameRate: 90,
 		environmentBlendModes: {
-			[XRSessionMode.ImmersiveVR]: XREnvironmentBlendMode.Opaque,
-			[XRSessionMode.ImmersiveAR]: XREnvironmentBlendMode.AlphaBlend,
+			'immersive-vr': XREnvironmentBlendMode.Opaque,
+			'immersive-ar': XREnvironmentBlendMode.AlphaBlend,
 		},
 		interactionMode: XRInteractionMode.WorldSpace,
 		userAgent: 'Test user agent',
 	};
 
-	const vrOnlyDeviceConfig = {
+	const vrOnlyDeviceConfig: XRDeviceConfig = {
 		name: 'VR Device',
 		controllerConfig: metaQuestTouchPlus,
-		supportedSessionModes: [XRSessionMode.Inline, XRSessionMode.ImmersiveVR],
+		supportedSessionModes: ['inline', 'immersive-vr'],
 		supportedFeatures: arvrDeviceConfig.supportedFeatures,
 		supportedFrameRates: arvrDeviceConfig.supportedFrameRates,
 		isSystemKeyboardSupported: true,
 		internalNominalFrameRate: 90,
 		environmentBlendModes: {
-			[XRSessionMode.ImmersiveVR]: XREnvironmentBlendMode.Opaque,
-			[XRSessionMode.ImmersiveAR]: XREnvironmentBlendMode.AlphaBlend,
+			'immersive-vr': XREnvironmentBlendMode.Opaque,
+			'immersive-ar': XREnvironmentBlendMode.AlphaBlend,
 		},
 		interactionMode: XRInteractionMode.WorldSpace,
 		userAgent: 'Test user agent',
@@ -111,7 +102,7 @@ describe('XRSystem', () => {
 		xrSystem = new XRSystem(xrDevice);
 		await expect(
 			xrSystem.requestSession('immersive-ar' as XRSessionMode, {
-				requiredFeatures: [WebXRFeatures.Anchors],
+				requiredFeatures: ['anchors'],
 			}),
 		).rejects.toThrow();
 	});
@@ -123,8 +114,8 @@ describe('XRSystem', () => {
 			'immersive-ar' as XRSessionMode,
 		);
 		expect(session).not.toBeNull();
-		expect(session.enabledFeatures).toContain(WebXRFeatures.Viewer);
-		expect(session.enabledFeatures).toContain(WebXRFeatures.Local);
+		expect(session.enabledFeatures).toContain('viewer');
+		expect(session.enabledFeatures).toContain('local');
 	});
 
 	test('requestSession should return XRSession with correct list of enabled features', async () => {
@@ -133,12 +124,12 @@ describe('XRSystem', () => {
 		const session = await xrSystem.requestSession(
 			'immersive-ar' as XRSessionMode,
 			{
-				requiredFeatures: [WebXRFeatures.HandTracking],
-				optionalFeatures: [WebXRFeatures.Anchors],
+				requiredFeatures: ['hand-tracking'],
+				optionalFeatures: ['anchors'],
 			},
 		);
 		expect(session).not.toBeNull();
-		expect(session.enabledFeatures).toContain(WebXRFeatures.HandTracking);
-		expect(session.enabledFeatures).not.toContain(WebXRFeatures.Anchors);
+		expect(session.enabledFeatures).toContain('hand-tracking');
+		expect(session.enabledFeatures).not.toContain('anchors');
 	});
 });

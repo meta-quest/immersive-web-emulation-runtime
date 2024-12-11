@@ -6,17 +6,15 @@
  */
 
 import {
-	WebXRFeatures,
-	PRIVATE as XRDEVICE_PRIVATE,
-	XRDevice,
-} from '../device/XRDevice.js';
-import {
-	PRIVATE as XRANCHOR_PRIVATE,
-	XRAnchor,
-	XRAnchorSet,
-	XRAnchorUtils,
-} from '../anchors/XRAnchor.js';
-import { PRIVATE as XRFRAME_PRIVATE, XRFrame } from '../frameloop/XRFrame.js';
+	P_ANCHOR,
+	P_DEVICE,
+	P_FRAME,
+	P_SESSION,
+	P_SPACE,
+	P_WEBGL_LAYER,
+} from '../private.js';
+import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
+import { XRAnchor, XRAnchorSet, XRAnchorUtils } from '../anchors/XRAnchor.js';
 import { XRInputSource, XRInputSourceArray } from '../input/XRInputSource.js';
 import {
 	XRInputSourcesChangeEvent,
@@ -33,26 +31,17 @@ import {
 } from '../events/XRSessionEvent.js';
 
 import { XREye } from '../views/XRView.js';
+import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSourceEventHandler } from '../events/XRInputSourceEvent.js';
-import { PRIVATE as XRSPACE_PRIVATE } from '../spaces/XRSpace.js';
-import { PRIVATE as XRWEBGLLAYER_PRIVATE } from '../layers/XRWebGLLayer.js';
 import { mat4 } from 'gl-matrix';
 
-export enum XRVisibilityState {
-	Visible = 'visible',
-	VisibleBlurred = 'visible-blurred',
-	Hidden = 'hidden',
-}
+export type XRVisibilityState = 'visible' | 'visible-blurred' | 'hidden';
 
-export enum XRSessionMode {
-	Inline = 'inline',
-	ImmersiveVR = 'immersive-vr',
-	ImmersiveAR = 'immersive-ar',
-}
+export type XRSessionMode = 'inline' | 'immersive-vr' | 'immersive-ar';
 
 export type XRSessionInit = {
-	requiredFeatures?: string[];
-	optionalFeatures?: string[];
+	requiredFeatures?: WebXRFeature[];
+	optionalFeatures?: WebXRFeature[];
 };
 
 export enum XREnvironmentBlendMode {
@@ -77,10 +66,8 @@ type CallbackData = {
 	cancelled: boolean;
 };
 
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-session');
-
 export class XRSession extends EventTarget {
-	[PRIVATE]: {
+	[P_SESSION]: {
 		device: XRDevice;
 		enabledFeatures: Array<string>;
 		isSystemKeyboardSupported: boolean;
@@ -141,7 +128,7 @@ export class XRSession extends EventTarget {
 		enabledFeatures: string[],
 	) {
 		super();
-		this[PRIVATE] = {
+		this[P_SESSION] = {
 			device,
 			mode,
 			renderState: new XRRenderState(),
@@ -155,10 +142,10 @@ export class XRSession extends EventTarget {
 				[XREye.None]: mat4.create(),
 			},
 			getProjectionMatrix: (eye: XREye) => {
-				return this[PRIVATE].projectionMatrices[eye];
+				return this[P_SESSION].projectionMatrices[eye];
 			},
 			referenceSpaceIsSupported: (referenceSpaceType: XRReferenceSpaceType) => {
-				if (!this[PRIVATE].enabledFeatures.includes(referenceSpaceType)) {
+				if (!this[P_SESSION].enabledFeatures.includes(referenceSpaceType)) {
 					return false;
 				}
 				switch (referenceSpaceType) {
@@ -168,30 +155,30 @@ export class XRSession extends EventTarget {
 					case XRReferenceSpaceType.LocalFloor:
 					case XRReferenceSpaceType.BoundedFloor:
 					case XRReferenceSpaceType.Unbounded:
-						return this[PRIVATE].mode != XRSessionMode.Inline;
+						return this[P_SESSION].mode != 'inline';
 				}
 			},
 			frameHandle: 0,
 			frameCallbacks: [],
 			currentFrameCallbacks: null,
 			onDeviceFrame: () => {
-				if (this[PRIVATE].ended) {
+				if (this[P_SESSION].ended) {
 					return;
 				}
 
-				this[PRIVATE].deviceFrameHandle = globalThis.requestAnimationFrame(
-					this[PRIVATE].onDeviceFrame,
+				this[P_SESSION].deviceFrameHandle = globalThis.requestAnimationFrame(
+					this[P_SESSION].onDeviceFrame,
 				);
 
-				if (this[PRIVATE].pendingRenderState != null) {
-					this[PRIVATE].renderState = this[PRIVATE].pendingRenderState;
-					this[PRIVATE].pendingRenderState = null;
-					this[PRIVATE].device[XRDEVICE_PRIVATE].onBaseLayerSet(
-						this[PRIVATE].renderState.baseLayer,
+				if (this[P_SESSION].pendingRenderState != null) {
+					this[P_SESSION].renderState = this[P_SESSION].pendingRenderState;
+					this[P_SESSION].pendingRenderState = null;
+					this[P_SESSION].device[P_DEVICE].onBaseLayerSet(
+						this[P_SESSION].renderState.baseLayer,
 					);
 				}
 
-				const baseLayer = this[PRIVATE].renderState.baseLayer;
+				const baseLayer = this[P_SESSION].renderState.baseLayer;
 				if (baseLayer === null) {
 					return;
 				}
@@ -226,7 +213,7 @@ export class XRSession extends EventTarget {
 				 * prevent rendering artifacts from past frames. It ensures that each new frame starts
 				 * with a clean slate.
 				 */
-				if (this[PRIVATE].mode != XRSessionMode.Inline) {
+				if (this[P_SESSION].mode != 'inline') {
 					const currentClearColor = context.getParameter(
 						context.COLOR_CLEAR_VALUE,
 					);
@@ -255,45 +242,46 @@ export class XRSession extends EventTarget {
 				}
 
 				// Calculate projection matrices
-				const { depthNear, depthFar } = this[PRIVATE].renderState;
+				const { depthNear, depthFar } = this[P_SESSION].renderState;
 				const { width, height } = canvas;
-				if (this[PRIVATE].mode !== XRSessionMode.Inline) {
+				if (this[P_SESSION].mode !== 'inline') {
 					const aspect =
-						(width * (this[PRIVATE].device.stereoEnabled ? 0.5 : 1.0)) / height;
+						(width * (this[P_SESSION].device.stereoEnabled ? 0.5 : 1.0)) /
+						height;
 					mat4.perspective(
-						this[PRIVATE].projectionMatrices[XREye.Left],
-						this[PRIVATE].device.fovy,
+						this[P_SESSION].projectionMatrices[XREye.Left],
+						this[P_SESSION].device.fovy,
 						aspect,
 						depthNear,
 						depthFar,
 					);
 					mat4.copy(
-						this[PRIVATE].projectionMatrices[XREye.Right],
-						this[PRIVATE].projectionMatrices[XREye.Left],
+						this[P_SESSION].projectionMatrices[XREye.Right],
+						this[P_SESSION].projectionMatrices[XREye.Left],
 					);
 				} else {
 					const aspect = width / height;
 					mat4.perspective(
-						this[PRIVATE].projectionMatrices[XREye.None],
-						this[PRIVATE].renderState.inlineVerticalFieldOfView!,
+						this[P_SESSION].projectionMatrices[XREye.None],
+						this[P_SESSION].renderState.inlineVerticalFieldOfView!,
 						aspect,
 						depthNear,
 						depthFar,
 					);
 				}
 
-				this[PRIVATE].updateTrackedAnchors();
+				this[P_SESSION].updateTrackedAnchors();
 
 				const frame = new XRFrame(
 					this,
-					this[PRIVATE].frameHandle,
+					this[P_SESSION].frameHandle,
 					true,
 					true,
 					performance.now(),
 				);
 
-				this[PRIVATE].device[XRDEVICE_PRIVATE].onFrameStart(frame);
-				this[PRIVATE].updateActiveInputSources();
+				this[P_SESSION].device[P_DEVICE].onFrameStart(frame);
+				this[P_SESSION].updateActiveInputSources();
 
 				/*
 				 * For each entry in callbacks, in order:
@@ -303,10 +291,10 @@ export class XRSession extends EventTarget {
 				 */
 				// - Let callbacks be a list of the entries in session’s list of animation frame
 				//   callback, in the order in which they were added to the list.
-				const callbacks = (this[PRIVATE].currentFrameCallbacks =
-					this[PRIVATE].frameCallbacks);
+				const callbacks = (this[P_SESSION].currentFrameCallbacks =
+					this[P_SESSION].frameCallbacks);
 				// - Set session’s list of animation frame callbacks to the empty list.
-				this[PRIVATE].frameCallbacks = [];
+				this[P_SESSION].frameCallbacks = [];
 				const rightNow = performance.now();
 				for (let i = 0; i < callbacks.length; i++) {
 					try {
@@ -317,28 +305,27 @@ export class XRSession extends EventTarget {
 						console.error(err);
 					}
 				}
-				this[PRIVATE].currentFrameCallbacks = null;
+				this[P_SESSION].currentFrameCallbacks = null;
 
 				// - Set frame’s active boolean to false.
-				frame[XRFRAME_PRIVATE].active = false;
+				frame[P_FRAME].active = false;
 			},
 			nominalFrameRate: device.internalNominalFrameRate,
 			referenceSpaces: [],
 			inputSourceArray: [],
 			activeInputSources: [],
 			updateActiveInputSources: () => {
-				const handTrackingOn = this[PRIVATE].enabledFeatures.includes(
-					WebXRFeatures.HandTracking,
-				);
-				const prevInputs = this[PRIVATE].activeInputSources;
-				const currInputs = this[PRIVATE].device.inputSources.filter(
+				const handTrackingOn =
+					this[P_SESSION].enabledFeatures.includes('hand-tracking');
+				const prevInputs = this[P_SESSION].activeInputSources;
+				const currInputs = this[P_SESSION].device.inputSources.filter(
 					(inputSource) => !inputSource.hand || handTrackingOn,
 				);
 
 				const added = currInputs.filter((item) => !prevInputs.includes(item));
 				const removed = prevInputs.filter((item) => !currInputs.includes(item));
 
-				this[PRIVATE].activeInputSources = currInputs;
+				this[P_SESSION].activeInputSources = currInputs;
 
 				if (added.length > 0 || removed.length > 0) {
 					this.dispatchEvent(
@@ -355,13 +342,13 @@ export class XRSession extends EventTarget {
 			newAnchors: new Map(),
 			frameTrackedAnchors: new XRAnchorSet(),
 			updateTrackedAnchors: () => {
-				if (this[PRIVATE].enabledFeatures.includes('anchors')) {
-					this[PRIVATE].frameTrackedAnchors.clear();
-					Array.from(this[PRIVATE].trackedAnchors).forEach((anchor) => {
-						if (anchor[XRANCHOR_PRIVATE].deleted) {
-							this[PRIVATE].trackedAnchors.delete(anchor);
-							if (this[PRIVATE].newAnchors.has(anchor)) {
-								const { reject } = this[PRIVATE].newAnchors.get(anchor)!;
+				if (this[P_SESSION].enabledFeatures.includes('anchors')) {
+					this[P_SESSION].frameTrackedAnchors.clear();
+					Array.from(this[P_SESSION].trackedAnchors).forEach((anchor) => {
+						if (anchor[P_ANCHOR].deleted) {
+							this[P_SESSION].trackedAnchors.delete(anchor);
+							if (this[P_SESSION].newAnchors.has(anchor)) {
+								const { reject } = this[P_SESSION].newAnchors.get(anchor)!;
 								reject(
 									new DOMException(
 										'Anchor is no longer tracked',
@@ -370,11 +357,11 @@ export class XRSession extends EventTarget {
 								);
 							}
 						} else {
-							this[PRIVATE].frameTrackedAnchors.add(anchor);
-							if (this[PRIVATE].newAnchors.has(anchor)) {
-								const { resolve } = this[PRIVATE].newAnchors.get(anchor)!;
+							this[P_SESSION].frameTrackedAnchors.add(anchor);
+							if (this[P_SESSION].newAnchors.has(anchor)) {
+								const { resolve } = this[P_SESSION].newAnchors.get(anchor)!;
 								resolve(anchor);
-								this[PRIVATE].newAnchors.delete(anchor);
+								this[P_SESSION].newAnchors.delete(anchor);
 							}
 						}
 					});
@@ -395,66 +382,65 @@ export class XRSession extends EventTarget {
 		XRAnchorUtils.recoverPersistentAnchorsFromStorage(this);
 
 		// start the frameloop
-		this[PRIVATE].onDeviceFrame();
+		this[P_SESSION].onDeviceFrame();
 	}
 
 	get visibilityState(): XRVisibilityState {
-		return this[PRIVATE].device.visibilityState;
+		return this[P_SESSION].device.visibilityState;
 	}
 
 	get frameRate(): number | undefined {
-		return this[PRIVATE].nominalFrameRate;
+		return this[P_SESSION].nominalFrameRate;
 	}
 
 	get supportedFrameRates(): Float32Array | undefined {
-		return new Float32Array(this[PRIVATE].device.supportedFrameRates);
+		return new Float32Array(this[P_SESSION].device.supportedFrameRates);
 	}
 
 	get renderState(): XRRenderState {
-		return this[PRIVATE].renderState;
+		return this[P_SESSION].renderState;
 	}
 
 	get inputSources(): XRInputSourceArray {
 		// use the same array object
-		this[PRIVATE].inputSourceArray.length = 0;
-		if (!this[PRIVATE].ended && this[PRIVATE].mode !== XRSessionMode.Inline) {
-			this[PRIVATE].inputSourceArray.push(...this[PRIVATE].activeInputSources);
+		this[P_SESSION].inputSourceArray.length = 0;
+		if (!this[P_SESSION].ended && this[P_SESSION].mode !== 'inline') {
+			this[P_SESSION].inputSourceArray.push(
+				...this[P_SESSION].activeInputSources,
+			);
 		}
-		return this[PRIVATE].inputSourceArray;
+		return this[P_SESSION].inputSourceArray;
 	}
 
 	get enabledFeatures(): Array<string> {
-		return this[PRIVATE].enabledFeatures;
+		return this[P_SESSION].enabledFeatures;
 	}
 
 	get isSystemKeyboardSupported(): boolean {
-		return this[PRIVATE].isSystemKeyboardSupported;
+		return this[P_SESSION].isSystemKeyboardSupported;
 	}
 
 	get environmentBlendMode(): XREnvironmentBlendMode {
 		return (
-			this[PRIVATE].device[XRDEVICE_PRIVATE].environmentBlendModes[
-				this[PRIVATE].mode
+			this[P_SESSION].device[P_DEVICE].environmentBlendModes[
+				this[P_SESSION].mode
 			] ?? XREnvironmentBlendMode.Opaque
 		);
 	}
 
 	get interactionMode(): XRInteractionMode {
-		return this[PRIVATE].device[XRDEVICE_PRIVATE].interactionMode;
+		return this[P_SESSION].device[P_DEVICE].interactionMode;
 	}
 
 	updateRenderState(state: XRRenderStateInit = {}): void {
-		if (this[PRIVATE].ended) {
+		if (this[P_SESSION].ended) {
 			throw new DOMException(
 				'XRSession has already ended.',
 				'InvalidStateError',
 			);
 		}
 
-		if (
-			state.baseLayer &&
-			state.baseLayer[XRWEBGLLAYER_PRIVATE].session !== this
-		) {
+		if (state.baseLayer && state.baseLayer[P_WEBGL_LAYER].session !== this) {
 			throw new DOMException(
 				'Base layer was created by a different XRSession',
 				'InvalidStateError',
@@ -463,7 +449,7 @@ export class XRSession extends EventTarget {
 
 		if (
 			state.inlineVerticalFieldOfView != null &&
-			this[PRIVATE].mode !== XRSessionMode.Inline
+			this[P_SESSION].mode !== 'inline'
 		) {
 			throw new DOMException(
 				'InlineVerticalFieldOfView must not be set for an immersive session',
@@ -474,25 +460,25 @@ export class XRSession extends EventTarget {
 		const compoundStateInit: XRRenderStateInit = {
 			baseLayer:
 				state.baseLayer ||
-				this[PRIVATE].pendingRenderState?.baseLayer ||
+				this[P_SESSION].pendingRenderState?.baseLayer ||
 				undefined,
 			depthFar:
 				state.depthFar ||
-				this[PRIVATE].pendingRenderState?.depthFar ||
+				this[P_SESSION].pendingRenderState?.depthFar ||
 				undefined,
 			depthNear:
 				state.depthNear ||
-				this[PRIVATE].pendingRenderState?.depthNear ||
+				this[P_SESSION].pendingRenderState?.depthNear ||
 				undefined,
 			inlineVerticalFieldOfView:
 				state.inlineVerticalFieldOfView ||
-				this[PRIVATE].pendingRenderState?.inlineVerticalFieldOfView ||
+				this[P_SESSION].pendingRenderState?.inlineVerticalFieldOfView ||
 				undefined,
 		};
 
-		this[PRIVATE].pendingRenderState = new XRRenderState(
+		this[P_SESSION].pendingRenderState = new XRRenderState(
 			compoundStateInit,
-			this[PRIVATE].renderState,
+			this[P_SESSION].renderState,
 		);
 	}
 
@@ -500,11 +486,11 @@ export class XRSession extends EventTarget {
 	// display frame rate of the device will be executed
 	async updateTargetFrameRate(rate: number): Promise<void> {
 		return new Promise<void>((resolve, reject) => {
-			if (this[PRIVATE].ended) {
+			if (this[P_SESSION].ended) {
 				reject(
 					new DOMException('XRSession has already ended.', 'InvalidStateError'),
 				);
-			} else if (!this[PRIVATE].device.supportedFrameRates.includes(rate)) {
+			} else if (!this[P_SESSION].device.supportedFrameRates.includes(rate)) {
 				reject(
 					new DOMException(
 						'Requested frame rate not supported.',
@@ -512,12 +498,12 @@ export class XRSession extends EventTarget {
 					),
 				);
 			} else {
-				if (this[PRIVATE].nominalFrameRate === rate) {
+				if (this[P_SESSION].nominalFrameRate === rate) {
 					console.log(
 						`Requested frame rate is the same as the current nominal frame rate, no update made`,
 					);
 				} else {
-					this[PRIVATE].nominalFrameRate = rate;
+					this[P_SESSION].nominalFrameRate = rate;
 					this.dispatchEvent(
 						new XRSessionEvent('frameratechange', { session: this }),
 					);
@@ -533,8 +519,8 @@ export class XRSession extends EventTarget {
 	): Promise<XRReferenceSpace> {
 		return new Promise<XRReferenceSpace>((resolve, reject) => {
 			if (
-				this[PRIVATE].ended ||
-				!this[PRIVATE].referenceSpaceIsSupported(type)
+				this[P_SESSION].ended ||
+				!this[P_SESSION].referenceSpaceIsSupported(type)
 			) {
 				reject(
 					new DOMException(
@@ -547,14 +533,14 @@ export class XRSession extends EventTarget {
 			let referenceSpace: XRReferenceSpace;
 			switch (type) {
 				case XRReferenceSpaceType.Viewer:
-					referenceSpace = this[PRIVATE].device.viewerSpace;
+					referenceSpace = this[P_SESSION].device.viewerSpace;
 					break;
 				case XRReferenceSpaceType.Local:
 					// creating an XRReferenceSpace with the current headset transform in global space
 					referenceSpace = new XRReferenceSpace(
 						type,
-						this[PRIVATE].device[XRDEVICE_PRIVATE].globalSpace,
-						this[PRIVATE].device.viewerSpace[XRSPACE_PRIVATE].offsetMatrix,
+						this[P_SESSION].device[P_DEVICE].globalSpace,
+						this[P_SESSION].device.viewerSpace[P_SPACE].offsetMatrix,
 					);
 					break;
 				case XRReferenceSpaceType.LocalFloor:
@@ -563,21 +549,21 @@ export class XRSession extends EventTarget {
 					// TO-DO: add boundary geometry for bounded-floor
 					referenceSpace = new XRReferenceSpace(
 						type,
-						this[PRIVATE].device[XRDEVICE_PRIVATE].globalSpace,
+						this[P_SESSION].device[P_DEVICE].globalSpace,
 					);
 					break;
 			}
-			this[PRIVATE].referenceSpaces.push(referenceSpace);
+			this[P_SESSION].referenceSpaces.push(referenceSpace);
 			resolve(referenceSpace);
 		});
 	}
 
 	requestAnimationFrame(callback: XRFrameRequestCallback): number {
-		if (this[PRIVATE].ended) {
+		if (this[P_SESSION].ended) {
 			return 0;
 		}
-		const frameHandle = ++this[PRIVATE].frameHandle;
-		this[PRIVATE].frameCallbacks.push({
+		const frameHandle = ++this[P_SESSION].frameHandle;
+		this[P_SESSION].frameCallbacks.push({
 			handle: frameHandle,
 			callback,
 			cancelled: false,
@@ -587,7 +573,7 @@ export class XRSession extends EventTarget {
 
 	cancelAnimationFrame(handle: number): void {
 		// Remove the callback with that handle from the queue
-		let callbacks: CallbackData[] | null = this[PRIVATE].frameCallbacks;
+		let callbacks: CallbackData[] | null = this[P_SESSION].frameCallbacks;
 		let index = callbacks.findIndex((d) => d && d.handle === handle);
 		if (index > -1) {
 			callbacks[index].cancelled = true;
@@ -595,7 +581,7 @@ export class XRSession extends EventTarget {
 		}
 		// If cancelAnimationFrame is called from within a frame callback, also check
 		// the remaining callbacks for the current frame:
-		callbacks = this[PRIVATE].currentFrameCallbacks;
+		callbacks = this[P_SESSION].currentFrameCallbacks;
 		if (callbacks) {
 			index = callbacks.findIndex((d) => d && d.handle === handle);
 			if (index > -1) {
@@ -607,13 +593,13 @@ export class XRSession extends EventTarget {
 
 	async end(): Promise<void> {
 		return new Promise((resolve, reject) => {
-			if (this[PRIVATE].ended || this[PRIVATE].deviceFrameHandle === null) {
+			if (this[P_SESSION].ended || this[P_SESSION].deviceFrameHandle === null) {
 				reject(
 					new DOMException('XRSession has already ended.', 'InvalidStateError'),
 				);
 			} else {
-				globalThis.cancelAnimationFrame(this[PRIVATE].deviceFrameHandle!);
-				this[PRIVATE].device[XRDEVICE_PRIVATE].onSessionEnd();
+				globalThis.cancelAnimationFrame(this[P_SESSION].deviceFrameHandle!);
+				this[P_SESSION].device[P_DEVICE].onSessionEnd();
 				this.dispatchEvent(new XRSessionEvent('end', { session: this }));
 				resolve();
 			}
@@ -622,25 +608,25 @@ export class XRSession extends EventTarget {
 
 	// anchors
 	get persistentAnchors(): Readonly<string[]> {
-		return Array.from(this[PRIVATE].persistentAnchors.keys());
+		return Array.from(this[P_SESSION].persistentAnchors.keys());
 	}
 
 	restorePersistentAnchor(uuid: string): Promise<XRAnchor> {
 		return new Promise<XRAnchor>((resolve, reject) => {
-			if (!this[PRIVATE].persistentAnchors.has(uuid)) {
+			if (!this[P_SESSION].persistentAnchors.has(uuid)) {
 				reject(
 					new DOMException(
 						`Persistent anchor with uuid ${uuid} not found.`,
 						'InvalidStateError',
 					),
 				);
-			} else if (this[PRIVATE].ended) {
+			} else if (this[P_SESSION].ended) {
 				reject(
 					new DOMException('XRSession has already ended.', 'InvalidStateError'),
 				);
 			} else {
-				const anchor = this[PRIVATE].persistentAnchors.get(uuid)!;
-				if (this[PRIVATE].newAnchors.has(anchor)) {
+				const anchor = this[P_SESSION].persistentAnchors.get(uuid)!;
+				if (this[P_SESSION].newAnchors.has(anchor)) {
 					reject(
 						new DOMException(
 							`Multiple concurrent attempts detected to restore the anchor with UUID: ${uuid}.`,
@@ -648,8 +634,8 @@ export class XRSession extends EventTarget {
 						),
 					);
 				} else {
-					this[PRIVATE].trackedAnchors.add(anchor);
-					this[PRIVATE].newAnchors.set(anchor, { resolve, reject });
+					this[P_SESSION].trackedAnchors.add(anchor);
+					this[P_SESSION].newAnchors.set(anchor, { resolve, reject });
 				}
 			}
 		});
@@ -657,7 +643,7 @@ export class XRSession extends EventTarget {
 
 	deletePersistentAnchor(uuid: string): Promise<undefined> {
 		return new Promise<undefined>((resolve, reject) => {
-			if (!this[PRIVATE].persistentAnchors.has(uuid)) {
+			if (!this[P_SESSION].persistentAnchors.has(uuid)) {
 				reject(
 					new DOMException(
 						`Persistent anchor with uuid ${uuid} not found.`,
@@ -665,8 +651,8 @@ export class XRSession extends EventTarget {
 					),
 				);
 			} else {
-				const anchor = this[PRIVATE].persistentAnchors.get(uuid)!;
-				this[PRIVATE].persistentAnchors.delete(uuid);
+				const anchor = this[P_SESSION].persistentAnchors.get(uuid)!;
+				this[P_SESSION].persistentAnchors.delete(uuid);
 				anchor.delete();
 				resolve(undefined);
 			}
@@ -675,167 +661,167 @@ export class XRSession extends EventTarget {
 
 	// events
 	get onend() {
-		return this[PRIVATE].onend ?? (() => {});
+		return this[P_SESSION].onend ?? (() => {});
 	}
 
 	set onend(callback: XRSessionEventHandler) {
-		if (this[PRIVATE].onend) {
-			this.removeEventListener('end', this[PRIVATE].onend as EventListener);
+		if (this[P_SESSION].onend) {
+			this.removeEventListener('end', this[P_SESSION].onend as EventListener);
 		}
-		this[PRIVATE].onend = callback;
+		this[P_SESSION].onend = callback;
 		if (callback) {
 			this.addEventListener('end', callback as EventListener);
 		}
 	}
 
 	get oninputsourceschange() {
-		return this[PRIVATE].oninputsourceschange ?? (() => {});
+		return this[P_SESSION].oninputsourceschange ?? (() => {});
 	}
 
 	set oninputsourceschange(callback: XRInputSourcesChangeEventHandler) {
-		if (this[PRIVATE].oninputsourceschange) {
+		if (this[P_SESSION].oninputsourceschange) {
 			this.removeEventListener(
 				'inputsourceschange',
-				this[PRIVATE].oninputsourceschange as EventListener,
+				this[P_SESSION].oninputsourceschange as EventListener,
 			);
 		}
-		this[PRIVATE].oninputsourceschange = callback;
+		this[P_SESSION].oninputsourceschange = callback;
 		if (callback) {
 			this.addEventListener('inputsourceschange', callback as EventListener);
 		}
 	}
 
 	get onselect() {
-		return this[PRIVATE].onselect ?? (() => {});
+		return this[P_SESSION].onselect ?? (() => {});
 	}
 
 	set onselect(callback: XRInputSourceEventHandler) {
-		if (this[PRIVATE].onselect) {
+		if (this[P_SESSION].onselect) {
 			this.removeEventListener(
 				'select',
-				this[PRIVATE].onselect as EventListener,
+				this[P_SESSION].onselect as EventListener,
 			);
 		}
-		this[PRIVATE].onselect = callback;
+		this[P_SESSION].onselect = callback;
 		if (callback) {
 			this.addEventListener('select', callback as EventListener);
 		}
 	}
 
 	get onselectstart() {
-		return this[PRIVATE].onselectstart ?? (() => {});
+		return this[P_SESSION].onselectstart ?? (() => {});
 	}
 
 	set onselectstart(callback: XRInputSourceEventHandler) {
-		if (this[PRIVATE].onselectstart) {
+		if (this[P_SESSION].onselectstart) {
 			this.removeEventListener(
 				'selectstart',
-				this[PRIVATE].onselectstart as EventListener,
+				this[P_SESSION].onselectstart as EventListener,
 			);
 		}
-		this[PRIVATE].onselectstart = callback;
+		this[P_SESSION].onselectstart = callback;
 		if (callback) {
 			this.addEventListener('selectstart', callback as EventListener);
 		}
 	}
 
 	get onselectend() {
-		return this[PRIVATE].onselectend ?? (() => {});
+		return this[P_SESSION].onselectend ?? (() => {});
 	}
 
 	set onselectend(callback: XRInputSourceEventHandler) {
-		if (this[PRIVATE].onselectend) {
+		if (this[P_SESSION].onselectend) {
 			this.removeEventListener(
 				'selectend',
-				this[PRIVATE].onselectend as EventListener,
+				this[P_SESSION].onselectend as EventListener,
 			);
 		}
-		this[PRIVATE].onselectend = callback;
+		this[P_SESSION].onselectend = callback;
 		if (callback) {
 			this.addEventListener('selectend', callback as EventListener);
 		}
 	}
 
 	get onsqueeze() {
-		return this[PRIVATE].onsqueeze ?? (() => {});
+		return this[P_SESSION].onsqueeze ?? (() => {});
 	}
 
 	set onsqueeze(callback: XRInputSourceEventHandler) {
-		if (this[PRIVATE].onsqueeze) {
+		if (this[P_SESSION].onsqueeze) {
 			this.removeEventListener(
 				'squeeze',
-				this[PRIVATE].onsqueeze as EventListener,
+				this[P_SESSION].onsqueeze as EventListener,
 			);
 		}
-		this[PRIVATE].onsqueeze = callback;
+		this[P_SESSION].onsqueeze = callback;
 		if (callback) {
 			this.addEventListener('squeeze', callback as EventListener);
 		}
 	}
 
 	get onsqueezestart() {
-		return this[PRIVATE].onsqueezestart ?? (() => {});
+		return this[P_SESSION].onsqueezestart ?? (() => {});
 	}
 
 	set onsqueezestart(callback: XRInputSourceEventHandler) {
-		if (this[PRIVATE].onsqueezestart) {
+		if (this[P_SESSION].onsqueezestart) {
 			this.removeEventListener(
 				'squeezestart',
-				this[PRIVATE].onsqueezestart as EventListener,
+				this[P_SESSION].onsqueezestart as EventListener,
 			);
 		}
-		this[PRIVATE].onsqueezestart = callback;
+		this[P_SESSION].onsqueezestart = callback;
 		if (callback) {
 			this.addEventListener('squeezestart', callback as EventListener);
 		}
 	}
 
 	get onsqueezeend() {
-		return this[PRIVATE].onsqueezeend ?? (() => {});
+		return this[P_SESSION].onsqueezeend ?? (() => {});
 	}
 
 	set onsqueezeend(callback: XRInputSourceEventHandler) {
-		if (this[PRIVATE].onsqueezeend) {
+		if (this[P_SESSION].onsqueezeend) {
 			this.removeEventListener(
 				'squeezeend',
-				this[PRIVATE].onsqueezeend as EventListener,
+				this[P_SESSION].onsqueezeend as EventListener,
 			);
 		}
-		this[PRIVATE].onsqueezeend = callback;
+		this[P_SESSION].onsqueezeend = callback;
 		if (callback) {
 			this.addEventListener('squeezeend', callback as EventListener);
 		}
 	}
 
 	get onvisibilitychange() {
-		return this[PRIVATE].onvisibilitychange ?? (() => {});
+		return this[P_SESSION].onvisibilitychange ?? (() => {});
 	}
 
 	set onvisibilitychange(callback: XRSessionEventHandler) {
-		if (this[PRIVATE].onvisibilitychange) {
+		if (this[P_SESSION].onvisibilitychange) {
 			this.removeEventListener(
 				'visibilitychange',
-				this[PRIVATE].onvisibilitychange as EventListener,
+				this[P_SESSION].onvisibilitychange as EventListener,
 			);
 		}
-		this[PRIVATE].onvisibilitychange = callback;
+		this[P_SESSION].onvisibilitychange = callback;
 		if (callback) {
 			this.addEventListener('visibilitychange', callback as EventListener);
 		}
 	}
 
 	get onframeratechange() {
-		return this[PRIVATE].onframeratechange ?? (() => {});
+		return this[P_SESSION].onframeratechange ?? (() => {});
 	}
 
 	set onframeratechange(callback: XRSessionEventHandler) {
-		if (this[PRIVATE].onframeratechange) {
+		if (this[P_SESSION].onframeratechange) {
 			this.removeEventListener(
 				'frameratechange',
-				this[PRIVATE].onframeratechange as EventListener,
+				this[P_SESSION].onframeratechange as EventListener,
 			);
 		}
-		this[PRIVATE].onframeratechange = callback;
+		this[P_SESSION].onframeratechange = callback;
 		if (callback) {
 			this.addEventListener('frameratechange', callback as EventListener);
 		}

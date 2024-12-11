@@ -6,6 +6,7 @@
  */
 
 import { Gamepad } from '../gamepad/Gamepad.js';
+import { P_INPUT_SOURCE } from '../private.js';
 import { XRHand } from './XRHand.js';
 import { XRSpace } from '../spaces/XRSpace.js';
 
@@ -24,12 +25,8 @@ export enum XRTargetRayMode {
 
 export class XRInputSourceArray extends Array<XRInputSource> {}
 
-export const PRIVATE = Symbol(
-	'@immersive-web-emulation-runtime/xr-input-source',
-);
-
 export class XRInputSource {
-	[PRIVATE]: {
+	[P_INPUT_SOURCE]: {
 		handedness: XRHandedness;
 		targetRayMode: XRTargetRayMode;
 		targetRaySpace: XRSpace;
@@ -48,7 +45,7 @@ export class XRInputSource {
 		gripSpace?: XRSpace,
 		hand?: XRHand,
 	) {
-		this[PRIVATE] = {
+		this[P_INPUT_SOURCE] = {
 			handedness,
 			targetRayMode,
 			targetRaySpace,
@@ -60,30 +57,30 @@ export class XRInputSource {
 	}
 
 	get handedness() {
-		return this[PRIVATE].handedness;
+		return this[P_INPUT_SOURCE].handedness;
 	}
 
 	get targetRayMode() {
-		return this[PRIVATE].targetRayMode;
+		return this[P_INPUT_SOURCE].targetRayMode;
 	}
 
 	get targetRaySpace() {
-		return this[PRIVATE].targetRaySpace;
+		return this[P_INPUT_SOURCE].targetRaySpace;
 	}
 
 	get gripSpace() {
-		return this[PRIVATE].gripSpace;
+		return this[P_INPUT_SOURCE].gripSpace;
 	}
 
 	get profiles() {
-		return this[PRIVATE].profiles;
+		return this[P_INPUT_SOURCE].profiles;
 	}
 
 	get gamepad() {
-		return this[PRIVATE].gamepad;
+		return this[P_INPUT_SOURCE].gamepad;
 	}
 
 	get hand() {
-		return this[PRIVATE].hand;
+		return this[P_INPUT_SOURCE].hand;
 	}
 }

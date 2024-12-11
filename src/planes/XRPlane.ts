@@ -5,10 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { XRSemanticLabels } from '../labels/labels';
-import { XRSpace } from '../spaces/XRSpace';
-
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-plane');
+import { P_PLANE } from '../private.js';
+import { XRSemanticLabels } from '../labels/labels.js';
+import { XRSpace } from '../spaces/XRSpace.js';
 
 export enum XRPlaneOrientation {
 	Horizontal = 'horizontal',
@@ -39,7 +38,7 @@ export const XREntityOrientation: Partial<
 };
 
 export class XRPlane {
-	[PRIVATE]: {
+	[P_PLANE]: {
 		planeSpace: XRSpace;
 		polygon: DOMPointReadOnly[];
 		lastChangedTime: DOMHighResTimeStamp;
@@ -52,7 +51,7 @@ export class XRPlane {
 		polygon: DOMPointReadOnly[],
 		semanticLabel?: XRSemanticLabels,
 	) {
-		this[PRIVATE] = {
+		this[P_PLANE] = {
 			planeSpace,
 			polygon,
 			lastChangedTime: performance.now(),
@@ -64,23 +63,23 @@ export class XRPlane {
 	}
 
 	get planeSpace() {
-		return this[PRIVATE].planeSpace;
+		return this[P_PLANE].planeSpace;
 	}
 
 	get polygon(): ReadonlyArray<DOMPointReadOnly> {
-		return this[PRIVATE].polygon;
+		return this[P_PLANE].polygon;
 	}
 
 	get orientation() {
-		return this[PRIVATE].orientation;
+		return this[P_PLANE].orientation;
 	}
 
 	get lastChangedTime() {
-		return this[PRIVATE].lastChangedTime;
+		return this[P_PLANE].lastChangedTime;
 	}
 
 	get semanticLabel() {
-		return this[PRIVATE].semanticLabel;
+		return this[P_PLANE].semanticLabel;
 	}
 }
 

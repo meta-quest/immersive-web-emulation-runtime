@@ -5,34 +5,34 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { WebXRFeatures, XRDevice } from '../device/XRDevice.js';
+import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
 import {
 	XRSession,
 	XRSessionInit,
 	XRSessionMode,
 } from '../session/XRSession.js';
 
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-system');
+import { P_SYSTEM } from '../private.js';
 
 export class XRSystem extends EventTarget {
-	[PRIVATE]: {
+	[P_SYSTEM]: {
 		device: XRDevice;
 		activeSession?: XRSession;
 	};
 
 	constructor(device: XRDevice) {
 		super();
-		this[PRIVATE] = { device };
+		this[P_SYSTEM] = { device };
 		// Initialize device change monitoring here if applicable
 	}
 
 	isSessionSupported(mode: XRSessionMode): Promise<boolean> {
 		return new Promise<boolean>((resolve, _reject) => {
-			if (mode === XRSessionMode.Inline) {
+			if (mode === 'inline') {
 				resolve(true);
 			} else {
 				// Check for spatial tracking permission if necessary
-				resolve(this[PRIVATE].device.supportedSessionModes.includes(mode));
+				resolve(this[P_SYSTEM].device.supportedSessionModes.includes(mode));
 			}
 		});
 	}
@@ -55,7 +55,7 @@ export class XRSystem extends EventTarget {
 					}
 
 					// Check for active sessions and other constraints here
-					if (this[PRIVATE].activeSession) {
+					if (this[P_SYSTEM].activeSession) {
 						reject(
 							new DOMException(
 								'An active XRSession already exists.',
@@ -67,7 +67,7 @@ export class XRSystem extends EventTarget {
 
 					// Handle required and optional features
 					const { requiredFeatures = [], optionalFeatures = [] } = options;
-					const { supportedFeatures } = this[PRIVATE].device;
+					const { supportedFeatures } = this[P_SYSTEM].device;
 
 					// Check if all required features are supported
 					const allRequiredSupported = requiredFeatures.every((feature) =>
@@ -88,26 +88,26 @@ export class XRSystem extends EventTarget {
 					);
 
 					// Combine required and supported optional features into enabled features
-					const enabledFeatures = Array.from(
+					const enabledFeatures: WebXRFeature[] = Array.from(
 						new Set([
 							...requiredFeatures,
 							...supportedOptionalFeatures,
-							WebXRFeatures.Viewer,
-							WebXRFeatures.Local,
+							'viewer',
+							'local',
 						]),
 					);
 
 					// Proceed with session creation
 					const session = new XRSession(
-						this[PRIVATE].device,
+						this[P_SYSTEM].device,
 						mode,
 						enabledFeatures,
 					);
-					this[PRIVATE].activeSession = session;
+					this[P_SYSTEM].activeSession = session;
 
 					// Listen for session end to clear the active session
 					session.addEventListener('end', () => {
-						this[PRIVATE].activeSession = undefined;
+						this[P_SYSTEM].activeSession = undefined;
 					});
 
 					resolve(session);

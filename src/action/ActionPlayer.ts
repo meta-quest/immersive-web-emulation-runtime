@@ -8,11 +8,16 @@
 import {
 	Axis,
 	Button,
-	PRIVATE as GAMEPAD_PRIVATE,
 	Gamepad,
 	GamepadButton,
 	GamepadMappingType,
 } from '../gamepad/Gamepad.js';
+import {
+	P_ACTION_PLAYER,
+	P_GAMEPAD,
+	P_JOINT_SPACE,
+	P_SPACE,
+} from '../private.js';
 import { XRHand, XRHandJoint } from '../input/XRHand.js';
 import {
 	XRHandedness,
@@ -20,18 +25,15 @@ import {
 	XRTargetRayMode,
 } from '../input/XRInputSource.js';
 import {
-	PRIVATE as XRJOINTSPACE_PRIVATE,
-	XRJointSpace,
-} from '../spaces/XRJointSpace.js';
-import {
 	XRReferenceSpace,
 	XRReferenceSpaceType,
 } from '../spaces/XRReferenceSpace.js';
-import { PRIVATE as XRSPACE_PRIVATE, XRSpace } from '../spaces/XRSpace.js';
 import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { InputSchema } from './ActionRecorder.js';
 import { XREye } from '../views/XRView.js';
+import { XRJointSpace } from '../spaces/XRJointSpace.js';
+import { XRSpace } from '../spaces/XRSpace.js';
 
 export interface CompressedRecording {
 	schema: {
@@ -40,8 +42,6 @@ export interface CompressedRecording {
 	}[];
 	frames: any[];
 }
-
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/action-player');
 
 type ProcessedInputData = {
 	targetRayTransform: number[];
@@ -52,7 +52,7 @@ type ProcessedInputData = {
 };
 
 export class ActionPlayer {
-	[PRIVATE]: {
+	[P_ACTION_PLAYER]: {
 		refSpace: XRReferenceSpace;
 		inputSources: Map<number, { active: boolean; source: XRInputSource }>;
 		inputSchemas: Map<number, InputSchema>;
@@ -93,7 +93,7 @@ export class ActionPlayer {
 			[XREye.Right]: new XRSpace(viewerSpace),
 			[XREye.None]: new XRSpace(viewerSpace),
 		};
-		this[PRIVATE] = {
+		this[P_ACTION_PLAYER] = {
 			refSpace,
 			inputSources: new Map(),
 			inputSchemas: new Map(),
@@ -110,11 +110,11 @@ export class ActionPlayer {
 		};
 
 		mat4.fromTranslation(
-			this[PRIVATE].viewSpaces[XREye.Left][XRSPACE_PRIVATE].offsetMatrix,
+			this[P_ACTION_PLAYER].viewSpaces[XREye.Left][P_SPACE].offsetMatrix,
 			vec3.fromValues(-ipd / 2, 0, 0),
 		);
 		mat4.fromTranslation(
-			this[PRIVATE].viewSpaces[XREye.Right][XRSPACE_PRIVATE].offsetMatrix,
+			this[P_ACTION_PLAYER].viewSpaces[XREye.Right][P_SPACE].offsetMatrix,
 			vec3.fromValues(ipd / 2, 0, 0),
 		);
 
@@ -158,69 +158,75 @@ export class ActionPlayer {
 				schema.hasHand ? hand : undefined,
 			);
 
-			this[PRIVATE].inputSources.set(index, {
+			this[P_ACTION_PLAYER].inputSources.set(index, {
 				active: false,
 				source: inputSource,
 			});
-			this[PRIVATE].inputSchemas.set(index, schema);
+			this[P_ACTION_PLAYER].inputSchemas.set(index, schema);
 		});
 	}
 
 	play() {
-		this[PRIVATE].recordedFramePointer = 0;
-		this[PRIVATE].playbackTime = this[PRIVATE].startingTimeStamp;
-		this[PRIVATE].playing = true;
-		this[PRIVATE].actualTimeStamp = performance.now();
+		this[P_ACTION_PLAYER].recordedFramePointer = 0;
+		this[P_ACTION_PLAYER].playbackTime =
+			this[P_ACTION_PLAYER].startingTimeStamp;
+		this[P_ACTION_PLAYER].playing = true;
+		this[P_ACTION_PLAYER].actualTimeStamp = performance.now();
 	}
 
 	stop() {
-		this[PRIVATE].playing = false;
+		this[P_ACTION_PLAYER].playing = false;
 	}
 
 	get playing() {
-		return this[PRIVATE].playing;
+		return this[P_ACTION_PLAYER].playing;
 	}
 
 	get viewerSpace() {
-		return this[PRIVATE].viewerSpace;
+		return this[P_ACTION_PLAYER].viewerSpace;
 	}
 
 	get viewSpaces() {
-		return this[PRIVATE].viewSpaces;
+		return this[P_ACTION_PLAYER].viewSpaces;
 	}
 
 	get inputSources() {
-		return Array.from(this[PRIVATE].inputSources.values())
+		return Array.from(this[P_ACTION_PLAYER].inputSources.values())
 			.filter((wrapper) => wrapper.active)
 			.map((wrapper) => wrapper.source);
 	}
 
 	playFrame() {
 		const now = performance.now();
-		const delta = now - this[PRIVATE].actualTimeStamp!;
-		this[PRIVATE].actualTimeStamp = now;
-		this[PRIVATE].playbackTime! += delta;
-		if (this[PRIVATE].playbackTime! > this[PRIVATE].endingTimeStamp) {
+		const delta = now - this[P_ACTION_PLAYER].actualTimeStamp!;
+		this[P_ACTION_PLAYER].actualTimeStamp = now;
+		this[P_ACTION_PLAYER].playbackTime! += delta;
+		if (
+			this[P_ACTION_PLAYER].playbackTime! >
+			this[P_ACTION_PLAYER].endingTimeStamp
+		) {
 			this.stop();
 			return;
 		}
 		while (
-			(this[PRIVATE].frames[
-				this[PRIVATE].recordedFramePointer + 1
-			][0] as number) < this[PRIVATE].playbackTime
+			(this[P_ACTION_PLAYER].frames[
+				this[P_ACTION_PLAYER].recordedFramePointer + 1
+			][0] as number) < this[P_ACTION_PLAYER].playbackTime
 		) {
-			this[PRIVATE].recordedFramePointer++;
+			this[P_ACTION_PLAYER].recordedFramePointer++;
 		}
 		const lastFrameData =
-			this[PRIVATE].frames[this[PRIVATE].recordedFramePointer];
+			this[P_ACTION_PLAYER].frames[this[P_ACTION_PLAYER].recordedFramePointer];
 		const nextFrameData =
-			this[PRIVATE].frames[this[PRIVATE].recordedFramePointer + 1];
+			this[P_ACTION_PLAYER].frames[
+				this[P_ACTION_PLAYER].recordedFramePointer + 1
+			];
 		const alpha =
-			((this[PRIVATE].playbackTime - lastFrameData[0]) as number) /
+			((this[P_ACTION_PLAYER].playbackTime - lastFrameData[0]) as number) /
 			(((nextFrameData[0] as number) - lastFrameData[0]) as number);
 
 		this.updateXRSpaceFromMergedFrames(
-			this[PRIVATE].viewerSpace,
+			this[P_ACTION_PLAYER].viewerSpace,
 			lastFrameData.slice(1, 8),
 			nextFrameData.slice(1, 8),
 			alpha,
@@ -242,14 +248,14 @@ export class ActionPlayer {
 			nextFrameInputs.set(index, inputData);
 		}
 
-		this[PRIVATE].inputSources.forEach((sourceWrapper) => {
+		this[P_ACTION_PLAYER].inputSources.forEach((sourceWrapper) => {
 			sourceWrapper.active = false;
 		});
 
 		nextFrameInputs.forEach((inputData, index) => {
-			this[PRIVATE].inputSources.get(index)!.active = true;
-			const inputSource = this[PRIVATE].inputSources.get(index)!.source;
-			const schema = this[PRIVATE].inputSchemas.get(index)!;
+			this[P_ACTION_PLAYER].inputSources.get(index)!.active = true;
+			const inputSource = this[P_ACTION_PLAYER].inputSources.get(index)!.source;
+			const schema = this[P_ACTION_PLAYER].inputSchemas.get(index)!;
 			this.updateInputSource(
 				inputSource,
 				schema,
@@ -304,7 +310,7 @@ export class ActionPlayer {
 					nextTransformArray,
 					alpha,
 				);
-				jointSpace[XRJOINTSPACE_PRIVATE].radius =
+				jointSpace[P_JOINT_SPACE].radius =
 					(nextRadius - lastRadius) * alpha + lastRadius;
 			}
 		}
@@ -313,16 +319,16 @@ export class ActionPlayer {
 			const gamepad = inputSource.gamepad!;
 			nextInputData.buttons!.forEach((states, index) => {
 				const gamepadButton = gamepad.buttons[index]! as GamepadButton;
-				gamepadButton[GAMEPAD_PRIVATE].pressed = states[0] === 1 ? true : false;
-				gamepadButton[GAMEPAD_PRIVATE].touched = states[1] === 1 ? true : false;
+				gamepadButton[P_GAMEPAD].pressed = states[0] === 1 ? true : false;
+				gamepadButton[P_GAMEPAD].touched = states[1] === 1 ? true : false;
 				const lastValue = lastInputData.buttons![index][2];
 				const nextValue = states[2];
-				gamepadButton[GAMEPAD_PRIVATE].value =
+				gamepadButton[P_GAMEPAD].value =
 					(nextValue - lastValue) * alpha + lastValue;
 			});
 			nextInputData.axes!.forEach((nextValue, index) => {
 				const lastValue = lastInputData.axes![index];
-				gamepad[GAMEPAD_PRIVATE].axesMap[index.toString()].x =
+				gamepad[P_GAMEPAD].axesMap[index.toString()].x =
 					(nextValue - lastValue) * alpha + lastValue;
 			});
 		}
@@ -356,18 +362,18 @@ export class ActionPlayer {
 			nextTransform[5],
 			nextTransform[6],
 		);
-		vec3.lerp(this[PRIVATE].vec3, f1p, f2p, alpha);
-		quat.slerp(this[PRIVATE].quat, f1q, f2q, alpha);
+		vec3.lerp(this[P_ACTION_PLAYER].vec3, f1p, f2p, alpha);
+		quat.slerp(this[P_ACTION_PLAYER].quat, f1q, f2q, alpha);
 		mat4.fromRotationTranslation(
-			space[XRSPACE_PRIVATE].offsetMatrix,
-			this[PRIVATE].quat,
-			this[PRIVATE].vec3,
+			space[P_SPACE].offsetMatrix,
+			this[P_ACTION_PLAYER].quat,
+			this[P_ACTION_PLAYER].vec3,
 		);
 	}
 
 	processRawInputData(inputDataRaw: any[]) {
 		const index = inputDataRaw[0];
-		const schema = this[PRIVATE].inputSchemas.get(index)!;
+		const schema = this[P_ACTION_PLAYER].inputSchemas.get(index)!;
 		const targetRayTransform: number[] = inputDataRaw.slice(1, 8);
 		const inputData: ProcessedInputData = { targetRayTransform };
 		let dataCounter = 8;

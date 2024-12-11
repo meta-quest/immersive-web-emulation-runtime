@@ -65,3 +65,6 @@ export { XRReferenceSpaceEvent } from './events/XRReferenceSpaceEvent.js';
 
 // Action Recording/Playback
 export { ActionRecorder } from './action/ActionRecorder.js';
+
+// Private Keys
+export * from './private.js';

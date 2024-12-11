@@ -5,12 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { P_POSE } from '../private.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-pose');
-
 export class XRPose {
-	[PRIVATE]: {
+	[P_POSE]: {
 		transform: XRRigidTransform;
 		emulatedPosition: boolean;
 		linearVelocity?: DOMPointReadOnly;
@@ -23,7 +22,7 @@ export class XRPose {
 		linearVelocity: DOMPointReadOnly | undefined = undefined,
 		angularVelocity: DOMPointReadOnly | undefined = undefined,
 	) {
-		this[PRIVATE] = {
+		this[P_POSE] = {
 			transform,
 			emulatedPosition,
 			linearVelocity,
@@ -32,18 +31,18 @@ export class XRPose {
 	}
 
 	get transform() {
-		return this[PRIVATE].transform;
+		return this[P_POSE].transform;
 	}
 
 	get emulatedPosition() {
-		return this[PRIVATE].emulatedPosition;
+		return this[P_POSE].emulatedPosition;
 	}
 
 	get linearVelocity() {
-		return this[PRIVATE].linearVelocity;
+		return this[P_POSE].linearVelocity;
 	}
 
 	get angularVelocity() {
-		return this[PRIVATE].angularVelocity;
+		return this[P_POSE].angularVelocity;
 	}
 }

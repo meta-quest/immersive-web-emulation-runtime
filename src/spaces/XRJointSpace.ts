@@ -5,16 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { P_JOINT_SPACE } from '../private.js';
 import { XRHandJoint } from '../input/XRHand.js';
 import { XRSpace } from './XRSpace.js';
 import { mat4 } from 'gl-matrix';
 
-export const PRIVATE = Symbol(
-	'@immersive-web-emulation-runtime/xr-joint-space',
-);
-
 export class XRJointSpace extends XRSpace {
-	[PRIVATE]: {
+	[P_JOINT_SPACE]: {
 		jointName: XRHandJoint;
 		radius: number;
 	};
@@ -25,10 +22,10 @@ export class XRJointSpace extends XRSpace {
 		offsetMatrix?: mat4,
 	) {
 		super(parentSpace, offsetMatrix);
-		this[PRIVATE] = { jointName, radius: 0 };
+		this[P_JOINT_SPACE] = { jointName, radius: 0 };
 	}
 
 	get jointName() {
-		return this[PRIVATE].jointName;
+		return this[P_JOINT_SPACE].jointName;
 	}
 }
