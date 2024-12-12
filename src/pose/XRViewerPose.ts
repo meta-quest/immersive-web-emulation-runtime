@@ -5,16 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { P_VIEWER_POSE } from '../private.js';
 import { XRPose } from './XRPose.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRView } from '../views/XRView.js';
 
-export const PRIVATE = Symbol(
-	'@immersive-web-emulation-runtime/xr-viewer-pose',
-);
-
 export class XRViewerPose extends XRPose {
-	[PRIVATE]: {
+	[P_VIEWER_POSE]: {
 		views: readonly XRView[];
 	};
 
@@ -26,12 +23,12 @@ export class XRViewerPose extends XRPose {
 		angularVelocity: DOMPointReadOnly | undefined = undefined,
 	) {
 		super(transform, emulatedPosition, linearVelocity, angularVelocity);
-		this[PRIVATE] = {
+		this[P_VIEWER_POSE] = {
 			views: Object.freeze(views),
 		};
 	}
 
 	get views() {
-		return this[PRIVATE].views;
+		return this[P_VIEWER_POSE].views;
 	}
 }

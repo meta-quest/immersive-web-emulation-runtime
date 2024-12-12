@@ -48,6 +48,15 @@ export { XRHand } from './input/XRHand.js';
 // Layers
 export { XRWebGLLayer, XRLayer } from './layers/XRWebGLLayer.js';
 
+// Planes
+export { XRPlane } from './planes/XRPlane.js';
+
+// Meshes
+export { XRMesh } from './meshes/XRMesh.js';
+
+// Anchors
+export { XRAnchor } from './anchors/XRAnchor.js';
+
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';
@@ -56,3 +65,6 @@ export { XRReferenceSpaceEvent } from './events/XRReferenceSpaceEvent.js';
 
 // Action Recording/Playback
 export { ActionRecorder } from './action/ActionRecorder.js';
+
+// Private Keys
+export * from './private.js';

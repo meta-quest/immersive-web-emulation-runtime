@@ -5,13 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { GlobalSpace, XRSpaceUtils } from '../../src/spaces/XRSpace';
+import { P_REF_SPACE, P_SPACE } from '../../src/private';
 import {
-	GlobalSpace,
-	PRIVATE as XRSPACE_PRIVATE,
-	XRSpaceUtils,
-} from '../../src/spaces/XRSpace';
-import {
-	PRIVATE,
 	XRReferenceSpace,
 	XRReferenceSpaceType,
 } from '../../src/spaces/XRReferenceSpace';
@@ -31,8 +27,8 @@ describe('XRReferenceSpace', () => {
 
 	test('XRReferenceSpace should initialize correctly', () => {
 		expect(xrReferenceSpace).toBeDefined();
-		expect(xrReferenceSpace[PRIVATE].type).toBe(XRReferenceSpaceType.Local);
-		expect(xrReferenceSpace[XRSPACE_PRIVATE].parentSpace).toBe(globalSpace);
+		expect(xrReferenceSpace[P_REF_SPACE].type).toBe(XRReferenceSpaceType.Local);
+		expect(xrReferenceSpace[P_SPACE].parentSpace).toBe(globalSpace);
 	});
 
 	test('getOffsetReferenceSpace should create a new XRReferenceSpace with correct offset', () => {
@@ -42,9 +38,9 @@ describe('XRReferenceSpace', () => {
 		const offsetSpace = xrReferenceSpace.getOffsetReferenceSpace(offsetMatrix);
 
 		expect(offsetSpace).toBeInstanceOf(XRReferenceSpace);
-		expect(offsetSpace[XRSPACE_PRIVATE].parentSpace).toBe(xrReferenceSpace);
+		expect(offsetSpace[P_SPACE].parentSpace).toBe(xrReferenceSpace);
 		expect(
-			mat4.equals(offsetSpace[XRSPACE_PRIVATE].offsetMatrix, offsetMatrix),
+			mat4.equals(offsetSpace[P_SPACE].offsetMatrix, offsetMatrix),
 		).toBeTruthy();
 	});
 

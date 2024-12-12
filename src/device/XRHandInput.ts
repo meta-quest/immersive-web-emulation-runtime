@@ -6,33 +6,29 @@
  */
 
 import {
-	PRIVATE as GAMEPAD_PRIVATE,
 	Gamepad,
 	GamepadConfig,
 	GamepadMappingType,
 } from '../gamepad/Gamepad.js';
+import { GlobalSpace, XRSpace } from '../spaces/XRSpace.js';
 import {
-	GlobalSpace,
-	PRIVATE as XRSPACE_PRIVATE,
-	XRSpace,
-} from '../spaces/XRSpace.js';
+	P_GAMEPAD,
+	P_HAND_INPUT,
+	P_JOINT_SPACE,
+	P_SPACE,
+	P_TRACKED_INPUT,
+} from '../private.js';
 import { XRHand, XRHandJoint } from '../input/XRHand.js';
 import {
 	XRHandedness,
 	XRInputSource,
 	XRTargetRayMode,
 } from '../input/XRInputSource.js';
-import {
-	PRIVATE as XRJOINTSPACE_PRIVATE,
-	XRJointSpace,
-} from '../spaces/XRJointSpace.js';
-import {
-	PRIVATE as XRTRACKEDINPUT_PRIVATE,
-	XRTrackedInput,
-} from './XRTrackedInput.js';
 import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { XRFrame } from '../frameloop/XRFrame.js';
+import { XRJointSpace } from '../spaces/XRJointSpace.js';
+import { XRTrackedInput } from './XRTrackedInput.js';
 import { pinchHandPose } from './configs/hand/pinch.js';
 import { pointHandPose } from './configs/hand/point.js';
 import { relaxedHandPose } from './configs/hand/relaxed.js';
@@ -121,10 +117,8 @@ const mirrorMatrixToRight = (matrixLeft: mat4) => {
 	}
 };
 
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-hand-input');
-
 export class XRHandInput extends XRTrackedInput {
-	[PRIVATE]: {
+	[P_HAND_INPUT]: {
 		poseId: string;
 		poses: {
 			default: HandPose;
@@ -173,7 +167,7 @@ export class XRHandInput extends XRTrackedInput {
 		);
 
 		super(inputSource);
-		this[PRIVATE] = {
+		this[P_HAND_INPUT] = {
 			poseId: 'default',
 			poses: handInputConfig.poses,
 		};
@@ -182,20 +176,20 @@ export class XRHandInput extends XRTrackedInput {
 	}
 
 	get poseId() {
-		return this[PRIVATE].poseId;
+		return this[P_HAND_INPUT].poseId;
 	}
 
 	set poseId(poseId: string) {
-		if (!this[PRIVATE].poses[poseId]) {
+		if (!this[P_HAND_INPUT].poses[poseId]) {
 			console.warn(`Pose config ${poseId} not found`);
 			return;
 		}
-		this[PRIVATE].poseId = poseId;
+		this[P_HAND_INPUT].poseId = poseId;
 	}
 
 	updateHandPose() {
-		const targetPose = this[PRIVATE].poses[this[PRIVATE].poseId];
-		const pinchPose = this[PRIVATE].poses.pinch;
+		const targetPose = this[P_HAND_INPUT].poses[this[P_HAND_INPUT].poseId];
+		const pinchPose = this[P_HAND_INPUT].poses.pinch;
 		Object.values(XRHandJoint).forEach((jointName) => {
 			const targetJointMatrix =
 				targetPose.jointTransforms[jointName].offsetMatrix;
@@ -203,21 +197,21 @@ export class XRHandInput extends XRTrackedInput {
 				pinchPose.jointTransforms[jointName].offsetMatrix;
 			const jointSpace = this.inputSource.hand!.get(jointName)!;
 			interpolateMatrix(
-				jointSpace[XRSPACE_PRIVATE].offsetMatrix,
+				jointSpace[P_SPACE].offsetMatrix,
 				targetJointMatrix,
 				pinchJointMatrix,
 				this.pinchValue,
 			);
 			if (this.inputSource.handedness === XRHandedness.Right) {
-				mirrorMatrixToRight(jointSpace[XRSPACE_PRIVATE].offsetMatrix);
+				mirrorMatrixToRight(jointSpace[P_SPACE].offsetMatrix);
 			}
-			jointSpace[XRJOINTSPACE_PRIVATE].radius =
+			jointSpace[P_JOINT_SPACE].radius =
 				(1 - this.pinchValue) * targetPose.jointTransforms[jointName].radius +
 				this.pinchValue * pinchPose.jointTransforms[jointName].radius;
 		});
 		if (targetPose.gripOffsetMatrix && pinchPose.gripOffsetMatrix) {
 			interpolateMatrix(
-				this.inputSource.gripSpace![XRSPACE_PRIVATE].offsetMatrix,
+				this.inputSource.gripSpace![P_SPACE].offsetMatrix,
 				targetPose.gripOffsetMatrix!,
 				pinchPose.gripOffsetMatrix!,
 				this.pinchValue,
@@ -226,8 +220,9 @@ export class XRHandInput extends XRTrackedInput {
 	}
 
 	get pinchValue() {
-		return this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
-			.buttonsMap['pinch']!.value;
+		return this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[
+			'pinch'
+		]!.value;
 	}
 
 	updatePinchValue(value: number) {
@@ -236,9 +231,10 @@ export class XRHandInput extends XRTrackedInput {
 			return;
 		}
 		const gamepadButton =
-			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
-				.buttonsMap['pinch']!;
-		gamepadButton[GAMEPAD_PRIVATE].pendingValue = value;
+			this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[
+				'pinch'
+			]!;
+		gamepadButton[P_GAMEPAD].pendingValue = value;
 	}
 
 	onFrameStart(frame: XRFrame): void {

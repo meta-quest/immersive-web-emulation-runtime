@@ -9,12 +9,12 @@ import {
 	XRReferenceSpace,
 	XRReferenceSpaceType,
 } from '../../src/spaces/XRReferenceSpace';
-import { XRSession, XRSessionMode } from '../../src/session/XRSession';
 
 import { XRDevice } from '../../src/device/XRDevice';
 import { XRFrame } from '../../src/frameloop/XRFrame';
 import { XRPose } from '../../src/pose/XRPose';
 import { XRRenderStateInit } from '../../src/session/XRRenderState';
+import { XRSession } from '../../src/session/XRSession';
 import { XRSpace } from '../../src/spaces/XRSpace';
 import { XRSystem } from '../../src/initialization/XRSystem';
 import { XRViewerPose } from '../../src/pose/XRViewerPose';
@@ -60,7 +60,7 @@ describe('XRFrame', () => {
 		};
 		xrDevice = new XRDevice(metaQuest3);
 		xrSystem = new XRSystem(xrDevice);
-		xrSession = await xrSystem.requestSession(XRSessionMode.ImmersiveVR);
+		xrSession = await xrSystem.requestSession('immersive-vr');
 		refSpace = await xrSession.requestReferenceSpace(
 			XRReferenceSpaceType.Local,
 		);

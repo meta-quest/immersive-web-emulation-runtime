@@ -5,10 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { P_VIEW } from '../private.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSession } from '../session/XRSession.js';
-
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-view');
 
 export enum XREye {
 	None = 'none',
@@ -17,7 +16,7 @@ export enum XREye {
 }
 
 export class XRView {
-	[PRIVATE]: {
+	[P_VIEW]: {
 		eye: XREye;
 		projectionMatrix: Float32Array;
 		transform: XRRigidTransform;
@@ -32,7 +31,7 @@ export class XRView {
 		transform: XRRigidTransform,
 		session: XRSession,
 	) {
-		this[PRIVATE] = {
+		this[P_VIEW] = {
 			eye,
 			projectionMatrix,
 			transform,
@@ -43,19 +42,19 @@ export class XRView {
 	}
 
 	get eye(): XREye {
-		return this[PRIVATE].eye;
+		return this[P_VIEW].eye;
 	}
 
 	get projectionMatrix(): Float32Array {
-		return this[PRIVATE].projectionMatrix;
+		return this[P_VIEW].projectionMatrix;
 	}
 
 	get transform(): XRRigidTransform {
-		return this[PRIVATE].transform;
+		return this[P_VIEW].transform;
 	}
 
 	get recommendedViewportScale(): number | null {
-		return this[PRIVATE].recommendedViewportScale;
+		return this[P_VIEW].recommendedViewportScale;
 	}
 
 	requestViewportScale(scale: number | null): void {
@@ -63,6 +62,6 @@ export class XRView {
 			console.warn('Invalid scale value. Scale must be > 0 and <= 1.');
 			return;
 		}
-		this[PRIVATE].requestedViewportScale = scale;
+		this[P_VIEW].requestedViewportScale = scale;
 	}
 }

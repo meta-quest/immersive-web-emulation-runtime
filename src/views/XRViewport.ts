@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-viewport');
+import { P_VIEWPORT } from '../private.js';
 
 export class XRViewport {
-	[PRIVATE]: {
+	[P_VIEWPORT]: {
 		x: number;
 		y: number;
 		width: number;
@@ -16,22 +16,22 @@ export class XRViewport {
 	};
 
 	constructor(x: number, y: number, width: number, height: number) {
-		this[PRIVATE] = { x, y, width, height };
+		this[P_VIEWPORT] = { x, y, width, height };
 	}
 
 	get x(): number {
-		return this[PRIVATE].x;
+		return this[P_VIEWPORT].x;
 	}
 
 	get y(): number {
-		return this[PRIVATE].y;
+		return this[P_VIEWPORT].y;
 	}
 
 	get width(): number {
-		return this[PRIVATE].width;
+		return this[P_VIEWPORT].width;
 	}
 
 	get height(): number {
-		return this[PRIVATE].height;
+		return this[P_VIEWPORT].height;
 	}
 }

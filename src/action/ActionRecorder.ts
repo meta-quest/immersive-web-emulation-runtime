@@ -7,9 +7,7 @@
 
 import { mat4, quat, vec3 } from 'gl-matrix';
 
-export const PRIVATE = Symbol(
-	'@immersive-web-emulation-runtime/action-recorder',
-);
+import { P_ACTION_RECORDER } from '../private.js';
 
 export interface InputFrame {
 	index: number;
@@ -63,7 +61,7 @@ const compress = (arr: vec3 | quat) => {
 };
 
 export class ActionRecorder {
-	[PRIVATE]: {
+	[P_ACTION_RECORDER]: {
 		session: XRSession;
 		refSpace: XRReferenceSpace;
 		inputMap: Map<XRInputSource, number>;
@@ -74,7 +72,7 @@ export class ActionRecorder {
 	};
 
 	constructor(session: XRSession, refSpace: XRReferenceSpace) {
-		this[PRIVATE] = {
+		this[P_ACTION_RECORDER] = {
 			session,
 			refSpace,
 			inputMap: new Map(),
@@ -87,8 +85,8 @@ export class ActionRecorder {
 
 	recordFrame(frame: XRFrame) {
 		const timeStamp = performance.now();
-		const viewerMatrix = frame.getViewerPose(this[PRIVATE].refSpace)?.transform
-			.matrix;
+		const viewerMatrix = frame.getViewerPose(this[P_ACTION_RECORDER].refSpace)
+			?.transform.matrix;
 		if (!viewerMatrix) return;
 		const position = mat4.getTranslation(vec3.create(), viewerMatrix);
 		const quaternion = mat4.getRotation(quat.create(), viewerMatrix);
@@ -98,8 +96,8 @@ export class ActionRecorder {
 			quaternion,
 			inputFrames: [],
 		};
-		this[PRIVATE].session.inputSources.forEach((inputSource) => {
-			if (!this[PRIVATE].inputMap.has(inputSource)) {
+		this[P_ACTION_RECORDER].session.inputSources.forEach((inputSource) => {
+			if (!this[P_ACTION_RECORDER].inputMap.has(inputSource)) {
 				const schema: InputSchema = {
 					handedness: inputSource.handedness,
 					targetRayMode: inputSource.targetRayMode,
@@ -118,15 +116,15 @@ export class ActionRecorder {
 					schema.numButtons = inputSource.gamepad!.buttons.length;
 					schema.numAxes = inputSource.gamepad!.axes.length;
 				}
-				const index = this[PRIVATE].inputMap.size;
-				this[PRIVATE].inputMap.set(inputSource, index);
-				this[PRIVATE].schemaMap.set(index, schema);
+				const index = this[P_ACTION_RECORDER].inputMap.size;
+				this[P_ACTION_RECORDER].inputMap.set(inputSource, index);
+				this[P_ACTION_RECORDER].schemaMap.set(index, schema);
 			}
-			const index = this[PRIVATE].inputMap.get(inputSource)!;
-			const schema = this[PRIVATE].schemaMap.get(index)!;
+			const index = this[P_ACTION_RECORDER].inputMap.get(inputSource)!;
+			const schema = this[P_ACTION_RECORDER].schemaMap.get(index)!;
 			const targetRayMatrix = frame.getPose(
 				inputSource.targetRaySpace,
-				this[PRIVATE].refSpace,
+				this[P_ACTION_RECORDER].refSpace,
 			)?.transform.matrix;
 			if (targetRayMatrix) {
 				const targetRayPosition = mat4.getTranslation(
@@ -149,7 +147,7 @@ export class ActionRecorder {
 				if (schema.hasGrip) {
 					const gripMatrix = frame.getPose(
 						inputSource.gripSpace!,
-						this[PRIVATE].refSpace,
+						this[P_ACTION_RECORDER].refSpace,
 					)?.transform.matrix;
 					if (gripMatrix) {
 						const position = mat4.getTranslation(vec3.create(), gripMatrix);
@@ -169,13 +167,13 @@ export class ActionRecorder {
 					allValid &&= frame.fillPoses(
 						jointSpaces,
 						inputSource.targetRaySpace,
-						this[PRIVATE].jointTransforms,
+						this[P_ACTION_RECORDER].jointTransforms,
 					);
 
 					// @ts-ignore
 					allValid &&= frame.fillJointRadii(
 						jointSpaces,
-						this[PRIVATE].jointRadii,
+						this[P_ACTION_RECORDER].jointRadii,
 					);
 
 					if (allValid) {
@@ -187,11 +185,11 @@ export class ActionRecorder {
 							};
 						} = {} as any;
 						for (let offset = 0; offset < 25; offset++) {
-							const jointMatrix = this[PRIVATE].jointTransforms.slice(
+							const jointMatrix = this[P_ACTION_RECORDER].jointTransforms.slice(
 								offset * 16,
 								(offset + 1) * 16,
 							);
-							const radius = this[PRIVATE].jointRadii[offset];
+							const radius = this[P_ACTION_RECORDER].jointRadii[offset];
 							const position = mat4.getTranslation(vec3.create(), jointMatrix);
 							const quaternion = mat4.getRotation(quat.create(), jointMatrix);
 							const jointName = jointSpaces[offset].jointName as XRHandJoint;
@@ -216,7 +214,9 @@ export class ActionRecorder {
 				actionFrame.inputFrames.push(inputFrame);
 			}
 		});
-		this[PRIVATE].compressedFrames.push(this.compressActionFrame(actionFrame));
+		this[P_ACTION_RECORDER].compressedFrames.push(
+			this.compressActionFrame(actionFrame),
+		);
 	}
 
 	compressActionFrame(af: ActionFrame): any[] {
@@ -227,7 +227,7 @@ export class ActionRecorder {
 		];
 		af.inputFrames.forEach((inputFrame) => {
 			const index = inputFrame.index;
-			const schema = this[PRIVATE].schemaMap.get(index)!;
+			const schema = this[P_ACTION_RECORDER].schemaMap.get(index)!;
 			const inputOut: any[] = [
 				index,
 				...compress(inputFrame.targetRayTransform.position),
@@ -266,8 +266,8 @@ export class ActionRecorder {
 
 	log() {
 		const out = {
-			schema: Array.from(this[PRIVATE].schemaMap.entries()),
-			frames: this[PRIVATE].compressedFrames,
+			schema: Array.from(this[P_ACTION_RECORDER].schemaMap.entries()),
+			frames: this[P_ACTION_RECORDER].compressedFrames,
 		};
 		console.log(JSON.stringify(out));
 	}

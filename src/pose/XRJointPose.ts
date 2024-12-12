@@ -5,13 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { P_JOINT_POSE } from '../private.js';
 import { XRPose } from './XRPose.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-joint-pose');
-
 export class XRJointPose extends XRPose {
-	[PRIVATE]: {
+	[P_JOINT_POSE]: {
 		radius: number;
 	};
 
@@ -23,10 +22,10 @@ export class XRJointPose extends XRPose {
 		angularVelocity: DOMPointReadOnly | undefined = undefined,
 	) {
 		super(transform, emulatedPosition, linearVelocity, angularVelocity);
-		this[PRIVATE] = { radius };
+		this[P_JOINT_POSE] = { radius };
 	}
 
 	get radius() {
-		return this[PRIVATE].radius;
+		return this[P_JOINT_POSE].radius;
 	}
 }

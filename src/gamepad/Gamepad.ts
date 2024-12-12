@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/gamepad');
+import { P_GAMEPAD } from '../private.js';
 
 export enum GamepadMappingType {
 	None = '',
@@ -31,7 +31,7 @@ export interface GamepadConfig {
 }
 
 export class GamepadButton {
-	[PRIVATE]: {
+	[P_GAMEPAD]: {
 		type: 'analog' | 'binary' | 'manual';
 		eventTrigger: 'select' | 'squeeze' | null;
 		pressed: boolean;
@@ -45,7 +45,7 @@ export class GamepadButton {
 		type: 'analog' | 'binary' | 'manual',
 		eventTrigger: 'select' | 'squeeze' | null,
 	) {
-		this[PRIVATE] = {
+		this[P_GAMEPAD] = {
 			type,
 			eventTrigger,
 			pressed: false,
@@ -57,23 +57,23 @@ export class GamepadButton {
 	}
 
 	get pressed() {
-		if (this[PRIVATE].type === 'manual') {
-			return this[PRIVATE].pressed;
+		if (this[P_GAMEPAD].type === 'manual') {
+			return this[P_GAMEPAD].pressed;
 		} else {
-			return this[PRIVATE].value > 0;
+			return this[P_GAMEPAD].value > 0;
 		}
 	}
 
 	get touched() {
-		if (this[PRIVATE].type === 'manual') {
-			return this[PRIVATE].touched;
+		if (this[P_GAMEPAD].type === 'manual') {
+			return this[P_GAMEPAD].touched;
 		} else {
-			return this[PRIVATE].touched || this.pressed;
+			return this[P_GAMEPAD].touched || this.pressed;
 		}
 	}
 
 	get value() {
-		return this[PRIVATE].value;
+		return this[P_GAMEPAD].value;
 	}
 }
 
@@ -84,7 +84,7 @@ export class EmptyGamepadButton {
 }
 
 export class Gamepad {
-	[PRIVATE]: {
+	[P_GAMEPAD]: {
 		id: string;
 		index: number;
 		connected: boolean;
@@ -106,7 +106,7 @@ export class Gamepad {
 		id: string = '',
 		index: number = -1,
 	) {
-		this[PRIVATE] = {
+		this[P_GAMEPAD] = {
 			id,
 			index,
 			connected: false,
@@ -120,10 +120,10 @@ export class Gamepad {
 		};
 		gamepadConfig.buttons.forEach((buttonConfig) => {
 			if (buttonConfig === null) {
-				this[PRIVATE].buttonsSequence.push(null);
+				this[P_GAMEPAD].buttonsSequence.push(null);
 			} else {
-				this[PRIVATE].buttonsSequence.push(buttonConfig.id);
-				this[PRIVATE].buttonsMap[buttonConfig.id] = new GamepadButton(
+				this[P_GAMEPAD].buttonsSequence.push(buttonConfig.id);
+				this[P_GAMEPAD].buttonsMap[buttonConfig.id] = new GamepadButton(
 					buttonConfig.type,
 					buttonConfig.eventTrigger ?? null,
 				);
@@ -131,39 +131,39 @@ export class Gamepad {
 		});
 		gamepadConfig.axes.forEach((axisConfig) => {
 			if (axisConfig === null) {
-				this[PRIVATE].axesSequence.push(null);
+				this[P_GAMEPAD].axesSequence.push(null);
 			} else {
-				this[PRIVATE].axesSequence.push(axisConfig.id + axisConfig.type);
-				if (!this[PRIVATE].axesMap[axisConfig.id]) {
-					this[PRIVATE].axesMap[axisConfig.id] = { x: 0, y: 0 };
+				this[P_GAMEPAD].axesSequence.push(axisConfig.id + axisConfig.type);
+				if (!this[P_GAMEPAD].axesMap[axisConfig.id]) {
+					this[P_GAMEPAD].axesMap[axisConfig.id] = { x: 0, y: 0 };
 				}
 			}
 		});
 	}
 
 	get id() {
-		return this[PRIVATE].id;
+		return this[P_GAMEPAD].id;
 	}
 
 	get index() {
-		return this[PRIVATE].index;
+		return this[P_GAMEPAD].index;
 	}
 
 	get connected() {
-		return this[PRIVATE].connected;
+		return this[P_GAMEPAD].connected;
 	}
 
 	get timestamp() {
-		return this[PRIVATE].timestamp;
+		return this[P_GAMEPAD].timestamp;
 	}
 
 	get mapping() {
-		return this[PRIVATE].mapping;
+		return this[P_GAMEPAD].mapping;
 	}
 
 	get axes() {
 		const axes: (number | null)[] = [];
-		this[PRIVATE].axesSequence.forEach((id) => {
+		this[P_GAMEPAD].axesSequence.forEach((id) => {
 			if (id === null) {
 				axes.push(null);
 			} else {
@@ -172,8 +172,8 @@ export class Gamepad {
 				axes.push(
 					// if axis type is manual, then return the x value
 					axisType === 'y-axis'
-						? this[PRIVATE].axesMap[axisId].y
-						: this[PRIVATE].axesMap[axisId].x,
+						? this[P_GAMEPAD].axesMap[axisId].y
+						: this[P_GAMEPAD].axesMap[axisId].x,
 				);
 			}
 		});
@@ -181,13 +181,13 @@ export class Gamepad {
 	}
 
 	get buttons() {
-		return this[PRIVATE].buttonsSequence.map((id) =>
-			id === null ? new EmptyGamepadButton() : this[PRIVATE].buttonsMap[id],
+		return this[P_GAMEPAD].buttonsSequence.map((id) =>
+			id === null ? new EmptyGamepadButton() : this[P_GAMEPAD].buttonsMap[id],
 		);
 	}
 
 	get hapticActuators() {
-		return this[PRIVATE].hapticActuators;
+		return this[P_GAMEPAD].hapticActuators;
 	}
 
 	get vibrationActuator() {

@@ -5,13 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-	GlobalSpace,
-	PRIVATE,
-	XRSpace,
-	XRSpaceUtils,
-} from '../../src/spaces/XRSpace';
+import { GlobalSpace, XRSpace, XRSpaceUtils } from '../../src/spaces/XRSpace';
 import { mat4, quat, vec3 } from 'gl-matrix';
+
+import { P_SPACE } from '../../src/private';
 
 describe('XRSpace and XRSpaceUtils', () => {
 	let globalSpace: GlobalSpace;
@@ -24,15 +21,15 @@ describe('XRSpace and XRSpaceUtils', () => {
 
 	test('XRSpace should initialize with default values', () => {
 		expect(
-			mat4.equals(xrSpace[PRIVATE].offsetMatrix, mat4.create()),
+			mat4.equals(xrSpace[P_SPACE].offsetMatrix, mat4.create()),
 		).toBeTruthy();
-		expect(xrSpace[PRIVATE].parentSpace).toBeUndefined();
+		expect(xrSpace[P_SPACE].parentSpace).toBeUndefined();
 	});
 
 	test('GlobalSpace should initialize as an XRSpace with no parent', () => {
-		expect(globalSpace[PRIVATE].parentSpace).toBeUndefined();
+		expect(globalSpace[P_SPACE].parentSpace).toBeUndefined();
 		expect(
-			mat4.equals(globalSpace[PRIVATE].offsetMatrix, mat4.create()),
+			mat4.equals(globalSpace[P_SPACE].offsetMatrix, mat4.create()),
 		).toBeTruthy();
 	});
 
@@ -43,7 +40,7 @@ describe('XRSpace and XRSpaceUtils', () => {
 		const expectedMatrix = mat4.create();
 		mat4.fromTranslation(expectedMatrix, position);
 		expect(
-			mat4.equals(xrSpace[PRIVATE].offsetMatrix, expectedMatrix),
+			mat4.equals(xrSpace[P_SPACE].offsetMatrix, expectedMatrix),
 		).toBeTruthy();
 	});
 
@@ -55,7 +52,7 @@ describe('XRSpace and XRSpaceUtils', () => {
 		const expectedMatrix = mat4.create();
 		mat4.fromQuat(expectedMatrix, quaternion);
 		expect(
-			mat4.equals(xrSpace[PRIVATE].offsetMatrix, expectedMatrix),
+			mat4.equals(xrSpace[P_SPACE].offsetMatrix, expectedMatrix),
 		).toBeTruthy();
 	});
 
