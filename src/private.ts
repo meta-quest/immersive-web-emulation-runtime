@@ -30,3 +30,4 @@ export const P_REF_SPACE = Symbol('@iwer/xr-reference-space');
 export const P_SPACE = Symbol('@iwer/xr-space');
 export const P_VIEW = Symbol('@iwer/xr-view');
 export const P_VIEWPORT = Symbol('@iwer/xr-viewport');
+export const P_RAY = Symbol('@iwer/xr-ray');

@@ -57,6 +57,9 @@ export { XRMesh } from './meshes/XRMesh.js';
 // Anchors
 export { XRAnchor } from './anchors/XRAnchor.js';
 
+// Hit Test
+export { XRRay } from './hittest/XRRay.js';
+
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';
