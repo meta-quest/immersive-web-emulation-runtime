@@ -5,16 +5,26 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { NativeMesh, XRMesh } from '../meshes/XRMesh.js';
+import { NativePlane, XRPlane } from '../planes/XRPlane.js';
 import {
 	P_ANCHOR,
 	P_DEVICE,
 	P_FRAME,
+	P_HIT_TEST,
+	P_MESH,
+	P_PLANE,
 	P_SESSION,
 	P_SPACE,
 	P_WEBGL_LAYER,
 } from '../private.js';
 import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
 import { XRAnchor, XRAnchorSet, XRAnchorUtils } from '../anchors/XRAnchor.js';
+import {
+	XRHitTestOptionsInit,
+	XRHitTestResult,
+	XRHitTestSource,
+} from '../hittest/XRHitTest.js';
 import { XRInputSource, XRInputSourceArray } from '../input/XRInputSource.js';
 import {
 	XRInputSourcesChangeEvent,
@@ -29,6 +39,7 @@ import {
 	XRSessionEvent,
 	XRSessionEventHandler,
 } from '../events/XRSessionEvent.js';
+import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
 
 import { XREye } from '../views/XRView.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
@@ -109,6 +120,15 @@ export class XRSession extends EventTarget {
 		>;
 		frameTrackedAnchors: XRAnchorSet; // https://immersive-web.github.io/anchors/#anchor-updates specifies same object
 		updateTrackedAnchors: () => void;
+		// tracked planes
+		trackedPlanes: Map<NativePlane, XRPlane>;
+		updateTrackedPlanes: (frame: XRFrame) => void;
+		// tracked meshes
+		trackedMeshes: Map<NativeMesh, XRMesh>;
+		updateTrackedMeshes: (frame: XRFrame) => void;
+		// hit-test
+		hitTestSources: Set<XRHitTestSource>;
+		computeHitTestResults: (frame: XRFrame) => void;
 		// event handlers
 		onend: XRSessionEventHandler | null;
 		oninputsourceschange: XRInputSourcesChangeEventHandler | null;
@@ -270,8 +290,6 @@ export class XRSession extends EventTarget {
 					);
 				}
 
-				this[P_SESSION].updateTrackedAnchors();
-
 				const frame = new XRFrame(
 					this,
 					this[P_SESSION].frameHandle,
@@ -279,6 +297,19 @@ export class XRSession extends EventTarget {
 					true,
 					performance.now(),
 				);
+
+				if (this[P_SESSION].enabledFeatures.includes('anchors')) {
+					this[P_SESSION].updateTrackedAnchors();
+				}
+				if (this[P_SESSION].enabledFeatures.includes('plane-detection')) {
+					this[P_SESSION].updateTrackedPlanes(frame);
+				}
+				if (this[P_SESSION].enabledFeatures.includes('mesh-detection')) {
+					this[P_SESSION].updateTrackedMeshes(frame);
+				}
+				if (this[P_SESSION].enabledFeatures.includes('hit-test')) {
+					this[P_SESSION].computeHitTestResults(frame);
+				}
 
 				this[P_SESSION].device[P_DEVICE].onFrameStart(frame);
 				this[P_SESSION].updateActiveInputSources();
@@ -366,6 +397,69 @@ export class XRSession extends EventTarget {
 						}
 					});
 				}
+			},
+			trackedPlanes: new Map(),
+			updateTrackedPlanes: (frame: XRFrame) => {
+				const sem = this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule;
+				if (!sem) {
+					return;
+				}
+				sem.trackedPlanes.forEach((plane) => {
+					let xrPlane = this[P_SESSION].trackedPlanes.get(plane);
+					if (!xrPlane) {
+						const planeSpace = new XRSpace(
+							this[P_SESSION].device[P_DEVICE].globalSpace,
+							plane.transform.matrix,
+						);
+						xrPlane = new XRPlane(plane, planeSpace, plane.polygon);
+						this[P_SESSION].trackedPlanes.set(plane, xrPlane);
+					}
+					xrPlane[P_PLANE].lastChangedTime = frame.predictedDisplayTime;
+					xrPlane[P_PLANE].frame = frame;
+					frame[P_FRAME].detectedPlanes.add(xrPlane);
+				});
+			},
+			trackedMeshes: new Map(),
+			updateTrackedMeshes: (frame: XRFrame) => {
+				const sem = this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule;
+				if (!sem) {
+					return;
+				}
+				sem.trackedMeshes.forEach((mesh) => {
+					let xrMesh = this[P_SESSION].trackedMeshes.get(mesh);
+					if (!xrMesh) {
+						const meshSpace = new XRSpace(
+							this[P_SESSION].device[P_DEVICE].globalSpace,
+							mesh.transform.matrix,
+						);
+						xrMesh = new XRMesh(mesh, meshSpace, mesh.vertices, mesh.indices);
+						this[P_SESSION].trackedMeshes.set(mesh, xrMesh);
+					}
+					xrMesh[P_MESH].lastChangedTime = frame.predictedDisplayTime;
+					xrMesh[P_MESH].frame = frame;
+					frame[P_FRAME].detectedMeshes.add(xrMesh);
+				});
+			},
+			hitTestSources: new Set(),
+			computeHitTestResults: (frame) => {
+				const sem = this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule;
+				if (!sem) return;
+				const globalSpace = this[P_SESSION].device[P_DEVICE].globalSpace;
+				this[P_SESSION].hitTestSources.forEach((hitTestSource) => {
+					const sourceSpace = hitTestSource[P_HIT_TEST].space;
+					const sourceGlobalOffset =
+						XRSpaceUtils.calculateGlobalOffsetMatrix(sourceSpace);
+					const rayLocalOffset = hitTestSource[P_HIT_TEST].offsetRay.matrix;
+					const rayGlobalOffset = mat4.create();
+					mat4.multiply(rayGlobalOffset, sourceGlobalOffset, rayLocalOffset);
+					const hitTestResults: XRHitTestResult[] = [];
+					sem.computeHitTestResults(rayGlobalOffset).forEach((matrix) => {
+						const offsetSpace = new XRSpace(globalSpace, matrix);
+						const hitTestResult = new XRHitTestResult(frame, offsetSpace);
+						hitTestResults.push(hitTestResult);
+					});
+					frame[P_FRAME].hitTestResultsMap.set(hitTestSource, hitTestResults);
+				});
 			},
 			onend: null,
 			oninputsourceschange: null,
@@ -655,6 +749,34 @@ export class XRSession extends EventTarget {
 				this[P_SESSION].persistentAnchors.delete(uuid);
 				anchor.delete();
 				resolve(undefined);
+			}
+		});
+	}
+
+	requestHitTestSource(options: XRHitTestOptionsInit) {
+		return new Promise<XRHitTestSource>((resolve, reject) => {
+			if (!this[P_SESSION].enabledFeatures.includes('hit-test')) {
+				reject(
+					new DOMException(
+						`WebXR feature "hit-test" is not supported by current session`,
+						'NotSupportedError',
+					),
+				);
+			} else if (this[P_SESSION].ended) {
+				reject(
+					new DOMException('XRSession has already ended.', 'InvalidStateError'),
+				);
+			} else if (!this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule) {
+				reject(
+					new DOMException(
+						'Synthethic Environment Module required for emulating hit-test',
+						'OperationError',
+					),
+				);
+			} else {
+				const xrHitTestSource = new XRHitTestSource(this, options);
+				this[P_SESSION].hitTestSources.add(xrHitTestSource);
+				resolve(xrHitTestSource);
 			}
 		});
 	}

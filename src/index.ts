@@ -49,13 +49,14 @@ export { XRHand } from './input/XRHand.js';
 export { XRWebGLLayer, XRLayer } from './layers/XRWebGLLayer.js';
 
 // Planes
-export { XRPlane } from './planes/XRPlane.js';
+export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';
 
 // Meshes
-export { XRMesh } from './meshes/XRMesh.js';
+export { XRMesh, XRMeshSet, NativeMesh } from './meshes/XRMesh.js';
+export { XRSemanticLabels } from './labels/labels.js';
 
 // Anchors
-export { XRAnchor } from './anchors/XRAnchor.js';
+export { XRAnchor, XRAnchorSet } from './anchors/XRAnchor.js';
 
 // Hit Test
 export { XRRay } from './hittest/XRRay.js';

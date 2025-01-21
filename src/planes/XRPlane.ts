@@ -6,6 +6,8 @@
  */
 
 import { P_PLANE } from '../private.js';
+import type { XRFrame } from '../frameloop/XRFrame.js';
+import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSemanticLabels } from '../labels/labels.js';
 import { XRSpace } from '../spaces/XRSpace.js';
 
@@ -39,6 +41,8 @@ export const XREntityOrientation: Partial<
 
 export class XRPlane {
 	[P_PLANE]: {
+		nativePlane: NativePlane;
+		frame: XRFrame;
 		planeSpace: XRSpace;
 		polygon: DOMPointReadOnly[];
 		lastChangedTime: DOMHighResTimeStamp;
@@ -47,11 +51,14 @@ export class XRPlane {
 	};
 
 	constructor(
+		nativePlane: NativePlane,
 		planeSpace: XRSpace,
 		polygon: DOMPointReadOnly[],
 		semanticLabel?: XRSemanticLabels,
 	) {
 		this[P_PLANE] = {
+			nativePlane,
+			frame: undefined!,
 			planeSpace,
 			polygon,
 			lastChangedTime: performance.now(),
@@ -84,3 +91,11 @@ export class XRPlane {
 }
 
 export class XRPlaneSet extends Set<XRPlane> {}
+
+export class NativePlane {
+	constructor(
+		public transform: XRRigidTransform,
+		public polygon: DOMPointReadOnly[],
+		public semanticLabel: XRSemanticLabels,
+	) {}
+}

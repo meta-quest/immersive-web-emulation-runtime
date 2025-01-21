@@ -54,6 +54,8 @@ import { XRSystem } from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
+import { NativePlane } from '../planes/XRPlane.js';
+import { NativeMesh } from '../meshes/XRMesh.js';
 
 export type WebXRFeature =
 	| 'viewer'
@@ -100,6 +102,14 @@ const DEFAULTS = {
 	headsetQuaternion: new Quaternion(),
 	stereoEnabled: false,
 };
+
+export interface SyntheticEnvironmentModule {
+	loadEnvironment(json: any): void;
+	get environmentCanvas(): HTMLCanvasElement;
+	get trackedPlanes(): Set<NativePlane>;
+	get trackedMeshes(): Set<NativeMesh>;
+	computeHitTestResults(rayMatrix: mat4): mat4[];
+}
 
 /**
  * XRDevice is not a standard API class outlined in the WebXR Device API Specifications
@@ -155,6 +165,9 @@ export class XRDevice {
 
 		// action playback
 		actionPlayer?: ActionPlayer;
+
+		// synthetic environment
+		syntheticEnvironmentModule?: SyntheticEnvironmentModule;
 	};
 
 	constructor(
@@ -408,6 +421,10 @@ export class XRDevice {
 		globalObject['XRInputSourceEvent'] = XRInputSourceEvent;
 		globalObject['XRInputSourcesChangeEvent'] = XRInputSourcesChangeEvent;
 		globalObject['XRReferenceSpaceEvent'] = XRReferenceSpaceEvent;
+	}
+
+	installSyntheticEnvironmentModule(sem: SyntheticEnvironmentModule) {
+		this[P_DEVICE].syntheticEnvironmentModule = sem;
 	}
 
 	get supportedSessionModes() {

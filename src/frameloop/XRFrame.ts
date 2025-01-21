@@ -14,6 +14,7 @@ import {
 } from '../private.js';
 import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
 import { XREye, XRView } from '../views/XRView.js';
+import { XRHitTestResult, XRHitTestSource } from '../hittest/XRHitTest.js';
 import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
 import { mat4, quat, vec3 } from 'gl-matrix';
 
@@ -53,6 +54,7 @@ export class XRFrame {
 		detectedPlanes: XRPlaneSet;
 		detectedMeshes: XRMeshSet;
 		trackedAnchors: XRAnchorSet;
+		hitTestResultsMap: Map<XRHitTestSource, XRHitTestResult[]>;
 	};
 
 	constructor(
@@ -72,6 +74,7 @@ export class XRFrame {
 			detectedPlanes: new XRPlaneSet(),
 			detectedMeshes: new XRMeshSet(),
 			trackedAnchors: session[P_SESSION].frameTrackedAnchors,
+			hitTestResultsMap: new Map(),
 		};
 	}
 
@@ -252,5 +255,21 @@ export class XRFrame {
 				});
 			}
 		});
+	}
+
+	getHitTestResults(hitTestSource: XRHitTestSource) {
+		if (!this[P_FRAME].active) {
+			throw new DOMException(
+				'XRFrame access outside the callback that produced it is invalid.',
+				'InvalidStateError',
+			);
+		} else if (!this[P_FRAME].hitTestResultsMap.has(hitTestSource)) {
+			throw new DOMException(
+				'Requested hit test results are not available for current frame.',
+				'InvalidStateError',
+			);
+		} else {
+			return [...this[P_FRAME].hitTestResultsMap.get(hitTestSource)!];
+		}
 	}
 }

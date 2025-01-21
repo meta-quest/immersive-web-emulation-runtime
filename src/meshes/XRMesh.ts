@@ -6,11 +6,15 @@
  */
 
 import { P_MESH } from '../private.js';
+import type { XRFrame } from '../frameloop/XRFrame.js';
+import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSemanticLabels } from '../labels/labels.js';
 import { XRSpace } from '../spaces/XRSpace.js';
 
 export class XRMesh {
 	[P_MESH]: {
+		nativeMesh: NativeMesh;
+		frame: XRFrame;
 		meshSpace: XRSpace;
 		vertices: Float32Array;
 		indices: Uint32Array;
@@ -19,12 +23,15 @@ export class XRMesh {
 	};
 
 	constructor(
+		nativeMesh: NativeMesh,
 		meshSpace: XRSpace,
 		vertices: Float32Array,
 		indices: Uint32Array,
 		semanticLabel?: XRSemanticLabels,
 	) {
 		this[P_MESH] = {
+			nativeMesh,
+			frame: undefined!,
 			meshSpace,
 			vertices,
 			indices,
@@ -55,3 +62,12 @@ export class XRMesh {
 }
 
 export class XRMeshSet extends Set<XRMesh> {}
+
+export class NativeMesh {
+	constructor(
+		public transform: XRRigidTransform,
+		public vertices: Float32Array,
+		public indices: Uint32Array,
+		public semanticLabel: XRSemanticLabels,
+	) {}
+}
