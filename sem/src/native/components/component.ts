@@ -5,7 +5,7 @@ export enum SpatialEntityComponentType {
 	Bounded3D = 'bounded3D',
 	Bounded2D = 'bounded2D',
 	TriangleMesh = 'triangleMesh',
-	SemanticLabels = 'semanticLabels',
+	SemanticLabel = 'semanticLabel',
 }
 
 export abstract class SpatialEntityComponent extends EventTarget {
