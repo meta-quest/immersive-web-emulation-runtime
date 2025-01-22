@@ -18,7 +18,9 @@ import {
 	WebGLRenderer,
 } from 'three';
 import { NativeMesh, NativePlane, XRDevice } from 'iwer';
+import { SpatialEntity, SpatialEntityType } from './native/entity.js';
 
+import { Scene as SceneFile } from './generated/protos/openxr_scene.js';
 import { mat4 } from 'gl-matrix';
 
 const forwardVector = new Vector3(0, 0, -1);
@@ -30,7 +32,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
 	private renderer: WebGLRenderer;
 	private scene: Scene;
 	private camera: PerspectiveCamera;
-	private objectMap: Map<string, Group> = new Map();
+	private objectMap: Map<string, SpatialEntity> = new Map();
 	private planes = new Group();
 	private boxes = new Group();
 	private meshes = new Group();
@@ -130,6 +132,34 @@ export class SyntheticEnvironmentModule extends EventTarget {
 			object.removeFromParent();
 		});
 		this.objectMap.clear();
+	}
+
+	loadEnvironment(json: any) {
+		this.deleteAll();
+		(json as SceneFile).spatialEntities.forEach((spatialEntityJSON) => {
+			const spatialEntity = SpatialEntity.fromPBJSON(spatialEntityJSON);
+			if (spatialEntity) {
+				switch (spatialEntity.entityType) {
+					case SpatialEntityType.Box:
+						this.boxes.add(spatialEntity);
+						this.trackedMeshes.add(spatialEntity.nativeEntity as NativeMesh);
+						break;
+					case SpatialEntityType.Plane:
+						this.planes.add(spatialEntity);
+						this.trackedPlanes.add(spatialEntity.nativeEntity as NativePlane);
+						break;
+					case SpatialEntityType.Mesh:
+						this.meshes.add(spatialEntity);
+						this.trackedMeshes.add(spatialEntity.nativeEntity as NativeMesh);
+						break;
+				}
+				const oldMesh = this.objectMap.get(spatialEntityJSON.uuid);
+				if (oldMesh) {
+					oldMesh.removeFromParent();
+				}
+				this.objectMap.set(spatialEntityJSON.uuid, spatialEntity);
+			}
+		});
 	}
 
 	computeHitTestResults(mat4: mat4) {
