@@ -298,6 +298,14 @@ export class XRSession extends EventTarget {
 					performance.now(),
 				);
 
+				if (this[P_SESSION].mode === 'immersive-ar') {
+					const sem =
+						this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule;
+					if (sem) {
+						sem.render(this[P_SESSION].device);
+					}
+				}
+
 				if (this[P_SESSION].enabledFeatures.includes('anchors')) {
 					this[P_SESSION].updateTrackedAnchors();
 				}
@@ -404,6 +412,12 @@ export class XRSession extends EventTarget {
 				if (!sem) {
 					return;
 				}
+				const trackedPlanes = Array.from(this[P_SESSION].trackedPlanes.keys());
+				trackedPlanes.forEach((plane) => {
+					if (!sem.trackedPlanes.has(plane)) {
+						this[P_SESSION].trackedPlanes.delete(plane);
+					}
+				});
 				sem.trackedPlanes.forEach((plane) => {
 					let xrPlane = this[P_SESSION].trackedPlanes.get(plane);
 					if (!xrPlane) {
@@ -425,6 +439,12 @@ export class XRSession extends EventTarget {
 				if (!sem) {
 					return;
 				}
+				const trackedMeshes = Array.from(this[P_SESSION].trackedMeshes.keys());
+				trackedMeshes.forEach((mesh) => {
+					if (!sem.trackedMeshes.has(mesh)) {
+						this[P_SESSION].trackedMeshes.delete(mesh);
+					}
+				});
 				sem.trackedMeshes.forEach((mesh) => {
 					let xrMesh = this[P_SESSION].trackedMeshes.get(mesh);
 					if (!xrMesh) {

@@ -104,7 +104,11 @@ const DEFAULTS = {
 };
 
 export interface SyntheticEnvironmentModule {
+	render(xrDevice: XRDevice): void;
 	loadEnvironment(json: any): void;
+	planesVisible: boolean;
+	boundingBoxesVisible: boolean;
+	meshesVisible: boolean;
 	get environmentCanvas(): HTMLCanvasElement;
 	get trackedPlanes(): Set<NativePlane>;
 	get trackedMeshes(): Set<NativeMesh>;
@@ -302,6 +306,10 @@ export class XRDevice {
 				// backup canvas data
 				const canvas = baseLayer.context.canvas as HTMLCanvasElement;
 				if (canvas.parentElement !== this[P_DEVICE].canvasContainer) {
+					const sem = this[P_DEVICE].syntheticEnvironmentModule;
+					if (sem) {
+						this[P_DEVICE].canvasContainer.appendChild(sem.environmentCanvas);
+					}
 					this[P_DEVICE].canvasData = {
 						canvas,
 						parent: canvas.parentElement,
@@ -325,7 +333,12 @@ export class XRDevice {
 					} else {
 						this[P_DEVICE].canvasContainer.removeChild(canvas);
 					}
+					const sem = this[P_DEVICE].syntheticEnvironmentModule;
+					if (sem) {
+						this[P_DEVICE].canvasContainer.removeChild(sem.environmentCanvas);
+					}
 					document.body.removeChild(this[P_DEVICE].canvasContainer);
+					this[P_DEVICE].canvasData = undefined;
 					window.dispatchEvent(new Event('resize'));
 				}
 			},
@@ -538,6 +551,14 @@ export class XRDevice {
 		return this[P_DEVICE].canvasContainer;
 	}
 
+	get canvasDimensions(): { width: number; height: number } | undefined {
+		if (this[P_DEVICE].canvasData) {
+			const { width, height } = this[P_DEVICE].canvasData.canvas;
+			return { width, height };
+		}
+		return;
+	}
+
 	get activeSession(): XRSession | undefined {
 		return this[P_DEVICE].xrSystem?.[P_SYSTEM].activeSession;
 	}
@@ -602,5 +623,9 @@ export class XRDevice {
 			this[P_DEVICE].ipd,
 		);
 		return this[P_DEVICE].actionPlayer;
+	}
+
+	get syntheticEnvironmentModule() {
+		return this[P_DEVICE].syntheticEnvironmentModule;
 	}
 }

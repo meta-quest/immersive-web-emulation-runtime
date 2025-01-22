@@ -28,7 +28,7 @@
 		"ts-proto": "^2.6.0"
 	},
 	"peerDependencies": {
-		"iwer": "file:../iwer-1.0.3.tgz"
+		"iwer": "^1.1.1"
 	},
 	"devDependencies": {
 		"@rollup/plugin-commonjs": "^28.0.1",
