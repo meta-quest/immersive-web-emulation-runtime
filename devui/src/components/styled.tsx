@@ -258,13 +258,6 @@ export const KeyRow = styled.div<{ $reverse: boolean }>`
 	justify-content: center;
 `;
 
-export const ButtonGroupColumn = styled.div`
-	display: flex;
-	flex-direction: column;
-	height: 50px;
-	justify-content: space-between;
-`;
-
 export const FAIcon = styled(FontAwesomeIcon)<{ $size?: number }>`
 	height: ${({ $size }) => `${$size}px`};
 	min-height: ${({ $size }) => `${$size}px`};
@@ -362,6 +355,6 @@ export const InputSuffix = styled.span`
 	top: 50%;
 	transform: translateY(-50%);
 	pointer-events: none;
-	color: var(--panel-light-grey);
+	color: ${Colors.textGrey};
 	font-size: 10px;
 `;

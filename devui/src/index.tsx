@@ -13,6 +13,7 @@ import { HeaderUI } from './components/header.js';
 import { HeadsetUI } from './components/headset.js';
 import { IWERIcon } from './components/icons.js';
 import { InputLayer } from './scene.js';
+import { StyleSheetManager } from 'styled-components';
 import { VERSION } from './version.js';
 import { XRDevice } from 'iwer';
 import { createRoot } from 'react-dom/client';
@@ -32,15 +33,32 @@ export class DevUI {
 		this.devUIContainer.style.left = '50vw';
 		this.devUIContainer.style.transform = 'translate(-50%, -50%)';
 		this.devUIContainer.style.pointerEvents = 'none';
+		const devUIShadowRoot = this.devUIContainer.attachShadow({
+			mode: 'open',
+		});
 		this.inputLayer = new InputLayer(xrDevice);
-		const root = createRoot(this.devUIContainer);
-		root.render(<Overlay xrDevice={xrDevice} inputLayer={this.inputLayer} />);
+		const root = createRoot(devUIShadowRoot);
+		root.render(
+			<Overlay
+				xrDevice={xrDevice}
+				inputLayer={this.inputLayer}
+				shadowRoot={devUIShadowRoot}
+			/>,
+		);
 
 		const installOfferSessionUI = () => {
 			const offerSessionUIContainer = document.createElement('div');
 			document.body.appendChild(offerSessionUIContainer);
-			const offerSessionRoot = createRoot(offerSessionUIContainer);
-			offerSessionRoot.render(<OfferSessionUI xrDevice={xrDevice} />);
+			const offerSessionShadowRoot = offerSessionUIContainer.attachShadow({
+				mode: 'open',
+			});
+			const offerSessionRoot = createRoot(offerSessionShadowRoot);
+			offerSessionRoot.render(
+				<OfferSessionUI
+					xrDevice={xrDevice}
+					shadowRoot={offerSessionShadowRoot}
+				/>,
+			);
 		};
 
 		if (document.body) {
@@ -62,9 +80,14 @@ export class DevUI {
 interface OverlayProps {
 	xrDevice: XRDevice;
 	inputLayer: InputLayer;
+	shadowRoot: ShadowRoot;
 }
 
-const Overlay: React.FC<OverlayProps> = ({ xrDevice, inputLayer }) => {
+const Overlay: React.FC<OverlayProps> = ({
+	xrDevice,
+	inputLayer,
+	shadowRoot,
+}) => {
 	const [pointerLocked, setPointerLocked] = useState(false);
 
 	useEffect(() => {
@@ -113,36 +136,42 @@ const Overlay: React.FC<OverlayProps> = ({ xrDevice, inputLayer }) => {
 	}, []);
 
 	return (
-		<div
-			style={{
-				width: '100vw',
-				height: '100vh',
-				display: 'flex',
-				flexDirection: 'column',
-				justifyContent: 'space-between',
-				pointerEvents: 'none',
-			}}
-		>
-			<HeaderUI xrDevice={xrDevice} inputLayer={inputLayer} />
-			<HeadsetUI
-				xrDevice={xrDevice}
-				inputLayer={inputLayer}
-				pointerLocked={pointerLocked}
-			/>
-			<ControlsUI
-				xrDevice={xrDevice}
-				inputLayer={inputLayer}
-				pointerLocked={pointerLocked}
-			/>
-		</div>
+		<StyleSheetManager target={shadowRoot} disableCSSOMInjection={true}>
+			<div
+				style={{
+					width: '100vw',
+					height: '100vh',
+					display: 'flex',
+					flexDirection: 'column',
+					justifyContent: 'space-between',
+					pointerEvents: 'none',
+				}}
+			>
+				<HeaderUI xrDevice={xrDevice} inputLayer={inputLayer} />
+				<HeadsetUI
+					xrDevice={xrDevice}
+					inputLayer={inputLayer}
+					pointerLocked={pointerLocked}
+				/>
+				<ControlsUI
+					xrDevice={xrDevice}
+					inputLayer={inputLayer}
+					pointerLocked={pointerLocked}
+				/>
+			</div>
+		</StyleSheetManager>
 	);
 };
 
 interface OfferSessionProps {
 	xrDevice: XRDevice;
+	shadowRoot: ShadowRoot;
 }
 
-const OfferSessionUI: React.FC<OfferSessionProps> = ({ xrDevice }) => {
+const OfferSessionUI: React.FC<OfferSessionProps> = ({
+	xrDevice,
+	shadowRoot,
+}) => {
 	const [showOffer, setShowOffer] = React.useState(
 		xrDevice.sessionOffered && !xrDevice.activeSession,
 	);
@@ -154,34 +183,36 @@ const OfferSessionUI: React.FC<OfferSessionProps> = ({ xrDevice }) => {
 	}, []);
 
 	return (
-		<HeaderButtonsContainer
-			style={{
-				zIndex: 899,
-				position: 'fixed',
-				top: showOffer ? '8px' : '-30px',
-				display: 'flex',
-				flexDirection: 'row',
-				alignItems: 'center',
-				justifyItems: 'space-between',
-				left: '50vw',
-				transform: 'translateX(-50%)',
-				transition: 'all 0.2s ease-in-out',
-				paddingLeft: '5px',
-				gap: '3px',
-			}}
-		>
-			<IWERIcon size={24} />
-			<HeaderButton
-				onClick={() => {
-					xrDevice.grantOfferedSession();
-				}}
+		<StyleSheetManager target={shadowRoot} disableCSSOMInjection={true}>
+			<HeaderButtonsContainer
 				style={{
-					fontSize: '16px',
+					zIndex: 899,
+					position: 'fixed',
+					top: showOffer ? '8px' : '-30px',
+					display: 'flex',
+					flexDirection: 'row',
+					alignItems: 'center',
+					justifyItems: 'space-between',
+					left: '50vw',
+					transform: 'translateX(-50%)',
+					transition: 'all 0.2s ease-in-out',
+					paddingLeft: '5px',
+					gap: '3px',
 				}}
 			>
-				Enter XR
-			</HeaderButton>
-		</HeaderButtonsContainer>
+				<IWERIcon size={24} />
+				<HeaderButton
+					onClick={() => {
+						xrDevice.grantOfferedSession();
+					}}
+					style={{
+						fontSize: '16px',
+					}}
+				>
+					Enter XR
+				</HeaderButton>
+			</HeaderButtonsContainer>
+		</StyleSheetManager>
 	);
 };
 

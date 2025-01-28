@@ -1,6 +1,6 @@
 {
 	"name": "@iwer/devui",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Dev UI for IWER",
 	"type": "module",
 	"main": "lib/index.js",
