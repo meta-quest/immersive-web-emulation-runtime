@@ -24,3 +24,5 @@ docs/.vitepress/dist/
 docs/.vitepress/cache/
 
 **/src/version.ts
+
+*.tgz

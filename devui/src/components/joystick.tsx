@@ -7,20 +7,23 @@
 
 import {
 	Button,
+	ButtonContainer,
 	ButtonGroup,
+	Colors,
+	ControlButtonStyles,
 	FAIcon,
-	KeyBlockContainer,
-	KeyRow,
 	MappedKeyBlock,
 } from './styled.js';
 import React, { useEffect, useRef, useState } from 'react';
+import {
+	faCircleXmark,
+	faFingerprint,
+} from '@fortawesome/free-solid-svg-icons';
 
 import { GamepadIcon } from './icons.js';
 import { MappedKeyDisplay } from './keys.js';
 import { XRController } from 'iwer/lib/device/XRController';
-import { faFingerprint } from '@fortawesome/free-solid-svg-icons';
 import { styled } from 'styled-components';
-import { useDevUIConfig } from '../index.js';
 
 interface JoystickProps {
 	xrController: XRController;
@@ -36,62 +39,59 @@ interface JoystickProps {
 const JoystickContainer = styled.div`
 	display: flex;
 	align-items: center;
-	margin-bottom: 2px;
+	margin-bottom: ${ControlButtonStyles.gap};
 `;
 
+const joystickSize = `calc(2 * ${ControlButtonStyles.height} + ${ControlButtonStyles.gap})`;
+
 const JoystickButton = styled.button`
-	background-color: rgba(255, 255, 255, 0.3);
+	background: ${Colors.gradientGreyTranslucent};
 	border: none;
 	display: flex;
 	justify-content: center;
 	align-items: center;
 	padding: 0;
 	pointer-events: none;
-	width: 50px;
-	height: 50px;
+	width: ${joystickSize};
+	height: ${joystickSize};
 	border-radius: 50%;
 	position: relative;
 	margin: 0 5px;
-	backdrop-filter: blur(10px);
-	-webkit-backdrop-filter: blur(10px);
 `;
 
 const JoystickInner = styled.div`
 	position: absolute;
-	background-color: white;
-	border-radius: 50%;
-	width: 36px;
-	height: 36px;
+	font-size: 50px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: ${Colors.textWhite};
 	cursor: pointer;
 	pointer-events: auto;
 `;
 
 const SmallButton = styled(Button)<{ $reverse: boolean }>`
-	width: 49px;
-	font-size: 14px;
+	width: ${ControlButtonStyles.widthLong};
+	font-size: ${ControlButtonStyles.fontSize};
 
 	${({ $reverse }) =>
 		$reverse
 			? `
     &:first-child {
-      margin-left: 1px;
-      border-radius: 2px 8px 8px 2px;
+      border-radius: ${ControlButtonStyles.radiusLast};
     }
 
     &:last-child {
-      margin-right: 1px;
-      border-radius: 8px 2px 2px 8px;
+      border-radius: ${ControlButtonStyles.radiusFirst};
     }
   `
 			: `
     &:first-child {
-      margin-right: 1px;
-      border-radius: 8px 2px 2px 8px;
+      border-radius: ${ControlButtonStyles.radiusFirst};
     }
 
     &:last-child {
-      margin-left: 1px;
-      border-radius: 2px 8px 8px 2px;
+      border-radius: ${ControlButtonStyles.radiusLast};
     }
   `}
 `;
@@ -106,7 +106,6 @@ export const Joystick: React.FC<JoystickProps> = ({
 	mappedKeyRight,
 	mappedKeyPressed,
 }) => {
-	const devuiConfig = useDevUIConfig();
 	const joystickRef = useRef<HTMLDivElement>(null);
 	const [isDragging, setIsDragging] = useState(false);
 	const [isTouched, setIsTouched] = useState(false);
@@ -246,7 +245,44 @@ export const Joystick: React.FC<JoystickProps> = ({
 		};
 	}, [isDragging, initialPosition]);
 
-	return (
+	return pointerLocked ? (
+		<>
+			<ButtonContainer $reverse={handedness === 'right'}>
+				<GamepadIcon
+					buttonName="thumbstick"
+					handedness={xrController.inputSource.handedness}
+				/>
+				<ButtonGroup $reverse={handedness === 'right'}>
+					<MappedKeyBlock $pressed={keyStates.up}>
+						{MappedKeyDisplay[mappedKeyUp]}
+					</MappedKeyBlock>
+					<MappedKeyBlock $pressed={keyStates.pressed}>
+						{MappedKeyDisplay[mappedKeyPressed]}
+					</MappedKeyBlock>
+				</ButtonGroup>
+			</ButtonContainer>
+			<ButtonContainer
+				$reverse={handedness === 'right'}
+				style={
+					handedness === 'right'
+						? { marginRight: '2px' }
+						: { marginLeft: '2px' }
+				}
+			>
+				<ButtonGroup $reverse={false} style={{ margin: 0 }}>
+					<MappedKeyBlock $pressed={keyStates.left}>
+						{MappedKeyDisplay[mappedKeyLeft]}
+					</MappedKeyBlock>
+					<MappedKeyBlock $pressed={keyStates.down}>
+						{MappedKeyDisplay[mappedKeyDown]}
+					</MappedKeyBlock>
+					<MappedKeyBlock $pressed={keyStates.right}>
+						{MappedKeyDisplay[mappedKeyRight]}
+					</MappedKeyBlock>
+				</ButtonGroup>
+			</ButtonContainer>
+		</>
+	) : (
 		<JoystickContainer
 			style={{
 				flexDirection:
@@ -256,110 +292,79 @@ export const Joystick: React.FC<JoystickProps> = ({
 				alignItems: 'flex-start',
 			}}
 		>
-			<GamepadIcon
-				buttonName="thumbstick"
-				handedness={xrController.inputSource.handedness}
-			/>
-			{pointerLocked ? (
-				<KeyBlockContainer $reverse={handedness === 'right'}>
-					<KeyRow $reverse={handedness === 'right'}>
-						<MappedKeyBlock $pressed={keyStates.up} style={{ margin: '2px' }}>
-							{MappedKeyDisplay[mappedKeyUp]}
-						</MappedKeyBlock>
-						<MappedKeyBlock
-							$pressed={keyStates.pressed}
-							style={{ margin: '2px' }}
-						>
-							{MappedKeyDisplay[mappedKeyPressed]}
-						</MappedKeyBlock>
-					</KeyRow>
-					<KeyRow $reverse={false}>
-						<MappedKeyBlock $pressed={keyStates.left} style={{ margin: '2px' }}>
-							{MappedKeyDisplay[mappedKeyLeft]}
-						</MappedKeyBlock>
-						<MappedKeyBlock $pressed={keyStates.down} style={{ margin: '2px' }}>
-							{MappedKeyDisplay[mappedKeyDown]}
-						</MappedKeyBlock>
-						<MappedKeyBlock
-							$pressed={keyStates.right}
-							style={{ margin: '2px' }}
-						>
-							{MappedKeyDisplay[mappedKeyRight]}
-						</MappedKeyBlock>
-					</KeyRow>
-				</KeyBlockContainer>
-			) : (
-				<>
-					<JoystickButton
+			<>
+				<GamepadIcon
+					buttonName="thumbstick"
+					handedness={xrController.inputSource.handedness}
+				/>
+				<JoystickButton style={{ margin: '0 5px' }}>
+					<JoystickInner ref={joystickRef} onMouseDown={handleMouseDown}>
+						<FAIcon icon={faCircleXmark} $size={50} />
+					</JoystickInner>
+				</JoystickButton>
+				<div
+					style={{
+						display: 'flex',
+						flexDirection: 'column',
+						alignItems: handedness === 'right' ? 'start' : 'end',
+					}}
+				>
+					<Button
+						$reverse={handedness === 'right'}
 						style={{
-							margin:
-								xrController.inputSource.handedness === 'left'
-									? '0 5px 0 -3px'
-									: '0 -3px 0 5px',
+							background: isPressed
+								? Colors.gradientLightGreyTranslucent
+								: Colors.gradientGreyTranslucent,
+							width: `calc(${ControlButtonStyles.widthLong} + ${ControlButtonStyles.widthShort} + ${ControlButtonStyles.gap})`,
+							marginBottom: ControlButtonStyles.gap,
+							borderRadius: ControlButtonStyles.radiusSolo,
+						}}
+						onClick={() => {
+							setIsPressed(true);
+							xrController.updateButtonValue(buttonId, 1);
+							setTimeout(() => {
+								setIsPressed(false);
+								xrController.updateButtonValue(buttonId, 0);
+							}, 250);
 						}}
 					>
-						<JoystickInner
-							ref={joystickRef}
-							onMouseDown={handleMouseDown}
-						></JoystickInner>
-					</JoystickButton>
-					<div style={{ display: 'flex', flexDirection: 'column' }}>
-						<Button
-							$reverse={handedness === 'right'}
+						Press
+					</Button>
+					<ButtonGroup $reverse={handedness === 'right'}>
+						<SmallButton
+							title="Click to toggle touch state"
+							$reverse={xrController.inputSource.handedness !== 'left'}
 							style={{
-								backgroundColor: isPressed
-									? 'rgba(255, 255, 255, 0.6)'
-									: 'rgba(255, 255, 255, 0.3)',
-								width: '80px',
-								marginBottom: '2px',
-								borderRadius: '8px',
+								background: isTouched
+									? Colors.gradientLightGreyTranslucent
+									: Colors.gradientGreyTranslucent,
+								width: ControlButtonStyles.widthShort,
 							}}
 							onClick={() => {
-								setIsPressed(true);
-								xrController.updateButtonValue(buttonId, 1);
-								setTimeout(() => {
-									setIsPressed(false);
-									xrController.updateButtonValue(buttonId, 0);
-								}, devuiConfig.buttonPressDuration);
+								setIsTouched(!isTouched);
+								xrController.updateButtonTouch(buttonId, !isTouched);
 							}}
 						>
-							Press
-						</Button>
-						<ButtonGroup $reverse={handedness === 'right'}>
-							<SmallButton
-								$reverse={xrController.inputSource.handedness !== 'left'}
-								style={{
-									backgroundColor: isTouched
-										? 'rgba(255, 255, 255, 0.6)'
-										: 'rgba(255, 255, 255, 0.3)',
-									width: '29px',
-								}}
-								onClick={() => {
-									setIsTouched(!isTouched);
-									xrController.updateButtonTouch(buttonId, !isTouched);
-								}}
-							>
-								<FAIcon icon={faFingerprint} />
-							</SmallButton>
-							<SmallButton
-								$reverse={xrController.inputSource.handedness !== 'left'}
-								style={{
-									backgroundColor: isOnHold
-										? 'rgba(255, 255, 255, 0.6)'
-										: 'rgba(255, 255, 255, 0.3)',
-									width: '49px',
-								}}
-								onClick={() => {
-									setIsOnHold(!isOnHold);
-									xrController.updateButtonValue(buttonId, isOnHold ? 0 : 1);
-								}}
-							>
-								Hold
-							</SmallButton>
-						</ButtonGroup>
-					</div>
-				</>
-			)}
+							<FAIcon icon={faFingerprint} />
+						</SmallButton>
+						<SmallButton
+							$reverse={xrController.inputSource.handedness !== 'left'}
+							style={{
+								background: isOnHold
+									? Colors.gradientLightGreyTranslucent
+									: Colors.gradientGreyTranslucent,
+								width: ControlButtonStyles.widthLong,
+							}}
+							onClick={() => {
+								setIsOnHold(!isOnHold);
+								xrController.updateButtonValue(buttonId, isOnHold ? 0 : 1);
+							}}
+						>
+							Hold
+						</SmallButton>
+					</ButtonGroup>
+				</div>
+			</>
 		</JoystickContainer>
 	);
 };

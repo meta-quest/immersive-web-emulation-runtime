@@ -1,6 +1,6 @@
 {
 	"name": "@iwer/devui",
-	"version": "0.2.1",
+	"version": "1.0.0",
 	"description": "Dev UI for IWER",
 	"type": "module",
 	"main": "lib/index.js",
@@ -10,6 +10,7 @@
 		"lib"
 	],
 	"scripts": {
+		"prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
 		"build": "tsc && rollup -c"
 	},
 	"repository": {
@@ -27,13 +28,15 @@
 		"@fortawesome/fontawesome-svg-core": "6.6.0",
 		"@fortawesome/free-solid-svg-icons": "6.6.0",
 		"@fortawesome/react-fontawesome": "0.2.2",
+		"@pmndrs/handle": "^6.5.5",
+		"@pmndrs/pointer-events": "^6.5.5",
 		"react": "18.3.1",
 		"react-dom": "18.3.1",
 		"styled-components": "6.1.13",
-		"three": "0.168.0"
+		"three": "^0.165.0"
 	},
 	"peerDependencies": {
-		"iwer": "^1.0.3"
+		"iwer": "^2.0.0"
 	},
 	"devDependencies": {
 		"@rollup/plugin-babel": "^6.0.4",
