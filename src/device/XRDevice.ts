@@ -103,8 +103,22 @@ const DEFAULTS = {
 	stereoEnabled: false,
 };
 
+export interface DevUIConstructor {
+	new (xrDevice: XRDevice): DevUI;
+}
+export interface DevUI {
+	version: string;
+	render(time: number): void;
+	get devUICanvas(): HTMLCanvasElement;
+	get devUIContainer(): HTMLDivElement;
+}
+
+export interface SEMConstructor {
+	new (xrDevice: XRDevice): SyntheticEnvironmentModule;
+}
 export interface SyntheticEnvironmentModule {
-	render(xrDevice: XRDevice): void;
+	version: string;
+	render(time: number): void;
 	loadEnvironment(json: any): void;
 	planesVisible: boolean;
 	boundingBoxesVisible: boolean;
@@ -115,11 +129,18 @@ export interface SyntheticEnvironmentModule {
 	computeHitTestResults(rayMatrix: mat4): mat4[];
 }
 
+const Z_INDEX_SEM_CANVAS = 1;
+const Z_INDEX_APP_CANVAS = 2;
+const Z_INDEX_DEVUI_CANVAS = 3;
+const Z_INDEX_DEVUI_CONTAINER = 4;
+
 /**
  * XRDevice is not a standard API class outlined in the WebXR Device API Specifications
  * Instead, it serves as an user-facing interface to control the emulated XR Device
  */
 export class XRDevice {
+	public readonly version = VERSION;
+
 	[P_DEVICE]: {
 		// device config
 		name: string;
@@ -158,6 +179,7 @@ export class XRDevice {
 			parent: HTMLElement | null;
 			width: number;
 			height: number;
+			zIndex: string;
 		};
 		canvasContainer: HTMLDivElement;
 
@@ -170,8 +192,9 @@ export class XRDevice {
 		// action playback
 		actionPlayer?: ActionPlayer;
 
-		// synthetic environment
-		syntheticEnvironmentModule?: SyntheticEnvironmentModule;
+		// add-on modules:
+		devui?: DevUI;
+		sem?: SyntheticEnvironmentModule;
 	};
 
 	constructor(
@@ -306,8 +329,17 @@ export class XRDevice {
 				// backup canvas data
 				const canvas = baseLayer.context.canvas as HTMLCanvasElement;
 				if (canvas.parentElement !== this[P_DEVICE].canvasContainer) {
-					const sem = this[P_DEVICE].syntheticEnvironmentModule;
+					const devui = this[P_DEVICE].devui;
+					if (devui) {
+						const { devUICanvas, devUIContainer } = devui;
+						devUICanvas.style.zIndex = Z_INDEX_DEVUI_CANVAS.toString();
+						devUIContainer.style.zIndex = Z_INDEX_DEVUI_CONTAINER.toString();
+						this[P_DEVICE].canvasContainer.appendChild(devui.devUICanvas);
+						this[P_DEVICE].canvasContainer.appendChild(devui.devUIContainer);
+					}
+					const sem = this[P_DEVICE].sem;
 					if (sem) {
+						sem.environmentCanvas.style.zIndex = Z_INDEX_SEM_CANVAS.toString();
 						this[P_DEVICE].canvasContainer.appendChild(sem.environmentCanvas);
 					}
 					this[P_DEVICE].canvasData = {
@@ -315,7 +347,9 @@ export class XRDevice {
 						parent: canvas.parentElement,
 						width: canvas.width,
 						height: canvas.height,
+						zIndex: canvas.style.zIndex,
 					};
+					canvas.style.zIndex = Z_INDEX_APP_CANVAS.toString();
 					this[P_DEVICE].canvasContainer.appendChild(canvas);
 					document.body.appendChild(this[P_DEVICE].canvasContainer);
 				}
@@ -325,15 +359,22 @@ export class XRDevice {
 			},
 			onSessionEnd: () => {
 				if (this[P_DEVICE].canvasData) {
-					const { canvas, parent, width, height } = this[P_DEVICE].canvasData;
+					const { canvas, parent, width, height, zIndex } =
+						this[P_DEVICE].canvasData;
 					canvas.width = width;
 					canvas.height = height;
+					canvas.style.zIndex = zIndex;
 					if (parent) {
 						parent.appendChild(canvas);
 					} else {
 						this[P_DEVICE].canvasContainer.removeChild(canvas);
 					}
-					const sem = this[P_DEVICE].syntheticEnvironmentModule;
+					const devui = this[P_DEVICE].devui;
+					if (devui) {
+						this[P_DEVICE].canvasContainer.removeChild(devui.devUICanvas);
+						this[P_DEVICE].canvasContainer.removeChild(devui.devUIContainer);
+					}
+					const sem = this[P_DEVICE].sem;
 					if (sem) {
 						this[P_DEVICE].canvasContainer.removeChild(sem.environmentCanvas);
 					}
@@ -436,8 +477,12 @@ export class XRDevice {
 		globalObject['XRReferenceSpaceEvent'] = XRReferenceSpaceEvent;
 	}
 
-	installSyntheticEnvironmentModule(sem: SyntheticEnvironmentModule) {
-		this[P_DEVICE].syntheticEnvironmentModule = sem;
+	installDevUI(devUIConstructor: DevUIConstructor) {
+		this[P_DEVICE].devui = new devUIConstructor(this);
+	}
+
+	installSEM(semConstructor: SEMConstructor) {
+		this[P_DEVICE].sem = new semConstructor(this);
 	}
 
 	get supportedSessionModes() {
@@ -563,6 +608,22 @@ export class XRDevice {
 		return this[P_DEVICE].xrSystem?.[P_SYSTEM].activeSession;
 	}
 
+	get sessionOffered(): boolean {
+		return Boolean(this[P_DEVICE].xrSystem?.[P_SYSTEM].offeredSessionConfig);
+	}
+
+	get name() {
+		return this[P_DEVICE].name;
+	}
+
+	grantOfferedSession(): void {
+		const pSystem = this[P_DEVICE].xrSystem?.[P_SYSTEM];
+		if (pSystem && pSystem.offeredSessionConfig) {
+			pSystem.grantSession(pSystem.offeredSessionConfig);
+			pSystem.offeredSessionConfig = undefined;
+		}
+	}
+
 	recenter() {
 		const deltaVec = new Vector3(-this.position.x, 0, -this.position.z);
 		const forward = new Vector3(0, 0, -1).applyQuaternion(this.quaternion);
@@ -625,7 +686,11 @@ export class XRDevice {
 		return this[P_DEVICE].actionPlayer;
 	}
 
-	get syntheticEnvironmentModule() {
-		return this[P_DEVICE].syntheticEnvironmentModule;
+	get devui() {
+		return this[P_DEVICE].devui;
+	}
+
+	get sem() {
+		return this[P_DEVICE].sem;
 	}
 }

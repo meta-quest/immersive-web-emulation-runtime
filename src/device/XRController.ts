@@ -31,6 +31,7 @@ export interface XRControllerConfig {
 
 export class XRController extends XRTrackedInput {
 	[P_CONTROLLER]: {
+		profileId: string;
 		gamepadConfig: GamepadConfig;
 	};
 
@@ -64,12 +65,17 @@ export class XRController extends XRTrackedInput {
 
 		super(inputSource);
 		this[P_CONTROLLER] = {
+			profileId: controllerConfig.profileId,
 			gamepadConfig: controllerConfig.layout[handedness]!.gamepad,
 		};
 	}
 
 	get gamepadConfig() {
 		return this[P_CONTROLLER].gamepadConfig;
+	}
+
+	get profileId() {
+		return this[P_CONTROLLER].profileId;
 	}
 
 	updateButtonValue(id: string, value: number) {
