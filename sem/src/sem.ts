@@ -9,7 +9,9 @@ import {
 	Color,
 	GridHelper,
 	Group,
+	Matrix3,
 	Matrix4,
+	Object3D,
 	PerspectiveCamera,
 	Quaternion,
 	Raycaster,
@@ -44,6 +46,10 @@ export class SyntheticEnvironmentModule extends EventTarget {
 	private tempScale = new Vector3();
 	private tempMatrix = new Matrix4();
 	private raycaster = new Raycaster();
+	private hitTestTarget = new Group();
+	private hitTestMarker = new Object3D();
+	private worldNormal = new Vector3();
+	private normalMatrix = new Matrix3();
 
 	constructor(private xrDevice: XRDevice) {
 		super();
@@ -72,6 +78,9 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		this.renderer.domElement.style.top = '50vh';
 		this.renderer.domElement.style.left = '50vw';
 		this.renderer.domElement.style.transform = 'translate(-50%, -50%)';
+
+		this.hitTestTarget.add(this.hitTestMarker);
+		this.hitTestMarker.rotateX(Math.PI / 2);
 	}
 
 	get environmentCanvas() {
@@ -184,8 +193,21 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		const intersections = this.raycaster.intersectObject(this.meshes, true);
 		const results = intersections.map((intersection) => {
 			const point = intersection.point;
-			this.tempMatrix.setPosition(point);
-			return this.tempMatrix.toArray();
+			this.hitTestTarget.position.copy(point);
+			if (intersection.face?.normal) {
+				this.worldNormal.copy(intersection.face.normal);
+				const object = intersection.object;
+				this.worldNormal
+					.applyMatrix3(this.normalMatrix.getNormalMatrix(object.matrixWorld))
+					.normalize();
+				this.hitTestTarget.lookAt(
+					this.tempPosition.addVectors(point, this.worldNormal),
+				);
+			} else {
+				this.hitTestTarget.quaternion.set(0, 0, 0, 1);
+			}
+			this.hitTestTarget.updateMatrixWorld(true);
+			return this.hitTestMarker.matrixWorld.toArray();
 		});
 
 		return results;
