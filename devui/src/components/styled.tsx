@@ -74,7 +74,6 @@ export const Button = styled.button<{ $reverse?: boolean }>`
 		border-radius: ${ControlButtonStyles.radiusSolo};
 	}
 `;
-Button.defaultProps = { $reverse: false };
 
 export const HeaderButtonsContainer = styled.div`
 	padding: 2px;
@@ -161,7 +160,6 @@ export const ButtonContainer = styled.div<{ $reverse?: boolean }>`
 		margin-bottom: 0;
 	}
 `;
-ButtonContainer.defaultProps = { $reverse: false };
 
 export const ButtonGroup = styled.div<{ $reverse?: boolean }>`
 	display: flex;
@@ -172,7 +170,6 @@ export const ButtonGroup = styled.div<{ $reverse?: boolean }>`
 	margin: ${({ $reverse }) => ($reverse ? '0 5px 0 0' : '0 0 0 5px')};
 	gap: 3px;
 `;
-ButtonGroup.defaultProps = { $reverse: false };
 
 export const JoystickButton = styled.button`
 	background-color: rgba(255, 255, 255, 0.3);
@@ -241,7 +238,6 @@ export const RangeSelector = styled.input.attrs({ type: 'range' })<{
 		border-radius: ${ControlButtonStyles.radiusMiddle};
 	}
 `;
-RangeSelector.defaultProps = { $reverse: false };
 
 export const KeyBlockContainer = styled.div<{ $reverse: boolean }>`
 	display: flex;
@@ -259,14 +255,13 @@ export const KeyRow = styled.div<{ $reverse: boolean }>`
 `;
 
 export const FAIcon = styled(FontAwesomeIcon)<{ $size?: number }>`
-	height: ${({ $size }) => `${$size}px`};
-	min-height: ${({ $size }) => `${$size}px`};
-	max-height: ${({ $size }) => `${$size}px`};
-	width: ${({ $size }) => `${$size}px`};
-	min-width: ${({ $size }) => `${$size}px`};
-	max-width: ${({ $size }) => `${$size}px`};
+	height: ${({ $size = 14 }) => `${$size}px`};
+	min-height: ${({ $size = 14 }) => `${$size}px`};
+	max-height: ${({ $size = 14 }) => `${$size}px`};
+	width: ${({ $size = 14 }) => `${$size}px`};
+	min-width: ${({ $size = 14 }) => `${$size}px`};
+	max-width: ${({ $size = 14 }) => `${$size}px`};
 `;
-FAIcon.defaultProps = { $size: 14 };
 
 export const ControlPanel = styled.div`
 	position: fixed;
@@ -286,13 +281,12 @@ export const ControlPanel = styled.div`
 `;
 
 export const SectionBreak = styled.hr<{ $horizontal?: boolean }>`
-	width: ${({ $horizontal }) => ($horizontal ? 'unset' : '1px')};
-	height: ${({ $horizontal }) => ($horizontal ? '1px' : 'unset')};
+	width: ${({ $horizontal = true }) => ($horizontal ? 'unset' : '1px')};
+	height: ${({ $horizontal = true }) => ($horizontal ? '1px' : 'unset')};
 	background-color: ${Colors.panelBorder};
 	margin: 5px 3px;
 	border: none;
 `;
-SectionBreak.defaultProps = { $horizontal: true };
 
 export const PanelHeaderButton = styled.button<{ $isRed?: boolean }>`
 	background-color: transparent;
@@ -319,7 +313,6 @@ export const PanelHeaderButton = styled.button<{ $isRed?: boolean }>`
 		outline: none;
 	}
 `;
-PanelHeaderButton.defaultProps = { $isRed: false };
 
 export const ValuesContainer = styled.div`
 	display: flex;
