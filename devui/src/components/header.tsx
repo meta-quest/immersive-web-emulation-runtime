@@ -21,6 +21,8 @@ import {
 	faBug,
 	faCirclePlay,
 	faCircleXmark,
+	faGamepad,
+	faHand,
 	faRightFromBracket,
 	faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons';
@@ -29,6 +31,7 @@ import { InputLayer } from '../scene.js';
 import React from 'react';
 import { XRDevice } from 'iwer';
 import { styled } from 'styled-components';
+import { useInputModeStore } from './controls.js';
 
 const VersionTableCol1 = styled.td`
 	text-align: right;
@@ -59,6 +62,7 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
 		Boolean(xrDevice.sem?.meshesVisible),
 	);
 	const [infoPanelOpen, setInfoPanelOpen] = React.useState(false);
+	const { inputMode, setInputMode } = useInputModeStore();
 
 	return (
 		<div
@@ -94,6 +98,23 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
 						}}
 					>
 						<FAIcon icon={faCirclePlay} $size={16} />
+					</HeaderButton>
+					<HeaderButton
+						title="Click to toggle input mode"
+						onClick={() => {
+							if (inputMode === 'controller') {
+								setInputMode('hand');
+								xrDevice.primaryInputMode = 'hand';
+							} else {
+								setInputMode('controller');
+								xrDevice.primaryInputMode = 'controller';
+							}
+						}}
+					>
+						<FAIcon
+							icon={inputMode === 'controller' ? faGamepad : faHand}
+							$size={16}
+						/>
 					</HeaderButton>
 					{xrDevice.sem && (
 						<>

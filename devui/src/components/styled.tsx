@@ -254,13 +254,28 @@ export const KeyRow = styled.div<{ $reverse: boolean }>`
 	justify-content: center;
 `;
 
-export const FAIcon = styled(FontAwesomeIcon)<{ $size?: number }>`
+export const FAIcon = styled(FontAwesomeIcon)<{
+	$size?: number;
+	$reverse?: boolean;
+}>`
 	height: ${({ $size = 14 }) => `${$size}px`};
 	min-height: ${({ $size = 14 }) => `${$size}px`};
 	max-height: ${({ $size = 14 }) => `${$size}px`};
 	width: ${({ $size = 14 }) => `${$size}px`};
 	min-width: ${({ $size = 14 }) => `${$size}px`};
 	max-width: ${({ $size = 14 }) => `${$size}px`};
+	transform: ${({ $reverse }) => ($reverse ? 'scaleX(-1)' : 'unset')};
+`;
+
+export const FAControlIcon = styled(FontAwesomeIcon)<{ $reverse?: boolean }>`
+	height: 18px;
+	min-height: 18px;
+	max-height: 18px;
+	width: 18px;
+	min-width: 18px;
+	max-width: 18px;
+	margin: 6px;
+	transform: ${({ $reverse }) => ($reverse ? 'scaleX(-1)' : 'unset')};
 `;
 
 export const ControlPanel = styled.div`

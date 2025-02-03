@@ -5,7 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { Colors, ControlButtonStyles } from './styled.js';
+import { Colors, ControlButtonStyles, FAControlIcon } from './styled.js';
+import {
+	faHandLizard,
+	faHandScissors,
+} from '@fortawesome/free-solid-svg-icons';
 
 import React from 'react';
 
@@ -797,6 +801,22 @@ export const ThumbrestR: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
 	</svg>
 );
 
+export const PoseL: React.FC = () => (
+	<FAControlIcon icon={faHandScissors} $reverse={true} />
+);
+
+export const PoseR: React.FC = () => (
+	<FAControlIcon icon={faHandScissors} $reverse={false} />
+);
+
+export const PinchL: React.FC = () => (
+	<FAControlIcon icon={faHandLizard} $reverse={true} />
+);
+
+export const PinchR: React.FC = () => (
+	<FAControlIcon icon={faHandLizard} $reverse={false} />
+);
+
 type ButtonID =
 	| 'x-button-left'
 	| 'y-button-left'
@@ -807,6 +827,8 @@ type ButtonID =
 	| 'thumbstick-down-left'
 	| 'thumbstick-right-left'
 	| 'thumbstick-left-left'
+	| 'pose-left'
+	| 'pinch-left'
 	| 'thumbstick-right'
 	| 'thumbstick-up-right'
 	| 'thumbstick-down-right'
@@ -817,7 +839,9 @@ type ButtonID =
 	| 'squeeze-left'
 	| 'squeeze-right'
 	| 'thumbrest-left'
-	| 'thumbrest-right';
+	| 'thumbrest-right'
+	| 'pose-right'
+	| 'pinch-right';
 
 // Create a mapping of buttonId to icon component
 const buttonIdToIcon: { [key in ButtonID]: React.FC } = {
@@ -830,6 +854,8 @@ const buttonIdToIcon: { [key in ButtonID]: React.FC } = {
 	'thumbstick-down-left': ThumbstickLDown,
 	'thumbstick-right-left': ThumbstickLRight,
 	'thumbstick-left-left': ThumbstickLLeft,
+	'pose-left': PoseL,
+	'pinch-left': PinchL,
 	'thumbstick-right': ThumbstickR,
 	'thumbstick-up-right': ThumbstickRUp,
 	'thumbstick-down-right': ThumbstickRDown,
@@ -841,6 +867,8 @@ const buttonIdToIcon: { [key in ButtonID]: React.FC } = {
 	'squeeze-right': GripR,
 	'thumbrest-left': ThumbrestL,
 	'thumbrest-right': ThumbrestR,
+	'pose-right': PoseR,
+	'pinch-right': PinchR,
 };
 
 // Define the GamepadIcon component

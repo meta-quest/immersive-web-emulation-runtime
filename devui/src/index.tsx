@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { ControlsUI, useInputModeStore } from './components/controls.js';
 import { HeaderButton, HeaderButtonsContainer } from './components/styled.js';
 import React, { useEffect, useState } from 'react';
 
-import { ControlsUI } from './components/controls.js';
 import { HeaderUI } from './components/header.js';
 import { HeadsetUI } from './components/headset.js';
 import { IWERIcon } from './components/icons.js';
@@ -25,6 +25,7 @@ export class DevUI {
 
 	constructor(xrDevice: XRDevice) {
 		xrDevice.ipd = 0;
+		useInputModeStore.getState().setInputMode(xrDevice.primaryInputMode);
 		this.devUIContainer = document.createElement('div');
 		this.devUIContainer.style.position = 'fixed';
 		this.devUIContainer.style.width = '100vw';

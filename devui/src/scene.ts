@@ -117,7 +117,6 @@ export class InputLayer {
 			transformHandle.space = 'local';
 			this.transformHandles.set(handedness, transformHandle);
 			transformHandle.addEventListener('click' as any, () => {
-				console.log('click');
 				if (transformHandle.userData.mode === 'translate') {
 					transformHandle.userData.setMode('rotate');
 				} else {
@@ -266,10 +265,14 @@ export class InputLayer {
 		xrDevice.position.copy(cameraRig.getWorldPosition(this.vec3) as any);
 		xrDevice.quaternion.copy(cameraRig.getWorldQuaternion(this.quat) as any);
 		transformHandles.forEach((transformHandle, handedness) => {
-			xrDevice.controllers[handedness]!.position.copy(
+			const emulatedInput =
+				xrDevice.primaryInputMode === 'controller'
+					? xrDevice.controllers[handedness]!
+					: xrDevice.hands[handedness]!;
+			emulatedInput.position.copy(
 				transformHandle.getWorldPosition(this.vec3) as any,
 			);
-			xrDevice.controllers[handedness]!.quaternion.copy(
+			emulatedInput.quaternion.copy(
 				transformHandle.getWorldQuaternion(this.quat) as any,
 			);
 		});

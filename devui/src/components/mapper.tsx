@@ -30,6 +30,8 @@ export const DEFAULT_KEYMAP: KeyMapType = {
 		'y-button': 'KeyZ',
 		trigger: 'KeyQ',
 		squeeze: 'KeyE',
+		pinch: 'MouseLeft',
+		pose: 'KeyF',
 	},
 	right: {
 		'thumbstick-up': 'ArrowUp',
@@ -41,6 +43,8 @@ export const DEFAULT_KEYMAP: KeyMapType = {
 		'b-button': 'ShiftRight',
 		trigger: 'MouseLeft',
 		squeeze: 'MouseRight',
+		pinch: 'MouseRight',
+		pose: 'Backslash',
 	},
 };
 
@@ -83,12 +87,14 @@ const Row = styled.div`
 	}
 `;
 
-interface ControllerMapperProps {
+interface ControlsMapperProps {
 	handedness: 'left' | 'right';
+	actions: string[];
 }
 
-export const ControllerMapper: React.FC<ControllerMapperProps> = ({
+export const ControlsMapper: React.FC<ControlsMapperProps> = ({
 	handedness,
+	actions,
 }) => {
 	const { keyMap, bindKey } = useKeyMapStore();
 
@@ -137,36 +143,38 @@ export const ControllerMapper: React.FC<ControllerMapperProps> = ({
 			window.removeEventListener('contextmenu', preventDefaultContextMenu);
 		};
 	}, [currentMapping]);
-	return Object.keys(keyMap[handedness]!).map((action) => (
-		<Row key={action}>
-			<GamepadIcon
-				buttonName={action === 'up' ? 'thumbstick' : action}
-				handedness={handedness}
-			/>
-			<ButtonGroup $reverse={false}>
-				<Button
-					$reverse={false}
-					style={{
-						width: '100px',
-						background:
-							currentMapping && currentMapping.action === action
-								? Colors.gradientLightGreyTranslucent
-								: Colors.gradientGreyTranslucent,
-					}}
-					onClick={() => startMapping(action)}
-					onContextMenu={(e) => e.preventDefault()}
-				>
-					{(keyMap[handedness] as { [key: string]: any })[action]}
-				</Button>
-				<Button
-					style={{ width: ControlButtonStyles.widthShort }}
-					$reverse={false}
-					onClick={() => bindKey(handedness, action)}
-					onContextMenu={(e) => e.preventDefault()}
-				>
-					<FontAwesomeIcon icon={faBan} />
-				</Button>
-			</ButtonGroup>
-		</Row>
-	));
+	return Object.keys(keyMap[handedness]!)
+		.filter((action) => actions.includes(action))
+		.map((action) => (
+			<Row key={action}>
+				<GamepadIcon
+					buttonName={action === 'up' ? 'thumbstick' : action}
+					handedness={handedness}
+				/>
+				<ButtonGroup $reverse={false}>
+					<Button
+						$reverse={false}
+						style={{
+							width: '100px',
+							background:
+								currentMapping && currentMapping.action === action
+									? Colors.gradientLightGreyTranslucent
+									: Colors.gradientGreyTranslucent,
+						}}
+						onClick={() => startMapping(action)}
+						onContextMenu={(e) => e.preventDefault()}
+					>
+						{(keyMap[handedness] as { [key: string]: any })[action]}
+					</Button>
+					<Button
+						style={{ width: ControlButtonStyles.widthShort }}
+						$reverse={false}
+						onClick={() => bindKey(handedness, action)}
+						onContextMenu={(e) => e.preventDefault()}
+					>
+						<FontAwesomeIcon icon={faBan} />
+					</Button>
+				</ButtonGroup>
+			</Row>
+		));
 };

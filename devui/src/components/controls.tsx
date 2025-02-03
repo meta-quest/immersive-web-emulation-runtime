@@ -5,34 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-	ControlButtonStyles,
-	ControlPanel,
-	FAIcon,
-	PanelHeaderButton,
-	SectionBreak,
-} from './styled.js';
-import { ControllerMapper, useKeyMapStore } from './mapper.js';
-import {
-	Button as GamepadButton,
-	GamepadConfig,
-} from 'iwer/lib/gamepad/Gamepad.js';
-import {
-	faCircleXmark,
-	faGamepad,
-	faGear,
-	faPlug,
-} from '@fortawesome/free-solid-svg-icons';
-
-import { AnalogButton } from './analog.js';
-import { BinaryButton } from './binary.js';
+import { ControllerUI } from './controller.js';
+import { HandUI } from './hand.js';
 import { InputLayer } from '../scene.js';
-import { Joystick } from './joystick.js';
 import React from 'react';
-import { TransformHandles } from '@pmndrs/handle';
-import { Vector3Input } from './vec3.js';
-import type { XRController } from 'iwer/lib/device/XRController.js';
 import { XRDevice } from 'iwer';
+import { create } from 'zustand';
 
 interface ControlsProps {
 	xrDevice: XRDevice;
@@ -40,230 +18,54 @@ interface ControlsProps {
 	pointerLocked: boolean;
 }
 
-type TransformedConfig = {
-	id: string;
-	type: 'analog' | 'binary' | 'manual';
-	hasAxes: boolean;
+type InputModeStore = {
+	inputMode: string;
+	setInputMode: (mode: 'controller' | 'hand') => void;
 };
 
-function transformGamepadConfig(
-	gamepadConfig: GamepadConfig,
-): TransformedConfig[] {
-	const axesSet = new Set<string>();
-
-	// Add all axis ids to the set
-	for (const axis of gamepadConfig.axes) {
-		if (axis && axis.id) {
-			axesSet.add(axis.id);
-		}
-	}
-
-	// Transform buttons to the desired format
-	const transformed = gamepadConfig.buttons
-		.filter((button): button is GamepadButton => button !== null) // Filter out null values
-		.map((button) => ({
-			id: button.id,
-			type: button.type,
-			hasAxes: axesSet.has(button.id),
-		}));
-
-	// Sort the array by hasAxes
-	transformed.sort((a, b) => {
-		if (a.hasAxes && !b.hasAxes) return -1;
-		if (!a.hasAxes && b.hasAxes) return 1;
-		return 0;
-	});
-
-	return transformed;
-}
+export const useInputModeStore = create<InputModeStore>((set) => ({
+	inputMode: 'controller',
+	setInputMode: (mode: 'controller' | 'hand') =>
+		set(() => ({
+			inputMode: mode,
+		})),
+}));
 
 export const ControlsUI: React.FC<ControlsProps> = ({
 	xrDevice,
 	inputLayer,
 	pointerLocked,
 }) => {
+	const { inputMode } = useInputModeStore();
 	return (
 		<>
-			{Object.entries(xrDevice.controllers).map(([handedness, controller]) => (
-				<ControllerUI
-					key={`controller-${handedness}`}
-					controller={controller}
-					handle={
-						inputLayer.transformHandles.get(handedness as 'left' | 'right')!
-					}
-					handedness={handedness}
-					pointerLocked={pointerLocked}
-				/>
-			))}
-		</>
-	);
-};
-
-interface ControllerProps {
-	controller: XRController;
-	handle: TransformHandles;
-	handedness: string;
-	pointerLocked: boolean;
-}
-
-export const ControllerUI: React.FC<ControllerProps> = ({
-	controller,
-	handle,
-	handedness,
-	pointerLocked,
-}) => {
-	const { keyMap } = useKeyMapStore();
-	const [connected, setConnected] = React.useState(controller.connected);
-	const [settingsOpen, setSettingsOpen] = React.useState(false);
-	React.useEffect(() => {
-		if (pointerLocked) {
-			setSettingsOpen(false);
-		}
-	}, [pointerLocked]);
-	return (
-		<ControlPanel
-			key={handedness}
-			style={
-				handedness === 'left'
-					? { left: '8px', bottom: '8px' }
-					: { right: '8px', bottom: '8px' }
-			}
-		>
-			{!pointerLocked && (
-				<>
-					<div
-						style={{
-							display: 'flex',
-							flexDirection: 'row',
-							justifyContent: 'space-between',
-							alignItems: 'center',
-						}}
-					>
-						<div
-							style={{
-								fontSize: '13px',
-								display: 'flex',
-								flexDirection: 'row',
-								alignItems: 'center',
-							}}
-						>
-							<FAIcon icon={faGamepad} style={{ marginRight: '5px' }} />
-							Controller&nbsp;
-							<span style={{ fontWeight: 'bold' }}>
-								[{handedness === 'left' ? 'L' : 'R'}]
-							</span>
-						</div>
-						<div
-							style={{
-								display: 'flex',
-								flexDirection: 'row',
-								gap: '1px',
-							}}
-						>
-							{connected ? (
-								<>
-									<PanelHeaderButton
-										title={`Click to ${
-											settingsOpen ? 'close' : 'change'
-										} key bindings`}
-										onClick={() => {
-											setSettingsOpen(!settingsOpen);
-										}}
-									>
-										<FAIcon icon={faGear} />
-									</PanelHeaderButton>
-									<PanelHeaderButton
-										title={`Click to disconnect ${handedness} controller`}
-										$isRed={true}
-										onClick={() => {
-											controller.connected = false;
-											setConnected(false);
-										}}
-									>
-										<FAIcon icon={faCircleXmark} />
-									</PanelHeaderButton>
-								</>
-							) : (
-								<PanelHeaderButton
-									title={`Click to reconnect ${handedness} controller`}
-									onClick={() => {
-										controller.connected = true;
-										setConnected(true);
-									}}
-									style={{ marginLeft: '5px' }}
-								>
-									<FAIcon icon={faPlug} />
-								</PanelHeaderButton>
-							)}
-						</div>
-					</div>
-				</>
-			)}
-			{connected && !pointerLocked && (
-				<>
-					{!settingsOpen && (
-						<>
-							<SectionBreak />
-							<Vector3Input
-								vector={handle.position}
-								label="Position"
-								marginBottom={ControlButtonStyles.gap}
+			{inputMode === 'controller'
+				? Object.entries(xrDevice.controllers).map(
+						([handedness, controller]) => (
+							<ControllerUI
+								key={`controller-${handedness}`}
+								controller={controller}
+								handle={
+									inputLayer.transformHandles.get(
+										handedness as 'left' | 'right',
+									)!
+								}
+								handedness={handedness}
+								pointerLocked={pointerLocked}
 							/>
-							<Vector3Input vector={handle.rotation} label="Rotation" />
-						</>
-					)}
-					<SectionBreak />
-				</>
-			)}
-			{connected &&
-				(settingsOpen ? (
-					<ControllerMapper handedness={handedness as any} />
-				) : (
-					transformGamepadConfig(controller.gamepadConfig).map(
-						(buttonConfig) => {
-							const mapping = keyMap[handedness as XRHandedness]!;
-							if (buttonConfig.hasAxes) {
-								return (
-									<Joystick
-										xrController={controller}
-										pointerLocked={pointerLocked}
-										buttonId={buttonConfig.id}
-										mappedKeyUp={
-											keyMap[handedness as XRHandedness]![
-												`${buttonConfig.id}-up`
-											]
-										}
-										mappedKeyDown={mapping[`${buttonConfig.id}-down`]}
-										mappedKeyLeft={mapping[`${buttonConfig.id}-left`]}
-										mappedKeyRight={mapping[`${buttonConfig.id}-right`]}
-										mappedKeyPressed={mapping[buttonConfig.id]}
-										key={buttonConfig.id}
-									/>
-								);
-							} else if (buttonConfig.type === 'analog') {
-								return (
-									<AnalogButton
-										xrController={controller}
-										buttonId={buttonConfig.id}
-										mappedKey={mapping[buttonConfig.id]}
-										pointerLocked={pointerLocked}
-										key={buttonConfig.id}
-									/>
-								);
-							} else {
-								return (
-									<BinaryButton
-										xrController={controller}
-										buttonId={buttonConfig.id}
-										mappedKey={mapping[buttonConfig.id]}
-										pointerLocked={pointerLocked}
-										key={buttonConfig.id}
-									/>
-								);
+						),
+				  )
+				: Object.entries(xrDevice.hands).map(([handedness, hand]) => (
+						<HandUI
+							key={`hand-${handedness}`}
+							hand={hand}
+							handle={
+								inputLayer.transformHandles.get(handedness as 'left' | 'right')!
 							}
-						},
-					)
-				))}
-		</ControlPanel>
+							handedness={handedness}
+							pointerLocked={pointerLocked}
+						/>
+				  ))}
+		</>
 	);
 };
