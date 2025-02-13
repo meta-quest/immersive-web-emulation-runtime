@@ -14,15 +14,85 @@ import {
 
 import { P_SYSTEM } from '../private.js';
 
+type SessionGrantConfig = {
+	resolve: (value: XRSession) => void;
+	reject: (reason?: any) => void;
+	mode: XRSessionMode;
+	options: XRSessionInit;
+};
+
 export class XRSystem extends EventTarget {
 	[P_SYSTEM]: {
 		device: XRDevice;
 		activeSession?: XRSession;
+		grantSession: (SessionGrantConfig: SessionGrantConfig) => void;
+		offeredSessionConfig?: SessionGrantConfig;
 	};
 
 	constructor(device: XRDevice) {
 		super();
-		this[P_SYSTEM] = { device };
+		this[P_SYSTEM] = {
+			device,
+			grantSession: ({ resolve, reject, mode, options }) => {
+				// Check for active sessions and other constraints here
+				if (this[P_SYSTEM].activeSession) {
+					reject(
+						new DOMException(
+							'An active XRSession already exists.',
+							'InvalidStateError',
+						),
+					);
+					return;
+				}
+
+				// Handle required and optional features
+				const { requiredFeatures = [], optionalFeatures = [] } = options;
+				const { supportedFeatures } = this[P_SYSTEM].device;
+
+				// Check if all required features are supported
+				const allRequiredSupported = requiredFeatures.every((feature) =>
+					supportedFeatures.includes(feature),
+				);
+				if (!allRequiredSupported) {
+					reject(
+						new Error(
+							'One or more required features are not supported by the device.',
+						),
+					);
+					return;
+				}
+
+				// Filter out unsupported optional features
+				const supportedOptionalFeatures = optionalFeatures.filter((feature) =>
+					supportedFeatures.includes(feature),
+				);
+
+				// Combine required and supported optional features into enabled features
+				const enabledFeatures: WebXRFeature[] = Array.from(
+					new Set([
+						...requiredFeatures,
+						...supportedOptionalFeatures,
+						'viewer',
+						'local',
+					]),
+				);
+
+				// Proceed with session creation
+				const session = new XRSession(
+					this[P_SYSTEM].device,
+					mode,
+					enabledFeatures,
+				);
+				this[P_SYSTEM].activeSession = session;
+
+				// Listen for session end to clear the active session
+				session.addEventListener('end', () => {
+					this[P_SYSTEM].activeSession = undefined;
+				});
+
+				resolve(session);
+			},
+		};
 		// Initialize device change monitoring here if applicable
 	}
 
@@ -54,63 +124,42 @@ export class XRSystem extends EventTarget {
 						return;
 					}
 
-					// Check for active sessions and other constraints here
-					if (this[P_SYSTEM].activeSession) {
+					const sessionGrantConfig = {
+						resolve,
+						reject,
+						mode,
+						options,
+					};
+
+					this[P_SYSTEM].grantSession(sessionGrantConfig);
+				})
+				.catch(reject);
+		});
+	}
+
+	offerSession(
+		mode: XRSessionMode,
+		options: XRSessionInit = {},
+	): Promise<XRSession> {
+		return new Promise<XRSession>((resolve, reject) => {
+			this.isSessionSupported(mode)
+				.then((isSupported) => {
+					if (!isSupported) {
 						reject(
 							new DOMException(
-								'An active XRSession already exists.',
-								'InvalidStateError',
+								'The requested XRSession mode is not supported.',
+								'NotSupportedError',
 							),
 						);
 						return;
 					}
 
-					// Handle required and optional features
-					const { requiredFeatures = [], optionalFeatures = [] } = options;
-					const { supportedFeatures } = this[P_SYSTEM].device;
-
-					// Check if all required features are supported
-					const allRequiredSupported = requiredFeatures.every((feature) =>
-						supportedFeatures.includes(feature),
-					);
-					if (!allRequiredSupported) {
-						reject(
-							new Error(
-								'One or more required features are not supported by the device.',
-							),
-						);
-						return;
-					}
-
-					// Filter out unsupported optional features
-					const supportedOptionalFeatures = optionalFeatures.filter((feature) =>
-						supportedFeatures.includes(feature),
-					);
-
-					// Combine required and supported optional features into enabled features
-					const enabledFeatures: WebXRFeature[] = Array.from(
-						new Set([
-							...requiredFeatures,
-							...supportedOptionalFeatures,
-							'viewer',
-							'local',
-						]),
-					);
-
-					// Proceed with session creation
-					const session = new XRSession(
-						this[P_SYSTEM].device,
+					this[P_SYSTEM].offeredSessionConfig = {
+						resolve,
+						reject,
 						mode,
-						enabledFeatures,
-					);
-					this[P_SYSTEM].activeSession = session;
-
-					// Listen for session end to clear the active session
-					session.addEventListener('end', () => {
-						this[P_SYSTEM].activeSession = undefined;
-					});
-
-					resolve(session);
+						options,
+					};
 				})
 				.catch(reject);
 		});

@@ -9,6 +9,8 @@ import {
 	Button,
 	ButtonContainer,
 	ButtonGroup,
+	Colors,
+	ControlButtonStyles,
 	FAIcon,
 	MappedKeyBlock,
 } from './styled.js';
@@ -18,7 +20,6 @@ import { GamepadIcon } from './icons.js';
 import { MappedKeyDisplay } from './keys.js';
 import { XRController } from 'iwer/lib/device/XRController';
 import { faFingerprint } from '@fortawesome/free-solid-svg-icons';
-import { useDevUIConfig } from '../index.js';
 
 interface BinaryButtonProps {
 	xrController: XRController;
@@ -33,7 +34,6 @@ export const BinaryButton: React.FC<BinaryButtonProps> = ({
 	pointerLocked,
 	mappedKey,
 }) => {
-	const devuiConfig = useDevUIConfig();
 	const [isTouched, setIsTouched] = useState(false);
 	const [isOnHold, setIsOnHold] = useState(false);
 	const [isPressed, setIsPressed] = useState(false);
@@ -83,10 +83,10 @@ export const BinaryButton: React.FC<BinaryButtonProps> = ({
 						<Button
 							$reverse={handedness === 'right'}
 							style={{
-								backgroundColor: isPressed
-									? 'rgba(255, 255, 255, 0.6)'
-									: 'rgba(255, 255, 255, 0.3)',
-								width: '50px',
+								background: isPressed
+									? Colors.gradientLightGreyTranslucent
+									: Colors.gradientGreyTranslucent,
+								width: ControlButtonStyles.widthLong,
 							}}
 							onClick={() => {
 								setIsPressed(true);
@@ -94,18 +94,20 @@ export const BinaryButton: React.FC<BinaryButtonProps> = ({
 								setTimeout(() => {
 									setIsPressed(false);
 									xrController.updateButtonValue(buttonId, 0);
-								}, devuiConfig.buttonPressDuration);
+								}, 250);
 							}}
 						>
 							Press
 						</Button>
 						<Button
+							title="Click to toggle touch state"
 							$reverse={handedness === 'right'}
 							style={{
-								backgroundColor: isTouched
-									? 'rgba(255, 255, 255, 0.6)'
-									: 'rgba(255, 255, 255, 0.3)',
-								width: '29px',
+								background: isTouched
+									? Colors.gradientLightGreyTranslucent
+									: Colors.gradientGreyTranslucent,
+
+								width: ControlButtonStyles.widthShort,
 							}}
 							onClick={() => {
 								setIsTouched(!isTouched);
@@ -117,10 +119,10 @@ export const BinaryButton: React.FC<BinaryButtonProps> = ({
 						<Button
 							$reverse={handedness === 'right'}
 							style={{
-								backgroundColor: isOnHold
-									? 'rgba(255, 255, 255, 0.6)'
-									: 'rgba(255, 255, 255, 0.3)',
-								width: '49px',
+								background: isOnHold
+									? Colors.gradientLightGreyTranslucent
+									: Colors.gradientGreyTranslucent,
+								width: ControlButtonStyles.widthLong,
 							}}
 							onClick={() => {
 								setIsOnHold(!isOnHold);

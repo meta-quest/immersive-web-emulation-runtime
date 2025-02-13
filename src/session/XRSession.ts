@@ -298,11 +298,16 @@ export class XRSession extends EventTarget {
 					performance.now(),
 				);
 
+				const time = performance.now();
+				const devui = this[P_SESSION].device[P_DEVICE].devui;
+				if (devui) {
+					devui.render(time);
+				}
+
 				if (this[P_SESSION].mode === 'immersive-ar') {
-					const sem =
-						this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule;
+					const sem = this[P_SESSION].device[P_DEVICE].sem;
 					if (sem) {
-						sem.render(this[P_SESSION].device);
+						sem.render(time);
 					}
 				}
 
@@ -408,7 +413,7 @@ export class XRSession extends EventTarget {
 			},
 			trackedPlanes: new Map(),
 			updateTrackedPlanes: (frame: XRFrame) => {
-				const sem = this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule;
+				const sem = this[P_SESSION].device[P_DEVICE].sem;
 				if (!sem) {
 					return;
 				}
@@ -425,7 +430,12 @@ export class XRSession extends EventTarget {
 							this[P_SESSION].device[P_DEVICE].globalSpace,
 							plane.transform.matrix,
 						);
-						xrPlane = new XRPlane(plane, planeSpace, plane.polygon);
+						xrPlane = new XRPlane(
+							plane,
+							planeSpace,
+							plane.polygon,
+							plane.semanticLabel,
+						);
 						this[P_SESSION].trackedPlanes.set(plane, xrPlane);
 					}
 					xrPlane[P_PLANE].lastChangedTime = frame.predictedDisplayTime;
@@ -435,7 +445,7 @@ export class XRSession extends EventTarget {
 			},
 			trackedMeshes: new Map(),
 			updateTrackedMeshes: (frame: XRFrame) => {
-				const sem = this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule;
+				const sem = this[P_SESSION].device[P_DEVICE].sem;
 				if (!sem) {
 					return;
 				}
@@ -452,7 +462,13 @@ export class XRSession extends EventTarget {
 							this[P_SESSION].device[P_DEVICE].globalSpace,
 							mesh.transform.matrix,
 						);
-						xrMesh = new XRMesh(mesh, meshSpace, mesh.vertices, mesh.indices);
+						xrMesh = new XRMesh(
+							mesh,
+							meshSpace,
+							mesh.vertices,
+							mesh.indices,
+							mesh.semanticLabel,
+						);
 						this[P_SESSION].trackedMeshes.set(mesh, xrMesh);
 					}
 					xrMesh[P_MESH].lastChangedTime = frame.predictedDisplayTime;
@@ -462,7 +478,7 @@ export class XRSession extends EventTarget {
 			},
 			hitTestSources: new Set(),
 			computeHitTestResults: (frame) => {
-				const sem = this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule;
+				const sem = this[P_SESSION].device[P_DEVICE].sem;
 				if (!sem) return;
 				const globalSpace = this[P_SESSION].device[P_DEVICE].globalSpace;
 				this[P_SESSION].hitTestSources.forEach((hitTestSource) => {
@@ -786,7 +802,7 @@ export class XRSession extends EventTarget {
 				reject(
 					new DOMException('XRSession has already ended.', 'InvalidStateError'),
 				);
-			} else if (!this[P_SESSION].device[P_DEVICE].syntheticEnvironmentModule) {
+			} else if (!this[P_SESSION].device[P_DEVICE].sem) {
 				reject(
 					new DOMException(
 						'Synthethic Environment Module required for emulating hit-test',

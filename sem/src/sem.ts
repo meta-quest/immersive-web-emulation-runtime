@@ -9,7 +9,9 @@ import {
 	Color,
 	GridHelper,
 	Group,
+	Matrix3,
 	Matrix4,
+	Object3D,
 	PerspectiveCamera,
 	Quaternion,
 	Raycaster,
@@ -21,6 +23,7 @@ import { NativeMesh, NativePlane, XRDevice } from 'iwer';
 import { SpatialEntity, SpatialEntityType } from './native/entity.js';
 
 import { Scene as SceneFile } from './generated/protos/openxr_scene.js';
+import { VERSION } from './version.js';
 import { mat4 } from 'gl-matrix';
 
 const forwardVector = new Vector3(0, 0, -1);
@@ -28,6 +31,7 @@ const forwardVector = new Vector3(0, 0, -1);
 export class SyntheticEnvironmentModule extends EventTarget {
 	public readonly trackedPlanes: Set<NativePlane> = new Set();
 	public readonly trackedMeshes: Set<NativeMesh> = new Set();
+	public readonly version = VERSION;
 
 	private renderer: WebGLRenderer;
 	private scene: Scene;
@@ -42,8 +46,12 @@ export class SyntheticEnvironmentModule extends EventTarget {
 	private tempScale = new Vector3();
 	private tempMatrix = new Matrix4();
 	private raycaster = new Raycaster();
+	private hitTestTarget = new Group();
+	private hitTestMarker = new Object3D();
+	private worldNormal = new Vector3();
+	private normalMatrix = new Matrix3();
 
-	constructor() {
+	constructor(private xrDevice: XRDevice) {
 		super();
 		this.scene = new Scene();
 		this.scene.background = new Color(0x3e3e3e);
@@ -66,6 +74,13 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		this.renderer = new WebGLRenderer({ antialias: true, alpha: true });
 		this.renderer.setPixelRatio(window.devicePixelRatio);
 		this.renderer.setSize(window.innerWidth, window.innerHeight);
+		this.renderer.domElement.style.position = 'fixed';
+		this.renderer.domElement.style.top = '50vh';
+		this.renderer.domElement.style.left = '50vw';
+		this.renderer.domElement.style.transform = 'translate(-50%, -50%)';
+
+		this.hitTestTarget.add(this.hitTestMarker);
+		this.hitTestMarker.rotateX(Math.PI / 2);
 	}
 
 	get environmentCanvas() {
@@ -96,16 +111,16 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		this.meshes.visible = visible;
 	}
 
-	render(xrDevice: XRDevice) {
-		this.camera.position.copy(xrDevice.position);
-		this.camera.quaternion.copy(xrDevice.quaternion);
-		const xrDeviceFOV = (xrDevice.fovy / Math.PI) * 180;
+	render() {
+		this.camera.position.copy(this.xrDevice.position);
+		this.camera.quaternion.copy(this.xrDevice.quaternion);
+		const xrDeviceFOV = (this.xrDevice.fovy / Math.PI) * 180;
 		let cameraMatrixNeedsUpdate = false;
 		if (this.camera.fov !== xrDeviceFOV) {
 			this.camera.fov = xrDeviceFOV;
 			cameraMatrixNeedsUpdate = true;
 		}
-		const iwerCanvasDimension = xrDevice.canvasDimensions;
+		const iwerCanvasDimension = this.xrDevice.canvasDimensions;
 		if (iwerCanvasDimension) {
 			const canvas = this.renderer.domElement;
 			const resizeNeeded =
@@ -178,8 +193,21 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		const intersections = this.raycaster.intersectObject(this.meshes, true);
 		const results = intersections.map((intersection) => {
 			const point = intersection.point;
-			this.tempMatrix.setPosition(point);
-			return this.tempMatrix.toArray();
+			this.hitTestTarget.position.copy(point);
+			if (intersection.face?.normal) {
+				this.worldNormal.copy(intersection.face.normal);
+				const object = intersection.object;
+				this.worldNormal
+					.applyMatrix3(this.normalMatrix.getNormalMatrix(object.matrixWorld))
+					.normalize();
+				this.hitTestTarget.lookAt(
+					this.tempPosition.addVectors(point, this.worldNormal),
+				);
+			} else {
+				this.hitTestTarget.quaternion.set(0, 0, 0, 1);
+			}
+			this.hitTestTarget.updateMatrixWorld(true);
+			return this.hitTestMarker.matrixWorld.toArray();
 		});
 
 		return results;

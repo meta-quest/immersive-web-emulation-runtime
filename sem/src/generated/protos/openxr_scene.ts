@@ -5,1328 +5,1328 @@
 // source: protos/openxr_scene.proto
 
 /* eslint-disable */
-import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
-import { Pose, Rect2D, Rect3D } from "./openxr_core";
+import { BinaryReader, BinaryWriter } from '@bufbuild/protobuf/wire';
+import { Pose, Rect2D, Rect3D } from './openxr_core.js';
 
-export const protobufPackage = "openxr.scene";
+export const protobufPackage = 'openxr.scene';
 
 export enum DynamicObjectTypeMETA {
-  Keyboard = 0,
-  UNRECOGNIZED = -1,
+	Keyboard = 0,
+	UNRECOGNIZED = -1,
 }
 
 export function dynamicObjectTypeMETAFromJSON(
-  object: any
+	object: any,
 ): DynamicObjectTypeMETA {
-  switch (object) {
-    case 0:
-    case "Keyboard":
-      return DynamicObjectTypeMETA.Keyboard;
-    case -1:
-    case "UNRECOGNIZED":
-    default:
-      return DynamicObjectTypeMETA.UNRECOGNIZED;
-  }
+	switch (object) {
+		case 0:
+		case 'Keyboard':
+			return DynamicObjectTypeMETA.Keyboard;
+		case -1:
+		case 'UNRECOGNIZED':
+		default:
+			return DynamicObjectTypeMETA.UNRECOGNIZED;
+	}
 }
 
 export function dynamicObjectTypeMETAToJSON(
-  object: DynamicObjectTypeMETA
+	object: DynamicObjectTypeMETA,
 ): string {
-  switch (object) {
-    case DynamicObjectTypeMETA.Keyboard:
-      return "Keyboard";
-    case DynamicObjectTypeMETA.UNRECOGNIZED:
-    default:
-      return "UNRECOGNIZED";
-  }
+	switch (object) {
+		case DynamicObjectTypeMETA.Keyboard:
+			return 'Keyboard';
+		case DynamicObjectTypeMETA.UNRECOGNIZED:
+		default:
+			return 'UNRECOGNIZED';
+	}
 }
 
 export enum SemanticLabelMETA {
-  UNKNOWN = 0,
-  FLOOR = 1,
-  CEILING = 2,
-  WALL_FACE = 3,
-  TABLE = 4,
-  COUCH = 5,
-  DOOR_FRAME = 6,
-  WINDOW_FRAME = 7,
-  OTHER = 8,
-  STORAGE = 9,
-  BED = 10,
-  SCREEN = 11,
-  LAMP = 12,
-  PLANT = 13,
-  WALL_ART = 14,
-  GLOBAL_MESH = 15,
-  INVISIBLE_WALL_FACE = 16,
-  CHAIR = 17,
-  INNER_WALL_FACE = 18,
-  OTHER_ROOM_FACE = 19,
-  OPENING = 20,
-  UNRECOGNIZED = -1,
+	UNKNOWN = 0,
+	FLOOR = 1,
+	CEILING = 2,
+	WALL_FACE = 3,
+	TABLE = 4,
+	COUCH = 5,
+	DOOR_FRAME = 6,
+	WINDOW_FRAME = 7,
+	OTHER = 8,
+	STORAGE = 9,
+	BED = 10,
+	SCREEN = 11,
+	LAMP = 12,
+	PLANT = 13,
+	WALL_ART = 14,
+	GLOBAL_MESH = 15,
+	INVISIBLE_WALL_FACE = 16,
+	CHAIR = 17,
+	INNER_WALL_FACE = 18,
+	OTHER_ROOM_FACE = 19,
+	OPENING = 20,
+	UNRECOGNIZED = -1,
 }
 
 export function semanticLabelMETAFromJSON(object: any): SemanticLabelMETA {
-  switch (object) {
-    case 0:
-    case "UNKNOWN":
-      return SemanticLabelMETA.UNKNOWN;
-    case 1:
-    case "FLOOR":
-      return SemanticLabelMETA.FLOOR;
-    case 2:
-    case "CEILING":
-      return SemanticLabelMETA.CEILING;
-    case 3:
-    case "WALL_FACE":
-      return SemanticLabelMETA.WALL_FACE;
-    case 4:
-    case "TABLE":
-      return SemanticLabelMETA.TABLE;
-    case 5:
-    case "COUCH":
-      return SemanticLabelMETA.COUCH;
-    case 6:
-    case "DOOR_FRAME":
-      return SemanticLabelMETA.DOOR_FRAME;
-    case 7:
-    case "WINDOW_FRAME":
-      return SemanticLabelMETA.WINDOW_FRAME;
-    case 8:
-    case "OTHER":
-      return SemanticLabelMETA.OTHER;
-    case 9:
-    case "STORAGE":
-      return SemanticLabelMETA.STORAGE;
-    case 10:
-    case "BED":
-      return SemanticLabelMETA.BED;
-    case 11:
-    case "SCREEN":
-      return SemanticLabelMETA.SCREEN;
-    case 12:
-    case "LAMP":
-      return SemanticLabelMETA.LAMP;
-    case 13:
-    case "PLANT":
-      return SemanticLabelMETA.PLANT;
-    case 14:
-    case "WALL_ART":
-      return SemanticLabelMETA.WALL_ART;
-    case 15:
-    case "GLOBAL_MESH":
-      return SemanticLabelMETA.GLOBAL_MESH;
-    case 16:
-    case "INVISIBLE_WALL_FACE":
-      return SemanticLabelMETA.INVISIBLE_WALL_FACE;
-    case 17:
-    case "CHAIR":
-      return SemanticLabelMETA.CHAIR;
-    case 18:
-    case "INNER_WALL_FACE":
-      return SemanticLabelMETA.INNER_WALL_FACE;
-    case 19:
-    case "OTHER_ROOM_FACE":
-      return SemanticLabelMETA.OTHER_ROOM_FACE;
-    case 20:
-    case "OPENING":
-      return SemanticLabelMETA.OPENING;
-    case -1:
-    case "UNRECOGNIZED":
-    default:
-      return SemanticLabelMETA.UNRECOGNIZED;
-  }
+	switch (object) {
+		case 0:
+		case 'UNKNOWN':
+			return SemanticLabelMETA.UNKNOWN;
+		case 1:
+		case 'FLOOR':
+			return SemanticLabelMETA.FLOOR;
+		case 2:
+		case 'CEILING':
+			return SemanticLabelMETA.CEILING;
+		case 3:
+		case 'WALL_FACE':
+			return SemanticLabelMETA.WALL_FACE;
+		case 4:
+		case 'TABLE':
+			return SemanticLabelMETA.TABLE;
+		case 5:
+		case 'COUCH':
+			return SemanticLabelMETA.COUCH;
+		case 6:
+		case 'DOOR_FRAME':
+			return SemanticLabelMETA.DOOR_FRAME;
+		case 7:
+		case 'WINDOW_FRAME':
+			return SemanticLabelMETA.WINDOW_FRAME;
+		case 8:
+		case 'OTHER':
+			return SemanticLabelMETA.OTHER;
+		case 9:
+		case 'STORAGE':
+			return SemanticLabelMETA.STORAGE;
+		case 10:
+		case 'BED':
+			return SemanticLabelMETA.BED;
+		case 11:
+		case 'SCREEN':
+			return SemanticLabelMETA.SCREEN;
+		case 12:
+		case 'LAMP':
+			return SemanticLabelMETA.LAMP;
+		case 13:
+		case 'PLANT':
+			return SemanticLabelMETA.PLANT;
+		case 14:
+		case 'WALL_ART':
+			return SemanticLabelMETA.WALL_ART;
+		case 15:
+		case 'GLOBAL_MESH':
+			return SemanticLabelMETA.GLOBAL_MESH;
+		case 16:
+		case 'INVISIBLE_WALL_FACE':
+			return SemanticLabelMETA.INVISIBLE_WALL_FACE;
+		case 17:
+		case 'CHAIR':
+			return SemanticLabelMETA.CHAIR;
+		case 18:
+		case 'INNER_WALL_FACE':
+			return SemanticLabelMETA.INNER_WALL_FACE;
+		case 19:
+		case 'OTHER_ROOM_FACE':
+			return SemanticLabelMETA.OTHER_ROOM_FACE;
+		case 20:
+		case 'OPENING':
+			return SemanticLabelMETA.OPENING;
+		case -1:
+		case 'UNRECOGNIZED':
+		default:
+			return SemanticLabelMETA.UNRECOGNIZED;
+	}
 }
 
 export function semanticLabelMETAToJSON(object: SemanticLabelMETA): string {
-  switch (object) {
-    case SemanticLabelMETA.UNKNOWN:
-      return "UNKNOWN";
-    case SemanticLabelMETA.FLOOR:
-      return "FLOOR";
-    case SemanticLabelMETA.CEILING:
-      return "CEILING";
-    case SemanticLabelMETA.WALL_FACE:
-      return "WALL_FACE";
-    case SemanticLabelMETA.TABLE:
-      return "TABLE";
-    case SemanticLabelMETA.COUCH:
-      return "COUCH";
-    case SemanticLabelMETA.DOOR_FRAME:
-      return "DOOR_FRAME";
-    case SemanticLabelMETA.WINDOW_FRAME:
-      return "WINDOW_FRAME";
-    case SemanticLabelMETA.OTHER:
-      return "OTHER";
-    case SemanticLabelMETA.STORAGE:
-      return "STORAGE";
-    case SemanticLabelMETA.BED:
-      return "BED";
-    case SemanticLabelMETA.SCREEN:
-      return "SCREEN";
-    case SemanticLabelMETA.LAMP:
-      return "LAMP";
-    case SemanticLabelMETA.PLANT:
-      return "PLANT";
-    case SemanticLabelMETA.WALL_ART:
-      return "WALL_ART";
-    case SemanticLabelMETA.GLOBAL_MESH:
-      return "GLOBAL_MESH";
-    case SemanticLabelMETA.INVISIBLE_WALL_FACE:
-      return "INVISIBLE_WALL_FACE";
-    case SemanticLabelMETA.CHAIR:
-      return "CHAIR";
-    case SemanticLabelMETA.INNER_WALL_FACE:
-      return "INNER_WALL_FACE";
-    case SemanticLabelMETA.OTHER_ROOM_FACE:
-      return "OTHER_ROOM_FACE";
-    case SemanticLabelMETA.OPENING:
-      return "OPENING";
-    case SemanticLabelMETA.UNRECOGNIZED:
-    default:
-      return "UNRECOGNIZED";
-  }
+	switch (object) {
+		case SemanticLabelMETA.UNKNOWN:
+			return 'UNKNOWN';
+		case SemanticLabelMETA.FLOOR:
+			return 'FLOOR';
+		case SemanticLabelMETA.CEILING:
+			return 'CEILING';
+		case SemanticLabelMETA.WALL_FACE:
+			return 'WALL_FACE';
+		case SemanticLabelMETA.TABLE:
+			return 'TABLE';
+		case SemanticLabelMETA.COUCH:
+			return 'COUCH';
+		case SemanticLabelMETA.DOOR_FRAME:
+			return 'DOOR_FRAME';
+		case SemanticLabelMETA.WINDOW_FRAME:
+			return 'WINDOW_FRAME';
+		case SemanticLabelMETA.OTHER:
+			return 'OTHER';
+		case SemanticLabelMETA.STORAGE:
+			return 'STORAGE';
+		case SemanticLabelMETA.BED:
+			return 'BED';
+		case SemanticLabelMETA.SCREEN:
+			return 'SCREEN';
+		case SemanticLabelMETA.LAMP:
+			return 'LAMP';
+		case SemanticLabelMETA.PLANT:
+			return 'PLANT';
+		case SemanticLabelMETA.WALL_ART:
+			return 'WALL_ART';
+		case SemanticLabelMETA.GLOBAL_MESH:
+			return 'GLOBAL_MESH';
+		case SemanticLabelMETA.INVISIBLE_WALL_FACE:
+			return 'INVISIBLE_WALL_FACE';
+		case SemanticLabelMETA.CHAIR:
+			return 'CHAIR';
+		case SemanticLabelMETA.INNER_WALL_FACE:
+			return 'INNER_WALL_FACE';
+		case SemanticLabelMETA.OTHER_ROOM_FACE:
+			return 'OTHER_ROOM_FACE';
+		case SemanticLabelMETA.OPENING:
+			return 'OPENING';
+		case SemanticLabelMETA.UNRECOGNIZED:
+		default:
+			return 'UNRECOGNIZED';
+	}
 }
 
 export interface RoomLayoutMETA {
-  floorUuid: string;
-  ceilingUuid: string;
-  wallUuids: string[];
+	floorUuid: string;
+	ceilingUuid: string;
+	wallUuids: string[];
 }
 
 export interface SpaceContainerMETA {
-  uuids: string[];
+	uuids: string[];
 }
 
 export interface Boundary2DMETA {
-  /**
-   * vertices is an array of float 2d vectors [x1, y1, x2, y2, etc...]. The boundary is not closed
-   * meaning that the last and first points are not the same and the line between them forms part
-   * of the bounary.
-   */
-  vertices: Uint8Array;
+	/**
+	 * vertices is an array of float 2d vectors [x1, y1, x2, y2, etc...]. The boundary is not closed
+	 * meaning that the last and first points are not the same and the line between them forms part
+	 * of the bounary.
+	 */
+	vertices: Uint8Array;
 }
 
 export interface TriangleMeshMETA {
-  /** vertices is an array of float 3d vectors [x1, y1, z1, x2, y2, z2, etc...] */
-  vertices: Uint8Array;
-  /** indices is an array of uint32 3 indices per triangle (i, j, k) [i1, j1, k1, i2, j2, j3, etc...] */
-  indices: Uint8Array;
+	/** vertices is an array of float 3d vectors [x1, y1, z1, x2, y2, z2, etc...] */
+	vertices: Uint8Array;
+	/** indices is an array of uint32 3 indices per triangle (i, j, k) [i1, j1, k1, i2, j2, j3, etc...] */
+	indices: Uint8Array;
 }
 
 export interface DynamicObjectMETA {
-  classType: DynamicObjectTypeMETA;
+	classType: DynamicObjectTypeMETA;
 }
 
 export interface RoomMeshMETA {
-  mesh: TriangleMeshMETA | undefined;
-  faces: RoomMeshMETA_RoomFace[];
+	mesh: TriangleMeshMETA | undefined;
+	faces: RoomMeshMETA_RoomFace[];
 }
 
 export interface RoomMeshMETA_RoomFace {
-  uuid: string;
-  parentUuid: string;
-  semanticLabel: SemanticLabelMETA;
+	uuid: string;
+	parentUuid: string;
+	semanticLabel: SemanticLabelMETA;
 }
 
 /** The fields with _META are component definitions from the XR_FB_spatial_entity extensions */
 export interface SpatialEntity {
-  uuid: string;
-  semanticLabel_META?: SemanticLabelMETA | undefined;
-  locatable_META: Pose | undefined;
-  boundary2D_META: Boundary2DMETA | undefined;
-  bounded2D_META: Rect2D | undefined;
-  bounded3D_META: Rect3D | undefined;
-  roomLayout_META: RoomLayoutMETA | undefined;
-  spaceContainer_META: SpaceContainerMETA | undefined;
-  triangleMesh_META: TriangleMeshMETA | undefined;
-  /** TODO: add EXT component definitions here */
-  dynamicObject_META: DynamicObjectMETA | undefined;
+	uuid: string;
+	semanticLabel_META?: SemanticLabelMETA | undefined;
+	locatable_META: Pose | undefined;
+	boundary2D_META: Boundary2DMETA | undefined;
+	bounded2D_META: Rect2D | undefined;
+	bounded3D_META: Rect3D | undefined;
+	roomLayout_META: RoomLayoutMETA | undefined;
+	spaceContainer_META: SpaceContainerMETA | undefined;
+	triangleMesh_META: TriangleMeshMETA | undefined;
+	/** TODO: add EXT component definitions here */
+	dynamicObject_META: DynamicObjectMETA | undefined;
 }
 
 export interface Scene {
-  type: string;
-  version: number;
-  spatialEntities: SpatialEntity[];
+	type: string;
+	version: number;
+	spatialEntities: SpatialEntity[];
 }
 
 function createBaseRoomLayoutMETA(): RoomLayoutMETA {
-  return { floorUuid: "", ceilingUuid: "", wallUuids: [] };
+	return { floorUuid: '', ceilingUuid: '', wallUuids: [] };
 }
 
 export const RoomLayoutMETA: MessageFns<RoomLayoutMETA> = {
-  encode(
-    message: RoomLayoutMETA,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    if (message.floorUuid !== "") {
-      writer.uint32(10).string(message.floorUuid);
-    }
-    if (message.ceilingUuid !== "") {
-      writer.uint32(18).string(message.ceilingUuid);
-    }
-    for (const v of message.wallUuids) {
-      writer.uint32(26).string(v!);
-    }
-    return writer;
-  },
+	encode(
+		message: RoomLayoutMETA,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		if (message.floorUuid !== '') {
+			writer.uint32(10).string(message.floorUuid);
+		}
+		if (message.ceilingUuid !== '') {
+			writer.uint32(18).string(message.ceilingUuid);
+		}
+		for (const v of message.wallUuids) {
+			writer.uint32(26).string(v!);
+		}
+		return writer;
+	},
 
-  decode(input: BinaryReader | Uint8Array, length?: number): RoomLayoutMETA {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseRoomLayoutMETA();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
+	decode(input: BinaryReader | Uint8Array, length?: number): RoomLayoutMETA {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseRoomLayoutMETA();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 10) {
+						break;
+					}
 
-          message.floorUuid = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
+					message.floorUuid = reader.string();
+					continue;
+				}
+				case 2: {
+					if (tag !== 18) {
+						break;
+					}
 
-          message.ceilingUuid = reader.string();
-          continue;
-        }
-        case 3: {
-          if (tag !== 26) {
-            break;
-          }
+					message.ceilingUuid = reader.string();
+					continue;
+				}
+				case 3: {
+					if (tag !== 26) {
+						break;
+					}
 
-          message.wallUuids.push(reader.string());
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.wallUuids.push(reader.string());
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): RoomLayoutMETA {
-    return {
-      floorUuid: isSet(object.floorUuid)
-        ? globalThis.String(object.floorUuid)
-        : "",
-      ceilingUuid: isSet(object.ceilingUuid)
-        ? globalThis.String(object.ceilingUuid)
-        : "",
-      wallUuids: globalThis.Array.isArray(object?.wallUuids)
-        ? object.wallUuids.map((e: any) => globalThis.String(e))
-        : [],
-    };
-  },
+	fromJSON(object: any): RoomLayoutMETA {
+		return {
+			floorUuid: isSet(object.floorUuid)
+				? globalThis.String(object.floorUuid)
+				: '',
+			ceilingUuid: isSet(object.ceilingUuid)
+				? globalThis.String(object.ceilingUuid)
+				: '',
+			wallUuids: globalThis.Array.isArray(object?.wallUuids)
+				? object.wallUuids.map((e: any) => globalThis.String(e))
+				: [],
+		};
+	},
 
-  toJSON(message: RoomLayoutMETA): unknown {
-    const obj: any = {};
-    if (message.floorUuid !== "") {
-      obj.floorUuid = message.floorUuid;
-    }
-    if (message.ceilingUuid !== "") {
-      obj.ceilingUuid = message.ceilingUuid;
-    }
-    if (message.wallUuids?.length) {
-      obj.wallUuids = message.wallUuids;
-    }
-    return obj;
-  },
+	toJSON(message: RoomLayoutMETA): unknown {
+		const obj: any = {};
+		if (message.floorUuid !== '') {
+			obj.floorUuid = message.floorUuid;
+		}
+		if (message.ceilingUuid !== '') {
+			obj.ceilingUuid = message.ceilingUuid;
+		}
+		if (message.wallUuids?.length) {
+			obj.wallUuids = message.wallUuids;
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<RoomLayoutMETA>, I>>(
-    base?: I
-  ): RoomLayoutMETA {
-    return RoomLayoutMETA.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<RoomLayoutMETA>, I>>(
-    object: I
-  ): RoomLayoutMETA {
-    const message = createBaseRoomLayoutMETA();
-    message.floorUuid = object.floorUuid ?? "";
-    message.ceilingUuid = object.ceilingUuid ?? "";
-    message.wallUuids = object.wallUuids?.map((e) => e) || [];
-    return message;
-  },
+	create<I extends Exact<DeepPartial<RoomLayoutMETA>, I>>(
+		base?: I,
+	): RoomLayoutMETA {
+		return RoomLayoutMETA.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<RoomLayoutMETA>, I>>(
+		object: I,
+	): RoomLayoutMETA {
+		const message = createBaseRoomLayoutMETA();
+		message.floorUuid = object.floorUuid ?? '';
+		message.ceilingUuid = object.ceilingUuid ?? '';
+		message.wallUuids = object.wallUuids?.map((e) => e) || [];
+		return message;
+	},
 };
 
 function createBaseSpaceContainerMETA(): SpaceContainerMETA {
-  return { uuids: [] };
+	return { uuids: [] };
 }
 
 export const SpaceContainerMETA: MessageFns<SpaceContainerMETA> = {
-  encode(
-    message: SpaceContainerMETA,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    for (const v of message.uuids) {
-      writer.uint32(10).string(v!);
-    }
-    return writer;
-  },
+	encode(
+		message: SpaceContainerMETA,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		for (const v of message.uuids) {
+			writer.uint32(10).string(v!);
+		}
+		return writer;
+	},
 
-  decode(
-    input: BinaryReader | Uint8Array,
-    length?: number
-  ): SpaceContainerMETA {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseSpaceContainerMETA();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
+	decode(
+		input: BinaryReader | Uint8Array,
+		length?: number,
+	): SpaceContainerMETA {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseSpaceContainerMETA();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 10) {
+						break;
+					}
 
-          message.uuids.push(reader.string());
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.uuids.push(reader.string());
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): SpaceContainerMETA {
-    return {
-      uuids: globalThis.Array.isArray(object?.uuids)
-        ? object.uuids.map((e: any) => globalThis.String(e))
-        : [],
-    };
-  },
+	fromJSON(object: any): SpaceContainerMETA {
+		return {
+			uuids: globalThis.Array.isArray(object?.uuids)
+				? object.uuids.map((e: any) => globalThis.String(e))
+				: [],
+		};
+	},
 
-  toJSON(message: SpaceContainerMETA): unknown {
-    const obj: any = {};
-    if (message.uuids?.length) {
-      obj.uuids = message.uuids;
-    }
-    return obj;
-  },
+	toJSON(message: SpaceContainerMETA): unknown {
+		const obj: any = {};
+		if (message.uuids?.length) {
+			obj.uuids = message.uuids;
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<SpaceContainerMETA>, I>>(
-    base?: I
-  ): SpaceContainerMETA {
-    return SpaceContainerMETA.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<SpaceContainerMETA>, I>>(
-    object: I
-  ): SpaceContainerMETA {
-    const message = createBaseSpaceContainerMETA();
-    message.uuids = object.uuids?.map((e) => e) || [];
-    return message;
-  },
+	create<I extends Exact<DeepPartial<SpaceContainerMETA>, I>>(
+		base?: I,
+	): SpaceContainerMETA {
+		return SpaceContainerMETA.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<SpaceContainerMETA>, I>>(
+		object: I,
+	): SpaceContainerMETA {
+		const message = createBaseSpaceContainerMETA();
+		message.uuids = object.uuids?.map((e) => e) || [];
+		return message;
+	},
 };
 
 function createBaseBoundary2DMETA(): Boundary2DMETA {
-  return { vertices: new Uint8Array(0) };
+	return { vertices: new Uint8Array(0) };
 }
 
 export const Boundary2DMETA: MessageFns<Boundary2DMETA> = {
-  encode(
-    message: Boundary2DMETA,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    if (message.vertices.length !== 0) {
-      writer.uint32(10).bytes(message.vertices);
-    }
-    return writer;
-  },
+	encode(
+		message: Boundary2DMETA,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		if (message.vertices.length !== 0) {
+			writer.uint32(10).bytes(message.vertices);
+		}
+		return writer;
+	},
 
-  decode(input: BinaryReader | Uint8Array, length?: number): Boundary2DMETA {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseBoundary2DMETA();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
+	decode(input: BinaryReader | Uint8Array, length?: number): Boundary2DMETA {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseBoundary2DMETA();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 10) {
+						break;
+					}
 
-          message.vertices = reader.bytes();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.vertices = reader.bytes();
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): Boundary2DMETA {
-    return {
-      vertices: isSet(object.vertices)
-        ? bytesFromBase64(object.vertices)
-        : new Uint8Array(0),
-    };
-  },
+	fromJSON(object: any): Boundary2DMETA {
+		return {
+			vertices: isSet(object.vertices)
+				? bytesFromBase64(object.vertices)
+				: new Uint8Array(0),
+		};
+	},
 
-  toJSON(message: Boundary2DMETA): unknown {
-    const obj: any = {};
-    if (message.vertices.length !== 0) {
-      obj.vertices = base64FromBytes(message.vertices);
-    }
-    return obj;
-  },
+	toJSON(message: Boundary2DMETA): unknown {
+		const obj: any = {};
+		if (message.vertices.length !== 0) {
+			obj.vertices = base64FromBytes(message.vertices);
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<Boundary2DMETA>, I>>(
-    base?: I
-  ): Boundary2DMETA {
-    return Boundary2DMETA.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<Boundary2DMETA>, I>>(
-    object: I
-  ): Boundary2DMETA {
-    const message = createBaseBoundary2DMETA();
-    message.vertices = object.vertices ?? new Uint8Array(0);
-    return message;
-  },
+	create<I extends Exact<DeepPartial<Boundary2DMETA>, I>>(
+		base?: I,
+	): Boundary2DMETA {
+		return Boundary2DMETA.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<Boundary2DMETA>, I>>(
+		object: I,
+	): Boundary2DMETA {
+		const message = createBaseBoundary2DMETA();
+		message.vertices = object.vertices ?? new Uint8Array(0);
+		return message;
+	},
 };
 
 function createBaseTriangleMeshMETA(): TriangleMeshMETA {
-  return { vertices: new Uint8Array(0), indices: new Uint8Array(0) };
+	return { vertices: new Uint8Array(0), indices: new Uint8Array(0) };
 }
 
 export const TriangleMeshMETA: MessageFns<TriangleMeshMETA> = {
-  encode(
-    message: TriangleMeshMETA,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    if (message.vertices.length !== 0) {
-      writer.uint32(10).bytes(message.vertices);
-    }
-    if (message.indices.length !== 0) {
-      writer.uint32(18).bytes(message.indices);
-    }
-    return writer;
-  },
+	encode(
+		message: TriangleMeshMETA,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		if (message.vertices.length !== 0) {
+			writer.uint32(10).bytes(message.vertices);
+		}
+		if (message.indices.length !== 0) {
+			writer.uint32(18).bytes(message.indices);
+		}
+		return writer;
+	},
 
-  decode(input: BinaryReader | Uint8Array, length?: number): TriangleMeshMETA {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseTriangleMeshMETA();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
+	decode(input: BinaryReader | Uint8Array, length?: number): TriangleMeshMETA {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseTriangleMeshMETA();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 10) {
+						break;
+					}
 
-          message.vertices = reader.bytes();
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
+					message.vertices = reader.bytes();
+					continue;
+				}
+				case 2: {
+					if (tag !== 18) {
+						break;
+					}
 
-          message.indices = reader.bytes();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.indices = reader.bytes();
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): TriangleMeshMETA {
-    return {
-      vertices: isSet(object.vertices)
-        ? bytesFromBase64(object.vertices)
-        : new Uint8Array(0),
-      indices: isSet(object.indices)
-        ? bytesFromBase64(object.indices)
-        : new Uint8Array(0),
-    };
-  },
+	fromJSON(object: any): TriangleMeshMETA {
+		return {
+			vertices: isSet(object.vertices)
+				? bytesFromBase64(object.vertices)
+				: new Uint8Array(0),
+			indices: isSet(object.indices)
+				? bytesFromBase64(object.indices)
+				: new Uint8Array(0),
+		};
+	},
 
-  toJSON(message: TriangleMeshMETA): unknown {
-    const obj: any = {};
-    if (message.vertices.length !== 0) {
-      obj.vertices = base64FromBytes(message.vertices);
-    }
-    if (message.indices.length !== 0) {
-      obj.indices = base64FromBytes(message.indices);
-    }
-    return obj;
-  },
+	toJSON(message: TriangleMeshMETA): unknown {
+		const obj: any = {};
+		if (message.vertices.length !== 0) {
+			obj.vertices = base64FromBytes(message.vertices);
+		}
+		if (message.indices.length !== 0) {
+			obj.indices = base64FromBytes(message.indices);
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<TriangleMeshMETA>, I>>(
-    base?: I
-  ): TriangleMeshMETA {
-    return TriangleMeshMETA.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<TriangleMeshMETA>, I>>(
-    object: I
-  ): TriangleMeshMETA {
-    const message = createBaseTriangleMeshMETA();
-    message.vertices = object.vertices ?? new Uint8Array(0);
-    message.indices = object.indices ?? new Uint8Array(0);
-    return message;
-  },
+	create<I extends Exact<DeepPartial<TriangleMeshMETA>, I>>(
+		base?: I,
+	): TriangleMeshMETA {
+		return TriangleMeshMETA.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<TriangleMeshMETA>, I>>(
+		object: I,
+	): TriangleMeshMETA {
+		const message = createBaseTriangleMeshMETA();
+		message.vertices = object.vertices ?? new Uint8Array(0);
+		message.indices = object.indices ?? new Uint8Array(0);
+		return message;
+	},
 };
 
 function createBaseDynamicObjectMETA(): DynamicObjectMETA {
-  return { classType: 0 };
+	return { classType: 0 };
 }
 
 export const DynamicObjectMETA: MessageFns<DynamicObjectMETA> = {
-  encode(
-    message: DynamicObjectMETA,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    if (message.classType !== 0) {
-      writer.uint32(8).int32(message.classType);
-    }
-    return writer;
-  },
+	encode(
+		message: DynamicObjectMETA,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		if (message.classType !== 0) {
+			writer.uint32(8).int32(message.classType);
+		}
+		return writer;
+	},
 
-  decode(input: BinaryReader | Uint8Array, length?: number): DynamicObjectMETA {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseDynamicObjectMETA();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 8) {
-            break;
-          }
+	decode(input: BinaryReader | Uint8Array, length?: number): DynamicObjectMETA {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseDynamicObjectMETA();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 8) {
+						break;
+					}
 
-          message.classType = reader.int32() as any;
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.classType = reader.int32() as any;
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): DynamicObjectMETA {
-    return {
-      classType: isSet(object.classType)
-        ? dynamicObjectTypeMETAFromJSON(object.classType)
-        : 0,
-    };
-  },
+	fromJSON(object: any): DynamicObjectMETA {
+		return {
+			classType: isSet(object.classType)
+				? dynamicObjectTypeMETAFromJSON(object.classType)
+				: 0,
+		};
+	},
 
-  toJSON(message: DynamicObjectMETA): unknown {
-    const obj: any = {};
-    if (message.classType !== 0) {
-      obj.classType = dynamicObjectTypeMETAToJSON(message.classType);
-    }
-    return obj;
-  },
+	toJSON(message: DynamicObjectMETA): unknown {
+		const obj: any = {};
+		if (message.classType !== 0) {
+			obj.classType = dynamicObjectTypeMETAToJSON(message.classType);
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<DynamicObjectMETA>, I>>(
-    base?: I
-  ): DynamicObjectMETA {
-    return DynamicObjectMETA.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<DynamicObjectMETA>, I>>(
-    object: I
-  ): DynamicObjectMETA {
-    const message = createBaseDynamicObjectMETA();
-    message.classType = object.classType ?? 0;
-    return message;
-  },
+	create<I extends Exact<DeepPartial<DynamicObjectMETA>, I>>(
+		base?: I,
+	): DynamicObjectMETA {
+		return DynamicObjectMETA.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<DynamicObjectMETA>, I>>(
+		object: I,
+	): DynamicObjectMETA {
+		const message = createBaseDynamicObjectMETA();
+		message.classType = object.classType ?? 0;
+		return message;
+	},
 };
 
 function createBaseRoomMeshMETA(): RoomMeshMETA {
-  return { mesh: undefined, faces: [] };
+	return { mesh: undefined, faces: [] };
 }
 
 export const RoomMeshMETA: MessageFns<RoomMeshMETA> = {
-  encode(
-    message: RoomMeshMETA,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    if (message.mesh !== undefined) {
-      TriangleMeshMETA.encode(message.mesh, writer.uint32(10).fork()).join();
-    }
-    for (const v of message.faces) {
-      RoomMeshMETA_RoomFace.encode(v!, writer.uint32(18).fork()).join();
-    }
-    return writer;
-  },
+	encode(
+		message: RoomMeshMETA,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		if (message.mesh !== undefined) {
+			TriangleMeshMETA.encode(message.mesh, writer.uint32(10).fork()).join();
+		}
+		for (const v of message.faces) {
+			RoomMeshMETA_RoomFace.encode(v!, writer.uint32(18).fork()).join();
+		}
+		return writer;
+	},
 
-  decode(input: BinaryReader | Uint8Array, length?: number): RoomMeshMETA {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseRoomMeshMETA();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
+	decode(input: BinaryReader | Uint8Array, length?: number): RoomMeshMETA {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseRoomMeshMETA();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 10) {
+						break;
+					}
 
-          message.mesh = TriangleMeshMETA.decode(reader, reader.uint32());
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
+					message.mesh = TriangleMeshMETA.decode(reader, reader.uint32());
+					continue;
+				}
+				case 2: {
+					if (tag !== 18) {
+						break;
+					}
 
-          message.faces.push(
-            RoomMeshMETA_RoomFace.decode(reader, reader.uint32())
-          );
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.faces.push(
+						RoomMeshMETA_RoomFace.decode(reader, reader.uint32()),
+					);
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): RoomMeshMETA {
-    return {
-      mesh: isSet(object.mesh)
-        ? TriangleMeshMETA.fromJSON(object.mesh)
-        : undefined,
-      faces: globalThis.Array.isArray(object?.faces)
-        ? object.faces.map((e: any) => RoomMeshMETA_RoomFace.fromJSON(e))
-        : [],
-    };
-  },
+	fromJSON(object: any): RoomMeshMETA {
+		return {
+			mesh: isSet(object.mesh)
+				? TriangleMeshMETA.fromJSON(object.mesh)
+				: undefined,
+			faces: globalThis.Array.isArray(object?.faces)
+				? object.faces.map((e: any) => RoomMeshMETA_RoomFace.fromJSON(e))
+				: [],
+		};
+	},
 
-  toJSON(message: RoomMeshMETA): unknown {
-    const obj: any = {};
-    if (message.mesh !== undefined) {
-      obj.mesh = TriangleMeshMETA.toJSON(message.mesh);
-    }
-    if (message.faces?.length) {
-      obj.faces = message.faces.map((e) => RoomMeshMETA_RoomFace.toJSON(e));
-    }
-    return obj;
-  },
+	toJSON(message: RoomMeshMETA): unknown {
+		const obj: any = {};
+		if (message.mesh !== undefined) {
+			obj.mesh = TriangleMeshMETA.toJSON(message.mesh);
+		}
+		if (message.faces?.length) {
+			obj.faces = message.faces.map((e) => RoomMeshMETA_RoomFace.toJSON(e));
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<RoomMeshMETA>, I>>(
-    base?: I
-  ): RoomMeshMETA {
-    return RoomMeshMETA.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<RoomMeshMETA>, I>>(
-    object: I
-  ): RoomMeshMETA {
-    const message = createBaseRoomMeshMETA();
-    message.mesh =
-      object.mesh !== undefined && object.mesh !== null
-        ? TriangleMeshMETA.fromPartial(object.mesh)
-        : undefined;
-    message.faces =
-      object.faces?.map((e) => RoomMeshMETA_RoomFace.fromPartial(e)) || [];
-    return message;
-  },
+	create<I extends Exact<DeepPartial<RoomMeshMETA>, I>>(
+		base?: I,
+	): RoomMeshMETA {
+		return RoomMeshMETA.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<RoomMeshMETA>, I>>(
+		object: I,
+	): RoomMeshMETA {
+		const message = createBaseRoomMeshMETA();
+		message.mesh =
+			object.mesh !== undefined && object.mesh !== null
+				? TriangleMeshMETA.fromPartial(object.mesh)
+				: undefined;
+		message.faces =
+			object.faces?.map((e) => RoomMeshMETA_RoomFace.fromPartial(e)) || [];
+		return message;
+	},
 };
 
 function createBaseRoomMeshMETA_RoomFace(): RoomMeshMETA_RoomFace {
-  return { uuid: "", parentUuid: "", semanticLabel: 0 };
+	return { uuid: '', parentUuid: '', semanticLabel: 0 };
 }
 
 export const RoomMeshMETA_RoomFace: MessageFns<RoomMeshMETA_RoomFace> = {
-  encode(
-    message: RoomMeshMETA_RoomFace,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    if (message.uuid !== "") {
-      writer.uint32(10).string(message.uuid);
-    }
-    if (message.parentUuid !== "") {
-      writer.uint32(18).string(message.parentUuid);
-    }
-    if (message.semanticLabel !== 0) {
-      writer.uint32(24).int32(message.semanticLabel);
-    }
-    return writer;
-  },
+	encode(
+		message: RoomMeshMETA_RoomFace,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		if (message.uuid !== '') {
+			writer.uint32(10).string(message.uuid);
+		}
+		if (message.parentUuid !== '') {
+			writer.uint32(18).string(message.parentUuid);
+		}
+		if (message.semanticLabel !== 0) {
+			writer.uint32(24).int32(message.semanticLabel);
+		}
+		return writer;
+	},
 
-  decode(
-    input: BinaryReader | Uint8Array,
-    length?: number
-  ): RoomMeshMETA_RoomFace {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseRoomMeshMETA_RoomFace();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
+	decode(
+		input: BinaryReader | Uint8Array,
+		length?: number,
+	): RoomMeshMETA_RoomFace {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseRoomMeshMETA_RoomFace();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 10) {
+						break;
+					}
 
-          message.uuid = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
+					message.uuid = reader.string();
+					continue;
+				}
+				case 2: {
+					if (tag !== 18) {
+						break;
+					}
 
-          message.parentUuid = reader.string();
-          continue;
-        }
-        case 3: {
-          if (tag !== 24) {
-            break;
-          }
+					message.parentUuid = reader.string();
+					continue;
+				}
+				case 3: {
+					if (tag !== 24) {
+						break;
+					}
 
-          message.semanticLabel = reader.int32() as any;
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.semanticLabel = reader.int32() as any;
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): RoomMeshMETA_RoomFace {
-    return {
-      uuid: isSet(object.uuid) ? globalThis.String(object.uuid) : "",
-      parentUuid: isSet(object.parentUuid)
-        ? globalThis.String(object.parentUuid)
-        : "",
-      semanticLabel: isSet(object.semanticLabel)
-        ? semanticLabelMETAFromJSON(object.semanticLabel)
-        : 0,
-    };
-  },
+	fromJSON(object: any): RoomMeshMETA_RoomFace {
+		return {
+			uuid: isSet(object.uuid) ? globalThis.String(object.uuid) : '',
+			parentUuid: isSet(object.parentUuid)
+				? globalThis.String(object.parentUuid)
+				: '',
+			semanticLabel: isSet(object.semanticLabel)
+				? semanticLabelMETAFromJSON(object.semanticLabel)
+				: 0,
+		};
+	},
 
-  toJSON(message: RoomMeshMETA_RoomFace): unknown {
-    const obj: any = {};
-    if (message.uuid !== "") {
-      obj.uuid = message.uuid;
-    }
-    if (message.parentUuid !== "") {
-      obj.parentUuid = message.parentUuid;
-    }
-    if (message.semanticLabel !== 0) {
-      obj.semanticLabel = semanticLabelMETAToJSON(message.semanticLabel);
-    }
-    return obj;
-  },
+	toJSON(message: RoomMeshMETA_RoomFace): unknown {
+		const obj: any = {};
+		if (message.uuid !== '') {
+			obj.uuid = message.uuid;
+		}
+		if (message.parentUuid !== '') {
+			obj.parentUuid = message.parentUuid;
+		}
+		if (message.semanticLabel !== 0) {
+			obj.semanticLabel = semanticLabelMETAToJSON(message.semanticLabel);
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<RoomMeshMETA_RoomFace>, I>>(
-    base?: I
-  ): RoomMeshMETA_RoomFace {
-    return RoomMeshMETA_RoomFace.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<RoomMeshMETA_RoomFace>, I>>(
-    object: I
-  ): RoomMeshMETA_RoomFace {
-    const message = createBaseRoomMeshMETA_RoomFace();
-    message.uuid = object.uuid ?? "";
-    message.parentUuid = object.parentUuid ?? "";
-    message.semanticLabel = object.semanticLabel ?? 0;
-    return message;
-  },
+	create<I extends Exact<DeepPartial<RoomMeshMETA_RoomFace>, I>>(
+		base?: I,
+	): RoomMeshMETA_RoomFace {
+		return RoomMeshMETA_RoomFace.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<RoomMeshMETA_RoomFace>, I>>(
+		object: I,
+	): RoomMeshMETA_RoomFace {
+		const message = createBaseRoomMeshMETA_RoomFace();
+		message.uuid = object.uuid ?? '';
+		message.parentUuid = object.parentUuid ?? '';
+		message.semanticLabel = object.semanticLabel ?? 0;
+		return message;
+	},
 };
 
 function createBaseSpatialEntity(): SpatialEntity {
-  return {
-    uuid: "",
-    semanticLabel_META: undefined,
-    locatable_META: undefined,
-    boundary2D_META: undefined,
-    bounded2D_META: undefined,
-    bounded3D_META: undefined,
-    roomLayout_META: undefined,
-    spaceContainer_META: undefined,
-    triangleMesh_META: undefined,
-    dynamicObject_META: undefined,
-  };
+	return {
+		uuid: '',
+		semanticLabel_META: undefined,
+		locatable_META: undefined,
+		boundary2D_META: undefined,
+		bounded2D_META: undefined,
+		bounded3D_META: undefined,
+		roomLayout_META: undefined,
+		spaceContainer_META: undefined,
+		triangleMesh_META: undefined,
+		dynamicObject_META: undefined,
+	};
 }
 
 export const SpatialEntity: MessageFns<SpatialEntity> = {
-  encode(
-    message: SpatialEntity,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    if (message.uuid !== "") {
-      writer.uint32(10).string(message.uuid);
-    }
-    if (message.semanticLabel_META !== undefined) {
-      writer.uint32(16).int32(message.semanticLabel_META);
-    }
-    if (message.locatable_META !== undefined) {
-      Pose.encode(message.locatable_META, writer.uint32(26).fork()).join();
-    }
-    if (message.boundary2D_META !== undefined) {
-      Boundary2DMETA.encode(
-        message.boundary2D_META,
-        writer.uint32(34).fork()
-      ).join();
-    }
-    if (message.bounded2D_META !== undefined) {
-      Rect2D.encode(message.bounded2D_META, writer.uint32(42).fork()).join();
-    }
-    if (message.bounded3D_META !== undefined) {
-      Rect3D.encode(message.bounded3D_META, writer.uint32(50).fork()).join();
-    }
-    if (message.roomLayout_META !== undefined) {
-      RoomLayoutMETA.encode(
-        message.roomLayout_META,
-        writer.uint32(58).fork()
-      ).join();
-    }
-    if (message.spaceContainer_META !== undefined) {
-      SpaceContainerMETA.encode(
-        message.spaceContainer_META,
-        writer.uint32(66).fork()
-      ).join();
-    }
-    if (message.triangleMesh_META !== undefined) {
-      TriangleMeshMETA.encode(
-        message.triangleMesh_META,
-        writer.uint32(74).fork()
-      ).join();
-    }
-    if (message.dynamicObject_META !== undefined) {
-      DynamicObjectMETA.encode(
-        message.dynamicObject_META,
-        writer.uint32(82).fork()
-      ).join();
-    }
-    return writer;
-  },
+	encode(
+		message: SpatialEntity,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		if (message.uuid !== '') {
+			writer.uint32(10).string(message.uuid);
+		}
+		if (message.semanticLabel_META !== undefined) {
+			writer.uint32(16).int32(message.semanticLabel_META);
+		}
+		if (message.locatable_META !== undefined) {
+			Pose.encode(message.locatable_META, writer.uint32(26).fork()).join();
+		}
+		if (message.boundary2D_META !== undefined) {
+			Boundary2DMETA.encode(
+				message.boundary2D_META,
+				writer.uint32(34).fork(),
+			).join();
+		}
+		if (message.bounded2D_META !== undefined) {
+			Rect2D.encode(message.bounded2D_META, writer.uint32(42).fork()).join();
+		}
+		if (message.bounded3D_META !== undefined) {
+			Rect3D.encode(message.bounded3D_META, writer.uint32(50).fork()).join();
+		}
+		if (message.roomLayout_META !== undefined) {
+			RoomLayoutMETA.encode(
+				message.roomLayout_META,
+				writer.uint32(58).fork(),
+			).join();
+		}
+		if (message.spaceContainer_META !== undefined) {
+			SpaceContainerMETA.encode(
+				message.spaceContainer_META,
+				writer.uint32(66).fork(),
+			).join();
+		}
+		if (message.triangleMesh_META !== undefined) {
+			TriangleMeshMETA.encode(
+				message.triangleMesh_META,
+				writer.uint32(74).fork(),
+			).join();
+		}
+		if (message.dynamicObject_META !== undefined) {
+			DynamicObjectMETA.encode(
+				message.dynamicObject_META,
+				writer.uint32(82).fork(),
+			).join();
+		}
+		return writer;
+	},
 
-  decode(input: BinaryReader | Uint8Array, length?: number): SpatialEntity {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseSpatialEntity();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
+	decode(input: BinaryReader | Uint8Array, length?: number): SpatialEntity {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseSpatialEntity();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 10) {
+						break;
+					}
 
-          message.uuid = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 16) {
-            break;
-          }
+					message.uuid = reader.string();
+					continue;
+				}
+				case 2: {
+					if (tag !== 16) {
+						break;
+					}
 
-          message.semanticLabel_META = reader.int32() as any;
-          continue;
-        }
-        case 3: {
-          if (tag !== 26) {
-            break;
-          }
+					message.semanticLabel_META = reader.int32() as any;
+					continue;
+				}
+				case 3: {
+					if (tag !== 26) {
+						break;
+					}
 
-          message.locatable_META = Pose.decode(reader, reader.uint32());
-          continue;
-        }
-        case 4: {
-          if (tag !== 34) {
-            break;
-          }
+					message.locatable_META = Pose.decode(reader, reader.uint32());
+					continue;
+				}
+				case 4: {
+					if (tag !== 34) {
+						break;
+					}
 
-          message.boundary2D_META = Boundary2DMETA.decode(
-            reader,
-            reader.uint32()
-          );
-          continue;
-        }
-        case 5: {
-          if (tag !== 42) {
-            break;
-          }
+					message.boundary2D_META = Boundary2DMETA.decode(
+						reader,
+						reader.uint32(),
+					);
+					continue;
+				}
+				case 5: {
+					if (tag !== 42) {
+						break;
+					}
 
-          message.bounded2D_META = Rect2D.decode(reader, reader.uint32());
-          continue;
-        }
-        case 6: {
-          if (tag !== 50) {
-            break;
-          }
+					message.bounded2D_META = Rect2D.decode(reader, reader.uint32());
+					continue;
+				}
+				case 6: {
+					if (tag !== 50) {
+						break;
+					}
 
-          message.bounded3D_META = Rect3D.decode(reader, reader.uint32());
-          continue;
-        }
-        case 7: {
-          if (tag !== 58) {
-            break;
-          }
+					message.bounded3D_META = Rect3D.decode(reader, reader.uint32());
+					continue;
+				}
+				case 7: {
+					if (tag !== 58) {
+						break;
+					}
 
-          message.roomLayout_META = RoomLayoutMETA.decode(
-            reader,
-            reader.uint32()
-          );
-          continue;
-        }
-        case 8: {
-          if (tag !== 66) {
-            break;
-          }
+					message.roomLayout_META = RoomLayoutMETA.decode(
+						reader,
+						reader.uint32(),
+					);
+					continue;
+				}
+				case 8: {
+					if (tag !== 66) {
+						break;
+					}
 
-          message.spaceContainer_META = SpaceContainerMETA.decode(
-            reader,
-            reader.uint32()
-          );
-          continue;
-        }
-        case 9: {
-          if (tag !== 74) {
-            break;
-          }
+					message.spaceContainer_META = SpaceContainerMETA.decode(
+						reader,
+						reader.uint32(),
+					);
+					continue;
+				}
+				case 9: {
+					if (tag !== 74) {
+						break;
+					}
 
-          message.triangleMesh_META = TriangleMeshMETA.decode(
-            reader,
-            reader.uint32()
-          );
-          continue;
-        }
-        case 10: {
-          if (tag !== 82) {
-            break;
-          }
+					message.triangleMesh_META = TriangleMeshMETA.decode(
+						reader,
+						reader.uint32(),
+					);
+					continue;
+				}
+				case 10: {
+					if (tag !== 82) {
+						break;
+					}
 
-          message.dynamicObject_META = DynamicObjectMETA.decode(
-            reader,
-            reader.uint32()
-          );
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.dynamicObject_META = DynamicObjectMETA.decode(
+						reader,
+						reader.uint32(),
+					);
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): SpatialEntity {
-    return {
-      uuid: isSet(object.uuid) ? globalThis.String(object.uuid) : "",
-      semanticLabel_META: isSet(object.semanticLabel_META)
-        ? semanticLabelMETAFromJSON(object.semanticLabel_META)
-        : undefined,
-      locatable_META: isSet(object.locatable_META)
-        ? Pose.fromJSON(object.locatable_META)
-        : undefined,
-      boundary2D_META: isSet(object.boundary2D_META)
-        ? Boundary2DMETA.fromJSON(object.boundary2D_META)
-        : undefined,
-      bounded2D_META: isSet(object.bounded2D_META)
-        ? Rect2D.fromJSON(object.bounded2D_META)
-        : undefined,
-      bounded3D_META: isSet(object.bounded3D_META)
-        ? Rect3D.fromJSON(object.bounded3D_META)
-        : undefined,
-      roomLayout_META: isSet(object.roomLayout_META)
-        ? RoomLayoutMETA.fromJSON(object.roomLayout_META)
-        : undefined,
-      spaceContainer_META: isSet(object.spaceContainer_META)
-        ? SpaceContainerMETA.fromJSON(object.spaceContainer_META)
-        : undefined,
-      triangleMesh_META: isSet(object.triangleMesh_META)
-        ? TriangleMeshMETA.fromJSON(object.triangleMesh_META)
-        : undefined,
-      dynamicObject_META: isSet(object.dynamicObject_META)
-        ? DynamicObjectMETA.fromJSON(object.dynamicObject_META)
-        : undefined,
-    };
-  },
+	fromJSON(object: any): SpatialEntity {
+		return {
+			uuid: isSet(object.uuid) ? globalThis.String(object.uuid) : '',
+			semanticLabel_META: isSet(object.semanticLabel_META)
+				? semanticLabelMETAFromJSON(object.semanticLabel_META)
+				: undefined,
+			locatable_META: isSet(object.locatable_META)
+				? Pose.fromJSON(object.locatable_META)
+				: undefined,
+			boundary2D_META: isSet(object.boundary2D_META)
+				? Boundary2DMETA.fromJSON(object.boundary2D_META)
+				: undefined,
+			bounded2D_META: isSet(object.bounded2D_META)
+				? Rect2D.fromJSON(object.bounded2D_META)
+				: undefined,
+			bounded3D_META: isSet(object.bounded3D_META)
+				? Rect3D.fromJSON(object.bounded3D_META)
+				: undefined,
+			roomLayout_META: isSet(object.roomLayout_META)
+				? RoomLayoutMETA.fromJSON(object.roomLayout_META)
+				: undefined,
+			spaceContainer_META: isSet(object.spaceContainer_META)
+				? SpaceContainerMETA.fromJSON(object.spaceContainer_META)
+				: undefined,
+			triangleMesh_META: isSet(object.triangleMesh_META)
+				? TriangleMeshMETA.fromJSON(object.triangleMesh_META)
+				: undefined,
+			dynamicObject_META: isSet(object.dynamicObject_META)
+				? DynamicObjectMETA.fromJSON(object.dynamicObject_META)
+				: undefined,
+		};
+	},
 
-  toJSON(message: SpatialEntity): unknown {
-    const obj: any = {};
-    if (message.uuid !== "") {
-      obj.uuid = message.uuid;
-    }
-    if (message.semanticLabel_META !== undefined) {
-      obj.semanticLabel_META = semanticLabelMETAToJSON(
-        message.semanticLabel_META
-      );
-    }
-    if (message.locatable_META !== undefined) {
-      obj.locatable_META = Pose.toJSON(message.locatable_META);
-    }
-    if (message.boundary2D_META !== undefined) {
-      obj.boundary2D_META = Boundary2DMETA.toJSON(message.boundary2D_META);
-    }
-    if (message.bounded2D_META !== undefined) {
-      obj.bounded2D_META = Rect2D.toJSON(message.bounded2D_META);
-    }
-    if (message.bounded3D_META !== undefined) {
-      obj.bounded3D_META = Rect3D.toJSON(message.bounded3D_META);
-    }
-    if (message.roomLayout_META !== undefined) {
-      obj.roomLayout_META = RoomLayoutMETA.toJSON(message.roomLayout_META);
-    }
-    if (message.spaceContainer_META !== undefined) {
-      obj.spaceContainer_META = SpaceContainerMETA.toJSON(
-        message.spaceContainer_META
-      );
-    }
-    if (message.triangleMesh_META !== undefined) {
-      obj.triangleMesh_META = TriangleMeshMETA.toJSON(
-        message.triangleMesh_META
-      );
-    }
-    if (message.dynamicObject_META !== undefined) {
-      obj.dynamicObject_META = DynamicObjectMETA.toJSON(
-        message.dynamicObject_META
-      );
-    }
-    return obj;
-  },
+	toJSON(message: SpatialEntity): unknown {
+		const obj: any = {};
+		if (message.uuid !== '') {
+			obj.uuid = message.uuid;
+		}
+		if (message.semanticLabel_META !== undefined) {
+			obj.semanticLabel_META = semanticLabelMETAToJSON(
+				message.semanticLabel_META,
+			);
+		}
+		if (message.locatable_META !== undefined) {
+			obj.locatable_META = Pose.toJSON(message.locatable_META);
+		}
+		if (message.boundary2D_META !== undefined) {
+			obj.boundary2D_META = Boundary2DMETA.toJSON(message.boundary2D_META);
+		}
+		if (message.bounded2D_META !== undefined) {
+			obj.bounded2D_META = Rect2D.toJSON(message.bounded2D_META);
+		}
+		if (message.bounded3D_META !== undefined) {
+			obj.bounded3D_META = Rect3D.toJSON(message.bounded3D_META);
+		}
+		if (message.roomLayout_META !== undefined) {
+			obj.roomLayout_META = RoomLayoutMETA.toJSON(message.roomLayout_META);
+		}
+		if (message.spaceContainer_META !== undefined) {
+			obj.spaceContainer_META = SpaceContainerMETA.toJSON(
+				message.spaceContainer_META,
+			);
+		}
+		if (message.triangleMesh_META !== undefined) {
+			obj.triangleMesh_META = TriangleMeshMETA.toJSON(
+				message.triangleMesh_META,
+			);
+		}
+		if (message.dynamicObject_META !== undefined) {
+			obj.dynamicObject_META = DynamicObjectMETA.toJSON(
+				message.dynamicObject_META,
+			);
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<SpatialEntity>, I>>(
-    base?: I
-  ): SpatialEntity {
-    return SpatialEntity.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<SpatialEntity>, I>>(
-    object: I
-  ): SpatialEntity {
-    const message = createBaseSpatialEntity();
-    message.uuid = object.uuid ?? "";
-    message.semanticLabel_META = object.semanticLabel_META ?? undefined;
-    message.locatable_META =
-      object.locatable_META !== undefined && object.locatable_META !== null
-        ? Pose.fromPartial(object.locatable_META)
-        : undefined;
-    message.boundary2D_META =
-      object.boundary2D_META !== undefined && object.boundary2D_META !== null
-        ? Boundary2DMETA.fromPartial(object.boundary2D_META)
-        : undefined;
-    message.bounded2D_META =
-      object.bounded2D_META !== undefined && object.bounded2D_META !== null
-        ? Rect2D.fromPartial(object.bounded2D_META)
-        : undefined;
-    message.bounded3D_META =
-      object.bounded3D_META !== undefined && object.bounded3D_META !== null
-        ? Rect3D.fromPartial(object.bounded3D_META)
-        : undefined;
-    message.roomLayout_META =
-      object.roomLayout_META !== undefined && object.roomLayout_META !== null
-        ? RoomLayoutMETA.fromPartial(object.roomLayout_META)
-        : undefined;
-    message.spaceContainer_META =
-      object.spaceContainer_META !== undefined &&
-      object.spaceContainer_META !== null
-        ? SpaceContainerMETA.fromPartial(object.spaceContainer_META)
-        : undefined;
-    message.triangleMesh_META =
-      object.triangleMesh_META !== undefined &&
-      object.triangleMesh_META !== null
-        ? TriangleMeshMETA.fromPartial(object.triangleMesh_META)
-        : undefined;
-    message.dynamicObject_META =
-      object.dynamicObject_META !== undefined &&
-      object.dynamicObject_META !== null
-        ? DynamicObjectMETA.fromPartial(object.dynamicObject_META)
-        : undefined;
-    return message;
-  },
+	create<I extends Exact<DeepPartial<SpatialEntity>, I>>(
+		base?: I,
+	): SpatialEntity {
+		return SpatialEntity.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<SpatialEntity>, I>>(
+		object: I,
+	): SpatialEntity {
+		const message = createBaseSpatialEntity();
+		message.uuid = object.uuid ?? '';
+		message.semanticLabel_META = object.semanticLabel_META ?? undefined;
+		message.locatable_META =
+			object.locatable_META !== undefined && object.locatable_META !== null
+				? Pose.fromPartial(object.locatable_META)
+				: undefined;
+		message.boundary2D_META =
+			object.boundary2D_META !== undefined && object.boundary2D_META !== null
+				? Boundary2DMETA.fromPartial(object.boundary2D_META)
+				: undefined;
+		message.bounded2D_META =
+			object.bounded2D_META !== undefined && object.bounded2D_META !== null
+				? Rect2D.fromPartial(object.bounded2D_META)
+				: undefined;
+		message.bounded3D_META =
+			object.bounded3D_META !== undefined && object.bounded3D_META !== null
+				? Rect3D.fromPartial(object.bounded3D_META)
+				: undefined;
+		message.roomLayout_META =
+			object.roomLayout_META !== undefined && object.roomLayout_META !== null
+				? RoomLayoutMETA.fromPartial(object.roomLayout_META)
+				: undefined;
+		message.spaceContainer_META =
+			object.spaceContainer_META !== undefined &&
+			object.spaceContainer_META !== null
+				? SpaceContainerMETA.fromPartial(object.spaceContainer_META)
+				: undefined;
+		message.triangleMesh_META =
+			object.triangleMesh_META !== undefined &&
+			object.triangleMesh_META !== null
+				? TriangleMeshMETA.fromPartial(object.triangleMesh_META)
+				: undefined;
+		message.dynamicObject_META =
+			object.dynamicObject_META !== undefined &&
+			object.dynamicObject_META !== null
+				? DynamicObjectMETA.fromPartial(object.dynamicObject_META)
+				: undefined;
+		return message;
+	},
 };
 
 function createBaseScene(): Scene {
-  return { type: "", version: 0, spatialEntities: [] };
+	return { type: '', version: 0, spatialEntities: [] };
 }
 
 export const Scene: MessageFns<Scene> = {
-  encode(
-    message: Scene,
-    writer: BinaryWriter = new BinaryWriter()
-  ): BinaryWriter {
-    if (message.type !== "") {
-      writer.uint32(10).string(message.type);
-    }
-    if (message.version !== 0) {
-      writer.uint32(16).uint32(message.version);
-    }
-    for (const v of message.spatialEntities) {
-      SpatialEntity.encode(v!, writer.uint32(26).fork()).join();
-    }
-    return writer;
-  },
+	encode(
+		message: Scene,
+		writer: BinaryWriter = new BinaryWriter(),
+	): BinaryWriter {
+		if (message.type !== '') {
+			writer.uint32(10).string(message.type);
+		}
+		if (message.version !== 0) {
+			writer.uint32(16).uint32(message.version);
+		}
+		for (const v of message.spatialEntities) {
+			SpatialEntity.encode(v!, writer.uint32(26).fork()).join();
+		}
+		return writer;
+	},
 
-  decode(input: BinaryReader | Uint8Array, length?: number): Scene {
-    const reader =
-      input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseScene();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
+	decode(input: BinaryReader | Uint8Array, length?: number): Scene {
+		const reader =
+			input instanceof BinaryReader ? input : new BinaryReader(input);
+		let end = length === undefined ? reader.len : reader.pos + length;
+		const message = createBaseScene();
+		while (reader.pos < end) {
+			const tag = reader.uint32();
+			switch (tag >>> 3) {
+				case 1: {
+					if (tag !== 10) {
+						break;
+					}
 
-          message.type = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 16) {
-            break;
-          }
+					message.type = reader.string();
+					continue;
+				}
+				case 2: {
+					if (tag !== 16) {
+						break;
+					}
 
-          message.version = reader.uint32();
-          continue;
-        }
-        case 3: {
-          if (tag !== 26) {
-            break;
-          }
+					message.version = reader.uint32();
+					continue;
+				}
+				case 3: {
+					if (tag !== 26) {
+						break;
+					}
 
-          message.spatialEntities.push(
-            SpatialEntity.decode(reader, reader.uint32())
-          );
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+					message.spatialEntities.push(
+						SpatialEntity.decode(reader, reader.uint32()),
+					);
+					continue;
+				}
+			}
+			if ((tag & 7) === 4 || tag === 0) {
+				break;
+			}
+			reader.skip(tag & 7);
+		}
+		return message;
+	},
 
-  fromJSON(object: any): Scene {
-    return {
-      type: isSet(object.type) ? globalThis.String(object.type) : "",
-      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
-      spatialEntities: globalThis.Array.isArray(object?.spatialEntities)
-        ? object.spatialEntities.map((e: any) => SpatialEntity.fromJSON(e))
-        : [],
-    };
-  },
+	fromJSON(object: any): Scene {
+		return {
+			type: isSet(object.type) ? globalThis.String(object.type) : '',
+			version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+			spatialEntities: globalThis.Array.isArray(object?.spatialEntities)
+				? object.spatialEntities.map((e: any) => SpatialEntity.fromJSON(e))
+				: [],
+		};
+	},
 
-  toJSON(message: Scene): unknown {
-    const obj: any = {};
-    if (message.type !== "") {
-      obj.type = message.type;
-    }
-    if (message.version !== 0) {
-      obj.version = Math.round(message.version);
-    }
-    if (message.spatialEntities?.length) {
-      obj.spatialEntities = message.spatialEntities.map((e) =>
-        SpatialEntity.toJSON(e)
-      );
-    }
-    return obj;
-  },
+	toJSON(message: Scene): unknown {
+		const obj: any = {};
+		if (message.type !== '') {
+			obj.type = message.type;
+		}
+		if (message.version !== 0) {
+			obj.version = Math.round(message.version);
+		}
+		if (message.spatialEntities?.length) {
+			obj.spatialEntities = message.spatialEntities.map((e) =>
+				SpatialEntity.toJSON(e),
+			);
+		}
+		return obj;
+	},
 
-  create<I extends Exact<DeepPartial<Scene>, I>>(base?: I): Scene {
-    return Scene.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<Scene>, I>>(object: I): Scene {
-    const message = createBaseScene();
-    message.type = object.type ?? "";
-    message.version = object.version ?? 0;
-    message.spatialEntities =
-      object.spatialEntities?.map((e) => SpatialEntity.fromPartial(e)) || [];
-    return message;
-  },
+	create<I extends Exact<DeepPartial<Scene>, I>>(base?: I): Scene {
+		return Scene.fromPartial(base ?? ({} as any));
+	},
+	fromPartial<I extends Exact<DeepPartial<Scene>, I>>(object: I): Scene {
+		const message = createBaseScene();
+		message.type = object.type ?? '';
+		message.version = object.version ?? 0;
+		message.spatialEntities =
+			object.spatialEntities?.map((e) => SpatialEntity.fromPartial(e)) || [];
+		return message;
+	},
 };
 
 function bytesFromBase64(b64: string): Uint8Array {
-  if ((globalThis as any).Buffer) {
-    return Uint8Array.from(globalThis.Buffer.from(b64, "base64"));
-  } else {
-    const bin = globalThis.atob(b64);
-    const arr = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; ++i) {
-      arr[i] = bin.charCodeAt(i);
-    }
-    return arr;
-  }
+	if ((globalThis as any).Buffer) {
+		return Uint8Array.from(globalThis.Buffer.from(b64, 'base64'));
+	} else {
+		const bin = globalThis.atob(b64);
+		const arr = new Uint8Array(bin.length);
+		for (let i = 0; i < bin.length; ++i) {
+			arr[i] = bin.charCodeAt(i);
+		}
+		return arr;
+	}
 }
 
 function base64FromBytes(arr: Uint8Array): string {
-  if ((globalThis as any).Buffer) {
-    return globalThis.Buffer.from(arr).toString("base64");
-  } else {
-    const bin: string[] = [];
-    arr.forEach((byte) => {
-      bin.push(globalThis.String.fromCharCode(byte));
-    });
-    return globalThis.btoa(bin.join(""));
-  }
+	if ((globalThis as any).Buffer) {
+		return globalThis.Buffer.from(arr).toString('base64');
+	} else {
+		const bin: string[] = [];
+		arr.forEach((byte) => {
+			bin.push(globalThis.String.fromCharCode(byte));
+		});
+		return globalThis.btoa(bin.join(''));
+	}
 }
 
 type Builtin =
-  | Date
-  | Function
-  | Uint8Array
-  | string
-  | number
-  | boolean
-  | undefined;
+	| Date
+	| Function
+	| Uint8Array
+	| string
+	| number
+	| boolean
+	| undefined;
 
 export type DeepPartial<T> = T extends Builtin
-  ? T
-  : T extends globalThis.Array<infer U>
-    ? globalThis.Array<DeepPartial<U>>
-    : T extends ReadonlyArray<infer U>
-      ? ReadonlyArray<DeepPartial<U>>
-      : T extends {}
-        ? { [K in keyof T]?: DeepPartial<T[K]> }
-        : Partial<T>;
+	? T
+	: T extends globalThis.Array<infer U>
+	? globalThis.Array<DeepPartial<U>>
+	: T extends ReadonlyArray<infer U>
+	? ReadonlyArray<DeepPartial<U>>
+	: T extends {}
+	? { [K in keyof T]?: DeepPartial<T[K]> }
+	: Partial<T>;
 
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin
-  ? P
-  : P & { [K in keyof P]: Exact<P[K], I[K]> } & {
-      [K in Exclude<keyof I, KeysOfUnion<P>>]: never;
-    };
+	? P
+	: P & { [K in keyof P]: Exact<P[K], I[K]> } & {
+			[K in Exclude<keyof I, KeysOfUnion<P>>]: never;
+	  };
 
 function isSet(value: any): boolean {
-  return value !== null && value !== undefined;
+	return value !== null && value !== undefined;
 }
 
 export interface MessageFns<T> {
-  encode(message: T, writer?: BinaryWriter): BinaryWriter;
-  decode(input: BinaryReader | Uint8Array, length?: number): T;
-  fromJSON(object: any): T;
-  toJSON(message: T): unknown;
-  create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;
-  fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T;
+	encode(message: T, writer?: BinaryWriter): BinaryWriter;
+	decode(input: BinaryReader | Uint8Array, length?: number): T;
+	fromJSON(object: any): T;
+	toJSON(message: T): unknown;
+	create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;
+	fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T;
 }

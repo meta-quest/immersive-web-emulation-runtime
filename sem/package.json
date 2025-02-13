@@ -1,6 +1,6 @@
 {
 	"name": "@iwer/sem",
-	"version": "0.1.0",
+	"version": "0.2.2",
 	"description": "Synthetic Environment Module for IWER",
 	"type": "module",
 	"main": "lib/index.js",
@@ -11,6 +11,7 @@
 		"captures"
 	],
 	"scripts": {
+		"prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
 		"build": "tsc && rollup -c"
 	},
 	"repository": {
@@ -25,11 +26,11 @@
 	},
 	"homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
 	"dependencies": {
-		"three": "0.168.0",
+		"three": "^0.165.0",
 		"ts-proto": "^2.6.0"
 	},
 	"peerDependencies": {
-		"iwer": "^1.1.1"
+		"iwer": "^2.0.0"
 	},
 	"devDependencies": {
 		"@rollup/plugin-commonjs": "^28.0.1",

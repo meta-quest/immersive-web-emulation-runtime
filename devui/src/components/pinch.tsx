@@ -11,68 +11,66 @@ import {
 	ButtonGroup,
 	Colors,
 	ControlButtonStyles,
-	FAIcon,
+	FAControlIcon,
 	MappedKeyBlock,
 	RangeSelector,
 } from './styled.js';
 import React, { useEffect, useState } from 'react';
 
-import { GamepadIcon } from './icons.js';
 import { MappedKeyDisplay } from './keys.js';
-import { XRController } from 'iwer/lib/device/XRController';
-import { faFingerprint } from '@fortawesome/free-solid-svg-icons';
+import { XRHandInput } from 'iwer/lib/device/XRHandInput.js';
+import { faHandLizard } from '@fortawesome/free-solid-svg-icons';
 
-interface AnalogButtonProps {
-	xrController: XRController;
-	buttonId: string;
+interface PinchControlProps {
+	hand: XRHandInput;
 	pointerLocked: boolean;
 	mappedKey: string;
 }
 
-export const AnalogButton: React.FC<AnalogButtonProps> = ({
-	xrController,
-	buttonId,
+const pinchSliderWidth = `calc(${ControlButtonStyles.widthLong} + ${ControlButtonStyles.widthShort} + ${ControlButtonStyles.gap})`;
+
+export const PinchControl: React.FC<PinchControlProps> = ({
+	hand,
 	pointerLocked,
 	mappedKey,
 }) => {
-	const [isTouched, setIsTouched] = useState(false);
 	const [isPressed, setIsPressed] = useState(false);
 	const [isKeyPressed, setIsKeyPressed] = useState(false);
 	const [analogValue, setAnalogValue] = useState(0);
 
-	const handedness = xrController.inputSource.handedness;
+	const handedness = hand.inputSource.handedness;
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.code === mappedKey) {
-				xrController.updateButtonValue(buttonId, 1);
+				hand.updatePinchValue(1);
 				setIsKeyPressed(true);
 			}
 		};
 
 		const handleKeyUp = (event: KeyboardEvent) => {
 			if (event.code === mappedKey) {
-				xrController.updateButtonValue(buttonId, 0);
+				hand.updatePinchValue(0);
 				setIsKeyPressed(false);
 			}
 		};
 
 		const handleMouseDown = (event: MouseEvent) => {
-			if (mappedKey === 'MouseLeft' && event.button === 0) {
-				xrController.updateButtonValue(buttonId, 1);
-				setIsKeyPressed(true);
-			} else if (mappedKey === 'MouseRight' && event.button === 2) {
-				xrController.updateButtonValue(buttonId, 1);
+			if (
+				(mappedKey === 'MouseLeft' && event.button === 0) ||
+				(mappedKey === 'MouseRight' && event.button === 2)
+			) {
+				hand.updatePinchValue(1);
 				setIsKeyPressed(true);
 			}
 		};
 
 		const handleMouseUp = (event: MouseEvent) => {
-			if (mappedKey === 'MouseLeft' && event.button === 0) {
-				xrController.updateButtonValue(buttonId, 0);
-				setIsKeyPressed(false);
-			} else if (mappedKey === 'MouseRight' && event.button === 2) {
-				xrController.updateButtonValue(buttonId, 0);
+			if (
+				(mappedKey === 'MouseLeft' && event.button === 0) ||
+				(mappedKey === 'MouseRight' && event.button === 2)
+			) {
+				hand.updatePinchValue(0);
 				setIsKeyPressed(false);
 			}
 		};
@@ -104,11 +102,11 @@ export const AnalogButton: React.FC<AnalogButtonProps> = ({
 				window.removeEventListener('keyup', handleKeyUp);
 			}
 		};
-	}, [mappedKey, pointerLocked, buttonId, xrController]);
+	}, [mappedKey, pointerLocked, hand]);
 
 	return (
 		<ButtonContainer $reverse={handedness === 'right'}>
-			<GamepadIcon buttonName={buttonId} handedness={handedness} />
+			<FAControlIcon icon={faHandLizard} $reverse={handedness === 'left'} />
 			<ButtonGroup $reverse={handedness === 'right'}>
 				{pointerLocked ? (
 					<MappedKeyBlock $pressed={isKeyPressed}>
@@ -126,30 +124,14 @@ export const AnalogButton: React.FC<AnalogButtonProps> = ({
 							}}
 							onClick={() => {
 								setIsPressed(true);
-								xrController.updateButtonValue(buttonId, 1);
+								hand.updatePinchValue(1);
 								setTimeout(() => {
 									setIsPressed(false);
-									xrController.updateButtonValue(buttonId, 0);
+									hand.updatePinchValue(0);
 								}, 250);
 							}}
 						>
-							Press
-						</Button>
-						<Button
-							title="Click to toggle touch state"
-							$reverse={handedness === 'right'}
-							style={{
-								background: isTouched
-									? Colors.gradientLightGreyTranslucent
-									: Colors.gradientGreyTranslucent,
-								width: ControlButtonStyles.widthShort,
-							}}
-							onClick={() => {
-								setIsTouched(!isTouched);
-								xrController.updateButtonTouch(buttonId, !isTouched);
-							}}
-						>
-							<FAIcon icon={faFingerprint} />
+							Pinch
 						</Button>
 						<RangeSelector
 							$reverse={handedness === 'right'}
@@ -157,8 +139,9 @@ export const AnalogButton: React.FC<AnalogButtonProps> = ({
 							onChange={(e) => {
 								const value = Number(e.target.value);
 								setAnalogValue(value);
-								xrController.updateButtonValue(buttonId, value / 100);
+								hand.updatePinchValue(value / 100);
 							}}
+							style={{ width: pinchSliderWidth }}
 							min="0"
 							max="100"
 						/>

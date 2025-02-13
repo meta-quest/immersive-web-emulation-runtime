@@ -16,3 +16,4 @@ export { LocatableComponent } from './native/components/locatable.js';
 export { SemanticLabelComponent } from './native/components/semanticlabel.js';
 export { TriangleMeshComponent } from './native/components/trianglemesh.js';
 export { SyntheticEnvironmentModule } from './sem.js';
+export { VERSION } from './version.js';
