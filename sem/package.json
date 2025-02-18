@@ -1,6 +1,6 @@
 {
 	"name": "@iwer/sem",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"description": "Synthetic Environment Module for IWER",
 	"type": "module",
 	"main": "lib/index.js",

@@ -147,6 +147,8 @@ export class SyntheticEnvironmentModule extends EventTarget {
 			object.removeFromParent();
 		});
 		this.objectMap.clear();
+		this.trackedMeshes.clear();
+		this.trackedPlanes.clear();
 	}
 
 	loadEnvironment(json: any) {
