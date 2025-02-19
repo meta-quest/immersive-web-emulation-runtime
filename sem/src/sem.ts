@@ -70,6 +70,8 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		this.planes.renderOrder = 1;
 		this.boxes.renderOrder = 2;
 		this.meshes.renderOrder = 3;
+		this.planes.visible = false;
+		this.boxes.visible = false;
 
 		this.renderer = new WebGLRenderer({ antialias: true, alpha: true });
 		this.renderer.setPixelRatio(window.devicePixelRatio);
@@ -177,6 +179,38 @@ export class SyntheticEnvironmentModule extends EventTarget {
 				this.objectMap.set(spatialEntityJSON.uuid, spatialEntity);
 			}
 		});
+	}
+
+	loadDefaultEnvironment(envId: string) {
+		if (typeof __IS_UMD__ !== 'undefined' && __IS_UMD__) {
+			// Use fetch for UMD builds to load JSON from CDN
+			const url = `https://www.unpkg.com/@iwer/sem@${VERSION}/captures/${envId}.json`;
+			fetch(url)
+				.then((response) => {
+					if (!response.ok) {
+						throw new Error(
+							`Network response was not ok: ${response.statusText}`,
+						);
+					}
+					return response.json();
+				})
+				.then((envJson) => {
+					this.loadEnvironment(envJson);
+				})
+				.catch((error) => {
+					console.error(`Error loading environment ${envId} from CDN`, error);
+				});
+		} else {
+			// Use dynamic import for ES builds
+			import(`../captures/${envId}.json`)
+				.then((module) => {
+					const envJson = module.default;
+					this.loadEnvironment(envJson);
+				})
+				.catch((error) => {
+					console.error(`Error loading environment ${envId} locally`, error);
+				});
+		}
 	}
 
 	computeHitTestResults(mat4: mat4) {

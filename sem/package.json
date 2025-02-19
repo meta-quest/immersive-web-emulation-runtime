@@ -1,6 +1,6 @@
 {
 	"name": "@iwer/sem",
-	"version": "0.2.3",
+	"version": "0.2.4",
 	"description": "Synthetic Environment Module for IWER",
 	"type": "module",
 	"main": "lib/index.js",
@@ -34,6 +34,7 @@
 	},
 	"devDependencies": {
 		"@rollup/plugin-commonjs": "^28.0.1",
+		"@rollup/plugin-dynamic-import-vars": "^2.1.5",
 		"@rollup/plugin-json": "^6.1.0",
 		"@rollup/plugin-node-resolve": "^15.3.0",
 		"@rollup/plugin-replace": "^6.0.1",
