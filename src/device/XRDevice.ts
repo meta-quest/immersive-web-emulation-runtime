@@ -120,6 +120,7 @@ export interface SyntheticEnvironmentModule {
 	version: string;
 	render(time: number): void;
 	loadEnvironment(json: any): void;
+	loadDefaultEnvironment(envId: string): void;
 	planesVisible: boolean;
 	boundingBoxesVisible: boolean;
 	meshesVisible: boolean;
