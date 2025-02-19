@@ -20,8 +20,8 @@
 	},
 	"dependencies": {
 		"@iwer/devui": "file:..",
-		"@iwer/sem": "^0.2.0",
-		"iwer": "^2.0.0",
+		"@iwer/sem": "^0.2.4",
+		"iwer": "^2.0.1",
 		"three": "0.165.0",
 		"troika-three-text": "^0.52.3"
 	}

@@ -23,6 +23,7 @@ import {
 	faCircleXmark,
 	faGamepad,
 	faHand,
+	faPersonShelter,
 	faRightFromBracket,
 	faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons';
@@ -30,6 +31,7 @@ import {
 import { InputLayer } from '../scene.js';
 import React from 'react';
 import { XRDevice } from 'iwer';
+import { create } from 'zustand';
 import { styled } from 'styled-components';
 import { useInputModeStore } from './controls.js';
 
@@ -46,6 +48,35 @@ const VersionTableCol2 = styled.td`
 	padding: 0;
 `;
 
+const envNames = [
+	'meeting_room',
+	'living_room',
+	'music_room',
+	'office_large',
+	'office_small',
+];
+
+type HeaderStateStore = {
+	infoPanelOpen: boolean;
+	envDropDownOpen: boolean;
+	setInfoPanelOpen: (open: boolean) => void;
+	setEnvDropDownOpen: (open: boolean) => void;
+};
+
+export const useHeaderStateStore = create<HeaderStateStore>((set) => ({
+	infoPanelOpen: false,
+	envDropDownOpen: false,
+	setInfoPanelOpen: (open: boolean) => set(() => ({ infoPanelOpen: open })),
+	setEnvDropDownOpen: (open: boolean) => set(() => ({ envDropDownOpen: open })),
+}));
+
+function underscoreToTitleCase(str: string): string {
+	return str
+		.split('_')
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(' ');
+}
+
 interface HeaderUIProps {
 	xrDevice: XRDevice;
 	inputLayer: InputLayer;
@@ -61,8 +92,13 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
 	const [meshesVisible, setMeshesVisible] = React.useState(
 		Boolean(xrDevice.sem?.meshesVisible),
 	);
-	const [infoPanelOpen, setInfoPanelOpen] = React.useState(false);
 	const { inputMode, setInputMode } = useInputModeStore();
+	const {
+		infoPanelOpen,
+		setInfoPanelOpen,
+		envDropDownOpen,
+		setEnvDropDownOpen,
+	} = useHeaderStateStore();
 
 	return (
 		<div
@@ -95,6 +131,8 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
 						title="Click to activate play mode"
 						onClick={() => {
 							inputLayer.lockPointer();
+							setEnvDropDownOpen(false);
+							setInfoPanelOpen(false);
 						}}
 					>
 						<FAIcon icon={faCirclePlay} $size={16} />
@@ -119,6 +157,12 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
 					{xrDevice.sem && (
 						<>
 							<SectionBreak $horizontal={false} />
+							<HeaderButton
+								title="Click to select/change emulated environment"
+								onClick={() => setEnvDropDownOpen(!envDropDownOpen)}
+							>
+								<FAIcon icon={faPersonShelter} $size={16} />
+							</HeaderButton>
 							<HeaderButton
 								title="Click to toggle visibility of planes"
 								onClick={() => {
@@ -278,6 +322,33 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
 					>
 						View Source on GitHub
 					</Button>
+				</ControlPanel>
+			)}
+			{envDropDownOpen && (
+				<ControlPanel
+					style={{
+						position: 'absolute',
+						top: '40px',
+					}}
+				>
+					{envNames.map((name) => (
+						<div key={name}>
+							<HeaderButton
+								style={{
+									fontSize: '12px',
+									width: '100%',
+									justifyContent: 'start',
+									borderRadius: '8px',
+								}}
+								onClick={() => {
+									// @ts-ignore
+									xrDevice.sem!.loadDefaultEnvironment(name);
+								}}
+							>
+								{underscoreToTitleCase(name)}
+							</HeaderButton>
+						</div>
+					))}
 				</ControlPanel>
 			)}
 		</div>

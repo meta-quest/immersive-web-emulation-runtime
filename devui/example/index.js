@@ -30,15 +30,7 @@ export async function init() {
 		xrDevice.installRuntime();
 		xrDevice.installDevUI(DevUI);
 		xrDevice.installSEM(SyntheticEnvironmentModule);
-
-		fetch('https://www.unpkg.com/@iwer/sem@0.2.2/captures/office_large.json')
-			.then((response) => response.json())
-			.then((data) => {
-				xrDevice.sem.loadEnvironment(data);
-			})
-			.catch((error) => {
-				console.error('Error loading JSON:', error);
-			});
+		xrDevice.sem.loadDefaultEnvironment('office_large');
 	}
 
 	const container = document.createElement('div');
@@ -160,13 +152,17 @@ export async function init() {
 					scene.add(mesh);
 				}
 			});
+			xrEntities.forEach((object, xrEntity) => {
+				const exists = xrmeshes.has(xrEntity) || xrplanes.has(xrEntity);
+				if (!exists) {
+					object.removeFromParent();
+					xrmeshes.delete(xrEntity);
+					xrplanes.delete(xrEntity);
+				} else if (object.userData.lookat) {
+					object.lookAt(camera.position);
+				}
+			});
 		}
-
-		xrEntities.values().forEach((object) => {
-			if (object.userData.lookat) {
-				object.lookAt(camera.position);
-			}
-		});
 	}
 
 	renderer.setAnimationLoop(animate);
