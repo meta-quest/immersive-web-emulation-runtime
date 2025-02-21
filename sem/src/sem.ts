@@ -22,6 +22,7 @@ import {
 import { NativeMesh, NativePlane, XRDevice } from 'iwer';
 import { SpatialEntity, SpatialEntityType } from './native/entity.js';
 
+import { Environments } from './registry.js';
 import { Scene as SceneFile } from './generated/protos/openxr_scene.js';
 import { VERSION } from './version.js';
 import { mat4 } from 'gl-matrix';
@@ -202,7 +203,12 @@ export class SyntheticEnvironmentModule extends EventTarget {
 				});
 		} else {
 			// Use dynamic import for ES builds
-			import(`../captures/${envId}.json`)
+			const importEnv = Environments[envId];
+			if (!importEnv) {
+				console.error(`Requested environment ${envId} does not exist`);
+				return;
+			}
+			importEnv()
 				.then((module) => {
 					const envJson = module.default;
 					this.loadEnvironment(envJson);

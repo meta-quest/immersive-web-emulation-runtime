@@ -1,6 +1,4 @@
-import { VERSION } from './lib/version.js';
 import commonjs from '@rollup/plugin-commonjs';
-import dynamicImportVars from '@rollup/plugin-dynamic-import-vars';
 import json from '@rollup/plugin-json';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
 import replace from '@rollup/plugin-replace';
@@ -19,7 +17,6 @@ const esPlugins = [
 		__IS_UMD__: 'false', // Set to false for ES builds
 		preventAssignment: true,
 	}),
-	dynamicImportVars(),
 ];
 
 const umdPlugins = [
