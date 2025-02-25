@@ -58,5 +58,8 @@
 	},
 	"dependencies": {
 		"gl-matrix": "^3.4.3"
+	},
+	"overrides": {
+		"serialize-javascript": "^6.0.2"
 	}
 }
