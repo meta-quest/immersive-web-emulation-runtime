@@ -96,13 +96,13 @@ export class XRTrackedInput {
 						button[P_GAMEPAD].value > 0
 					) {
 						session.dispatchEvent(
-							new XRInputSourceEvent(button[P_GAMEPAD].eventTrigger, {
+							new XRInputSourceEvent(button[P_GAMEPAD].eventTrigger + 'start', {
 								frame,
 								inputSource: this[P_TRACKED_INPUT].inputSource,
 							}),
 						);
 						session.dispatchEvent(
-							new XRInputSourceEvent(button[P_GAMEPAD].eventTrigger + 'start', {
+							new XRInputSourceEvent(button[P_GAMEPAD].eventTrigger, {
 								frame,
 								inputSource: this[P_TRACKED_INPUT].inputSource,
 							}),
