@@ -5,17 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-	WebXRFeatures,
-	XRDevice,
-	XRDeviceConfig,
-} from '../../src/device/XRDevice';
+import { XRDevice, XRDeviceConfig } from '../../src/device/XRDevice';
 import {
 	XREnvironmentBlendMode,
 	XRInteractionMode,
 	XRSession,
-	XRSessionMode,
-	XRVisibilityState,
 } from '../../src/session/XRSession';
 import {
 	XRReferenceSpace,
@@ -73,29 +67,21 @@ describe('XRSession', () => {
 		const testDeviceConfig: XRDeviceConfig = {
 			name: 'Test Device',
 			controllerConfig: metaQuestTouchPlus,
-			supportedSessionModes: [
-				XRSessionMode.Inline,
-				XRSessionMode.ImmersiveVR,
-				XRSessionMode.ImmersiveAR,
-			],
-			supportedFeatures: [
-				WebXRFeatures.Viewer,
-				WebXRFeatures.Local,
-				WebXRFeatures.LocalFloor,
-			],
+			supportedSessionModes: ['inline', 'immersive-vr', 'immersive-ar'],
+			supportedFeatures: ['viewer', 'local', 'local-floor'],
 			supportedFrameRates: [72, 80, 90, 120],
 			isSystemKeyboardSupported: true,
 			internalNominalFrameRate: 90,
 			environmentBlendModes: {
-				[XRSessionMode.ImmersiveVR]: XREnvironmentBlendMode.Opaque,
-				[XRSessionMode.ImmersiveAR]: XREnvironmentBlendMode.AlphaBlend,
+				'immersive-vr': XREnvironmentBlendMode.Opaque,
+				'immersive-ar': XREnvironmentBlendMode.AlphaBlend,
 			},
 			interactionMode: XRInteractionMode.WorldSpace,
 			userAgent: 'Test user agent',
 		};
 		xrDevice = new XRDevice(testDeviceConfig);
 		xrSystem = new XRSystem(xrDevice);
-		xrSession = await xrSystem.requestSession(XRSessionMode.ImmersiveVR);
+		xrSession = await xrSystem.requestSession('immersive-vr');
 		xrRenderStateInit = {};
 		xrRenderStateInit.baseLayer = new XRWebGLLayer(
 			xrSession,
@@ -185,7 +171,7 @@ describe('XRSession', () => {
 
 	test('Inline XRSession.requestReferenceSpace should reject except for viewer', async () => {
 		xrSession.end();
-		const inlineSession = await xrSystem.requestSession(XRSessionMode.Inline);
+		const inlineSession = await xrSystem.requestSession('inline');
 		expect(
 			await inlineSession.requestReferenceSpace(XRReferenceSpaceType.Viewer),
 		).toBeDefined();
@@ -205,7 +191,7 @@ describe('XRSession', () => {
 
 	test('Inline XRSession.requestReferenceSpace should reject except for viewer', async () => {
 		xrSession.end();
-		const inlineSession = await xrSystem.requestSession(XRSessionMode.Inline);
+		const inlineSession = await xrSystem.requestSession('inline');
 		expect(
 			await inlineSession.requestReferenceSpace(XRReferenceSpaceType.Viewer),
 		).toBeDefined();
@@ -243,8 +229,8 @@ describe('XRSession', () => {
 		).rejects.toThrow();
 		xrSession.end();
 		// should return if local-floor is requested
-		xrSession = await xrSystem.requestSession(XRSessionMode.ImmersiveVR, {
-			requiredFeatures: [WebXRFeatures.LocalFloor],
+		xrSession = await xrSystem.requestSession('immersive-vr', {
+			requiredFeatures: ['local-floor'],
 		});
 		expect(
 			await xrSession.requestReferenceSpace(XRReferenceSpaceType.LocalFloor),
@@ -269,10 +255,10 @@ describe('XRSession', () => {
 
 	test('Visibility change on XRSession will fire the visibilitychange XRSessionEvent', async () => {
 		const mockCallback = jest.fn().mockImplementation(() => {
-			expect(xrSession.visibilityState).toBe(XRVisibilityState.VisibleBlurred);
+			expect(xrSession.visibilityState).toBe('visible-blurred');
 		});
 		xrSession.addEventListener('visibilitychange', mockCallback);
-		xrDevice.updateVisibilityState(XRVisibilityState.VisibleBlurred);
+		xrDevice.updateVisibilityState('visible-blurred');
 		const onFrame = (_time: number, _frame: XRFrame) => {
 			xrSession.end();
 		};
@@ -354,7 +340,7 @@ describe('XRSession', () => {
 	test('XRSession.environmentBlendMode returns the correct value', async () => {
 		expect(xrSession.environmentBlendMode).toBe(XREnvironmentBlendMode.Opaque);
 		xrSession.end();
-		xrSession = await xrSystem.requestSession(XRSessionMode.ImmersiveAR);
+		xrSession = await xrSystem.requestSession('immersive-ar');
 		expect(xrSession.environmentBlendMode).toBe(
 			XREnvironmentBlendMode.AlphaBlend,
 		);

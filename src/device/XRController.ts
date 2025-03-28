@@ -5,25 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-	PRIVATE as GAMEPAD_PRIVATE,
-	Gamepad,
-	GamepadConfig,
-} from '../gamepad/Gamepad.js';
+import { Gamepad, GamepadConfig } from '../gamepad/Gamepad.js';
 import { GlobalSpace, XRSpace } from '../spaces/XRSpace.js';
+import { P_CONTROLLER, P_GAMEPAD, P_TRACKED_INPUT } from '../private.js';
 import {
 	XRHandedness,
 	XRInputSource,
 	XRTargetRayMode,
 } from '../input/XRInputSource.js';
-import {
-	PRIVATE as XRTRACKEDINPUT_PRIVATE,
-	XRTrackedInput,
-} from './XRTrackedInput.js';
 
+import { XRTrackedInput } from './XRTrackedInput.js';
 import { mat4 } from 'gl-matrix';
-
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-controller');
 
 export interface XRControllerConfig {
 	profileId: string;
@@ -38,7 +30,8 @@ export interface XRControllerConfig {
 }
 
 export class XRController extends XRTrackedInput {
-	[PRIVATE]: {
+	[P_CONTROLLER]: {
+		profileId: string;
 		gamepadConfig: GamepadConfig;
 	};
 
@@ -71,13 +64,18 @@ export class XRController extends XRTrackedInput {
 		);
 
 		super(inputSource);
-		this[PRIVATE] = {
+		this[P_CONTROLLER] = {
+			profileId: controllerConfig.profileId,
 			gamepadConfig: controllerConfig.layout[handedness]!.gamepad,
 		};
 	}
 
 	get gamepadConfig() {
-		return this[PRIVATE].gamepadConfig;
+		return this[P_CONTROLLER].gamepadConfig;
+	}
+
+	get profileId() {
+		return this[P_CONTROLLER].profileId;
 	}
 
 	updateButtonValue(id: string, value: number) {
@@ -86,11 +84,10 @@ export class XRController extends XRTrackedInput {
 			return;
 		}
 		const gamepadButton =
-			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
-				.buttonsMap[id];
+			this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[id];
 		if (gamepadButton) {
 			if (
-				gamepadButton[GAMEPAD_PRIVATE].type === 'binary' &&
+				gamepadButton[P_GAMEPAD].type === 'binary' &&
 				value != 1 &&
 				value != 0
 			) {
@@ -99,7 +96,7 @@ export class XRController extends XRTrackedInput {
 				);
 				return;
 			}
-			gamepadButton[GAMEPAD_PRIVATE].pendingValue = value;
+			gamepadButton[P_GAMEPAD].pendingValue = value;
 		} else {
 			console.warn(`Current controller does not have button ${id}.`);
 		}
@@ -107,10 +104,9 @@ export class XRController extends XRTrackedInput {
 
 	updateButtonTouch(id: string, touched: boolean) {
 		const gamepadButton =
-			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
-				.buttonsMap[id];
+			this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[id];
 		if (gamepadButton) {
-			gamepadButton[GAMEPAD_PRIVATE].touched = touched;
+			gamepadButton[P_GAMEPAD].touched = touched;
 		} else {
 			console.warn(`Current controller does not have button ${id}.`);
 		}
@@ -122,8 +118,7 @@ export class XRController extends XRTrackedInput {
 			return;
 		}
 		const axesById =
-			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
-				.axesMap[id];
+			this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].axesMap[id];
 		if (axesById) {
 			if (type === 'x-axis') {
 				axesById.x = value;
@@ -143,8 +138,7 @@ export class XRController extends XRTrackedInput {
 			return;
 		}
 		const axesById =
-			this[XRTRACKEDINPUT_PRIVATE].inputSource.gamepad![GAMEPAD_PRIVATE]
-				.axesMap[id];
+			this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].axesMap[id];
 		if (axesById) {
 			axesById.x = x;
 			axesById.y = y;

@@ -5,14 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { P_RENDER_STATE } from '../private.js';
 import { XRWebGLLayer } from '../layers/XRWebGLLayer.js';
 
-export const PRIVATE = Symbol(
-	'@immersive-web-emulation-runtime/xr-render-state',
-);
-
 export class XRRenderState {
-	[PRIVATE]: {
+	[P_RENDER_STATE]: {
 		depthNear: number;
 		depthFar: number;
 		inlineVerticalFieldOfView: number | null;
@@ -20,7 +17,7 @@ export class XRRenderState {
 	};
 
 	constructor(init: Partial<XRRenderStateInit> = {}, oldState?: XRRenderState) {
-		this[PRIVATE] = {
+		this[P_RENDER_STATE] = {
 			depthNear: init.depthNear || oldState?.depthNear || 0.1,
 			depthFar: init.depthFar || oldState?.depthFar || 1000.0,
 			inlineVerticalFieldOfView:
@@ -32,19 +29,19 @@ export class XRRenderState {
 	}
 
 	get depthNear(): number {
-		return this[PRIVATE].depthNear;
+		return this[P_RENDER_STATE].depthNear;
 	}
 
 	get depthFar(): number {
-		return this[PRIVATE].depthFar;
+		return this[P_RENDER_STATE].depthFar;
 	}
 
 	get inlineVerticalFieldOfView(): number | null {
-		return this[PRIVATE].inlineVerticalFieldOfView;
+		return this[P_RENDER_STATE].inlineVerticalFieldOfView;
 	}
 
 	get baseLayer(): XRWebGLLayer | null {
-		return this[PRIVATE].baseLayer;
+		return this[P_RENDER_STATE].baseLayer;
 	}
 }
 

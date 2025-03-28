@@ -23,4 +23,6 @@ node_modules/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 
-src/version.ts
+**/src/version.ts
+
+*.tgz

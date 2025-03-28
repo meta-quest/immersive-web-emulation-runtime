@@ -8,13 +8,10 @@
 import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { DOMPointReadOnly } from '../utils/DOMPointReadOnly.js';
-
-export const PRIVATE = Symbol(
-	'@immersive-web-emulation-runtime/xr-rigid-transform',
-);
+import { P_RIGID_TRANSFORM } from '../private.js';
 
 export class XRRigidTransform {
-	[PRIVATE]: {
+	[P_RIGID_TRANSFORM]: {
 		matrix: mat4;
 		position: vec3;
 		orientation: quat;
@@ -26,7 +23,7 @@ export class XRRigidTransform {
 		const defaultPosition = vec3.fromValues(0, 0, 0);
 		const defaultOrientation = quat.create();
 
-		this[PRIVATE] = {
+		this[P_RIGID_TRANSFORM] = {
 			matrix: mat4.create(),
 			position: position
 				? vec3.fromValues(position.x!, position.y!, position.z!)
@@ -50,30 +47,30 @@ export class XRRigidTransform {
 
 	private updateMatrix(): void {
 		mat4.fromRotationTranslation(
-			this[PRIVATE].matrix,
-			this[PRIVATE].orientation,
-			this[PRIVATE].position,
+			this[P_RIGID_TRANSFORM].matrix,
+			this[P_RIGID_TRANSFORM].orientation,
+			this[P_RIGID_TRANSFORM].position,
 		);
 	}
 
 	get matrix(): Float32Array {
-		return this[PRIVATE].matrix as Float32Array;
+		return this[P_RIGID_TRANSFORM].matrix as Float32Array;
 	}
 
 	get position(): DOMPointReadOnly {
-		const pos = this[PRIVATE].position;
+		const pos = this[P_RIGID_TRANSFORM].position;
 		return new DOMPointReadOnly(pos[0], pos[1], pos[2], 1);
 	}
 
 	get orientation(): DOMPointReadOnly {
-		const ori = this[PRIVATE].orientation;
+		const ori = this[P_RIGID_TRANSFORM].orientation;
 		return new DOMPointReadOnly(ori[0], ori[1], ori[2], ori[3]);
 	}
 
 	get inverse(): XRRigidTransform {
-		if (!this[PRIVATE].inverse) {
+		if (!this[P_RIGID_TRANSFORM].inverse) {
 			const invMatrix = mat4.create();
-			if (!mat4.invert(invMatrix, this[PRIVATE].matrix)) {
+			if (!mat4.invert(invMatrix, this[P_RIGID_TRANSFORM].matrix)) {
 				throw new Error('Matrix is not invertible.');
 			}
 
@@ -85,7 +82,7 @@ export class XRRigidTransform {
 			mat4.getRotation(invOrientation, invMatrix);
 
 			// Creating a new XRRigidTransform for the inverse
-			this[PRIVATE].inverse = new XRRigidTransform(
+			this[P_RIGID_TRANSFORM].inverse = new XRRigidTransform(
 				new DOMPointReadOnly(invPosition[0], invPosition[1], invPosition[2], 1),
 				new DOMPointReadOnly(
 					invOrientation[0],
@@ -96,9 +93,9 @@ export class XRRigidTransform {
 			);
 
 			// Setting the inverse of the inverse to be this transform
-			this[PRIVATE].inverse[PRIVATE].inverse = this;
+			this[P_RIGID_TRANSFORM].inverse[P_RIGID_TRANSFORM].inverse = this;
 		}
 
-		return this[PRIVATE].inverse;
+		return this[P_RIGID_TRANSFORM].inverse;
 	}
 }

@@ -48,6 +48,19 @@ export { XRHand } from './input/XRHand.js';
 // Layers
 export { XRWebGLLayer, XRLayer } from './layers/XRWebGLLayer.js';
 
+// Planes
+export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';
+
+// Meshes
+export { XRMesh, XRMeshSet, NativeMesh } from './meshes/XRMesh.js';
+export { XRSemanticLabels } from './labels/labels.js';
+
+// Anchors
+export { XRAnchor, XRAnchorSet } from './anchors/XRAnchor.js';
+
+// Hit Test
+export { XRRay } from './hittest/XRRay.js';
+
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';
@@ -56,3 +69,6 @@ export { XRReferenceSpaceEvent } from './events/XRReferenceSpaceEvent.js';
 
 // Action Recording/Playback
 export { ActionRecorder } from './action/ActionRecorder.js';
+
+// Private Keys
+export * from './private.js';

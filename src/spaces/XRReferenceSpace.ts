@@ -5,13 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { P_REF_SPACE } from '../private.js';
 import { XRReferenceSpaceEventHandler } from '../events/XRReferenceSpaceEvent.js';
 import { XRSpace } from './XRSpace.js';
 import { mat4 } from 'gl-matrix';
-
-export const PRIVATE = Symbol(
-	'@immersive-web-emulation-runtime/xr-reference-space',
-);
 
 export enum XRReferenceSpaceType {
 	Viewer = 'viewer',
@@ -22,7 +19,7 @@ export enum XRReferenceSpaceType {
 }
 
 export class XRReferenceSpace extends XRSpace {
-	[PRIVATE]: {
+	[P_REF_SPACE]: {
 		type: XRReferenceSpaceType;
 		onreset: XRReferenceSpaceEventHandler | null;
 	} = {
@@ -36,18 +33,21 @@ export class XRReferenceSpace extends XRSpace {
 		offsetMatrix?: mat4,
 	) {
 		super(parentSpace, offsetMatrix);
-		this[PRIVATE].type = type;
+		this[P_REF_SPACE].type = type;
 	}
 
 	get onreset(): XRReferenceSpaceEventHandler {
-		return this[PRIVATE].onreset ?? (() => {});
+		return this[P_REF_SPACE].onreset ?? (() => {});
 	}
 
 	set onreset(callback: XRReferenceSpaceEventHandler) {
-		if (this[PRIVATE].onreset) {
-			this.removeEventListener('reset', this[PRIVATE].onreset as EventListener);
+		if (this[P_REF_SPACE].onreset) {
+			this.removeEventListener(
+				'reset',
+				this[P_REF_SPACE].onreset as EventListener,
+			);
 		}
-		this[PRIVATE].onreset = callback;
+		this[P_REF_SPACE].onreset = callback;
 		if (callback) {
 			this.addEventListener('reset', callback as EventListener);
 		}
@@ -57,6 +57,6 @@ export class XRReferenceSpace extends XRSpace {
 	getOffsetReferenceSpace(originOffset: mat4): XRReferenceSpace {
 		// Create a new XRReferenceSpace with the originOffset as its offsetMatrix
 		// The new space's parent is set to 'this' (the current XRReferenceSpace)
-		return new XRReferenceSpace(this[PRIVATE].type, this, originOffset);
+		return new XRReferenceSpace(this[P_REF_SPACE].type, this, originOffset);
 	}
 }

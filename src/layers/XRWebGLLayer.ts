@@ -5,17 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-	PRIVATE as XRSESSION_PRIVATE,
-	XRSession,
-} from '../session/XRSession.js';
-import { PRIVATE as XRVIEW_PRIVATE, XRView } from '../views/XRView.js';
+import { P_DEVICE, P_SESSION, P_VIEW, P_WEBGL_LAYER } from '../private.js';
 
-import { PRIVATE as XRDEVICE_PRIVATE } from '../device/XRDevice.js';
+import { XRSession } from '../session/XRSession.js';
+import { XRView } from '../views/XRView.js';
 
 export class XRLayer extends EventTarget {}
-
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/XRWebGLLayer');
 
 type LayerInit = {
 	antialias?: boolean;
@@ -36,7 +31,7 @@ const defaultLayerInit: LayerInit = {
 };
 
 export class XRWebGLLayer extends XRLayer {
-	[PRIVATE]: {
+	[P_WEBGL_LAYER]: {
 		session: XRSession;
 		context: WebGLRenderingContext | WebGL2RenderingContext;
 		antialias: boolean;
@@ -49,7 +44,7 @@ export class XRWebGLLayer extends XRLayer {
 	) {
 		super();
 
-		if (session[XRSESSION_PRIVATE].ended) {
+		if (session[P_SESSION].ended) {
 			throw new DOMException('Session has ended', 'InvalidStateError');
 		}
 
@@ -59,7 +54,7 @@ export class XRWebGLLayer extends XRLayer {
 		// Default values for XRWebGLLayerInit, can be overridden by layerInit
 		const config = { ...defaultLayerInit, ...layerInit };
 
-		this[PRIVATE] = {
+		this[P_WEBGL_LAYER] = {
 			session,
 			context,
 			antialias: config.antialias!,
@@ -67,11 +62,11 @@ export class XRWebGLLayer extends XRLayer {
 	}
 
 	get context() {
-		return this[PRIVATE].context;
+		return this[P_WEBGL_LAYER].context;
 	}
 
 	get antialias() {
-		return this[PRIVATE].antialias;
+		return this[P_WEBGL_LAYER].antialias;
 	}
 
 	get ignoreDepthValues() {
@@ -83,24 +78,25 @@ export class XRWebGLLayer extends XRLayer {
 	}
 
 	get framebufferWidth() {
-		return this[PRIVATE].context.drawingBufferWidth;
+		return this[P_WEBGL_LAYER].context.drawingBufferWidth;
 	}
 
 	get framebufferHeight() {
-		return this[PRIVATE].context.drawingBufferHeight;
+		return this[P_WEBGL_LAYER].context.drawingBufferHeight;
 	}
 
 	getViewport(view: XRView) {
-		if (view[XRVIEW_PRIVATE].session !== this[PRIVATE].session) {
+		if (view[P_VIEW].session !== this[P_WEBGL_LAYER].session) {
 			throw new DOMException(
 				"View's session differs from Layer's session",
 				'InvalidStateError',
 			);
 		}
 		// TO-DO: check frame
-		return this[PRIVATE].session[XRSESSION_PRIVATE].device[
-			XRDEVICE_PRIVATE
-		].getViewport(this, view);
+		return this[P_WEBGL_LAYER].session[P_SESSION].device[P_DEVICE].getViewport(
+			this,
+			view,
+		);
 	}
 
 	static getNativeFramebufferScaleFactor(session: XRSession): number {
@@ -110,7 +106,7 @@ export class XRWebGLLayer extends XRLayer {
 			);
 		}
 
-		if (session[XRSESSION_PRIVATE].ended) {
+		if (session[P_SESSION].ended) {
 			return 0.0;
 		}
 

@@ -5,17 +5,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { GlobalSpace, XRSpace } from '../spaces/XRSpace.js';
 import {
-	GlobalSpace,
-	PRIVATE as XRSPACE_PRIVATE,
-	XRSpace,
-} from '../spaces/XRSpace.js';
+	P_DEVICE,
+	P_REF_SPACE,
+	P_SESSION,
+	P_SPACE,
+	P_SYSTEM,
+} from '../private.js';
 import { Quaternion, Vector3 } from '../utils/Math.js';
 import { XRController, XRControllerConfig } from './XRController.js';
 import {
 	XREnvironmentBlendMode,
 	XRInteractionMode,
-	PRIVATE as XRSESSION_PRIVATE,
 	XRSession,
 	XRSessionMode,
 	XRVisibilityState,
@@ -29,14 +31,9 @@ import {
 } from '../input/XRInputSource.js';
 import { XRLayer, XRWebGLLayer } from '../layers/XRWebGLLayer.js';
 import {
-	PRIVATE as XRREFERENCESPACE_PRIVATE,
 	XRReferenceSpace,
 	XRReferenceSpaceType,
 } from '../spaces/XRReferenceSpace.js';
-import {
-	PRIVATE as XRSYSTEM_PRIVATE,
-	XRSystem,
-} from '../initialization/XRSystem.js';
 import { mat4, vec3 } from 'gl-matrix';
 
 import { ActionPlayer } from '../action/ActionPlayer.js';
@@ -53,30 +50,32 @@ import { XRReferenceSpaceEvent } from '../events/XRReferenceSpaceEvent.js';
 import { XRRenderState } from '../session/XRRenderState.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSessionEvent } from '../events/XRSessionEvent.js';
+import { XRSystem } from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
+import { NativePlane } from '../planes/XRPlane.js';
+import { NativeMesh } from '../meshes/XRMesh.js';
 
-export enum WebXRFeatures {
-	Viewer = 'viewer',
-	Local = 'local',
-	LocalFloor = 'local-floor',
-	BoundedFloor = 'bounded-floor',
-	Unbounded = 'unbounded',
-	DomOverlay = 'dom-overlay',
-	Anchors = 'anchors',
-	PlaneDetection = 'plane-detection',
-	MeshDetection = 'mesh-detection',
-	HitTest = 'hit-test',
-	HandTracking = 'hand-tracking',
-	DepthSensing = 'depth-sensing',
-}
+export type WebXRFeature =
+	| 'viewer'
+	| 'local'
+	| 'local-floor'
+	| 'bounded-floor'
+	| 'unbounded'
+	| 'dom-overlay'
+	| 'anchors'
+	| 'plane-detection'
+	| 'mesh-detection'
+	| 'hit-test'
+	| 'hand-tracking'
+	| 'depth-sensing';
 
 export interface XRDeviceConfig {
 	name: string;
 	controllerConfig: XRControllerConfig | undefined;
 	supportedSessionModes: XRSessionMode[];
-	supportedFeatures: WebXRFeatures[];
+	supportedFeatures: WebXRFeature[];
 	supportedFrameRates: number[];
 	isSystemKeyboardSupported: boolean;
 	internalNominalFrameRate: number;
@@ -96,8 +95,6 @@ export interface XRDeviceOptions {
 	canvasContainer: HTMLDivElement;
 }
 
-export const PRIVATE = Symbol('@immersive-web-emulation-runtime/xr-device');
-
 const DEFAULTS = {
 	ipd: 0.063,
 	fovy: Math.PI / 2,
@@ -106,12 +103,46 @@ const DEFAULTS = {
 	stereoEnabled: false,
 };
 
+export interface DevUIConstructor {
+	new (xrDevice: XRDevice): DevUI;
+}
+export interface DevUI {
+	version: string;
+	render(time: number): void;
+	get devUICanvas(): HTMLCanvasElement;
+	get devUIContainer(): HTMLDivElement;
+}
+
+export interface SEMConstructor {
+	new (xrDevice: XRDevice): SyntheticEnvironmentModule;
+}
+export interface SyntheticEnvironmentModule {
+	version: string;
+	render(time: number): void;
+	loadEnvironment(json: any): void;
+	loadDefaultEnvironment(envId: string): void;
+	planesVisible: boolean;
+	boundingBoxesVisible: boolean;
+	meshesVisible: boolean;
+	get environmentCanvas(): HTMLCanvasElement;
+	get trackedPlanes(): Set<NativePlane>;
+	get trackedMeshes(): Set<NativeMesh>;
+	computeHitTestResults(rayMatrix: mat4): mat4[];
+}
+
+const Z_INDEX_SEM_CANVAS = 1;
+const Z_INDEX_APP_CANVAS = 2;
+const Z_INDEX_DEVUI_CANVAS = 3;
+const Z_INDEX_DEVUI_CONTAINER = 4;
+
 /**
  * XRDevice is not a standard API class outlined in the WebXR Device API Specifications
  * Instead, it serves as an user-facing interface to control the emulated XR Device
  */
 export class XRDevice {
-	[PRIVATE]: {
+	public readonly version = VERSION;
+
+	[P_DEVICE]: {
 		// device config
 		name: string;
 		supportedSessionModes: string[];
@@ -149,6 +180,7 @@ export class XRDevice {
 			parent: HTMLElement | null;
 			width: number;
 			height: number;
+			zIndex: string;
 		};
 		canvasContainer: HTMLDivElement;
 
@@ -160,6 +192,10 @@ export class XRDevice {
 
 		// action playback
 		actionPlayer?: ActionPlayer;
+
+		// add-on modules:
+		devui?: DevUI;
+		sem?: SyntheticEnvironmentModule;
 	};
 
 	constructor(
@@ -215,7 +251,7 @@ export class XRDevice {
 		canvasContainer.style.overflow = 'hidden';
 		canvasContainer.style.zIndex = '999';
 
-		this[PRIVATE] = {
+		this[P_DEVICE] = {
 			name: deviceConfig.name,
 			supportedSessionModes: deviceConfig.supportedSessionModes,
 			supportedFeatures: deviceConfig.supportedFeatures,
@@ -237,7 +273,7 @@ export class XRDevice {
 			hands,
 			primaryInputMode: 'controller',
 			pendingReferenceSpaceReset: false,
-			visibilityState: XRVisibilityState.Visible,
+			visibilityState: 'visible',
 			pendingVisibilityState: null,
 			xrSystem: null,
 
@@ -257,35 +293,35 @@ export class XRDevice {
 						return new XRViewport(
 							0,
 							0,
-							this[PRIVATE].stereoEnabled ? width / 2 : width,
+							this[P_DEVICE].stereoEnabled ? width / 2 : width,
 							height,
 						);
 					case XREye.Right:
 						return new XRViewport(
 							width / 2,
 							0,
-							this[PRIVATE].stereoEnabled ? width / 2 : 0,
+							this[P_DEVICE].stereoEnabled ? width / 2 : 0,
 							height,
 						);
 				}
 			},
 			updateViews: () => {
 				// update viewerSpace
-				const viewerSpace = this[PRIVATE].viewerSpace;
+				const viewerSpace = this[P_DEVICE].viewerSpace;
 				mat4.fromRotationTranslation(
-					viewerSpace[XRSPACE_PRIVATE].offsetMatrix,
-					this[PRIVATE].quaternion.quat,
-					this[PRIVATE].position.vec3,
+					viewerSpace[P_SPACE].offsetMatrix,
+					this[P_DEVICE].quaternion.quat,
+					this[P_DEVICE].position.vec3,
 				);
 
 				// update viewSpaces
 				mat4.fromTranslation(
-					this[PRIVATE].viewSpaces[XREye.Left][XRSPACE_PRIVATE].offsetMatrix,
-					vec3.fromValues(-this[PRIVATE].ipd / 2, 0, 0),
+					this[P_DEVICE].viewSpaces[XREye.Left][P_SPACE].offsetMatrix,
+					vec3.fromValues(-this[P_DEVICE].ipd / 2, 0, 0),
 				);
 				mat4.fromTranslation(
-					this[PRIVATE].viewSpaces[XREye.Right][XRSPACE_PRIVATE].offsetMatrix,
-					vec3.fromValues(this[PRIVATE].ipd / 2, 0, 0),
+					this[P_DEVICE].viewSpaces[XREye.Right][P_SPACE].offsetMatrix,
+					vec3.fromValues(this[P_DEVICE].ipd / 2, 0, 0),
 				);
 			},
 			onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => {
@@ -293,79 +329,104 @@ export class XRDevice {
 
 				// backup canvas data
 				const canvas = baseLayer.context.canvas as HTMLCanvasElement;
-				if (canvas.parentElement !== this[PRIVATE].canvasContainer) {
-					this[PRIVATE].canvasData = {
+				if (canvas.parentElement !== this[P_DEVICE].canvasContainer) {
+					const devui = this[P_DEVICE].devui;
+					if (devui) {
+						const { devUICanvas, devUIContainer } = devui;
+						devUICanvas.style.zIndex = Z_INDEX_DEVUI_CANVAS.toString();
+						devUIContainer.style.zIndex = Z_INDEX_DEVUI_CONTAINER.toString();
+						this[P_DEVICE].canvasContainer.appendChild(devui.devUICanvas);
+						this[P_DEVICE].canvasContainer.appendChild(devui.devUIContainer);
+					}
+					const sem = this[P_DEVICE].sem;
+					if (sem) {
+						sem.environmentCanvas.style.zIndex = Z_INDEX_SEM_CANVAS.toString();
+						this[P_DEVICE].canvasContainer.appendChild(sem.environmentCanvas);
+					}
+					this[P_DEVICE].canvasData = {
 						canvas,
 						parent: canvas.parentElement,
 						width: canvas.width,
 						height: canvas.height,
+						zIndex: canvas.style.zIndex,
 					};
-					this[PRIVATE].canvasContainer.appendChild(canvas);
-					document.body.appendChild(this[PRIVATE].canvasContainer);
+					canvas.style.zIndex = Z_INDEX_APP_CANVAS.toString();
+					this[P_DEVICE].canvasContainer.appendChild(canvas);
+					document.body.appendChild(this[P_DEVICE].canvasContainer);
 				}
 
 				canvas.width = window.innerWidth;
 				canvas.height = window.innerHeight;
 			},
 			onSessionEnd: () => {
-				if (this[PRIVATE].canvasData) {
-					const { canvas, parent, width, height } = this[PRIVATE].canvasData;
+				if (this[P_DEVICE].canvasData) {
+					const { canvas, parent, width, height, zIndex } =
+						this[P_DEVICE].canvasData;
 					canvas.width = width;
 					canvas.height = height;
+					canvas.style.zIndex = zIndex;
 					if (parent) {
 						parent.appendChild(canvas);
 					} else {
-						this[PRIVATE].canvasContainer.removeChild(canvas);
+						this[P_DEVICE].canvasContainer.removeChild(canvas);
 					}
-					document.body.removeChild(this[PRIVATE].canvasContainer);
+					const devui = this[P_DEVICE].devui;
+					if (devui) {
+						this[P_DEVICE].canvasContainer.removeChild(devui.devUICanvas);
+						this[P_DEVICE].canvasContainer.removeChild(devui.devUIContainer);
+					}
+					const sem = this[P_DEVICE].sem;
+					if (sem) {
+						this[P_DEVICE].canvasContainer.removeChild(sem.environmentCanvas);
+					}
+					document.body.removeChild(this[P_DEVICE].canvasContainer);
+					this[P_DEVICE].canvasData = undefined;
 					window.dispatchEvent(new Event('resize'));
 				}
 			},
 			onFrameStart: (frame: XRFrame) => {
-				if (this[PRIVATE].actionPlayer?.playing) {
-					this[PRIVATE].actionPlayer.playFrame();
+				if (this[P_DEVICE].actionPlayer?.playing) {
+					this[P_DEVICE].actionPlayer.playFrame();
 				} else {
 					const session = frame.session;
-					this[PRIVATE].updateViews();
+					this[P_DEVICE].updateViews();
 
-					if (this[PRIVATE].pendingVisibilityState) {
-						this[PRIVATE].visibilityState =
-							this[PRIVATE].pendingVisibilityState;
-						this[PRIVATE].pendingVisibilityState = null;
+					if (this[P_DEVICE].pendingVisibilityState) {
+						this[P_DEVICE].visibilityState =
+							this[P_DEVICE].pendingVisibilityState;
+						this[P_DEVICE].pendingVisibilityState = null;
 						session.dispatchEvent(
 							new XRSessionEvent('visibilitychange', { session }),
 						);
 					}
-					if (this[PRIVATE].visibilityState === XRVisibilityState.Visible) {
+					if (this[P_DEVICE].visibilityState === 'visible') {
 						this.activeInputs.forEach((activeInput) => {
 							activeInput.onFrameStart(frame);
 						});
 					}
 
-					if (this[PRIVATE].pendingReferenceSpaceReset) {
-						session[XRSESSION_PRIVATE].referenceSpaces.forEach(
-							(referenceSpace) => {
-								switch (referenceSpace[XRREFERENCESPACE_PRIVATE].type) {
-									case XRReferenceSpaceType.Local:
-									case XRReferenceSpaceType.LocalFloor:
-									case XRReferenceSpaceType.BoundedFloor:
-									case XRReferenceSpaceType.Unbounded:
-										referenceSpace.dispatchEvent(
-											new XRReferenceSpaceEvent('reset', { referenceSpace }),
-										);
-										break;
-								}
-							},
-						);
-						this[PRIVATE].pendingReferenceSpaceReset = false;
+					if (this[P_DEVICE].pendingReferenceSpaceReset) {
+						session[P_SESSION].referenceSpaces.forEach((referenceSpace) => {
+							switch (referenceSpace[P_REF_SPACE].type) {
+								case XRReferenceSpaceType.Local:
+								case XRReferenceSpaceType.LocalFloor:
+								case XRReferenceSpaceType.BoundedFloor:
+								case XRReferenceSpaceType.Unbounded:
+									referenceSpace.dispatchEvent(
+										new XRReferenceSpaceEvent('reset', { referenceSpace }),
+									);
+									break;
+							}
+						});
+						this[P_DEVICE].pendingReferenceSpaceReset = false;
 					}
 				}
 
-				this[PRIVATE].updateViews();
+				this[P_DEVICE].updateViews();
 			},
 		};
 
-		this[PRIVATE].updateViews();
+		this[P_DEVICE].updateViews();
 		globalThis;
 	}
 
@@ -382,13 +443,13 @@ export class XRDevice {
 				configurable: true,
 			},
 		);
-		this[PRIVATE].xrSystem = new XRSystem(this);
+		this[P_DEVICE].xrSystem = new XRSystem(this);
 		Object.defineProperty(globalThis.navigator, 'xr', {
-			value: this[PRIVATE].xrSystem,
+			value: this[P_DEVICE].xrSystem,
 			configurable: true,
 		});
 		Object.defineProperty(navigator, 'userAgent', {
-			value: this[PRIVATE].userAgent,
+			value: this[P_DEVICE].userAgent,
 			writable: false,
 			configurable: false,
 			enumerable: true,
@@ -417,84 +478,92 @@ export class XRDevice {
 		globalObject['XRReferenceSpaceEvent'] = XRReferenceSpaceEvent;
 	}
 
+	installDevUI(devUIConstructor: DevUIConstructor) {
+		this[P_DEVICE].devui = new devUIConstructor(this);
+	}
+
+	installSEM(semConstructor: SEMConstructor) {
+		this[P_DEVICE].sem = new semConstructor(this);
+	}
+
 	get supportedSessionModes() {
-		return this[PRIVATE].supportedSessionModes;
+		return this[P_DEVICE].supportedSessionModes;
 	}
 
 	get supportedFeatures() {
-		return this[PRIVATE].supportedFeatures;
+		return this[P_DEVICE].supportedFeatures;
 	}
 
 	get supportedFrameRates() {
-		return this[PRIVATE].supportedFrameRates;
+		return this[P_DEVICE].supportedFrameRates;
 	}
 
 	get isSystemKeyboardSupported() {
-		return this[PRIVATE].isSystemKeyboardSupported;
+		return this[P_DEVICE].isSystemKeyboardSupported;
 	}
 
 	get internalNominalFrameRate() {
-		return this[PRIVATE].internalNominalFrameRate;
+		return this[P_DEVICE].internalNominalFrameRate;
 	}
 
 	get stereoEnabled() {
-		return this[PRIVATE].stereoEnabled;
+		return this[P_DEVICE].stereoEnabled;
 	}
 
 	set stereoEnabled(value: boolean) {
-		this[PRIVATE].stereoEnabled = value;
+		this[P_DEVICE].stereoEnabled = value;
 	}
 
 	get ipd() {
-		return this[PRIVATE].ipd;
+		return this[P_DEVICE].ipd;
 	}
 
 	set ipd(value: number) {
-		this[PRIVATE].ipd = value;
+		this[P_DEVICE].ipd = value;
 	}
 
 	get fovy() {
-		return this[PRIVATE].fovy;
+		return this[P_DEVICE].fovy;
 	}
 
 	set fovy(value: number) {
-		this[PRIVATE].fovy = value;
+		this[P_DEVICE].fovy = value;
 	}
 
 	get position(): Vector3 {
-		return this[PRIVATE].position;
+		return this[P_DEVICE].position;
 	}
 
 	get quaternion(): Quaternion {
-		return this[PRIVATE].quaternion;
+		return this[P_DEVICE].quaternion;
 	}
 
 	get viewerSpace() {
-		if (this[PRIVATE].actionPlayer?.playing) {
-			return this[PRIVATE].actionPlayer.viewerSpace;
+		if (this[P_DEVICE].actionPlayer?.playing) {
+			return this[P_DEVICE].actionPlayer.viewerSpace;
 		} else {
-			return this[PRIVATE].viewerSpace;
+			return this[P_DEVICE].viewerSpace;
 		}
 	}
 
 	get viewSpaces() {
-		if (this[PRIVATE].actionPlayer?.playing) {
-			return this[PRIVATE].actionPlayer.viewSpaces;
+		if (this[P_DEVICE].actionPlayer?.playing) {
+			return this[P_DEVICE].actionPlayer.viewSpaces;
 		} else {
-			return this[PRIVATE].viewSpaces;
+			return this[P_DEVICE].viewSpaces;
 		}
 	}
 
 	get controllers() {
-		return this[PRIVATE].controllers;
+		return this[P_DEVICE].controllers;
 	}
 
 	get hands() {
-		return this[PRIVATE].hands;
+		return this[P_DEVICE].hands;
 	}
 
 	get primaryInputMode() {
-		return this[PRIVATE].primaryInputMode;
+		return this[P_DEVICE].primaryInputMode;
 	}
 
 	set primaryInputMode(mode: 'controller' | 'hand') {
@@ -502,34 +571,58 @@ export class XRDevice {
 			console.warn('primary input mode can only be "controller" or "hand"');
 			return;
 		}
-		this[PRIVATE].primaryInputMode = mode;
+		this[P_DEVICE].primaryInputMode = mode;
 	}
 
 	get activeInputs(): XRTrackedInput[] {
-		if (this[PRIVATE].visibilityState !== XRVisibilityState.Visible) {
+		if (this[P_DEVICE].visibilityState !== 'visible') {
 			return [];
 		}
 		const activeInputs: XRTrackedInput[] =
-			this[PRIVATE].primaryInputMode === 'controller'
-				? Object.values(this[PRIVATE].controllers)
-				: Object.values(this[PRIVATE].hands);
+			this[P_DEVICE].primaryInputMode === 'controller'
+				? Object.values(this[P_DEVICE].controllers)
+				: Object.values(this[P_DEVICE].hands);
 		return activeInputs.filter((input) => input.connected);
 	}
 
 	get inputSources(): XRInputSource[] {
-		if (this[PRIVATE].actionPlayer?.playing) {
-			return this[PRIVATE].actionPlayer.inputSources;
+		if (this[P_DEVICE].actionPlayer?.playing) {
+			return this[P_DEVICE].actionPlayer.inputSources;
 		} else {
 			return this.activeInputs.map((input) => input.inputSource);
 		}
 	}
 
 	get canvasContainer(): HTMLDivElement {
-		return this[PRIVATE].canvasContainer;
+		return this[P_DEVICE].canvasContainer;
+	}
+
+	get canvasDimensions(): { width: number; height: number } | undefined {
+		if (this[P_DEVICE].canvasData) {
+			const { width, height } = this[P_DEVICE].canvasData.canvas;
+			return { width, height };
+		}
+		return;
 	}
 
 	get activeSession(): XRSession | undefined {
-		return this[PRIVATE].xrSystem?.[XRSYSTEM_PRIVATE].activeSession;
+		return this[P_DEVICE].xrSystem?.[P_SYSTEM].activeSession;
+	}
+
+	get sessionOffered(): boolean {
+		return Boolean(this[P_DEVICE].xrSystem?.[P_SYSTEM].offeredSessionConfig);
+	}
+
+	get name() {
+		return this[P_DEVICE].name;
+	}
+
+	grantOfferedSession(): void {
+		const pSystem = this[P_DEVICE].xrSystem?.[P_SYSTEM];
+		if (pSystem && pSystem.offeredSessionConfig) {
+			pSystem.grantSession(pSystem.offeredSessionConfig);
+			pSystem.offeredSessionConfig = undefined;
+		}
 	}
 
 	recenter() {
@@ -546,31 +639,33 @@ export class XRDevice {
 		this.quaternion.multiply(deltaQuat);
 
 		[
-			...Object.values(this[PRIVATE].controllers),
-			...Object.values(this[PRIVATE].hands),
+			...Object.values(this[P_DEVICE].controllers),
+			...Object.values(this[P_DEVICE].hands),
 		].forEach((activeInput) => {
 			activeInput.position.add(deltaVec);
 			activeInput.quaternion.multiply(deltaQuat);
 			activeInput.position.applyQuaternion(deltaQuat);
 		});
 
-		this[PRIVATE].pendingReferenceSpaceReset = true;
+		this[P_DEVICE].pendingReferenceSpaceReset = true;
 	}
 
 	get visibilityState() {
-		return this[PRIVATE].visibilityState;
+		return this[P_DEVICE].visibilityState;
 	}
 
 	// visibility state updates are queued until the XRSession produces frames
 	updateVisibilityState(state: XRVisibilityState) {
-		if (!Object.values(XRVisibilityState).includes(state)) {
+		if (
+			!Object.values(['visible', 'visible-blurred', 'hidden']).includes(state)
+		) {
 			throw new DOMException(
 				'Invalid XRVisibilityState value',
 				'NotSupportedError',
 			);
 		}
-		if (state !== this[PRIVATE].visibilityState) {
-			this[PRIVATE].pendingVisibilityState = state;
+		if (state !== this[P_DEVICE].visibilityState) {
+			this[P_DEVICE].pendingVisibilityState = state;
 		}
 	}
 
@@ -584,11 +679,19 @@ export class XRDevice {
 			frames: any[];
 		},
 	) {
-		this[PRIVATE].actionPlayer = new ActionPlayer(
+		this[P_DEVICE].actionPlayer = new ActionPlayer(
 			refSpace,
 			recording,
-			this[PRIVATE].ipd,
+			this[P_DEVICE].ipd,
 		);
-		return this[PRIVATE].actionPlayer;
+		return this[P_DEVICE].actionPlayer;
+	}
+
+	get devui() {
+		return this[P_DEVICE].devui;
+	}
+
+	get sem() {
+		return this[P_DEVICE].sem;
 	}
 }

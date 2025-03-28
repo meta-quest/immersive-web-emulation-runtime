@@ -5,10 +5,24 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { Colors, ControlButtonStyles, FAControlIcon } from './styled.js';
+import {
+	faHandLizard,
+	faHandScissors,
+} from '@fortawesome/free-solid-svg-icons';
+
 import React from 'react';
 
-export const ButtonX: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+const IconSize = ControlButtonStyles.height;
+
+export const ButtonX: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			fill="#fff"
 			fillRule="evenodd"
@@ -39,8 +53,14 @@ export const ButtonX: React.FC = () => (
 	</svg>
 );
 
-export const ButtonY: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ButtonY: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			fill="#fff"
 			fillRule="evenodd"
@@ -71,8 +91,14 @@ export const ButtonY: React.FC = () => (
 	</svg>
 );
 
-export const ButtonA: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ButtonA: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			fill="#fff"
 			fillRule="evenodd"
@@ -103,8 +129,14 @@ export const ButtonA: React.FC = () => (
 	</svg>
 );
 
-export const ButtonB: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ButtonB: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			fill="#fff"
 			fillRule="evenodd"
@@ -135,8 +167,14 @@ export const ButtonB: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickL: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickL: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={0.5}
@@ -167,8 +205,14 @@ export const ThumbstickL: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickR: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickR: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={0.7}
@@ -199,8 +243,18 @@ export const ThumbstickR: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickLUp: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickLUp: React.FC = ({
+	scale = 1.2,
+}: {
+	scale?: number;
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={1.5}
@@ -230,8 +284,18 @@ export const ThumbstickLUp: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickLDown: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickLDown: React.FC = ({
+	scale = 1.2,
+}: {
+	scale?: number;
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={1.5}
@@ -261,8 +325,18 @@ export const ThumbstickLDown: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickLLeft: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickLLeft: React.FC = ({
+	scale = 1.2,
+}: {
+	scale?: number;
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={1.5}
@@ -292,8 +366,18 @@ export const ThumbstickLLeft: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickLRight: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickLRight: React.FC = ({
+	scale = 1.2,
+}: {
+	scale?: number;
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={1.5}
@@ -323,8 +407,18 @@ export const ThumbstickLRight: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickRUp: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickRUp: React.FC = ({
+	scale = 1.2,
+}: {
+	scale?: number;
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={1.5}
@@ -354,8 +448,18 @@ export const ThumbstickRUp: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickRDown: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickRDown: React.FC = ({
+	scale = 1.2,
+}: {
+	scale?: number;
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={1.5}
@@ -385,8 +489,18 @@ export const ThumbstickRDown: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickRLeft: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickRLeft: React.FC = ({
+	scale = 1.2,
+}: {
+	scale?: number;
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={1.5}
@@ -416,8 +530,18 @@ export const ThumbstickRLeft: React.FC = () => (
 	</svg>
 );
 
-export const ThumbstickRRight: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbstickRRight: React.FC = ({
+	scale = 1.2,
+}: {
+	scale?: number;
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={1.5}
@@ -447,8 +571,14 @@ export const ThumbstickRRight: React.FC = () => (
 	</svg>
 );
 
-export const GripL: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const GripL: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			fill="#fff"
 			fillRule="evenodd"
@@ -479,8 +609,14 @@ export const GripL: React.FC = () => (
 	</svg>
 );
 
-export const GripR: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const GripR: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			fill="#fff"
 			fillRule="evenodd"
@@ -511,8 +647,14 @@ export const GripR: React.FC = () => (
 	</svg>
 );
 
-export const TriggerL: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const TriggerL: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={0.7}
@@ -543,8 +685,14 @@ export const TriggerL: React.FC = () => (
 	</svg>
 );
 
-export const TriggerR: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const TriggerR: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			strokeWidth={0.7}
@@ -575,8 +723,14 @@ export const TriggerR: React.FC = () => (
 	</svg>
 );
 
-export const ThumbrestL: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbrestL: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			d="m20.01 15.768-4.242 4.242a5.5 5.5 0 1 1-7.778-7.778l4.242-4.242a5.5 5.5 0 1 1 7.778 7.778Z"
@@ -608,8 +762,14 @@ export const ThumbrestL: React.FC = () => (
 	</svg>
 );
 
-export const ThumbrestR: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
+export const ThumbrestR: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={IconSize}
+		height={IconSize}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<path
 			stroke="#fff"
 			d="m15.768 7.99 4.242 4.242a5.5 5.5 0 1 1-7.778 7.778L7.99 15.768a5.5 5.5 0 1 1 7.778-7.778Z"
@@ -641,6 +801,22 @@ export const ThumbrestR: React.FC = () => (
 	</svg>
 );
 
+export const PoseL: React.FC = () => (
+	<FAControlIcon icon={faHandScissors} $reverse={true} />
+);
+
+export const PoseR: React.FC = () => (
+	<FAControlIcon icon={faHandScissors} $reverse={false} />
+);
+
+export const PinchL: React.FC = () => (
+	<FAControlIcon icon={faHandLizard} $reverse={true} />
+);
+
+export const PinchR: React.FC = () => (
+	<FAControlIcon icon={faHandLizard} $reverse={false} />
+);
+
 type ButtonID =
 	| 'x-button-left'
 	| 'y-button-left'
@@ -651,6 +827,8 @@ type ButtonID =
 	| 'thumbstick-down-left'
 	| 'thumbstick-right-left'
 	| 'thumbstick-left-left'
+	| 'pose-left'
+	| 'pinch-left'
 	| 'thumbstick-right'
 	| 'thumbstick-up-right'
 	| 'thumbstick-down-right'
@@ -661,7 +839,9 @@ type ButtonID =
 	| 'squeeze-left'
 	| 'squeeze-right'
 	| 'thumbrest-left'
-	| 'thumbrest-right';
+	| 'thumbrest-right'
+	| 'pose-right'
+	| 'pinch-right';
 
 // Create a mapping of buttonId to icon component
 const buttonIdToIcon: { [key in ButtonID]: React.FC } = {
@@ -674,6 +854,8 @@ const buttonIdToIcon: { [key in ButtonID]: React.FC } = {
 	'thumbstick-down-left': ThumbstickLDown,
 	'thumbstick-right-left': ThumbstickLRight,
 	'thumbstick-left-left': ThumbstickLLeft,
+	'pose-left': PoseL,
+	'pinch-left': PinchL,
 	'thumbstick-right': ThumbstickR,
 	'thumbstick-up-right': ThumbstickRUp,
 	'thumbstick-down-right': ThumbstickRDown,
@@ -685,6 +867,8 @@ const buttonIdToIcon: { [key in ButtonID]: React.FC } = {
 	'squeeze-right': GripR,
 	'thumbrest-left': ThumbrestL,
 	'thumbrest-right': ThumbrestR,
+	'pose-right': PoseR,
+	'pinch-right': PinchR,
 };
 
 // Define the GamepadIcon component
@@ -702,27 +886,23 @@ export const GamepadIcon: React.FC<GamepadIconProps> = ({
 	return IconComponent ? (
 		<IconComponent />
 	) : (
-		<div style={{ width: '28px', height: '28px' }}></div>
+		<div
+			style={{
+				width: ControlButtonStyles.height,
+				height: ControlButtonStyles.height,
+			}}
+		></div>
 	);
 };
 
-export const IWERIcon: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={28} height={28} fill="none">
-		<path
-			fill="#fff"
-			fillRule="evenodd"
-			d="M1 11.2A5.2 5.2 0 0 1 6.2 6h15.6a5.2 5.2 0 0 1 5.2 5.2v5.2a5.2 5.2 0 0 1-5.2 5.2h-3.109c-1.149 0-2.199-.65-2.713-1.677l-.199-.398a1.733 1.733 0 0 0-1.55-.958h-.458c-.656 0-1.257.37-1.55.958l-.2.398A3.033 3.033 0 0 1 9.31 21.6H6.2A5.2 5.2 0 0 1 1 16.4v-5.2Zm9.1 2.167a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 0 1 5.2 0Zm15.538-1.426a.498.498 0 0 0 .141-.542l.002-.002a5.456 5.456 0 0 0-.347-.755l-.104-.178a5.586 5.586 0 0 0-.486-.686.502.502 0 0 0-.54-.15l-1.225.39a4.234 4.234 0 0 0-.968-.56l-.275-1.256a.497.497 0 0 0-.4-.392 5.686 5.686 0 0 0-1.871.003.497.497 0 0 0-.4.391l-.276 1.257a4.234 4.234 0 0 0-.968.559l-1.226-.39a.498.498 0 0 0-.539.15 5.586 5.586 0 0 0-.486.686l-.104.179c-.134.242-.25.492-.347.754a.498.498 0 0 0 .14.542l.953.867a4.26 4.26 0 0 0 0 1.12l-.952.867a.498.498 0 0 0-.141.541c.097.262.213.513.347.755l.104.178c.145.242.308.471.486.687.13.156.346.211.54.15l1.223-.392c.295.226.62.416.968.559l.275 1.256c.044.2.198.359.4.392a5.686 5.686 0 0 0 1.871 0 .497.497 0 0 0 .4-.392l.276-1.256c.347-.143.673-.333.968-.56l1.225.39c.194.062.41.009.54-.15a5.59 5.59 0 0 0 .486-.686l.103-.178a5.45 5.45 0 0 0 .348-.755.498.498 0 0 0-.14-.541l-.954-.867a4.258 4.258 0 0 0 0-1.118l.953-.867ZM20.5 15.967a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2Z"
-			clipRule="evenodd"
-			style={{
-				fill: '#fff',
-				fillOpacity: 1,
-			}}
-		/>
-	</svg>
-);
-
-export const MouseLeft: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={12} height={16} fill="none">
+export const MouseLeft: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={12}
+		height={16}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<g clipPath="url(#a)">
 			<path
 				stroke="#fff"
@@ -756,8 +936,14 @@ export const MouseLeft: React.FC = () => (
 	</svg>
 );
 
-export const MouseRight: React.FC = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width={12} height={16} fill="none">
+export const MouseRight: React.FC = ({ scale = 1.2 }: { scale?: number }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={12}
+		height={16}
+		fill="none"
+		transform={`scale(${scale}, ${scale})`}
+	>
 		<g clipPath="url(#a)">
 			<path
 				stroke="#fff"
@@ -788,5 +974,111 @@ export const MouseRight: React.FC = () => (
 				/>
 			</clipPath>
 		</defs>
+	</svg>
+);
+
+interface IconProps {
+	size?: number;
+	color?: string;
+}
+
+export const BoxIcon: React.FC<IconProps> = ({
+	size = 14,
+	color = Colors.textWhite,
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={size}
+		height={size}
+		viewBox="0 0 14 14"
+		fill="none"
+	>
+		<path
+			stroke={color}
+			strokeWidth={1.5}
+			d="M7 13.037V5.512m-.324.289 6.3-2.275m-11.952 0 6.3 2.275m.23 6.937 4.233-1.528a1.627 1.627 0 0 0 1.076-1.53V4.396c0-.685-.43-1.297-1.076-1.53L7.553 1.339a1.63 1.63 0 0 0-1.106 0L2.213 2.867a1.627 1.627 0 0 0-1.075 1.53V9.68c0 .686.43 1.298 1.075 1.53l4.234 1.529a1.63 1.63 0 0 0 1.106 0Z"
+			style={{
+				stroke: color,
+				strokeOpacity: 1,
+			}}
+		/>
+	</svg>
+);
+
+export const MeshIcon: React.FC<IconProps> = ({
+	size = 14,
+	color = Colors.textWhite,
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={size}
+		height={size}
+		viewBox="0 0 14 14"
+		fill="none"
+	>
+		<path
+			stroke={color}
+			strokeWidth={1.2}
+			d="M7 13.037V5.512M3.937 11.9V4.375m6.126 7.525V4.375M6.675 5.8l6.3-2.275m-9.275.962 6.3-2.275M1.024 3.526l6.3 2.275M6.85 9.388l6.3-2.275m-12.302 0 6.3 2.276m-3.15-7.176 6.3 2.276m-2.746 8.248 4.234-1.527a1.627 1.627 0 0 0 1.075-1.53V4.396c0-.685-.43-1.297-1.075-1.53L7.553 1.339a1.63 1.63 0 0 0-1.106 0L2.213 2.867a1.627 1.627 0 0 0-1.076 1.53V9.68c0 .686.43 1.298 1.076 1.53l4.234 1.529a1.63 1.63 0 0 0 1.106 0Z"
+			style={{
+				stroke: color,
+				strokeOpacity: 1,
+			}}
+		/>
+	</svg>
+);
+
+export const PlaneIcon: React.FC<IconProps> = ({
+	size = 14,
+	color = Colors.textWhite,
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={size}
+		height={size}
+		viewBox="0 0 14 14"
+		fill="none"
+	>
+		<path
+			stroke={color}
+			strokeWidth={1.2}
+			d="M1.225 8.225h11.55M2.1 5.075h9.8m-7 7L5.6 2.1m3.5 9.975L8.4 2.1m-5.708 9.712h8.617a1.75 1.75 0 0 0 1.696-2.183l-1.567-6.125a1.75 1.75 0 0 0-1.695-1.317H4.258c-.8 0-1.498.542-1.696 1.317L.996 9.629a1.75 1.75 0 0 0 1.696 2.183Z"
+			style={{
+				stroke: color,
+				strokeOpacity: 1,
+			}}
+		/>
+	</svg>
+);
+
+export const IWERIcon: React.FC<IconProps> = ({
+	size = 14,
+	color = Colors.textWhite,
+}) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={size}
+		height={size}
+		viewBox="0 0 14 14"
+		fill="none"
+	>
+		<path
+			fill={color}
+			d="M10.5 8.367a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8Z"
+			style={{
+				fill: color,
+				fillOpacity: 1,
+			}}
+		/>
+		<path
+			fill={color}
+			fillRule="evenodd"
+			d="M0 5.8A2.8 2.8 0 0 1 2.8 3h8.4A2.8 2.8 0 0 1 14 5.8v2.8a2.8 2.8 0 0 1-2.8 2.8H9.526c-.619 0-1.184-.35-1.46-.903l-.108-.214a.933.933 0 0 0-.835-.516h-.246c-.354 0-.677.2-.835.516l-.107.214a1.633 1.633 0 0 1-1.461.903H2.8A2.8 2.8 0 0 1 0 8.6V5.8Zm4.9 1.167a1.4 1.4 0 1 1-2.8 0 1.4 1.4 0 0 1 2.8 0Zm8.367-.768a.268.268 0 0 0 .076-.292 2.942 2.942 0 0 0-.187-.407l-.055-.096a3.012 3.012 0 0 0-.262-.37.27.27 0 0 0-.29-.08l-.66.21a2.279 2.279 0 0 0-.522-.302l-.148-.676a.268.268 0 0 0-.215-.211 3.062 3.062 0 0 0-1.008.001.268.268 0 0 0-.215.21l-.148.677a2.28 2.28 0 0 0-.522.301l-.66-.21a.268.268 0 0 0-.29.081c-.096.116-.184.24-.262.37l-.056.096c-.072.13-.135.265-.187.406a.268.268 0 0 0 .076.292l.513.467a2.293 2.293 0 0 0 0 .603l-.513.467a.268.268 0 0 0-.076.291c.052.141.115.276.187.407l.056.096c.078.13.166.253.262.37a.27.27 0 0 0 .29.08l.66-.211c.158.122.333.224.52.3l.149.677a.268.268 0 0 0 .215.211 3.06 3.06 0 0 0 1.007 0 .268.268 0 0 0 .216-.21l.148-.677a2.28 2.28 0 0 0 .521-.301l.66.21c.105.033.22.004.29-.08.097-.117.184-.24.263-.37l.055-.097c.073-.13.135-.265.188-.406a.268.268 0 0 0-.076-.292l-.513-.466a2.299 2.299 0 0 0 0-.602l.513-.467Z"
+			clipRule="evenodd"
+			style={{
+				fill: color,
+				fillOpacity: 1,
+			}}
+		/>
 	</svg>
 );
