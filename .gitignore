@@ -26,3 +26,5 @@ docs/.vitepress/cache/
 **/src/version.ts
 
 *.tgz
+
+/coverage/

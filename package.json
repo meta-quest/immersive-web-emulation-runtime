@@ -14,7 +14,7 @@
 		"build": "tsc && rollup -c",
 		"doc": "typedoc",
 		"format": "prettier --write ./src/**/*",
-		"test": "jest",
+		"test": "jest --coverage",
 		"prepublishOnly": "npm run build",
 		"docs:dev": "vitepress dev docs",
 		"docs:build": "vitepress build docs",
