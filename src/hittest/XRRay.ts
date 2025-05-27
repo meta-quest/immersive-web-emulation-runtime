@@ -63,7 +63,7 @@ export class XRRay {
 			if (direction) {
 				if (
 					(direction.x === 0 && direction.y === 0 && direction.z === 0) ||
-					direction.w !== 1
+					direction.w !== 0
 				) {
 					throw new DOMException(
 						'Invalid direction value to construct XRRay',
