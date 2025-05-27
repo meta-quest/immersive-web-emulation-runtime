@@ -2,6 +2,7 @@
 module.exports = {
 	preset: 'ts-jest/presets/default-esm',
 	extensionsToTreatAsEsm: ['.ts'],
+	setupFiles: ['<rootDir>/tests/polyfill.ts'],
 	moduleNameMapper: {
 		'^(\\.{1,2}/.*)\\.js$': '$1',
 	},

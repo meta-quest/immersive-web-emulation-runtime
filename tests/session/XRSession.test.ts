@@ -28,6 +28,9 @@ import { XRWebGLLayer } from '../../src/layers/XRWebGLLayer';
 import { mat4 } from 'gl-matrix';
 import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta';
 
+// silence console logs
+console.log = () => {};
+
 describe('XRSession', () => {
 	let xrDevice: XRDevice;
 	let xrSystem: XRSystem;

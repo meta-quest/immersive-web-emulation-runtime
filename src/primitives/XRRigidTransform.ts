@@ -7,7 +7,6 @@
 
 import { mat4, quat, vec3 } from 'gl-matrix';
 
-import { DOMPointReadOnly } from '../utils/DOMPointReadOnly.js';
 import { P_RIGID_TRANSFORM } from '../private.js';
 
 export class XRRigidTransform {
