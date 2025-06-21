@@ -32,7 +32,7 @@
 	},
 	"homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
 	"devDependencies": {
-		"@rollup/plugin-commonjs": "^25.0.7",
+		"@rollup/plugin-commonjs": "^28.0.6",
 		"@rollup/plugin-node-resolve": "^15.2.3",
 		"@rollup/plugin-terser": "^0.4.4",
 		"@types/gl-matrix": "^3.2.0",
