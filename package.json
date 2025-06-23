@@ -41,7 +41,7 @@
 		"@types/three": "^0.149.0",
 		"@types/uuid": "^9.0.8",
 		"@types/webxr": "^0.5.8",
-		"@typescript-eslint/eslint-plugin": "^5.55.0",
+		"@typescript-eslint/eslint-plugin": "^8.35.0",
 		"@typescript-eslint/parser": "^5.55.0",
 		"eslint": "^8.36.0",
 		"eslint-config-prettier": "^8.10.0",
