@@ -34,8 +34,7 @@ const prepare = async () => {
 		xrdevice = new XRDevice(metaQuest3);
 		xrdevice.ipd = 0;
 		xrdevice.installRuntime();
-
-		const devui = new DevUI(xrdevice);
+		xrdevice.installDevUI(DevUI);
 	}
 	Array.from(document.getElementsByClassName('native')).forEach((el) => {
 		el.style.display = nativeVRSupport ? 'block' : 'none';
