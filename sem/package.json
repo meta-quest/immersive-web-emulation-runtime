@@ -26,7 +26,7 @@
 	},
 	"homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
 	"dependencies": {
-		"three": "^0.165.0",
+		"three": "^0.178.0",
 		"ts-proto": "^2.6.0"
 	},
 	"peerDependencies": {
