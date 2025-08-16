@@ -283,12 +283,11 @@ describe('XRSession', () => {
 	});
 
 	test('Select, selectstart, selectend events are correctly fired', async () => {
-		const mockOnSelect = jest.fn();
-		const mockOnSelectStart = jest.fn();
-		const mockOnSelectEnd = jest.fn();
-		xrSession.addEventListener('select', mockOnSelect);
-		xrSession.addEventListener('selectstart', mockOnSelectStart);
-		xrSession.addEventListener('selectend', mockOnSelectEnd);
+		const callOrder: string[] = [];
+		const mockSelectCallback = jest.fn((event) => callOrder.push(event.type));
+		xrSession.addEventListener('select', mockSelectCallback);
+		xrSession.addEventListener('selectstart', mockSelectCallback);
+		xrSession.addEventListener('selectend', mockSelectCallback);
 		let frameId = 0;
 		const onFrame = (_time: number, _frame: XRFrame) => {
 			frameId++;
@@ -306,18 +305,16 @@ describe('XRSession', () => {
 		};
 		xrSession.requestAnimationFrame(onFrame);
 		jest.runAllTimers();
-		expect(mockOnSelect).toHaveBeenCalled();
-		expect(mockOnSelectStart).toHaveBeenCalled();
-		expect(mockOnSelectEnd).toHaveBeenCalled();
+		expect(mockSelectCallback).toHaveBeenCalledTimes(3);
+		expect(callOrder).toEqual(['selectstart', 'select', 'selectend']);
 	});
 
 	test('Squeeze, squeezestart, squeezeend events are correctly fired', async () => {
-		const mockOnSqueeze = jest.fn();
-		const mockOnSqueezeStart = jest.fn();
-		const mockOnSqueezeEnd = jest.fn();
-		xrSession.addEventListener('squeeze', mockOnSqueeze);
-		xrSession.addEventListener('squeezestart', mockOnSqueezeStart);
-		xrSession.addEventListener('squeezeend', mockOnSqueezeEnd);
+		const callOrder: string[] = [];
+		const mockSqueezeCallback = jest.fn((event) => callOrder.push(event.type));
+		xrSession.addEventListener('squeeze', mockSqueezeCallback);
+		xrSession.addEventListener('squeezestart', mockSqueezeCallback);
+		xrSession.addEventListener('squeezeend', mockSqueezeCallback);
 		let frameId = 0;
 		const onFrame = (_time: number, _frame: XRFrame) => {
 			frameId++;
@@ -335,9 +332,8 @@ describe('XRSession', () => {
 		};
 		xrSession.requestAnimationFrame(onFrame);
 		jest.runAllTimers();
-		expect(mockOnSqueeze).toHaveBeenCalled();
-		expect(mockOnSqueezeStart).toHaveBeenCalled();
-		expect(mockOnSqueezeEnd).toHaveBeenCalled();
+		expect(mockSqueezeCallback).toHaveBeenCalledTimes(3);
+		expect(callOrder).toEqual(['squeezestart', 'squeeze', 'squeezeend']);
 	});
 
 	test('XRSession.environmentBlendMode returns the correct value', async () => {
