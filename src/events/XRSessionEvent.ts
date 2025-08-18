@@ -8,21 +8,21 @@
 import { XRSession } from '../session/XRSession.js';
 
 interface XRSessionEventInit extends EventInit {
-	session: XRSession;
+  session: XRSession;
 }
 
 export class XRSessionEvent extends Event {
-	public readonly session: XRSession;
+  public readonly session: XRSession;
 
-	constructor(type: string, eventInitDict: XRSessionEventInit) {
-		super(type, eventInitDict);
-		if (!eventInitDict.session) {
-			throw new Error('XRSessionEventInit.session is required');
-		}
-		this.session = eventInitDict.session;
-	}
+  constructor(type: string, eventInitDict: XRSessionEventInit) {
+    super(type, eventInitDict);
+    if (!eventInitDict.session) {
+      throw new Error('XRSessionEventInit.session is required');
+    }
+    this.session = eventInitDict.session;
+  }
 }
 
 export interface XRSessionEventHandler {
-	(evt: XRSessionEvent): any;
+  (evt: XRSessionEvent): any;
 }

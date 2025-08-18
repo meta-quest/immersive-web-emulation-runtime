@@ -11,24 +11,24 @@ import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRView } from '../views/XRView.js';
 
 export class XRViewerPose extends XRPose {
-	[P_VIEWER_POSE]: {
-		views: readonly XRView[];
-	};
+  [P_VIEWER_POSE]: {
+    views: readonly XRView[];
+  };
 
-	constructor(
-		transform: XRRigidTransform,
-		views: XRView[],
-		emulatedPosition: boolean = false,
-		linearVelocity: DOMPointReadOnly | undefined = undefined,
-		angularVelocity: DOMPointReadOnly | undefined = undefined,
-	) {
-		super(transform, emulatedPosition, linearVelocity, angularVelocity);
-		this[P_VIEWER_POSE] = {
-			views: Object.freeze(views),
-		};
-	}
+  constructor(
+    transform: XRRigidTransform,
+    views: XRView[],
+    emulatedPosition: boolean = false,
+    linearVelocity: DOMPointReadOnly | undefined = undefined,
+    angularVelocity: DOMPointReadOnly | undefined = undefined,
+  ) {
+    super(transform, emulatedPosition, linearVelocity, angularVelocity);
+    this[P_VIEWER_POSE] = {
+      views: Object.freeze(views),
+    };
+  }
 
-	get views() {
-		return this[P_VIEWER_POSE].views;
-	}
+  get views() {
+    return this[P_VIEWER_POSE].views;
+  }
 }

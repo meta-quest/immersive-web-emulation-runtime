@@ -12,8 +12,8 @@ import { XRSemanticLabels } from '../labels/labels.js';
 import { XRSpace } from '../spaces/XRSpace.js';
 
 export enum XRPlaneOrientation {
-	Horizontal = 'horizontal',
-	Vertical = 'vertical',
+  Horizontal = 'horizontal',
+  Vertical = 'vertical',
 }
 
 /**
@@ -21,81 +21,81 @@ export enum XRPlaneOrientation {
  * For more details, see the {@link https://github.com/immersive-web/semantic-labels | Semantic Labels Documentation}.
  */
 export const XREntityOrientation: Partial<
-	Record<XRSemanticLabels, XRPlaneOrientation>
+  Record<XRSemanticLabels, XRPlaneOrientation>
 > = {
-	[XRSemanticLabels.Desk]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Couch]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Floor]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Ceiling]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Wall]: XRPlaneOrientation.Vertical,
-	[XRSemanticLabels.Door]: XRPlaneOrientation.Vertical,
-	[XRSemanticLabels.Window]: XRPlaneOrientation.Vertical,
-	[XRSemanticLabels.Table]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Shelf]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Bed]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Screen]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Lamp]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.Plant]: XRPlaneOrientation.Horizontal,
-	[XRSemanticLabels.WallArt]: XRPlaneOrientation.Vertical,
+  [XRSemanticLabels.Desk]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Couch]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Floor]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Ceiling]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Wall]: XRPlaneOrientation.Vertical,
+  [XRSemanticLabels.Door]: XRPlaneOrientation.Vertical,
+  [XRSemanticLabels.Window]: XRPlaneOrientation.Vertical,
+  [XRSemanticLabels.Table]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Shelf]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Bed]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Screen]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Lamp]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Plant]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.WallArt]: XRPlaneOrientation.Vertical,
 };
 
 export class XRPlane {
-	[P_PLANE]: {
-		nativePlane: NativePlane;
-		frame: XRFrame;
-		planeSpace: XRSpace;
-		polygon: DOMPointReadOnly[];
-		lastChangedTime: DOMHighResTimeStamp;
-		semanticLabel?: XRSemanticLabels;
-		orientation?: XRPlaneOrientation;
-	};
+  [P_PLANE]: {
+    nativePlane: NativePlane;
+    frame: XRFrame;
+    planeSpace: XRSpace;
+    polygon: DOMPointReadOnly[];
+    lastChangedTime: DOMHighResTimeStamp;
+    semanticLabel?: XRSemanticLabels;
+    orientation?: XRPlaneOrientation;
+  };
 
-	constructor(
-		nativePlane: NativePlane,
-		planeSpace: XRSpace,
-		polygon: DOMPointReadOnly[],
-		semanticLabel?: XRSemanticLabels,
-	) {
-		this[P_PLANE] = {
-			nativePlane,
-			frame: undefined!,
-			planeSpace,
-			polygon,
-			lastChangedTime: performance.now(),
-			semanticLabel,
-			orientation: semanticLabel
-				? XREntityOrientation[semanticLabel]
-				: undefined,
-		};
-	}
+  constructor(
+    nativePlane: NativePlane,
+    planeSpace: XRSpace,
+    polygon: DOMPointReadOnly[],
+    semanticLabel?: XRSemanticLabels,
+  ) {
+    this[P_PLANE] = {
+      nativePlane,
+      frame: undefined!,
+      planeSpace,
+      polygon,
+      lastChangedTime: performance.now(),
+      semanticLabel,
+      orientation: semanticLabel
+        ? XREntityOrientation[semanticLabel]
+        : undefined,
+    };
+  }
 
-	get planeSpace() {
-		return this[P_PLANE].planeSpace;
-	}
+  get planeSpace() {
+    return this[P_PLANE].planeSpace;
+  }
 
-	get polygon(): ReadonlyArray<DOMPointReadOnly> {
-		return this[P_PLANE].polygon;
-	}
+  get polygon(): ReadonlyArray<DOMPointReadOnly> {
+    return this[P_PLANE].polygon;
+  }
 
-	get orientation() {
-		return this[P_PLANE].orientation;
-	}
+  get orientation() {
+    return this[P_PLANE].orientation;
+  }
 
-	get lastChangedTime() {
-		return this[P_PLANE].lastChangedTime;
-	}
+  get lastChangedTime() {
+    return this[P_PLANE].lastChangedTime;
+  }
 
-	get semanticLabel() {
-		return this[P_PLANE].semanticLabel;
-	}
+  get semanticLabel() {
+    return this[P_PLANE].semanticLabel;
+  }
 }
 
 export class XRPlaneSet extends Set<XRPlane> {}
 
 export class NativePlane {
-	constructor(
-		public transform: XRRigidTransform,
-		public polygon: DOMPointReadOnly[],
-		public semanticLabel: XRSemanticLabels,
-	) {}
+  constructor(
+    public transform: XRRigidTransform,
+    public polygon: DOMPointReadOnly[],
+    public semanticLabel: XRSemanticLabels,
+  ) {}
 }

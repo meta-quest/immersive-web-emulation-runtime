@@ -11,76 +11,76 @@ import { XRHand } from './XRHand.js';
 import { XRSpace } from '../spaces/XRSpace.js';
 
 export enum XRHandedness {
-	None = 'none',
-	Left = 'left',
-	Right = 'right',
+  None = 'none',
+  Left = 'left',
+  Right = 'right',
 }
 
 export enum XRTargetRayMode {
-	Gaze = 'gaze',
-	TrackedPointer = 'tracked-pointer',
-	Screen = 'screen',
-	TransientPointer = 'transient-pointer',
+  Gaze = 'gaze',
+  TrackedPointer = 'tracked-pointer',
+  Screen = 'screen',
+  TransientPointer = 'transient-pointer',
 }
 
 export class XRInputSourceArray extends Array<XRInputSource> {}
 
 export class XRInputSource {
-	[P_INPUT_SOURCE]: {
-		handedness: XRHandedness;
-		targetRayMode: XRTargetRayMode;
-		targetRaySpace: XRSpace;
-		gripSpace?: XRSpace;
-		profiles: Array<string>;
-		gamepad?: Gamepad;
-		hand?: XRHand;
-	};
+  [P_INPUT_SOURCE]: {
+    handedness: XRHandedness;
+    targetRayMode: XRTargetRayMode;
+    targetRaySpace: XRSpace;
+    gripSpace?: XRSpace;
+    profiles: Array<string>;
+    gamepad?: Gamepad;
+    hand?: XRHand;
+  };
 
-	constructor(
-		handedness: XRHandedness,
-		targetRayMode: XRTargetRayMode,
-		profiles: string[],
-		targetRaySpace: XRSpace,
-		gamepad?: Gamepad,
-		gripSpace?: XRSpace,
-		hand?: XRHand,
-	) {
-		this[P_INPUT_SOURCE] = {
-			handedness,
-			targetRayMode,
-			targetRaySpace,
-			gripSpace,
-			profiles,
-			gamepad,
-			hand,
-		};
-	}
+  constructor(
+    handedness: XRHandedness,
+    targetRayMode: XRTargetRayMode,
+    profiles: string[],
+    targetRaySpace: XRSpace,
+    gamepad?: Gamepad,
+    gripSpace?: XRSpace,
+    hand?: XRHand,
+  ) {
+    this[P_INPUT_SOURCE] = {
+      handedness,
+      targetRayMode,
+      targetRaySpace,
+      gripSpace,
+      profiles,
+      gamepad,
+      hand,
+    };
+  }
 
-	get handedness() {
-		return this[P_INPUT_SOURCE].handedness;
-	}
+  get handedness() {
+    return this[P_INPUT_SOURCE].handedness;
+  }
 
-	get targetRayMode() {
-		return this[P_INPUT_SOURCE].targetRayMode;
-	}
+  get targetRayMode() {
+    return this[P_INPUT_SOURCE].targetRayMode;
+  }
 
-	get targetRaySpace() {
-		return this[P_INPUT_SOURCE].targetRaySpace;
-	}
+  get targetRaySpace() {
+    return this[P_INPUT_SOURCE].targetRaySpace;
+  }
 
-	get gripSpace() {
-		return this[P_INPUT_SOURCE].gripSpace;
-	}
+  get gripSpace() {
+    return this[P_INPUT_SOURCE].gripSpace;
+  }
 
-	get profiles() {
-		return this[P_INPUT_SOURCE].profiles;
-	}
+  get profiles() {
+    return this[P_INPUT_SOURCE].profiles;
+  }
 
-	get gamepad() {
-		return this[P_INPUT_SOURCE].gamepad;
-	}
+  get gamepad() {
+    return this[P_INPUT_SOURCE].gamepad;
+  }
 
-	get hand() {
-		return this[P_INPUT_SOURCE].hand;
-	}
+  get hand() {
+    return this[P_INPUT_SOURCE].hand;
+  }
 }

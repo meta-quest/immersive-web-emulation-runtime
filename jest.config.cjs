@@ -9,5 +9,8 @@ module.exports = {
 	transform: {
 		'^.+\\.ts$': ['ts-jest', { useESM: true }],
 	},
+	transformIgnorePatterns: [
+		'node_modules/(?!(webxr-layers-polyfill)/)'
+	],
 	testEnvironment: 'jsdom',
 };

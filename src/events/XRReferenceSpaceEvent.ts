@@ -9,24 +9,24 @@ import { XRReferenceSpace } from '../spaces/XRReferenceSpace.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 
 interface XRReferenceSpaceEventInit extends EventInit {
-	referenceSpace: XRReferenceSpace;
-	transform?: XRRigidTransform;
+  referenceSpace: XRReferenceSpace;
+  transform?: XRRigidTransform;
 }
 
 export class XRReferenceSpaceEvent extends Event {
-	public readonly referenceSpace: XRReferenceSpace;
-	public readonly transform?: XRRigidTransform;
+  public readonly referenceSpace: XRReferenceSpace;
+  public readonly transform?: XRRigidTransform;
 
-	constructor(type: string, eventInitDict: XRReferenceSpaceEventInit) {
-		super(type, eventInitDict);
-		if (!eventInitDict.referenceSpace) {
-			throw new Error('XRReferenceSpaceEventInit.referenceSpace is required');
-		}
-		this.referenceSpace = eventInitDict.referenceSpace;
-		this.transform = eventInitDict.transform;
-	}
+  constructor(type: string, eventInitDict: XRReferenceSpaceEventInit) {
+    super(type, eventInitDict);
+    if (!eventInitDict.referenceSpace) {
+      throw new Error('XRReferenceSpaceEventInit.referenceSpace is required');
+    }
+    this.referenceSpace = eventInitDict.referenceSpace;
+    this.transform = eventInitDict.transform;
+  }
 }
 
 export interface XRReferenceSpaceEventHandler {
-	(evt: XRReferenceSpaceEvent): any;
+  (evt: XRReferenceSpaceEvent): any;
 }

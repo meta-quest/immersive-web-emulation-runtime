@@ -11,21 +11,21 @@ import { XRSpace } from './XRSpace.js';
 import { mat4 } from 'gl-matrix';
 
 export class XRJointSpace extends XRSpace {
-	[P_JOINT_SPACE]: {
-		jointName: XRHandJoint;
-		radius: number;
-	};
+  [P_JOINT_SPACE]: {
+    jointName: XRHandJoint;
+    radius: number;
+  };
 
-	constructor(
-		jointName: XRHandJoint,
-		parentSpace?: XRSpace,
-		offsetMatrix?: mat4,
-	) {
-		super(parentSpace, offsetMatrix);
-		this[P_JOINT_SPACE] = { jointName, radius: 0 };
-	}
+  constructor(
+    jointName: XRHandJoint,
+    parentSpace?: XRSpace,
+    offsetMatrix?: mat4,
+  ) {
+    super(parentSpace, offsetMatrix);
+    this[P_JOINT_SPACE] = { jointName, radius: 0 };
+  }
 
-	get jointName() {
-		return this[P_JOINT_SPACE].jointName;
-	}
+  get jointName() {
+    return this[P_JOINT_SPACE].jointName;
+  }
 }
