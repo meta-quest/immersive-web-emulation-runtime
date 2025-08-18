@@ -634,10 +634,18 @@ export class XRDevice {
   }
 
   grantOfferedSession(): void {
-    const pSystem = this[P_DEVICE].xrSystem?.[P_SYSTEM];
+    const xrSystem = this[P_DEVICE].xrSystem;
+    const pSystem = xrSystem?.[P_SYSTEM];
     if (pSystem && pSystem.offeredSessionConfig) {
-      pSystem.grantSession(pSystem.offeredSessionConfig);
+      const { resolve, reject, mode, options } = pSystem.offeredSessionConfig;
+      
+      // Clear the offered session config first
       pSystem.offeredSessionConfig = undefined;
+      
+      // Use the same requestSession flow to ensure identical behavior
+      xrSystem.requestSession(mode, options)
+        .then(resolve)
+        .catch(reject);
     }
   }
 
