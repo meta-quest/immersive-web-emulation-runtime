@@ -56,6 +56,8 @@ import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
 import { NativePlane } from '../planes/XRPlane.js';
 import { NativeMesh } from '../meshes/XRMesh.js';
+// @ts-ignore
+import WebXRLayerPolyfill from 'webxr-layers-polyfill';
 
 export type WebXRFeature =
 	| 'viewer'
@@ -104,7 +106,7 @@ const DEFAULTS = {
 };
 
 export interface DevUIConstructor {
-	new (xrDevice: XRDevice): DevUI;
+	new(xrDevice: XRDevice): DevUI;
 }
 export interface DevUI {
 	version: string;
@@ -114,7 +116,7 @@ export interface DevUI {
 }
 
 export interface SEMConstructor {
-	new (xrDevice: XRDevice): SyntheticEnvironmentModule;
+	new(xrDevice: XRDevice): SyntheticEnvironmentModule;
 }
 export interface SyntheticEnvironmentModule {
 	version: string;
@@ -128,6 +130,11 @@ export interface SyntheticEnvironmentModule {
 	get trackedPlanes(): Set<NativePlane>;
 	get trackedMeshes(): Set<NativeMesh>;
 	computeHitTestResults(rayMatrix: mat4): mat4[];
+}
+
+interface RuntimeOptions {
+	globalObject: any;
+	polyfillLayers: boolean;
 }
 
 const Z_INDEX_SEM_CANVAS = 1;
@@ -430,7 +437,9 @@ export class XRDevice {
 		globalThis;
 	}
 
-	installRuntime(globalObject: any = globalThis) {
+	installRuntime(options?: RuntimeOptions) {
+		const globalObject = options?.globalObject ?? globalThis;
+		const polyfillLayers = options?.polyfillLayers;
 		Object.defineProperty(
 			WebGL2RenderingContext.prototype,
 			'makeXRCompatible',
@@ -476,6 +485,13 @@ export class XRDevice {
 		globalObject['XRInputSourceEvent'] = XRInputSourceEvent;
 		globalObject['XRInputSourcesChangeEvent'] = XRInputSourcesChangeEvent;
 		globalObject['XRReferenceSpaceEvent'] = XRReferenceSpaceEvent;
+
+		if (polyfillLayers) {
+			new WebXRLayerPolyfill();
+		} else {
+			globalObject['XRMediaBinding'] = undefined;
+			globalObject['XRWebGLBinding'] = undefined;
+		}
 	}
 
 	installDevUI(devUIConstructor: DevUIConstructor) {
