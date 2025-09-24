@@ -86,11 +86,18 @@ export interface XRDeviceConfig {
   }>;
   interactionMode: XRInteractionMode;
   userAgent: string;
+  // new properties for screen and optics
+  ipd?: number;
+  fovy?: number;
+  resolutionWidth?: number;
+  resolutionHeight?: number;
 }
 
 export interface XRDeviceOptions {
   ipd: number;
   fovy: number;
+  resolutionWidth: number;
+  resolutionHeight: number;
   stereoEnabled: boolean;
   headsetPosition: Vector3;
   headsetQuaternion: Quaternion;
@@ -100,6 +107,8 @@ export interface XRDeviceOptions {
 const DEFAULTS = {
   ipd: 0.063,
   fovy: Math.PI / 2,
+  resolutionWidth: 1024,
+  resolutionHeight: 1024,
   headsetPosition: new Vector3(0, 1.6, 0),
   headsetQuaternion: new Quaternion(),
   stereoEnabled: false,
@@ -169,6 +178,8 @@ export class XRDevice {
     stereoEnabled: boolean;
     ipd: number;
     fovy: number;
+    resolutionWidth: number;
+    resolutionHeight: number;
     controllers: { [key in XRHandedness]?: XRController };
     hands: { [key in XRHandedness]?: XRHandInput };
     primaryInputMode: 'controller' | 'hand';
@@ -274,8 +285,16 @@ export class XRDevice {
       quaternion:
         deviceOptions.headsetQuaternion ?? DEFAULTS.headsetQuaternion.clone(),
       stereoEnabled: deviceOptions.stereoEnabled ?? DEFAULTS.stereoEnabled,
-      ipd: deviceOptions.ipd ?? DEFAULTS.ipd,
-      fovy: deviceOptions.fovy ?? DEFAULTS.fovy,
+      ipd: deviceOptions.ipd ?? deviceConfig.ipd ?? DEFAULTS.ipd,
+      fovy: deviceOptions.fovy ?? deviceConfig.fovy ?? DEFAULTS.fovy,
+      resolutionWidth:
+        deviceOptions.resolutionWidth ??
+        deviceConfig.resolutionWidth ??
+        DEFAULTS.resolutionWidth,
+      resolutionHeight:
+        deviceOptions.resolutionHeight ??
+        deviceConfig.resolutionHeight ??
+        DEFAULTS.resolutionHeight,
       controllers,
       hands,
       primaryInputMode: 'controller',
@@ -362,8 +381,8 @@ export class XRDevice {
           document.body.appendChild(this[P_DEVICE].canvasContainer);
         }
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        canvas.width = this[P_DEVICE].resolutionWidth;
+        canvas.height = this[P_DEVICE].resolutionHeight;
       },
       onSessionEnd: () => {
         if (this[P_DEVICE].canvasData) {
@@ -544,6 +563,14 @@ export class XRDevice {
 
   set fovy(value: number) {
     this[P_DEVICE].fovy = value;
+  }
+
+  get resolutionWidth() {
+    return this[P_DEVICE].resolutionWidth;
+  }
+
+  get resolutionHeight() {
+    return this[P_DEVICE].resolutionHeight;
   }
 
   get position(): Vector3 {
