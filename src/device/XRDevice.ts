@@ -440,6 +440,11 @@ export class XRDevice {
   installRuntime(options?: RuntimeOptions) {
     const globalObject = options?.globalObject ?? globalThis;
     const polyfillLayers = options?.polyfillLayers;
+
+    // Save reference to old navigator.xr before replacing it
+    // This allows us to dispatch events to listeners that were attached before IWER initialized
+    const oldNavigatorXR = globalThis.navigator.xr;
+
     Object.defineProperty(
       WebGL2RenderingContext.prototype,
       'makeXRCompatible',
@@ -492,6 +497,24 @@ export class XRDevice {
       globalObject['XRMediaBinding'] = undefined;
       globalObject['XRWebGLBinding'] = undefined;
     }
+
+    // Fire devicechange event to notify applications that XR devices are now available
+    // Use queueMicrotask to ensure event fires after XRSystem is fully initialized
+    queueMicrotask(() => {
+      const event = new Event('devicechange');
+
+      // Dispatch on the new navigator.xr
+      this[P_DEVICE].xrSystem?.dispatchEvent(event);
+
+      // Also dispatch on the old navigator.xr if it existed and has dispatchEvent
+      // This ensures listeners attached before IWER initialized still receive the event
+      if (
+        oldNavigatorXR &&
+        typeof oldNavigatorXR.dispatchEvent === 'function'
+      ) {
+        oldNavigatorXR.dispatchEvent(new Event('devicechange'));
+      }
+    });
   }
 
   installDevUI(devUIConstructor: DevUIConstructor) {
@@ -638,14 +661,12 @@ export class XRDevice {
     const pSystem = xrSystem?.[P_SYSTEM];
     if (pSystem && pSystem.offeredSessionConfig) {
       const { resolve, reject, mode, options } = pSystem.offeredSessionConfig;
-      
+
       // Clear the offered session config first
       pSystem.offeredSessionConfig = undefined;
-      
+
       // Use the same requestSession flow to ensure identical behavior
-      xrSystem.requestSession(mode, options)
-        .then(resolve)
-        .catch(reject);
+      xrSystem.requestSession(mode, options).then(resolve).catch(reject);
     }
   }
 
