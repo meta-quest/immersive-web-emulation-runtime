@@ -203,7 +203,6 @@ export class XRSession extends EventTarget {
           return;
         }
         const context = baseLayer.context;
-        const canvas = context.canvas;
 
         /**
          * This code snippet is designed to clear the buffers attached to an opaque framebuffer
@@ -263,11 +262,12 @@ export class XRSession extends EventTarget {
 
         // Calculate projection matrices
         const { depthNear, depthFar } = this[P_SESSION].renderState;
-        const { width, height } = canvas;
         if (this[P_SESSION].mode !== 'inline') {
+          const perEyeWidth = this[P_SESSION].device[P_DEVICE].resolutionWidth;
+          const perEyeHeight =
+            this[P_SESSION].device[P_DEVICE].resolutionHeight;
           const aspect =
-            (width * (this[P_SESSION].device.stereoEnabled ? 0.5 : 1.0)) /
-            height;
+            perEyeHeight > 0 ? perEyeWidth / perEyeHeight : 1;
           mat4.perspective(
             this[P_SESSION].projectionMatrices[XREye.Left],
             this[P_SESSION].device.fovy,
@@ -280,6 +280,7 @@ export class XRSession extends EventTarget {
             this[P_SESSION].projectionMatrices[XREye.Left],
           );
         } else {
+          const { width, height } = baseLayer.context.canvas;
           const aspect = width / height;
           mat4.perspective(
             this[P_SESSION].projectionMatrices[XREye.None],
