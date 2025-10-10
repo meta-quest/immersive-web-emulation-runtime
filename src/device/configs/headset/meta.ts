@@ -9,14 +9,13 @@ import {
   XREnvironmentBlendMode,
   XRInteractionMode,
 } from '../../../session/XRSession.js';
+import { XRDeviceConfig } from '../../XRDevice.js';
 import {
   metaQuestTouchPlus,
   metaQuestTouchPro,
   oculusTouchV2,
   oculusTouchV3,
 } from '../controller/meta.js';
-
-import { XRDeviceConfig } from '../../XRDevice.js';
 
 export const oculusQuest1: XRDeviceConfig = {
   name: 'Oculus Quest 1',
@@ -30,6 +29,8 @@ export const oculusQuest1: XRDeviceConfig = {
     'unbounded',
     'anchors',
     'plane-detection',
+    'hit-test',
+    'layers',
     'hand-tracking',
   ],
   supportedFrameRates: [72, 80, 90],
@@ -42,6 +43,16 @@ export const oculusQuest1: XRDeviceConfig = {
   interactionMode: XRInteractionMode.WorldSpace,
   userAgent:
     'Mozilla/5.0 (X11; Linux x86_64; Quest 1) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
+  ipd: 0.064,
+  fieldOfView: {
+    diagonal: 104,
+    horizontal: 94,
+    vertical: 96,
+  },
+  resolutionWidth: 1440,
+  resolutionHeight: 1600,
+  stereoOverlap: 0.86,
+  handGestureDetectionSupported: true,
 };
 
 export const metaQuest2: XRDeviceConfig = {
@@ -58,6 +69,7 @@ export const metaQuest2: XRDeviceConfig = {
     'plane-detection',
     'mesh-detection',
     'hit-test',
+    'layers',
     'hand-tracking',
   ],
   supportedFrameRates: [72, 80, 90, 120],
@@ -70,6 +82,16 @@ export const metaQuest2: XRDeviceConfig = {
   interactionMode: XRInteractionMode.WorldSpace,
   userAgent:
     'Mozilla/5.0 (X11; Linux x86_64; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
+  ipd: 0.063,
+  fieldOfView: {
+    diagonal: 110,
+    horizontal: 97,
+    vertical: 93,
+  },
+  resolutionWidth: 1832,
+  resolutionHeight: 1920,
+  stereoOverlap: 0.86,
+  handGestureDetectionSupported: true,
 };
 
 export const metaQuestPro: XRDeviceConfig = {
@@ -86,6 +108,7 @@ export const metaQuestPro: XRDeviceConfig = {
     'plane-detection',
     'mesh-detection',
     'hit-test',
+    'layers',
     'hand-tracking',
   ],
   supportedFrameRates: [72, 80, 90, 120],
@@ -98,6 +121,16 @@ export const metaQuestPro: XRDeviceConfig = {
   interactionMode: XRInteractionMode.WorldSpace,
   userAgent:
     'Mozilla/5.0 (X11; Linux x86_64; Quest Pro) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
+  ipd: 0.064,
+  fieldOfView: {
+    diagonal: 112,
+    horizontal: 106,
+    vertical: 98,
+  },
+  resolutionWidth: 1800,
+  resolutionHeight: 1920,
+  stereoOverlap: 0.87,
+  handGestureDetectionSupported: true,
 };
 
 export const metaQuest3: XRDeviceConfig = {
@@ -116,6 +149,7 @@ export const metaQuest3: XRDeviceConfig = {
     'hit-test',
     'hand-tracking',
     'depth-sensing',
+    'layers',
   ],
   supportedFrameRates: [72, 80, 90, 120],
   isSystemKeyboardSupported: true,
@@ -127,4 +161,14 @@ export const metaQuest3: XRDeviceConfig = {
   interactionMode: XRInteractionMode.WorldSpace,
   userAgent:
     'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
+  ipd: 0.064,
+  fieldOfView: {
+    diagonal: 121,
+    horizontal: 110,
+    vertical: 96,
+  },
+  resolutionWidth: 2064,
+  resolutionHeight: 2208,
+  stereoOverlap: 0.88,
+  handGestureDetectionSupported: true,
 };

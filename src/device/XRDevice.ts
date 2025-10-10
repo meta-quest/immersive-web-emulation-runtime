@@ -5,7 +5,30 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GlobalSpace, XRSpace } from '../spaces/XRSpace.js';
+import { mat4, vec3 } from 'gl-matrix';
+// @ts-ignore
+import WebXRLayerPolyfill from 'webxr-layers-polyfill';
+import { ActionPlayer } from '../action/ActionPlayer.js';
+import { InputSchema } from '../action/ActionRecorder.js';
+import { XRInputSourceEvent } from '../events/XRInputSourceEvent.js';
+import { XRInputSourcesChangeEvent } from '../events/XRInputSourcesChangeEvent.js';
+import { XRReferenceSpaceEvent } from '../events/XRReferenceSpaceEvent.js';
+import { XRSessionEvent } from '../events/XRSessionEvent.js';
+import { XRFrame } from '../frameloop/XRFrame.js';
+import { XRSystem } from '../initialization/XRSystem.js';
+import { XRHand } from '../input/XRHand.js';
+import {
+  XRHandedness,
+  XRInputSource,
+  XRInputSourceArray,
+} from '../input/XRInputSource.js';
+import { XRLayer, XRWebGLLayer } from '../layers/XRWebGLLayer.js';
+import { NativeMesh } from '../meshes/XRMesh.js';
+import { NativePlane } from '../planes/XRPlane.js';
+import { XRJointPose } from '../pose/XRJointPose.js';
+import { XRPose } from '../pose/XRPose.js';
+import { XRViewerPose } from '../pose/XRViewerPose.js';
+import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import {
   P_DEVICE,
   P_REF_SPACE,
@@ -13,8 +36,7 @@ import {
   P_SPACE,
   P_SYSTEM,
 } from '../private.js';
-import { Quaternion, Vector3 } from '../utils/Math.js';
-import { XRController, XRControllerConfig } from './XRController.js';
+import { XRRenderState } from '../session/XRRenderState.js';
 import {
   XREnvironmentBlendMode,
   XRInteractionMode,
@@ -22,42 +44,19 @@ import {
   XRSessionMode,
   XRVisibilityState,
 } from '../session/XRSession.js';
-import { XREye, XRView } from '../views/XRView.js';
-import { XRHandInput, oculusHandConfig } from './XRHandInput.js';
-import {
-  XRHandedness,
-  XRInputSource,
-  XRInputSourceArray,
-} from '../input/XRInputSource.js';
-import { XRLayer, XRWebGLLayer } from '../layers/XRWebGLLayer.js';
+import { XRJointSpace } from '../spaces/XRJointSpace.js';
 import {
   XRReferenceSpace,
   XRReferenceSpaceType,
 } from '../spaces/XRReferenceSpace.js';
-import { mat4, vec3 } from 'gl-matrix';
-
-import { ActionPlayer } from '../action/ActionPlayer.js';
-import { InputSchema } from '../action/ActionRecorder.js';
+import { GlobalSpace, XRSpace } from '../spaces/XRSpace.js';
+import { Quaternion, Vector3 } from '../utils/Math.js';
 import { VERSION } from '../version.js';
-import { XRFrame } from '../frameloop/XRFrame.js';
-import { XRHand } from '../input/XRHand.js';
-import { XRInputSourceEvent } from '../events/XRInputSourceEvent.js';
-import { XRInputSourcesChangeEvent } from '../events/XRInputSourcesChangeEvent.js';
-import { XRJointPose } from '../pose/XRJointPose.js';
-import { XRJointSpace } from '../spaces/XRJointSpace.js';
-import { XRPose } from '../pose/XRPose.js';
-import { XRReferenceSpaceEvent } from '../events/XRReferenceSpaceEvent.js';
-import { XRRenderState } from '../session/XRRenderState.js';
-import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
-import { XRSessionEvent } from '../events/XRSessionEvent.js';
-import { XRSystem } from '../initialization/XRSystem.js';
-import { XRTrackedInput } from './XRTrackedInput.js';
-import { XRViewerPose } from '../pose/XRViewerPose.js';
+import { XREye, XRView } from '../views/XRView.js';
 import { XRViewport } from '../views/XRViewport.js';
-import { NativePlane } from '../planes/XRPlane.js';
-import { NativeMesh } from '../meshes/XRMesh.js';
-// @ts-ignore
-import WebXRLayerPolyfill from 'webxr-layers-polyfill';
+import { XRController, XRControllerConfig } from './XRController.js';
+import { XRHandInput, oculusHandConfig } from './XRHandInput.js';
+import { XRTrackedInput } from './XRTrackedInput.js';
 
 export type WebXRFeature =
   | 'viewer'
@@ -70,8 +69,15 @@ export type WebXRFeature =
   | 'plane-detection'
   | 'mesh-detection'
   | 'hit-test'
+  | 'layers'
   | 'hand-tracking'
   | 'depth-sensing';
+
+export interface XRDeviceFieldOfView {
+  diagonal: number;
+  horizontal: number;
+  vertical: number;
+}
 
 export interface XRDeviceConfig {
   name: string;
@@ -86,11 +92,12 @@ export interface XRDeviceConfig {
   }>;
   interactionMode: XRInteractionMode;
   userAgent: string;
-  // new properties for screen and optics
   ipd?: number;
-  fovy?: number;
   resolutionWidth?: number;
   resolutionHeight?: number;
+  stereoOverlap?: number;
+  fieldOfView?: XRDeviceFieldOfView;
+  handGestureDetectionSupported?: boolean;
 }
 
 export interface XRDeviceOptions {
@@ -102,6 +109,7 @@ export interface XRDeviceOptions {
   headsetPosition: Vector3;
   headsetQuaternion: Quaternion;
   canvasContainer: HTMLDivElement;
+  stereoOverlap: number;
 }
 
 const DEFAULTS = {
@@ -112,6 +120,7 @@ const DEFAULTS = {
   headsetPosition: new Vector3(0, 1.6, 0),
   headsetQuaternion: new Quaternion(),
   stereoEnabled: false,
+  stereoOverlap: 0.85,
 };
 
 export interface DevUIConstructor {
@@ -180,6 +189,9 @@ export class XRDevice {
     fovy: number;
     resolutionWidth: number;
     resolutionHeight: number;
+    stereoOverlap: number;
+    fieldOfView?: XRDeviceFieldOfView;
+    handGestureDetectionSupported: boolean;
     controllers: { [key in XRHandedness]?: XRController };
     hands: { [key in XRHandedness]?: XRHandInput };
     primaryInputMode: 'controller' | 'hand';
@@ -232,9 +244,16 @@ export class XRDevice {
     };
     const controllerConfig = deviceConfig.controllerConfig;
     const controllers: { [key in XRHandedness]?: XRController } = {};
+    let hasTrackedController = false;
     if (controllerConfig) {
       Object.values(XRHandedness).forEach((handedness) => {
         if (controllerConfig.layout[handedness]) {
+          if (
+            handedness === XRHandedness.Left ||
+            handedness === XRHandedness.Right
+          ) {
+            hasTrackedController = true;
+          }
           controllers[handedness] = new XRController(
             controllerConfig,
             handedness,
@@ -269,6 +288,11 @@ export class XRDevice {
     canvasContainer.style.overflow = 'hidden';
     canvasContainer.style.zIndex = '999';
 
+    const configVerticalFovRadians =
+      deviceConfig.fieldOfView?.vertical != null
+        ? (deviceConfig.fieldOfView.vertical * Math.PI) / 180
+        : undefined;
+
     this[P_DEVICE] = {
       name: deviceConfig.name,
       supportedSessionModes: deviceConfig.supportedSessionModes,
@@ -286,7 +310,7 @@ export class XRDevice {
         deviceOptions.headsetQuaternion ?? DEFAULTS.headsetQuaternion.clone(),
       stereoEnabled: deviceOptions.stereoEnabled ?? DEFAULTS.stereoEnabled,
       ipd: deviceOptions.ipd ?? deviceConfig.ipd ?? DEFAULTS.ipd,
-      fovy: deviceOptions.fovy ?? deviceConfig.fovy ?? DEFAULTS.fovy,
+      fovy: deviceOptions.fovy ?? configVerticalFovRadians ?? DEFAULTS.fovy,
       resolutionWidth:
         deviceOptions.resolutionWidth ??
         deviceConfig.resolutionWidth ??
@@ -295,9 +319,16 @@ export class XRDevice {
         deviceOptions.resolutionHeight ??
         deviceConfig.resolutionHeight ??
         DEFAULTS.resolutionHeight,
+      stereoOverlap:
+        deviceOptions.stereoOverlap ??
+        deviceConfig.stereoOverlap ??
+        DEFAULTS.stereoOverlap,
+      fieldOfView: deviceConfig.fieldOfView,
+      handGestureDetectionSupported:
+        deviceConfig.handGestureDetectionSupported ?? false,
       controllers,
       hands,
-      primaryInputMode: 'controller',
+      primaryInputMode: hasTrackedController ? 'controller' : 'hand',
       pendingReferenceSpaceReset: false,
       visibilityState: 'visible',
       pendingVisibilityState: null,
@@ -312,6 +343,8 @@ export class XRDevice {
       getViewport: (layer: XRWebGLLayer, view: XRView) => {
         const canvas = layer.context.canvas;
         const { width, height } = canvas;
+        const overlap = this.getClampedStereoOverlap();
+        const stereoLayout = this.computeStereoViewportLayout(width, overlap);
         switch (view.eye) {
           case XREye.None:
             return new XRViewport(0, 0, width, height);
@@ -319,14 +352,14 @@ export class XRDevice {
             return new XRViewport(
               0,
               0,
-              this[P_DEVICE].stereoEnabled ? width / 2 : width,
+              this[P_DEVICE].stereoEnabled ? stereoLayout.perEyeWidth : width,
               height,
             );
           case XREye.Right:
             return new XRViewport(
-              width / 2,
+              this[P_DEVICE].stereoEnabled ? stereoLayout.rightX : width / 2,
               0,
-              this[P_DEVICE].stereoEnabled ? width / 2 : 0,
+              this[P_DEVICE].stereoEnabled ? stereoLayout.perEyeWidth : 0,
               height,
             );
         }
@@ -381,8 +414,9 @@ export class XRDevice {
           document.body.appendChild(this[P_DEVICE].canvasContainer);
         }
 
-        canvas.width = this[P_DEVICE].resolutionWidth;
-        canvas.height = this[P_DEVICE].resolutionHeight;
+        const { width, height } = this.getRecommendedRenderTargetSize();
+        canvas.width = width;
+        canvas.height = height;
       },
       onSessionEnd: () => {
         if (this[P_DEVICE].canvasData) {
@@ -541,6 +575,10 @@ export class XRDevice {
     return this[P_DEVICE].internalNominalFrameRate;
   }
 
+  get userAgent() {
+    return this[P_DEVICE].userAgent;
+  }
+
   get stereoEnabled() {
     return this[P_DEVICE].stereoEnabled;
   }
@@ -571,6 +609,53 @@ export class XRDevice {
 
   get resolutionHeight() {
     return this[P_DEVICE].resolutionHeight;
+  }
+
+  get stereoOverlap() {
+    return this[P_DEVICE].stereoOverlap;
+  }
+
+  get fieldOfView() {
+    return this[P_DEVICE].fieldOfView;
+  }
+
+  getRecommendedRenderTargetSize(stereoOverride?: boolean) {
+    const overlap = this.getClampedStereoOverlap();
+    const perEyeWidth = this[P_DEVICE].resolutionWidth;
+    const stereo =
+      typeof stereoOverride === 'boolean'
+        ? stereoOverride
+        : this[P_DEVICE].stereoEnabled;
+    const width = stereo
+      ? Math.round(perEyeWidth * (2 - overlap))
+      : perEyeWidth;
+    return { width, height: this[P_DEVICE].resolutionHeight };
+  }
+
+  private getClampedStereoOverlap() {
+    const overlap = this[P_DEVICE].stereoOverlap ?? DEFAULTS.stereoOverlap;
+    if (Number.isNaN(overlap)) {
+      return DEFAULTS.stereoOverlap;
+    }
+    return Math.min(Math.max(overlap, 0), 1);
+  }
+
+  private computeStereoViewportLayout(totalWidth: number, overlap: number) {
+    if (totalWidth <= 0) {
+      return {
+        perEyeWidth: 0,
+        rightX: 0,
+      };
+    }
+    const denominator = 2 - overlap;
+    const safeDenominator = denominator <= Number.EPSILON ? 1 : denominator;
+    const perEyeWidth = totalWidth / safeDenominator;
+    const rightX = perEyeWidth * (1 - overlap);
+    return { perEyeWidth, rightX };
+  }
+
+  get handGestureDetectionSupported() {
+    return this[P_DEVICE].handGestureDetectionSupported;
   }
 
   get position(): Vector3 {
@@ -665,14 +750,12 @@ export class XRDevice {
     const pSystem = xrSystem?.[P_SYSTEM];
     if (pSystem && pSystem.offeredSessionConfig) {
       const { resolve, reject, mode, options } = pSystem.offeredSessionConfig;
-      
+
       // Clear the offered session config first
       pSystem.offeredSessionConfig = undefined;
-      
+
       // Use the same requestSession flow to ensure identical behavior
-      xrSystem.requestSession(mode, options)
-        .then(resolve)
-        .catch(reject);
+      xrSystem.requestSession(mode, options).then(resolve).catch(reject);
     }
   }
 

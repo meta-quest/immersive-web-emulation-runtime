@@ -263,10 +263,11 @@ export class XRSession extends EventTarget {
         // Calculate projection matrices
         const { depthNear, depthFar } = this[P_SESSION].renderState;
         if (this[P_SESSION].mode !== 'inline') {
-          const aspect =
-            (this[P_SESSION].device[P_DEVICE].resolutionWidth *
-              (this[P_SESSION].device.stereoEnabled ? 0.5 : 1.0)) /
+          const perEyeWidth = this[P_SESSION].device[P_DEVICE].resolutionWidth;
+          const perEyeHeight =
             this[P_SESSION].device[P_DEVICE].resolutionHeight;
+          const aspect =
+            perEyeHeight > 0 ? perEyeWidth / perEyeHeight : 1;
           mat4.perspective(
             this[P_SESSION].projectionMatrices[XREye.Left],
             this[P_SESSION].device.fovy,

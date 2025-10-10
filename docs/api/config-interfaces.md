@@ -15,33 +15,54 @@ outline: deep
 - **`supportedSessionModes`**: **XRSessionMode[]**  
   Session modes the device supports (e.g., `inline`, `immersive-vr`, `immersive-ar`).
 
-- **`supportedFeatures`**: **WebXRFeatures[]**  
+- **`supportedFeatures`**: **WebXRFeatures[]**
   Features supported by the device, such as `hand-tracking`, `hit-test`, etc.
 
-- **`supportedFrameRates`**: **number[]**  
+- **`supportedFrameRates`**: **number[]**
   Frame rates supported by the device for rendering.
 
 - **`isSystemKeyboardSupported`**: **boolean**  
   Indicates if system keyboard input is supported.
 
-- **`internalNominalFrameRate`**: **number**  
+- **`internalNominalFrameRate`**: **number**
   The device's nominal internal frame rate.
+
+- **`ipd?`**: **number**
+  Optional interpupillary distance override in meters.
+
+- **`resolutionWidth?` / `resolutionHeight?`**: **number**
+  Optional per-eye render target resolution in pixels.
+
+- **`stereoOverlap?`**: **number**
+  Fraction between 0–1 describing how much of the stereo views overlap.
+
+- **`fieldOfView?`**: **{ diagonal: number; horizontal: number; vertical: number }**
+  Detailed field-of-view measurements in degrees for diagnostics.
+
+- **`handGestureDetectionSupported?`**: **boolean**
+  Whether the device reports native hand gesture detection alongside hand tracking.
 
 ## XRDeviceOptions
 
-- **`ipd`**: **number**  
+- **`ipd`**: **number**
   Interpupillary distance in meters, affecting stereo rendering.
 
-- **`fovy`**: **number**  
+- **`fovy`**: **number**
   Field of view on the Y-axis in radians.
 
-- **`stereoEnabled`**: **boolean**  
+- **`resolutionWidth` / `resolutionHeight`**: **number**
+  Render target resolution overrides in pixels.
+
+- **`stereoEnabled`**: **boolean**
   Enables or disables stereo rendering.
 
-- **`headsetPosition`**: **Vector3**  
+- **`stereoOverlap`**: **number**
+  Overrides the stereo overlap fraction when simulating optical changes.
+
+- **`headsetPosition`**: **Vector3**
   The initial position of the headset in 3D space.
 
-- **`headsetQuaternion`**: **Quaternion**  
+- **`headsetQuaternion`**: **Quaternion**
   The initial orientation of the headset.
 
 - **`canvasContainer`**: **HTMLDivElement**  
