@@ -34,7 +34,7 @@
 		"react-dom": "^19.2.0",
 		"styled-components": "^6.1.19",
 		"three": "^0.165.0",
-		"zustand": "^4.5.7"
+		"zustand": "^5.0.0"
 	},
 	"peerDependencies": {
 		"iwer": "^2.0.1"
