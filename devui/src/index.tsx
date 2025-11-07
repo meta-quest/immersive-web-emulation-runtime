@@ -178,9 +178,13 @@ const OfferSessionUI: React.FC<OfferSessionProps> = ({
 	);
 
 	React.useEffect(() => {
-		setInterval(() => {
+		const intervalId = setInterval(() => {
 			setShowOffer(xrDevice.sessionOffered && !xrDevice.activeSession);
 		}, 1000);
+
+		return () => {
+			clearInterval(intervalId);
+		};
 	}, []);
 
 	return (
