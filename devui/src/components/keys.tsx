@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import React from 'react';
 import { MouseLeft, MouseRight } from './icons.js';
 import {
 	faAngleUp,
@@ -20,7 +21,7 @@ import {
 import { FAIcon } from './styled.js';
 
 export const MappedKeyDisplay: {
-	[keyCode: string]: string | JSX.Element;
+	[keyCode: string]: string | React.JSX.Element;
 } = {
 	KeyA: 'A',
 	KeyB: 'B',

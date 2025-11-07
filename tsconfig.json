@@ -3,7 +3,7 @@
     /* Basic Options */
     "target": "ES2018", /* Good balance for modern browsers */
     "module": "esnext", /* Suitable for bundlers like Webpack or Rollup */
-    "lib": ["dom", "es2018"], /* Standard library files for web development */
+    "lib": ["dom", "es2019"], /* Standard library files for web development */
     "declaration": true, /* Generates corresponding '.d.ts' file */
     "declarationMap": true, /* Generates a sourcemap for each corresponding '.d.ts' file */
     "sourceMap": true, /* Generates corresponding '.map' file */
