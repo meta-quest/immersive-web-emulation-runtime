@@ -53,6 +53,7 @@ export class InputLayer {
 	};
 	private forwardHtmlEvents: () => void;
 	private lastTime: number = 0;
+	private _hideUI: boolean = false;
 
 	constructor(private xrDevice: XRDevice) {
 		this.scene = new Scene();
@@ -261,6 +262,7 @@ export class InputLayer {
 	}
 
 	syncDeviceTransforms() {
+		if (this._hideUI) return; // Skip sync when hideUI is enabled
 		const { xrDevice, cameraRig, transformHandles } = this;
 		xrDevice.position.copy(cameraRig.getWorldPosition(this.vec3) as any);
 		xrDevice.quaternion.copy(cameraRig.getWorldQuaternion(this.quat) as any);
@@ -276,6 +278,10 @@ export class InputLayer {
 				transformHandle.getWorldQuaternion(this.quat) as any,
 			);
 		});
+	}
+
+	setHideUI(enabled: boolean) {
+		this._hideUI = enabled;
 	}
 
 	renderScene(time: number) {
