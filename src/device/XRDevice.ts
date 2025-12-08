@@ -460,7 +460,7 @@ export class XRDevice {
     Object.defineProperty(navigator, 'userAgent', {
       value: this[P_DEVICE].userAgent,
       writable: false,
-      configurable: false,
+      configurable: true,
       enumerable: true,
     });
     globalObject['XRSystem'] = XRSystem;

@@ -140,6 +140,11 @@ export class XRSession extends EventTarget {
     onsqueezeend: XRInputSourceEventHandler | null;
     onvisibilitychange: XRSessionEventHandler | null;
     onframeratechange: XRSessionEventHandler | null;
+    // context lost handler for cleanup
+    contextLostHandler: {
+      canvas: HTMLCanvasElement;
+      handler: (event: Event) => void;
+    } | null;
   };
 
   constructor(
@@ -196,6 +201,42 @@ export class XRSession extends EventTarget {
           this[P_SESSION].device[P_DEVICE].onBaseLayerSet(
             this[P_SESSION].renderState.baseLayer,
           );
+
+          // Set up context lost handler when baseLayer is set
+          const newBaseLayer = this[P_SESSION].renderState.baseLayer;
+          if (
+            newBaseLayer &&
+            newBaseLayer.context &&
+            newBaseLayer.context.canvas
+          ) {
+            // Remove old handler if it exists
+            if (this[P_SESSION].contextLostHandler) {
+              this[P_SESSION].contextLostHandler.canvas.removeEventListener(
+                'webglcontextlost',
+                this[P_SESSION].contextLostHandler.handler,
+              );
+            }
+
+            // Create new handler
+            const handler = (event: Event) => {
+              event.preventDefault(); // Prevent default recovery
+              this[P_SESSION].ended = true;
+              if (this[P_SESSION].deviceFrameHandle) {
+                globalThis.cancelAnimationFrame(
+                  this[P_SESSION].deviceFrameHandle,
+                );
+              }
+            };
+
+            newBaseLayer.context.canvas.addEventListener(
+              'webglcontextlost',
+              handler,
+            );
+            this[P_SESSION].contextLostHandler = {
+              canvas: newBaseLayer.context.canvas as HTMLCanvasElement,
+              handler,
+            };
+          }
         }
 
         const baseLayer = this[P_SESSION].renderState.baseLayer;
@@ -507,6 +548,7 @@ export class XRSession extends EventTarget {
       onsqueezeend: null,
       onvisibilitychange: null,
       onframeratechange: null,
+      contextLostHandler: null,
     };
 
     XRAnchorUtils.recoverPersistentAnchorsFromStorage(this);
@@ -728,7 +770,18 @@ export class XRSession extends EventTarget {
           new DOMException('XRSession has already ended.', 'InvalidStateError'),
         );
       } else {
+        this[P_SESSION].ended = true; // Set ended flag to stop frame loop
         globalThis.cancelAnimationFrame(this[P_SESSION].deviceFrameHandle!);
+
+        // Clean up context lost handler
+        if (this[P_SESSION].contextLostHandler) {
+          this[P_SESSION].contextLostHandler.canvas.removeEventListener(
+            'webglcontextlost',
+            this[P_SESSION].contextLostHandler.handler,
+          );
+          this[P_SESSION].contextLostHandler = null;
+        }
+
         this[P_SESSION].device[P_DEVICE].onSessionEnd();
         this.dispatchEvent(new XRSessionEvent('end', { session: this }));
         resolve();

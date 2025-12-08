@@ -20,6 +20,7 @@ import { createRoot } from 'react-dom/client';
 
 export class DevUI {
 	private inputLayer: InputLayer;
+	private _hideUI: boolean = false;
 	public devUIContainer: HTMLDivElement;
 	public readonly version = VERSION;
 
@@ -75,6 +76,19 @@ export class DevUI {
 
 	get devUICanvas() {
 		return this.inputLayer.domElement;
+	}
+
+	set hideUI(enabled: boolean) {
+		this._hideUI = enabled;
+		// Hide UI containers
+		this.devUIContainer.style.display = enabled ? 'none' : '';
+		this.inputLayer.domElement.style.display = enabled ? 'none' : '';
+		// Disable sync in InputLayer
+		this.inputLayer.setHideUI(enabled);
+	}
+
+	get hideUI(): boolean {
+		return this._hideUI;
 	}
 }
 
