@@ -14,6 +14,72 @@ export {
 	oculusQuest1,
 } from './device/configs/headset/meta.js';
 
+// Remote Control Interface
+export { RemoteControlInterface } from './remote/index.js';
+export type {
+	DeviceId,
+	InputDeviceId,
+	ControllerId,
+	Action,
+	DiscreteAction,
+	DurationAction,
+	OrientationInput,
+	GetTransformParams,
+	GetTransformResult,
+	SetTransformParams,
+	SetTransformResult,
+	LookAtParams,
+	LookAtResult,
+	AnimateToParams,
+	AnimateToResult,
+	SetInputModeParams,
+	SetInputModeResult,
+	SetConnectedParams,
+	SetConnectedResult,
+	GetSelectValueParams,
+	GetSelectValueResult,
+	SetSelectValueParams,
+	SetSelectValueResult,
+	SelectParams,
+	SelectResult,
+	GamepadButtonInfo,
+	GamepadAxisInfo,
+	GetGamepadStateParams,
+	GetGamepadStateResult,
+	GamepadButtonInput,
+	GamepadAxisInput,
+	SetGamepadStateParams,
+	SetGamepadStateResult,
+	CaptureCanvasParams,
+	CaptureCanvasResult,
+	RemoteSessionStatus,
+	AcceptSessionResult,
+	EndSessionResult,
+	RemoteDeviceState,
+	SetDeviceStateParams,
+	SetDeviceStateResult,
+} from './remote/index.js';
+
+// Control Types
+export type {
+	Vec3,
+	Quat,
+	EulerRotation,
+	InputMode,
+	ControlMode,
+} from './types/state.js';
+
+// Control Math Utilities
+export {
+	eulerToQuat,
+	quatToEuler,
+	directionTo,
+	lookRotation,
+	vec3ToObj,
+	quatToObj,
+	waitForCondition,
+} from './utils/control-math.js';
+
 // Initialization
 export { XRSystem } from './initialization/XRSystem.js';
 

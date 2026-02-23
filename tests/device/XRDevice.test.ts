@@ -179,4 +179,119 @@ describe('XRDevice', () => {
 		expect(device.devui).toBeUndefined();
 		expect(device.sem).toBeUndefined();
 	});
+
+	describe('controlMode', () => {
+		test('should default to manual', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			expect(device.controlMode).toBe('manual');
+		});
+
+		test('should allow setting to programmatic', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			device.controlMode = 'programmatic';
+			expect(device.controlMode).toBe('programmatic');
+		});
+
+		test('should allow setting back to manual', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			device.controlMode = 'programmatic';
+			device.controlMode = 'manual';
+			expect(device.controlMode).toBe('manual');
+		});
+
+		test('should warn and not change for invalid mode', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+			device.controlMode = 'invalid' as any;
+			expect(device.controlMode).toBe('manual');
+			expect(consoleSpy).toHaveBeenCalledWith('control mode can only be "manual" or "programmatic"');
+			consoleSpy.mockRestore();
+		});
+
+		test('should not notify listeners if mode unchanged', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const listener = jest.fn();
+			device.onControlModeChange(listener);
+			device.controlMode = 'manual'; // Already manual
+			expect(listener).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('onControlModeChange', () => {
+		test('should register listener and invoke on change', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const listener = jest.fn();
+			device.onControlModeChange(listener);
+			device.controlMode = 'programmatic';
+			expect(listener).toHaveBeenCalledWith('programmatic');
+		});
+
+		test('should return unsubscribe function', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const listener = jest.fn();
+			const unsubscribe = device.onControlModeChange(listener);
+			unsubscribe();
+			device.controlMode = 'programmatic';
+			expect(listener).not.toHaveBeenCalled();
+		});
+
+		test('should support multiple listeners', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const listener1 = jest.fn();
+			const listener2 = jest.fn();
+			device.onControlModeChange(listener1);
+			device.onControlModeChange(listener2);
+			device.controlMode = 'programmatic';
+			expect(listener1).toHaveBeenCalledWith('programmatic');
+			expect(listener2).toHaveBeenCalledWith('programmatic');
+		});
+	});
+
+	describe('onStateChange', () => {
+		test('should register listener', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const listener = jest.fn();
+			device.onStateChange(listener);
+			device.notifyStateChange();
+			expect(listener).toHaveBeenCalled();
+		});
+
+		test('should return unsubscribe function', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const listener = jest.fn();
+			const unsubscribe = device.onStateChange(listener);
+			unsubscribe();
+			device.notifyStateChange();
+			expect(listener).not.toHaveBeenCalled();
+		});
+
+		test('should support multiple listeners', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const listener1 = jest.fn();
+			const listener2 = jest.fn();
+			device.onStateChange(listener1);
+			device.onStateChange(listener2);
+			device.notifyStateChange();
+			expect(listener1).toHaveBeenCalled();
+			expect(listener2).toHaveBeenCalled();
+		});
+	});
+
+	describe('notifyStateChange', () => {
+		test('should call all registered state change listeners', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			const listener1 = jest.fn();
+			const listener2 = jest.fn();
+			device.onStateChange(listener1);
+			device.onStateChange(listener2);
+			device.notifyStateChange();
+			expect(listener1).toHaveBeenCalledTimes(1);
+			expect(listener2).toHaveBeenCalledTimes(1);
+		});
+
+		test('should not fail with no listeners', () => {
+			const device = new XRDevice(mockDeviceConfig);
+			expect(() => device.notifyStateChange()).not.toThrow();
+		});
+	});
 });

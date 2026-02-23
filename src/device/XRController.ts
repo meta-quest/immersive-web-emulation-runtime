@@ -102,6 +102,36 @@ export class XRController extends XRTrackedInput {
     }
   }
 
+  /**
+   * Set button value immediately (bypasses pending mechanism).
+   * Use this for programmatic control where value should be readable immediately.
+   */
+  setButtonValueImmediate(id: string, value: number) {
+    if (value > 1 || value < 0) {
+      console.warn(`Out-of-range value ${value} provided for button ${id}.`);
+      return;
+    }
+    const gamepadButton =
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[id];
+    if (gamepadButton) {
+      if (
+        gamepadButton[P_GAMEPAD].type === 'binary' &&
+        value != 1 &&
+        value != 0
+      ) {
+        console.warn(
+          `Non-binary value ${value} provided for binary button ${id}.`,
+        );
+        return;
+      }
+      // Set both value and pendingValue for immediate effect
+      gamepadButton[P_GAMEPAD].value = value;
+      gamepadButton[P_GAMEPAD].pendingValue = value;
+    } else {
+      console.warn(`Current controller does not have button ${id}.`);
+    }
+  }
+
   updateButtonTouch(id: string, touched: boolean) {
     const gamepadButton =
       this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[id];
@@ -145,5 +175,41 @@ export class XRController extends XRTrackedInput {
     } else {
       console.warn(`Current controller does not have ${id} axes.`);
     }
+  }
+
+  /**
+   * Get the current value of a button by id
+   */
+  getButtonValue(id: string): number {
+    const gamepadButton =
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[id];
+    if (gamepadButton) {
+      return gamepadButton[P_GAMEPAD].pendingValue ?? gamepadButton.value;
+    }
+    return 0;
+  }
+
+  /**
+   * Get the touched state of a button by id
+   */
+  getButtonTouched(id: string): boolean {
+    const gamepadButton =
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[id];
+    if (gamepadButton) {
+      return gamepadButton.touched;
+    }
+    return false;
+  }
+
+  /**
+   * Get the current axes values for a given id (e.g., 'thumbstick')
+   */
+  getAxes(id: string = 'thumbstick'): { x: number; y: number } {
+    const axesById =
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].axesMap[id];
+    if (axesById) {
+      return { x: axesById.x, y: axesById.y };
+    }
+    return { x: 0, y: 0 };
   }
 }

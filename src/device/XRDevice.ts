@@ -14,6 +14,8 @@ import {
   P_SYSTEM,
 } from '../private.js';
 import { Quaternion, Vector3 } from '../utils/Math.js';
+import type { ControlMode } from '../types/state.js';
+import { RemoteControlInterface } from '../remote/RemoteControlInterface.js';
 import { XRController, XRControllerConfig } from './XRController.js';
 import {
   XREnvironmentBlendMode,
@@ -203,6 +205,17 @@ export class XRDevice {
     // add-on modules:
     devui?: DevUI;
     sem?: SyntheticEnvironmentModule;
+
+    // control mode for programmatic access
+    controlMode: ControlMode;
+    controlModeListeners: Set<(mode: ControlMode) => void>;
+    stateChangeListeners: Set<() => void>;
+
+    // remote control interface
+    remote: RemoteControlInterface;
+
+    // frame timing for remote update
+    lastFrameTime: number;
   };
 
   constructor(
@@ -392,6 +405,18 @@ export class XRDevice {
         }
       },
       onFrameStart: (frame: XRFrame) => {
+        // Calculate delta time for remote control
+        const now = performance.now();
+        const deltaTimeMs = this[P_DEVICE].lastFrameTime > 0
+          ? now - this[P_DEVICE].lastFrameTime
+          : 16.67; // Default to ~60fps
+        this[P_DEVICE].lastFrameTime = now;
+
+        // Update remote control interface
+        if (this[P_DEVICE].remote) {
+          this[P_DEVICE].remote.update(deltaTimeMs);
+        }
+
         if (this[P_DEVICE].actionPlayer?.playing) {
           this[P_DEVICE].actionPlayer.playFrame();
         } else {
@@ -431,7 +456,21 @@ export class XRDevice {
 
         this[P_DEVICE].updateViews();
       },
+
+      // control mode for programmatic access
+      controlMode: 'manual',
+      controlModeListeners: new Set(),
+      stateChangeListeners: new Set(),
+
+      // remote control interface - initialized after this object
+      remote: null as any,
+
+      // frame timing for remote update
+      lastFrameTime: 0,
     };
+
+    // Initialize remote control interface
+    this[P_DEVICE].remote = new RemoteControlInterface(this);
 
     this[P_DEVICE].updateViews();
     globalThis;
@@ -621,6 +660,14 @@ export class XRDevice {
     return;
   }
 
+  /**
+   * Get the app canvas when an XR session is active.
+   * Returns undefined if no session is active or no canvas is available.
+   */
+  get appCanvas(): HTMLCanvasElement | undefined {
+    return this[P_DEVICE].canvasData?.canvas;
+  }
+
   get activeSession(): XRSession | undefined {
     return this[P_DEVICE].xrSystem?.[P_SYSTEM].activeSession;
   }
@@ -717,5 +764,71 @@ export class XRDevice {
 
   get sem() {
     return this[P_DEVICE].sem;
+  }
+
+  get remote(): RemoteControlInterface {
+    return this[P_DEVICE].remote;
+  }
+
+  // =============================================================================
+  // Control Mode API
+  // =============================================================================
+
+  /**
+   * Get the current control mode
+   * - 'manual': User controls device via DevUI (default)
+   * - 'programmatic': External API controls device
+   */
+  get controlMode(): ControlMode {
+    return this[P_DEVICE].controlMode;
+  }
+
+  /**
+   * Set the control mode
+   * Notifies all registered listeners of the change
+   */
+  set controlMode(mode: ControlMode) {
+    if (mode !== 'manual' && mode !== 'programmatic') {
+      console.warn('control mode can only be "manual" or "programmatic"');
+      return;
+    }
+    const prevMode = this[P_DEVICE].controlMode;
+    if (prevMode !== mode) {
+      this[P_DEVICE].controlMode = mode;
+      this[P_DEVICE].controlModeListeners.forEach((listener) => listener(mode));
+    }
+  }
+
+  /**
+   * Register a listener to be notified when control mode changes
+   * @param listener - Callback function that receives the new mode
+   * @returns Unsubscribe function to remove the listener
+   */
+  onControlModeChange(listener: (mode: ControlMode) => void): () => void {
+    this[P_DEVICE].controlModeListeners.add(listener);
+    return () => {
+      this[P_DEVICE].controlModeListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Register a listener to be notified when device state changes
+   * Called after programmatic state modifications
+   * @param listener - Callback function
+   * @returns Unsubscribe function to remove the listener
+   */
+  onStateChange(listener: () => void): () => void {
+    this[P_DEVICE].stateChangeListeners.add(listener);
+    return () => {
+      this[P_DEVICE].stateChangeListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Notify all state change listeners that device state has been modified
+   * Should be called after programmatic state modifications
+   */
+  notifyStateChange(): void {
+    this[P_DEVICE].stateChangeListeners.forEach((listener) => listener());
   }
 }
