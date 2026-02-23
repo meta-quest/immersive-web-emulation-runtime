@@ -16,10 +16,13 @@ import { InputLayer } from './scene.js';
 import { StyleSheetManager } from 'styled-components';
 import { VERSION } from './version.js';
 import { XRDevice } from 'iwer';
+import type { ControlMode } from 'iwer';
 import { createRoot } from 'react-dom/client';
 
 export class DevUI {
 	private inputLayer: InputLayer;
+	private unsubscribeControlMode: () => void;
+	private unsubscribeStateChange: () => void;
 	public devUIContainer: HTMLDivElement;
 	public readonly version = VERSION;
 
@@ -38,6 +41,25 @@ export class DevUI {
 			mode: 'open',
 		});
 		this.inputLayer = new InputLayer(xrDevice);
+
+		// Subscribe to control mode changes
+		this.unsubscribeControlMode = xrDevice.onControlModeChange((mode: ControlMode) => {
+			this.inputLayer.isInProgrammaticMode = mode === 'programmatic';
+			if (mode === 'programmatic') {
+				this.inputLayer.syncFromDevice();
+				this.inputLayer.setInteractionsEnabled(false);
+			} else {
+				this.inputLayer.setInteractionsEnabled(true);
+			}
+		});
+
+		// Subscribe to state changes when in programmatic mode
+		this.unsubscribeStateChange = xrDevice.onStateChange(() => {
+			if (this.inputLayer.isInProgrammaticMode) {
+				this.inputLayer.syncFromDevice();
+			}
+		});
+
 		const root = createRoot(devUIShadowRoot);
 		root.render(
 			<Overlay
@@ -73,6 +95,12 @@ export class DevUI {
 		this.inputLayer.renderScene(time);
 	}
 
+	dispose() {
+		this.unsubscribeControlMode();
+		this.unsubscribeStateChange();
+		this.inputLayer.dispose();
+	}
+
 	get devUICanvas() {
 		return this.inputLayer.domElement;
 	}
@@ -90,6 +118,7 @@ const Overlay: React.FC<OverlayProps> = ({
 	shadowRoot,
 }) => {
 	const [pointerLocked, setPointerLocked] = useState(false);
+	const [controlMode, setControlMode] = useState<ControlMode>(xrDevice.controlMode);
 
 	useEffect(() => {
 		const pointerLockChangeHandler = () => {
@@ -117,6 +146,11 @@ const Overlay: React.FC<OverlayProps> = ({
 			false,
 		);
 
+		// Subscribe to control mode changes
+		const unsubscribe = xrDevice.onControlModeChange((mode: ControlMode) => {
+			setControlMode(mode);
+		});
+
 		return () => {
 			document.removeEventListener(
 				'pointerlockchange',
@@ -133,8 +167,9 @@ const Overlay: React.FC<OverlayProps> = ({
 				pointerLockChangeHandler,
 				false,
 			);
+			unsubscribe();
 		};
-	}, []);
+	}, [xrDevice]);
 
 	return (
 		<StyleSheetManager target={shadowRoot} disableCSSOMInjection={true}>
@@ -148,17 +183,64 @@ const Overlay: React.FC<OverlayProps> = ({
 					pointerEvents: 'none',
 				}}
 			>
-				<HeaderUI xrDevice={xrDevice} inputLayer={inputLayer} />
-				<HeadsetUI
-					xrDevice={xrDevice}
-					inputLayer={inputLayer}
-					pointerLocked={pointerLocked}
-				/>
-				<ControlsUI
-					xrDevice={xrDevice}
-					inputLayer={inputLayer}
-					pointerLocked={pointerLocked}
-				/>
+				{/* Remote Control Mode: Blue edge gradient + bottom indicator */}
+				{controlMode === 'programmatic' && (
+					<>
+						{/* Blue gradient edge overlay */}
+						<div
+							style={{
+								position: 'absolute',
+								top: 0,
+								left: 0,
+								right: 0,
+								bottom: 0,
+								pointerEvents: 'none',
+								zIndex: 999,
+								boxShadow: 'inset 0 0 20px 5px rgba(59, 130, 246, 0.5)',
+							}}
+						/>
+						{/* Bottom indicator panel */}
+						<div
+							style={{
+								position: 'absolute',
+								bottom: '8px',
+								left: '50%',
+								transform: 'translateX(-50%)',
+								backgroundColor: 'rgba(59, 130, 246, 0.9)',
+								color: 'white',
+								padding: '6px 16px',
+								borderRadius: '16px',
+								fontSize: '12px',
+								fontFamily: 'system-ui, sans-serif',
+								fontWeight: 500,
+								zIndex: 1000,
+								display: 'flex',
+								alignItems: 'center',
+								gap: '6px',
+								boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+							}}
+						>
+							<span style={{ fontSize: '14px' }}>&#9679;</span>
+							Remote Control Active
+						</div>
+					</>
+				)}
+				{/* Normal UI - only visible when NOT in programmatic mode */}
+				{controlMode !== 'programmatic' && (
+					<>
+						<HeaderUI xrDevice={xrDevice} inputLayer={inputLayer} />
+						<HeadsetUI
+							xrDevice={xrDevice}
+							inputLayer={inputLayer}
+							pointerLocked={pointerLocked}
+						/>
+						<ControlsUI
+							xrDevice={xrDevice}
+							inputLayer={inputLayer}
+							pointerLocked={pointerLocked}
+						/>
+					</>
+				)}
 			</div>
 		</StyleSheetManager>
 	);

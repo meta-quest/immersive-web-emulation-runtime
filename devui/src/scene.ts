@@ -6,6 +6,7 @@
  */
 
 import {
+	Euler,
 	FrontSide,
 	Group,
 	Mesh,
@@ -39,6 +40,8 @@ export class InputLayer {
 	private isPointerLocked: boolean = false;
 	private vec3: Vector3 = new Vector3();
 	private quat: Quaternion = new Quaternion();
+	private quatB: Quaternion = new Quaternion();
+	private euler: Euler = new Euler();
 	private mouseMoveHandler: (event: MouseEvent) => void;
 	private headsetDefaultPosition: Vector3;
 	private headsetDefaultQuaternion: Quaternion;
@@ -53,6 +56,17 @@ export class InputLayer {
 	};
 	private forwardHtmlEvents: () => void;
 	private lastTime: number = 0;
+
+	/**
+	 * Whether the device is in programmatic control mode.
+	 * When true, this layer won't sync TO the device (device controls us instead).
+	 */
+	public isInProgrammaticMode: boolean = false;
+
+	/**
+	 * Whether user interactions (pointer lock, mouse movement) are enabled.
+	 */
+	private interactionsEnabled: boolean = true;
 
 	constructor(private xrDevice: XRDevice) {
 		this.scene = new Scene();
@@ -129,7 +143,7 @@ export class InputLayer {
 		window.transformHandles = this.transformHandles;
 
 		this.mouseMoveHandler = (event: MouseEvent) => {
-			if (!this.isPointerLocked) return;
+			if (!this.isPointerLocked || this.isInProgrammaticMode) return;
 			const movementX =
 				// @ts-ignore
 				event.movementX || event.mozMovementX || event.webkitMovementX || 0;
@@ -174,6 +188,10 @@ export class InputLayer {
 	}
 
 	lockPointer() {
+		// Don't allow pointer lock in programmatic mode or when interactions disabled
+		if (this.isInProgrammaticMode || !this.interactionsEnabled) {
+			return;
+		}
 		this.renderer.domElement.requestPointerLock =
 			this.renderer.domElement.requestPointerLock ||
 			// @ts-ignore
@@ -199,7 +217,7 @@ export class InputLayer {
 		} else {
 			document.removeEventListener('mousemove', this.mouseMoveHandler, false);
 			Object.values(this.transformHandles).forEach((transformHandle) => {
-				transformHandle.visible = true;
+				transformHandle.visible = !this.isInProgrammaticMode;
 			});
 		}
 	}
@@ -210,6 +228,8 @@ export class InputLayer {
 		if (event.code in keyState) {
 			keyState[event.code] = true;
 		}
+
+		if (this.isInProgrammaticMode) return;
 
 		if (keyState.ShiftLeft && keyState.ArrowUp) {
 			this.cameraRig.position.y += 0.05;
@@ -278,6 +298,79 @@ export class InputLayer {
 		});
 	}
 
+	/**
+	 * Sync DevUI's local transforms FROM the device's global transforms.
+	 * This is the reverse of syncDeviceTransforms() - used when device
+	 * is controlled programmatically and we need to follow its state.
+	 */
+	syncFromDevice() {
+		const { xrDevice, playerRig, cameraRig, transformHandles } = this;
+
+		// Get headset world position and rotation from device
+		const headsetPos = xrDevice.position;
+		const headsetQuat = xrDevice.quaternion;
+
+		// Update combined camera position
+		this.combinedCameraPosition.set(headsetPos.x, headsetPos.y, headsetPos.z);
+
+		// Decompose quaternion into Euler angles (YXZ order for gimbal)
+		// Y = yaw (playerRig), pitch+roll preserved on cameraRig
+		this.quatB.set(headsetQuat.x, headsetQuat.y, headsetQuat.z, headsetQuat.w);
+		this.euler.setFromQuaternion(this.quatB, 'YXZ');
+
+		// Set playerRig position (x/z) and yaw
+		playerRig.position.set(headsetPos.x, 0, headsetPos.z);
+		playerRig.rotation.set(0, this.euler.y, 0);
+
+		// Set cameraRig position (y) and full local rotation (preserving roll)
+		// cameraRig local quat = inv(playerRig yaw quat) * headset world quat
+		cameraRig.position.set(0, headsetPos.y, 0);
+		this.quat.setFromEuler(this.euler.set(0, this.euler.y, 0, 'YXZ'));
+		cameraRig.quaternion.multiplyQuaternions(this.quat.invert(), this.quatB);
+
+		// Force Three.js to update world matrices
+		playerRig.updateMatrixWorld(true);
+
+		// Sync controller/hand transforms
+		transformHandles.forEach((transformHandle, handedness) => {
+			const emulatedInput =
+				xrDevice.primaryInputMode === 'controller'
+					? xrDevice.controllers[handedness]!
+					: xrDevice.hands[handedness]!;
+
+			// Convert world position to cameraRig local position
+			const worldPos = this.vec3.set(
+				emulatedInput.position.x,
+				emulatedInput.position.y,
+				emulatedInput.position.z,
+			);
+			cameraRig.worldToLocal(worldPos);
+			transformHandle.position.copy(worldPos);
+
+			// Convert world quaternion to cameraRig local quaternion
+			cameraRig.getWorldQuaternion(this.quat);
+			this.quatB.set(
+				emulatedInput.quaternion.x,
+				emulatedInput.quaternion.y,
+				emulatedInput.quaternion.z,
+				emulatedInput.quaternion.w,
+			);
+			this.quatB.premultiply(this.quat.invert());
+			transformHandle.quaternion.copy(this.quatB);
+		});
+	}
+
+	/**
+	 * Enable or disable user interactions (pointer lock, keyboard controls).
+	 * When disabled, the DevUI still renders but doesn't respond to user input.
+	 */
+	setInteractionsEnabled(enabled: boolean) {
+		this.interactionsEnabled = enabled;
+		if (!enabled && this.isPointerLocked) {
+			document.exitPointerLock();
+		}
+	}
+
 	renderScene(time: number) {
 		const xrDeviceFOV = (this.xrDevice.fovy / Math.PI) * 180;
 		let cameraMatrixNeedsUpdate = false;
@@ -304,26 +397,34 @@ export class InputLayer {
 		if (cameraMatrixNeedsUpdate) {
 			this.camera.updateProjectionMatrix();
 		}
-		if (!this.isPointerLocked) {
-			this.cameraRig.position.y = this.combinedCameraPosition.y;
-			this.playerRig.position.x = this.combinedCameraPosition.x;
-			this.playerRig.position.z = this.combinedCameraPosition.z;
-		} else {
-			this.cameraRig.getWorldPosition(this.combinedCameraPosition);
+		if (!this.isInProgrammaticMode) {
+			if (!this.isPointerLocked) {
+				this.cameraRig.position.y = this.combinedCameraPosition.y;
+				this.playerRig.position.x = this.combinedCameraPosition.x;
+				this.playerRig.position.z = this.combinedCameraPosition.z;
+			} else {
+				this.cameraRig.getWorldPosition(this.combinedCameraPosition);
+			}
 		}
 		this.forwardHtmlEvents();
 		this.transformHandles.forEach((transformHandle, handedness) => {
 			const connected = Boolean(
 				this.xrDevice.controllers[handedness]?.connected,
 			);
-			transformHandle.visible = connected && !this.isPointerLocked;
+			transformHandle.visible = connected && !this.isPointerLocked && !this.isInProgrammaticMode;
 			if (connected) {
 				transformHandle.update(time, this.camera);
 			}
 		});
 		const delta = Math.min((time - this.lastTime) / 1000, 0.1);
-		this.movePlayerRig(delta);
-		this.syncDeviceTransforms();
+
+		// Only process user input and sync TO device in manual mode
+		// In programmatic mode, the device controls us (via syncFromDevice)
+		if (!this.isInProgrammaticMode) {
+			this.movePlayerRig(delta);
+			this.syncDeviceTransforms();
+		}
+
 		this.renderer.render(this.scene, this.camera);
 		this.lastTime = time;
 	}
