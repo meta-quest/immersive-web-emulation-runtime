@@ -1,6 +1,6 @@
 {
 	"name": "@iwer/devui",
-	"version": "1.1.2",
+	"version": "2.2.0",
 	"description": "Dev UI for IWER",
 	"type": "module",
 	"main": "lib/index.js",
@@ -36,7 +36,7 @@
 		"three": "^0.165.0"
 	},
 	"peerDependencies": {
-		"iwer": "^2.1.0"
+		"iwer": "^2.2.0"
 	},
 	"devDependencies": {
 		"@rollup/plugin-babel": "^6.0.4",
@@ -46,6 +46,7 @@
 		"@rollup/plugin-terser": "^0.4.4",
 		"@types/react": "^18.3.12",
 		"@types/react-dom": "^18.3.1",
+		"iwer": "^2.2.0",
 		"rollup": "^4.24.3",
 		"rollup-plugin-peer-deps-external": "^2.2.4",
 		"typescript": "^5.6.3"

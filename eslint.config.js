@@ -33,8 +33,8 @@ export default [
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-inferrable-types': 'off',
 
-      // Import sorting with better auto-fix support
-      'sort-imports': 'off', // Turn off ESLint's sort-imports in favor of import/order
+      // Import sorting
+      'sort-imports': 'off',
       'import/order': [
         'error',
         {
