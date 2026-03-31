@@ -6,18 +6,22 @@
  */
 
 import {
+	Camera,
 	Color,
 	GridHelper,
 	Group,
 	Matrix3,
 	Matrix4,
+	MeshDepthMaterial,
 	Object3D,
 	PerspectiveCamera,
 	Quaternion,
+	RGBADepthPacking,
 	Raycaster,
 	Scene,
 	Vector3,
 	WebGLRenderer,
+	WebGLRenderTarget,
 } from 'three';
 import { NativeMesh, NativePlane, XRDevice } from 'iwer';
 import { SpatialEntity, SpatialEntityType } from './native/entity.js';
@@ -52,6 +56,14 @@ export class SyntheticEnvironmentModule extends EventTarget {
 	private worldNormal = new Vector3();
 	private normalMatrix = new Matrix3();
 
+	// Depth sensing
+	private depthRenderTarget: WebGLRenderTarget | null = null;
+	private depthMaterial = new MeshDepthMaterial({
+		depthPacking: RGBADepthPacking,
+	});
+	private depthCamera: Camera;
+	private depthReadBuffer: Uint8Array | null = null;
+
 	constructor(private xrDevice: XRDevice) {
 		super();
 		this.scene = new Scene();
@@ -84,6 +96,10 @@ export class SyntheticEnvironmentModule extends EventTarget {
 
 		this.hitTestTarget.add(this.hitTestMarker);
 		this.hitTestMarker.rotateX(Math.PI / 2);
+
+		this.depthCamera = new Camera();
+		this.depthCamera.matrixWorldAutoUpdate = false;
+		this.depthCamera.matrixAutoUpdate = false;
 	}
 
 	get environmentCanvas() {
@@ -253,5 +269,117 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		});
 
 		return results;
+	}
+
+	computeDepthBuffer(
+		viewMatrix: mat4,
+		projectionMatrix: mat4,
+		width: number,
+		height: number,
+		depthNear: number,
+		depthFar: number,
+	): { data: ArrayBuffer; width: number; height: number; rawValueToMeters: number } | null {
+		if (this.trackedMeshes.size === 0) {
+			return null;
+		}
+
+		// Create or resize render target
+		if (
+			!this.depthRenderTarget ||
+			this.depthRenderTarget.width !== width ||
+			this.depthRenderTarget.height !== height
+		) {
+			this.depthRenderTarget?.dispose();
+			this.depthRenderTarget = new WebGLRenderTarget(width, height);
+			this.depthReadBuffer = new Uint8Array(width * height * 4);
+		}
+
+		// Set up depth camera from view & projection matrices
+		this.depthCamera.matrixWorldInverse.fromArray(viewMatrix);
+		this.depthCamera.matrixWorld.copy(
+			this.depthCamera.matrixWorldInverse,
+		).invert();
+		this.depthCamera.projectionMatrix.fromArray(projectionMatrix);
+		this.depthCamera.projectionMatrixInverse.copy(
+			this.depthCamera.projectionMatrix,
+		).invert();
+
+		// Save visibility state and force environment geometry visible for depth
+		const prevMeshesVisible = this.meshes.visible;
+		const prevBoxesVisible = this.boxes.visible;
+		this.meshes.visible = true;
+		this.boxes.visible = true;
+
+		// Render with depth material into the render target
+		const prevOverrideMaterial = this.scene.overrideMaterial;
+		const prevBackground = this.scene.background;
+		this.scene.overrideMaterial = this.depthMaterial;
+		this.scene.background = null;
+
+		this.renderer.setRenderTarget(this.depthRenderTarget);
+		this.renderer.clear();
+		this.renderer.render(this.scene, this.depthCamera);
+		this.renderer.setRenderTarget(null);
+
+		this.scene.overrideMaterial = prevOverrideMaterial;
+		this.scene.background = prevBackground;
+
+		// Restore visibility state
+		this.meshes.visible = prevMeshesVisible;
+		this.boxes.visible = prevBoxesVisible;
+
+		// Read back RGBA pixels (depth encoded via RGBADepthPacking)
+		this.renderer.readRenderTargetPixels(
+			this.depthRenderTarget,
+			0,
+			0,
+			width,
+			height,
+			this.depthReadBuffer!,
+		);
+
+		// Output as float32 (one depth-in-meters value per pixel)
+		const depthRange = depthFar - depthNear;
+		const rawValueToMeters = 1.0; // float32 values are already in meters
+		const outputBuffer = new ArrayBuffer(width * height * 4); // 4 bytes per float
+		const output = new Float32Array(outputBuffer);
+		const rgba = this.depthReadBuffer!;
+
+		for (let row = 0; row < height; row++) {
+			// Flip vertically: readRenderTargetPixels returns bottom-to-top rows,
+			// but view coordinates expect top-to-bottom
+			const srcRow = height - 1 - row;
+			for (let col = 0; col < width; col++) {
+				const srcIdx = srcRow * width + col;
+				const dstIdx = row * width + col;
+
+				const r = rgba[srcIdx * 4] / 255;
+				const g = rgba[srcIdx * 4 + 1] / 255;
+				const b = rgba[srcIdx * 4 + 2] / 255;
+				const a = rgba[srcIdx * 4 + 3] / 255;
+
+				// Decode depth from RGBA packing — this is gl_FragCoord.z (0..1)
+				const normalizedDepth = r + g / 256 + b / 65536 + a / 16777216;
+
+				// Convert from non-linear gl_FragCoord.z to linear eye-space depth
+				let depthMeters: number;
+				if (normalizedDepth >= 1.0) {
+					depthMeters = depthFar;
+				} else if (normalizedDepth <= 0.0) {
+					depthMeters = depthFar; // no geometry hit → treat as far plane
+				} else {
+					depthMeters = (depthNear * depthFar) / (depthFar - normalizedDepth * depthRange);
+				}
+
+				output[dstIdx] = depthMeters;
+			}
+		}
+
+		return {
+			data: outputBuffer,
+			width,
+			height,
+			rawValueToMeters,
+		};
 	}
 }
