@@ -58,6 +58,7 @@ import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
 import { NativePlane } from '../planes/XRPlane.js';
 import { NativeMesh } from '../meshes/XRMesh.js';
+import type { DepthSensingData } from '../depth/XRDepthInformation.js';
 // @ts-ignore
 import WebXRLayerPolyfill from 'webxr-layers-polyfill';
 
@@ -132,6 +133,14 @@ export interface SyntheticEnvironmentModule {
   get trackedPlanes(): Set<NativePlane>;
   get trackedMeshes(): Set<NativeMesh>;
   computeHitTestResults(rayMatrix: mat4): mat4[];
+  computeDepthBuffer(
+    viewMatrix: mat4,
+    projectionMatrix: mat4,
+    width: number,
+    height: number,
+    depthNear: number,
+    depthFar: number,
+  ): DepthSensingData | null;
 }
 
 interface RuntimeOptions {

@@ -18,6 +18,12 @@ import {
   P_SPACE,
   P_WEBGL_LAYER,
 } from '../private.js';
+import {
+  XRCPUDepthInformation,
+  XRDepthDataFormat,
+  XRDepthStateInit,
+  XRDepthUsage,
+} from '../depth/XRDepthInformation.js';
 import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
 import { XRAnchor, XRAnchorSet, XRAnchorUtils } from '../anchors/XRAnchor.js';
 import {
@@ -42,6 +48,7 @@ import {
 import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
 
 import { XREye } from '../views/XRView.js';
+import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSourceEventHandler } from '../events/XRInputSourceEvent.js';
 import { mat4 } from 'gl-matrix';
@@ -53,6 +60,7 @@ export type XRSessionMode = 'inline' | 'immersive-vr' | 'immersive-ar';
 export type XRSessionInit = {
   requiredFeatures?: WebXRFeature[];
   optionalFeatures?: WebXRFeature[];
+  depthSensing?: XRDepthStateInit;
 };
 
 export enum XREnvironmentBlendMode {
@@ -129,6 +137,10 @@ export class XRSession extends EventTarget {
     // hit-test
     hitTestSources: Set<XRHitTestSource>;
     computeHitTestResults: (frame: XRFrame) => void;
+    // depth sensing
+    depthSensingUsage: XRDepthUsage;
+    depthSensingDataFormat: XRDepthDataFormat;
+    computeDepthSensing: (frame: XRFrame) => void;
     // event handlers
     onend: XRSessionEventHandler | null;
     oninputsourceschange: XRInputSourcesChangeEventHandler | null;
@@ -320,6 +332,9 @@ export class XRSession extends EventTarget {
         if (this[P_SESSION].enabledFeatures.includes('mesh-detection')) {
           this[P_SESSION].updateTrackedMeshes(frame);
         }
+        if (this[P_SESSION].enabledFeatures.includes('depth-sensing')) {
+          this[P_SESSION].computeDepthSensing(frame);
+        }
         if (this[P_SESSION].enabledFeatures.includes('hit-test')) {
           this[P_SESSION].computeHitTestResults(frame);
         }
@@ -476,6 +491,55 @@ export class XRSession extends EventTarget {
           frame[P_FRAME].detectedMeshes.add(xrMesh);
         });
       },
+      depthSensingUsage: 'cpu-optimized', // emulator only supports CPU depth sensing
+      depthSensingDataFormat: 'float32' as XRDepthDataFormat, // emulator always produces float32
+      computeDepthSensing: (frame: XRFrame) => {
+        const sem = this[P_SESSION].device[P_DEVICE].sem;
+        if (!sem) return;
+
+        const { depthNear, depthFar } = this[P_SESSION].renderState;
+        const baseLayer = this[P_SESSION].renderState.baseLayer;
+        if (!baseLayer) return;
+        const canvas = baseLayer.context.canvas;
+        // Use a reduced resolution for depth buffer (1/4 of canvas)
+        const depthWidth = Math.max(1, Math.floor(canvas.width / 4));
+        const depthHeight = Math.max(1, Math.floor(canvas.height / 4));
+
+        const eyes =
+          this[P_SESSION].mode === 'inline'
+            ? [XREye.None]
+            : [XREye.Left, XREye.Right];
+
+        for (const eye of eyes) {
+          const projectionMatrix = this[P_SESSION].getProjectionMatrix(eye);
+          const viewSpace =
+            this[P_SESSION].device.viewSpaces[eye];
+          const viewGlobalMatrix =
+            XRSpaceUtils.calculateGlobalOffsetMatrix(viewSpace);
+          const viewMatrix = mat4.create();
+          mat4.invert(viewMatrix, viewGlobalMatrix);
+
+          const result = sem.computeDepthBuffer(
+            viewMatrix,
+            projectionMatrix,
+            depthWidth,
+            depthHeight,
+            depthNear,
+            depthFar,
+          );
+          if (result) {
+            const depthInfo = new XRCPUDepthInformation(
+              result.data,
+              result.width,
+              result.height,
+              new XRRigidTransform(), // identity: depth buffer is aligned with view
+              result.rawValueToMeters,
+              this[P_SESSION].depthSensingDataFormat,
+            );
+            frame[P_FRAME].depthDataMap.set(eye, depthInfo);
+          }
+        }
+      },
       hitTestSources: new Set(),
       computeHitTestResults: (frame) => {
         const sem = this[P_SESSION].device[P_DEVICE].sem;
@@ -560,6 +624,14 @@ export class XRSession extends EventTarget {
 
   get interactionMode(): XRInteractionMode {
     return this[P_SESSION].device[P_DEVICE].interactionMode;
+  }
+
+  get depthUsage(): XRDepthUsage {
+    return this[P_SESSION].depthSensingUsage;
+  }
+
+  get depthDataFormat(): XRDepthDataFormat {
+    return this[P_SESSION].depthSensingDataFormat;
   }
 
   updateRenderState(state: XRRenderStateInit = {}): void {

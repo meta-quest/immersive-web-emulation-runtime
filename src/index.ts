@@ -121,6 +121,9 @@ export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';
 export { XRMesh, XRMeshSet, NativeMesh } from './meshes/XRMesh.js';
 export { XRSemanticLabels } from './labels/labels.js';
 
+// Depth Sensing
+export { XRCPUDepthInformation } from './depth/XRDepthInformation.js';
+
 // Anchors
 export { XRAnchor, XRAnchorSet } from './anchors/XRAnchor.js';
 

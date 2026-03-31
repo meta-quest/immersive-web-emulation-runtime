@@ -13,12 +13,14 @@ import { XRJointSpace } from '../../src/spaces/XRJointSpace.js';
 import { XRRigidTransform } from '../../src/primitives/XRRigidTransform.js';
 import { XRHitTestSource } from '../../src/hittest/XRHitTest.js';
 import { XREye } from '../../src/views/XRView.js';
+import { XRCPUDepthInformation } from '../../src/depth/XRDepthInformation.js';
 import {
 	P_FRAME,
 	P_SESSION,
 	P_JOINT_SPACE,
 	P_DEVICE,
 	P_SPACE,
+	P_VIEW,
 } from '../../src/private.js';
 
 // Mock dependencies
@@ -618,6 +620,98 @@ describe('XRFrame', () => {
 					'Requested hit test results are not available for current frame.',
 					'InvalidStateError',
 				),
+			);
+		});
+	});
+
+	describe('getDepthInformation method', () => {
+		let activeFrame: XRFrame;
+		let inactiveFrame: XRFrame;
+		let mockView: any;
+
+		beforeEach(() => {
+			activeFrame = new XRFrame(mockSession, 1, true, true, 1000.5);
+			inactiveFrame = new XRFrame(mockSession, 2, false, false, 2000.5);
+			mockView = {
+				[P_VIEW]: {
+					eye: XREye.Left,
+				},
+			};
+		});
+
+		it('should throw InvalidStateError when frame is inactive', () => {
+			mockSession[P_SESSION].enabledFeatures = ['depth-sensing'];
+			expect(() => {
+				inactiveFrame.getDepthInformation(mockView);
+			}).toThrow(
+				new DOMException(
+					'XRFrame access outside the callback that produced it is invalid.',
+					'InvalidStateError',
+				),
+			);
+		});
+
+		it('should throw InvalidStateError when depth-sensing not enabled', () => {
+			mockSession[P_SESSION].enabledFeatures = [];
+			expect(() => {
+				activeFrame.getDepthInformation(mockView);
+			}).toThrow(
+				new DOMException(
+					'depth-sensing feature is not enabled on this session.',
+					'InvalidStateError',
+				),
+			);
+		});
+
+		it('should return null when no depth data available', () => {
+			mockSession[P_SESSION].enabledFeatures = ['depth-sensing'];
+			const result = activeFrame.getDepthInformation(mockView);
+			expect(result).toBeNull();
+		});
+
+		it('should return depth info when data is available', () => {
+			mockSession[P_SESSION].enabledFeatures = ['depth-sensing'];
+			const mockDepthInfo = new XRCPUDepthInformation(
+				new ArrayBuffer(8),
+				2,
+				2,
+				new XRRigidTransform(),
+				0.001,
+				'luminance-alpha',
+			);
+			activeFrame[P_FRAME].depthDataMap.set(XREye.Left, mockDepthInfo);
+
+			const result = activeFrame.getDepthInformation(mockView);
+			expect(result).toBe(mockDepthInfo);
+		});
+
+		it('should return correct depth info per eye', () => {
+			mockSession[P_SESSION].enabledFeatures = ['depth-sensing'];
+			const leftDepth = new XRCPUDepthInformation(
+				new ArrayBuffer(8),
+				2,
+				2,
+				new XRRigidTransform(),
+				0.001,
+				'luminance-alpha',
+			);
+			const rightDepth = new XRCPUDepthInformation(
+				new ArrayBuffer(8),
+				2,
+				2,
+				new XRRigidTransform(),
+				0.002,
+				'luminance-alpha',
+			);
+			activeFrame[P_FRAME].depthDataMap.set(XREye.Left, leftDepth);
+			activeFrame[P_FRAME].depthDataMap.set(XREye.Right, rightDepth);
+
+			const leftView = { [P_VIEW]: { eye: XREye.Left } };
+			const rightView = { [P_VIEW]: { eye: XREye.Right } };
+
+			expect(activeFrame.getDepthInformation(leftView as any)).toBe(leftDepth);
+			expect(activeFrame.getDepthInformation(rightView as any)).toBe(
+				rightDepth,
 			);
 		});
 	});

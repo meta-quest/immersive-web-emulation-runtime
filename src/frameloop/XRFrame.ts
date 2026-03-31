@@ -11,8 +11,10 @@ import {
   P_JOINT_SPACE,
   P_SESSION,
   P_SPACE,
+  P_VIEW,
 } from '../private.js';
 import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
+import { XRCPUDepthInformation } from '../depth/XRDepthInformation.js';
 import { XREye, XRView } from '../views/XRView.js';
 import { XRHitTestResult, XRHitTestSource } from '../hittest/XRHitTest.js';
 import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
@@ -55,6 +57,7 @@ export class XRFrame {
     detectedMeshes: XRMeshSet;
     trackedAnchors: XRAnchorSet;
     hitTestResultsMap: Map<XRHitTestSource, XRHitTestResult[]>;
+    depthDataMap: Map<XREye, XRCPUDepthInformation>;
   };
 
   constructor(
@@ -75,6 +78,7 @@ export class XRFrame {
       detectedMeshes: new XRMeshSet(),
       trackedAnchors: session[P_SESSION].frameTrackedAnchors,
       hitTestResultsMap: new Map(),
+      depthDataMap: new Map(),
     };
   }
 
@@ -271,5 +275,25 @@ export class XRFrame {
     } else {
       return [...this[P_FRAME].hitTestResultsMap.get(hitTestSource)!];
     }
+  }
+
+  getDepthInformation(view: XRView): XRCPUDepthInformation | null {
+    if (!this[P_FRAME].active) {
+      throw new DOMException(
+        'XRFrame access outside the callback that produced it is invalid.',
+        'InvalidStateError',
+      );
+    }
+    if (
+      !this[P_FRAME].session[P_SESSION].enabledFeatures.includes(
+        'depth-sensing',
+      )
+    ) {
+      throw new DOMException(
+        'depth-sensing feature is not enabled on this session.',
+        'InvalidStateError',
+      );
+    }
+    return this[P_FRAME].depthDataMap.get(view[P_VIEW].eye) ?? null;
   }
 }
