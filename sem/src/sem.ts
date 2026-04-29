@@ -62,6 +62,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		depthPacking: RGBADepthPacking,
 	});
 	private depthCamera: Camera;
+	private _tempMatrix = new Matrix4();
 	private depthReadBuffer: Uint8Array | null = null;
 
 	constructor(private xrDevice: XRDevice) {
@@ -98,8 +99,6 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		this.hitTestMarker.rotateX(Math.PI / 2);
 
 		this.depthCamera = new Camera();
-		this.depthCamera.matrixWorldAutoUpdate = false;
-		this.depthCamera.matrixAutoUpdate = false;
 	}
 
 	get environmentCanvas() {
@@ -294,11 +293,16 @@ export class SyntheticEnvironmentModule extends EventTarget {
 			this.depthReadBuffer = new Uint8Array(width * height * 4);
 		}
 
-		// Set up depth camera from view & projection matrices
-		this.depthCamera.matrixWorldInverse.fromArray(viewMatrix);
-		this.depthCamera.matrixWorld.copy(
-			this.depthCamera.matrixWorldInverse,
-		).invert();
+		// Set up depth camera from view & projection matrices.
+		// Decompose into position/quaternion/scale so Three.js's
+		// updateMatrixWorld() computes correct matrices during render.
+		this._tempMatrix.fromArray(viewMatrix);
+		this._tempMatrix.invert();
+		this._tempMatrix.decompose(
+			this.depthCamera.position,
+			this.depthCamera.quaternion,
+			this.depthCamera.scale,
+		);
 		this.depthCamera.projectionMatrix.fromArray(projectionMatrix);
 		this.depthCamera.projectionMatrixInverse.copy(
 			this.depthCamera.projectionMatrix,
@@ -317,7 +321,11 @@ export class SyntheticEnvironmentModule extends EventTarget {
 		this.scene.background = null;
 
 		this.renderer.setRenderTarget(this.depthRenderTarget);
+		const prevClearColor = this.renderer.getClearColor(new Color());
+		const prevClearAlpha = this.renderer.getClearAlpha();
+		this.renderer.setClearColor(0x000000, 0);
 		this.renderer.clear();
+		this.renderer.setClearColor(prevClearColor, prevClearAlpha);
 		this.renderer.render(this.scene, this.depthCamera);
 		this.renderer.setRenderTarget(null);
 
@@ -363,9 +371,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
 
 				// Convert from non-linear gl_FragCoord.z to linear eye-space depth
 				let depthMeters: number;
-				if (normalizedDepth >= 1.0) {
-					depthMeters = depthFar;
-				} else if (normalizedDepth <= 0.0) {
+				if (normalizedDepth >= 1.0 || normalizedDepth <= 0.0) {
 					depthMeters = depthFar; // no geometry hit → treat as far plane
 				} else {
 					depthMeters = (depthNear * depthFar) / (depthFar - normalizedDepth * depthRange);

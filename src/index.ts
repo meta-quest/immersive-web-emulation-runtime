@@ -123,6 +123,11 @@ export { XRSemanticLabels } from './labels/labels.js';
 
 // Depth Sensing
 export { XRCPUDepthInformation } from './depth/XRDepthInformation.js';
+export {
+	XRWebGLBinding,
+	XRWebGLDepthInformation,
+	type XRTextureType,
+} from './depth/XRWebGLBinding.js';
 
 // Anchors
 export { XRAnchor, XRAnchorSet } from './anchors/XRAnchor.js';

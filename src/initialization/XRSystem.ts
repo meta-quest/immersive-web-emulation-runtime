@@ -82,6 +82,7 @@ export class XRSystem extends EventTarget {
           this[P_SYSTEM].device,
           mode,
           enabledFeatures,
+          options.depthSensing,
         );
         this[P_SYSTEM].activeSession = session;
 

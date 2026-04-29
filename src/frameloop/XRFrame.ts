@@ -15,6 +15,7 @@ import {
 } from '../private.js';
 import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
 import { XRCPUDepthInformation } from '../depth/XRDepthInformation.js';
+import { XRWebGLDepthInformation } from '../depth/XRWebGLBinding.js';
 import { XREye, XRView } from '../views/XRView.js';
 import { XRHitTestResult, XRHitTestSource } from '../hittest/XRHitTest.js';
 import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
@@ -58,6 +59,7 @@ export class XRFrame {
     trackedAnchors: XRAnchorSet;
     hitTestResultsMap: Map<XRHitTestSource, XRHitTestResult[]>;
     depthDataMap: Map<XREye, XRCPUDepthInformation>;
+    gpuDepthDataMap: Map<XREye, XRWebGLDepthInformation>;
   };
 
   constructor(
@@ -79,6 +81,7 @@ export class XRFrame {
       trackedAnchors: session[P_SESSION].frameTrackedAnchors,
       hitTestResultsMap: new Map(),
       depthDataMap: new Map(),
+      gpuDepthDataMap: new Map(),
     };
   }
 

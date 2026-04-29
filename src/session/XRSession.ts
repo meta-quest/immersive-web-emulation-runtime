@@ -24,6 +24,7 @@ import {
   XRDepthStateInit,
   XRDepthUsage,
 } from '../depth/XRDepthInformation.js';
+import { XRWebGLDepthInformation } from '../depth/XRWebGLBinding.js';
 import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
 import { XRAnchor, XRAnchorSet, XRAnchorUtils } from '../anchors/XRAnchor.js';
 import {
@@ -140,7 +141,11 @@ export class XRSession extends EventTarget {
     // depth sensing
     depthSensingUsage: XRDepthUsage;
     depthSensingDataFormat: XRDepthDataFormat;
+    depthTexture: WebGLTexture | null;
+    depthTextureWidth: number;
+    depthTextureHeight: number;
     computeDepthSensing: (frame: XRFrame) => void;
+    activeFrame: XRFrame | null;
     // event handlers
     onend: XRSessionEventHandler | null;
     oninputsourceschange: XRInputSourcesChangeEventHandler | null;
@@ -158,6 +163,7 @@ export class XRSession extends EventTarget {
     device: XRDevice,
     mode: XRSessionMode,
     enabledFeatures: string[],
+    _depthSensing?: XRDepthStateInit,
   ) {
     super();
     this[P_SESSION] = {
@@ -339,6 +345,7 @@ export class XRSession extends EventTarget {
           this[P_SESSION].computeHitTestResults(frame);
         }
 
+        this[P_SESSION].activeFrame = frame;
         this[P_SESSION].device[P_DEVICE].onFrameStart(frame);
         this[P_SESSION].updateActiveInputSources();
 
@@ -368,6 +375,7 @@ export class XRSession extends EventTarget {
 
         // - Set frame’s active boolean to false.
         frame[P_FRAME].active = false;
+        this[P_SESSION].activeFrame = null;
       },
       nominalFrameRate: device.internalNominalFrameRate,
       referenceSpaces: [],
@@ -491,8 +499,13 @@ export class XRSession extends EventTarget {
           frame[P_FRAME].detectedMeshes.add(xrMesh);
         });
       },
-      depthSensingUsage: 'cpu-optimized', // emulator only supports CPU depth sensing
-      depthSensingDataFormat: 'float32' as XRDepthDataFormat, // emulator always produces float32
+      depthSensingUsage: (_depthSensing?.usagePreference?.[0] ??
+        'cpu-optimized') as XRDepthUsage,
+      depthSensingDataFormat: 'float32' as XRDepthDataFormat,
+      depthTexture: null,
+      depthTextureWidth: 0,
+      depthTextureHeight: 0,
+      activeFrame: null,
       computeDepthSensing: (frame: XRFrame) => {
         const sem = this[P_SESSION].device[P_DEVICE].sem;
         if (!sem) return;
@@ -501,7 +514,6 @@ export class XRSession extends EventTarget {
         const baseLayer = this[P_SESSION].renderState.baseLayer;
         if (!baseLayer) return;
         const canvas = baseLayer.context.canvas;
-        // Use a reduced resolution for depth buffer (1/4 of canvas)
         const depthWidth = Math.max(1, Math.floor(canvas.width / 4));
         const depthHeight = Math.max(1, Math.floor(canvas.height / 4));
 
@@ -510,10 +522,12 @@ export class XRSession extends EventTarget {
             ? [XREye.None]
             : [XREye.Left, XREye.Right];
 
+        const isGpuOptimized =
+          this[P_SESSION].depthSensingUsage === 'gpu-optimized';
+
         for (const eye of eyes) {
           const projectionMatrix = this[P_SESSION].getProjectionMatrix(eye);
-          const viewSpace =
-            this[P_SESSION].device.viewSpaces[eye];
+          const viewSpace = this[P_SESSION].device.viewSpaces[eye];
           const viewGlobalMatrix =
             XRSpaceUtils.calculateGlobalOffsetMatrix(viewSpace);
           const viewMatrix = mat4.create();
@@ -528,15 +542,82 @@ export class XRSession extends EventTarget {
             depthFar,
           );
           if (result) {
-            const depthInfo = new XRCPUDepthInformation(
-              result.data,
-              result.width,
-              result.height,
-              new XRRigidTransform(), // identity: depth buffer is aligned with view
-              result.rawValueToMeters,
-              this[P_SESSION].depthSensingDataFormat,
-            );
-            frame[P_FRAME].depthDataMap.set(eye, depthInfo);
+            if (isGpuOptimized) {
+              // Provide GPU depth data (inverse depth in texture)
+              const gl = baseLayer.context as WebGL2RenderingContext;
+              const { width: dw, height: dh } = result;
+              const numLayers = 2;
+
+              if (
+                !this[P_SESSION].depthTexture ||
+                this[P_SESSION].depthTextureWidth !== dw ||
+                this[P_SESSION].depthTextureHeight !== dh
+              ) {
+                if (this[P_SESSION].depthTexture) {
+                  gl.deleteTexture(this[P_SESSION].depthTexture);
+                }
+                this[P_SESSION].depthTexture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, this[P_SESSION].depthTexture);
+                gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R32F, dw, dh, numLayers);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                this[P_SESSION].depthTextureWidth = dw;
+                this[P_SESSION].depthTextureHeight = dh;
+              } else {
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, this[P_SESSION].depthTexture);
+              }
+
+              const srcData = new Float32Array(result.data);
+              const flippedData = new Float32Array(srcData.length);
+              for (let row = 0; row < dh; row++) {
+                const srcRow = dh - 1 - row;
+                for (let col = 0; col < dw; col++) {
+                  const depthM = srcData[srcRow * dw + col];
+                  flippedData[row * dw + col] =
+                    depthM > 0 ? 1 - depthNear / depthM : 0;
+                }
+              }
+
+              const prevFlipY = gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL);
+              const prevPremultiply = gl.getParameter(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL);
+              gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+              gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+
+              const layerIndex = eye === XREye.Right ? 1 : 0;
+              gl.texSubImage3D(
+                gl.TEXTURE_2D_ARRAY, 0, 0, 0, layerIndex,
+                dw, dh, 1, gl.RED, gl.FLOAT, flippedData,
+              );
+
+              gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, prevFlipY);
+              gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, prevPremultiply);
+
+              const gpuDepthInfo = new XRWebGLDepthInformation(
+                this[P_SESSION].depthTexture!,
+                dw,
+                dh,
+                new XRRigidTransform(),
+                result.rawValueToMeters,
+                depthNear,
+                depthFar,
+                'texture-array',
+                layerIndex,
+              );
+              frame[P_FRAME].gpuDepthDataMap.set(eye, gpuDepthInfo);
+            } else {
+              // Provide CPU depth data.
+              const cpuDepthInfo = new XRCPUDepthInformation(
+                result.data,
+                result.width,
+                result.height,
+                new XRRigidTransform(),
+                result.rawValueToMeters,
+                this[P_SESSION].depthSensingDataFormat,
+              );
+              frame[P_FRAME].depthDataMap.set(eye, cpuDepthInfo);
+            }
           }
         }
       },

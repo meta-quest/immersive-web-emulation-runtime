@@ -59,6 +59,7 @@ import { XRViewport } from '../views/XRViewport.js';
 import { NativePlane } from '../planes/XRPlane.js';
 import { NativeMesh } from '../meshes/XRMesh.js';
 import type { DepthSensingData } from '../depth/XRDepthInformation.js';
+import { XRWebGLBinding } from '../depth/XRWebGLBinding.js';
 // @ts-ignore
 import WebXRLayerPolyfill from 'webxr-layers-polyfill';
 
@@ -538,8 +539,8 @@ export class XRDevice {
       new WebXRLayerPolyfill();
     } else {
       globalObject['XRMediaBinding'] = undefined;
-      globalObject['XRWebGLBinding'] = undefined;
     }
+    globalObject['XRWebGLBinding'] = XRWebGLBinding;
   }
 
   installDevUI(devUIConstructor: DevUIConstructor) {
