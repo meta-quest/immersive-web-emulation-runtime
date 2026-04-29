@@ -1571,5 +1571,227 @@ describe('RemoteControlInterface', () => {
 				expect(result.value).toBe(0.75);
 			});
 		});
+
+		describe('duration action error handling (fix #9 - infinite loop)', () => {
+			beforeEach(() => {
+				mockActiveSession();
+			});
+
+			test('should reject duration action with invalid device instead of looping', async () => {
+				const promise = remote.dispatch('animate_to', {
+					device: 'headset',
+					position: { x: 0, y: 1.6, z: -2 },
+					duration: 0.1,
+				});
+
+				// Corrupt the action's params to simulate an invalid device in the queue
+				const action = (remote as any).commandQueue[0];
+				action.params.device = 'bogus-device';
+
+				// Process the duration action - should reject, not loop forever
+				remote.update(200);
+
+				await expect(promise).rejects.toThrow('Unknown device');
+				expect(remote.queueLength).toBe(0);
+			});
+
+			test('should remain responsive after duration action error', async () => {
+				const badPromise = remote.dispatch('animate_to', {
+					device: 'headset',
+					position: { x: 1, y: 1, z: 1 },
+					duration: 0.1,
+				});
+
+				// Corrupt device to trigger error path
+				const action = (remote as any).commandQueue[0];
+				action.params.device = 'bogus-device';
+
+				remote.update(200);
+				await expect(badPromise).rejects.toThrow('Unknown device');
+
+				// Queue should be empty, subsequent commands should work
+				const goodPromise = remote.dispatch('set_transform', {
+					device: 'headset',
+					position: { x: 5, y: 5, z: 5 },
+				});
+				remote.update(16.67);
+				const result = (await goodPromise) as SetTransformResult;
+
+				expect(result.position).toEqual({ x: 5, y: 5, z: 5 });
+			});
+
+			test('should reject lerp error mid-animation and drain action', async () => {
+				const promise = remote.dispatch('animate_to', {
+					device: 'headset',
+					position: { x: 0, y: 1.6, z: -2 },
+					duration: 0.2,
+				});
+
+				// Corrupt device mid-animation to trigger lerp error
+				const action = (remote as any).commandQueue[0];
+				action.params.device = 'bogus-device';
+
+				// Update with time less than duration -> hits lerp path
+				remote.update(50);
+
+				await expect(promise).rejects.toThrow('Unknown device');
+				expect(remote.queueLength).toBe(0);
+			});
+		});
+
+		describe('select with invalid device (fix #10 - upfront validation)', () => {
+			beforeEach(() => {
+				mockActiveSession();
+			});
+
+			test('should reject select with undefined device immediately', async () => {
+				await expect(
+					remote.dispatch('select', {}),
+				).rejects.toThrow('Unknown input device');
+
+				expect(remote.queueLength).toBe(0);
+			});
+
+			test('should reject select with invalid device name', async () => {
+				await expect(
+					remote.dispatch('select', { device: 'bogus' }),
+				).rejects.toThrow('Unknown input device');
+
+				expect(remote.queueLength).toBe(0);
+			});
+
+			test('should remain responsive after select with bad device', async () => {
+				await expect(
+					remote.dispatch('select', { device: 'bogus' }),
+				).rejects.toThrow();
+
+				// Subsequent commands should still work
+				const promise = remote.dispatch('set_transform', {
+					device: 'headset',
+					position: { x: 1, y: 2, z: 3 },
+				});
+				remote.update(16.67);
+				const result = (await promise) as SetTransformResult;
+
+				expect(result.position).toEqual({ x: 1, y: 2, z: 3 });
+			});
+		});
+
+		describe('device name aliases (fix #11)', () => {
+			test('should resolve "right" to "controller-right" for get_transform', async () => {
+				device.controllers.right!.position.set(1, 2, 3);
+
+				const result = (await remote.dispatch('get_transform', {
+					device: 'right',
+				})) as GetTransformResult;
+
+				expect(result.device).toBe('controller-right');
+				expect(result.position).toEqual({ x: 1, y: 2, z: 3 });
+			});
+
+			test('should resolve "left" to "controller-left" for get_transform', async () => {
+				device.controllers.left!.position.set(4, 5, 6);
+
+				const result = (await remote.dispatch('get_transform', {
+					device: 'left',
+				})) as GetTransformResult;
+
+				expect(result.device).toBe('controller-left');
+				expect(result.position).toEqual({ x: 4, y: 5, z: 6 });
+			});
+
+			test('should resolve "right-controller" alias', async () => {
+				device.controllers.right!.position.set(7, 8, 9);
+
+				const result = (await remote.dispatch('get_transform', {
+					device: 'right-controller',
+				})) as GetTransformResult;
+
+				expect(result.device).toBe('controller-right');
+				expect(result.position).toEqual({ x: 7, y: 8, z: 9 });
+			});
+
+			test('should resolve "controllers.right" alias', async () => {
+				device.controllers.right!.position.set(10, 11, 12);
+
+				const result = (await remote.dispatch('get_transform', {
+					device: 'controllers.right',
+				})) as GetTransformResult;
+
+				expect(result.device).toBe('controller-right');
+			});
+
+			test('should resolve "rightController" alias', async () => {
+				device.controllers.right!.position.set(1, 1, 1);
+
+				const result = (await remote.dispatch('get_transform', {
+					device: 'rightController',
+				})) as GetTransformResult;
+
+				expect(result.device).toBe('controller-right');
+			});
+
+			test('should resolve hand aliases', async () => {
+				device.hands.right!.position.set(2, 2, 2);
+				device.hands.left!.position.set(3, 3, 3);
+
+				const rightResult = (await remote.dispatch('get_transform', {
+					device: 'rightHand',
+				})) as GetTransformResult;
+				expect(rightResult.device).toBe('hand-right');
+				expect(rightResult.position).toEqual({ x: 2, y: 2, z: 2 });
+
+				const leftResult = (await remote.dispatch('get_transform', {
+					device: 'hands.left',
+				})) as GetTransformResult;
+				expect(leftResult.device).toBe('hand-left');
+				expect(leftResult.position).toEqual({ x: 3, y: 3, z: 3 });
+			});
+
+			test('should work with aliases for set_transform', async () => {
+				mockActiveSession();
+
+				const promise = remote.dispatch('set_transform', {
+					device: 'right',
+					position: { x: 9, y: 8, z: 7 },
+				});
+				remote.update(16.67);
+				const result = (await promise) as SetTransformResult;
+
+				expect(result.device).toBe('controller-right');
+				expect(result.position).toEqual({ x: 9, y: 8, z: 7 });
+			});
+
+			test('should work with aliases for select', async () => {
+				mockActiveSession();
+
+				const promise = remote.dispatch('select', {
+					device: 'right',
+				});
+
+				remote.update(16.67); // press
+				remote.update(200);   // wait
+				remote.update(16.67); // release
+
+				const result = (await promise) as SelectResult;
+				expect(result.device).toBe('controller-right');
+			});
+
+			test('should pass through canonical names unchanged', async () => {
+				device.position.set(1, 1, 1);
+
+				const result = (await remote.dispatch('get_transform', {
+					device: 'headset',
+				})) as GetTransformResult;
+
+				expect(result.device).toBe('headset');
+			});
+
+			test('should still reject truly unknown device names', async () => {
+				await expect(
+					remote.dispatch('get_transform', { device: 'totally-invalid' }),
+				).rejects.toThrow('Unknown device');
+			});
+		});
 	});
 });

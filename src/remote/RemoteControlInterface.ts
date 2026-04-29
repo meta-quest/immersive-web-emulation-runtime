@@ -157,6 +157,35 @@ function slerpQuat(a: Quat, b: Quat, t: number): Quat {
 }
 
 /**
+ * Map of common device name aliases to canonical DeviceId values.
+ * Enables callers to use natural variants like "right", "left-controller",
+ * "controllers.right", etc. in addition to the canonical names.
+ */
+const DEVICE_ID_ALIASES: Record<string, string> = {
+	right: 'controller-right',
+	left: 'controller-left',
+	'right-controller': 'controller-right',
+	'left-controller': 'controller-left',
+	'controllers.right': 'controller-right',
+	'controllers.left': 'controller-left',
+	rightController: 'controller-right',
+	leftController: 'controller-left',
+	'right-hand': 'hand-right',
+	'left-hand': 'hand-left',
+	'hands.right': 'hand-right',
+	'hands.left': 'hand-left',
+	rightHand: 'hand-right',
+	leftHand: 'hand-left',
+};
+
+/**
+ * Resolve a device identifier, accepting both canonical names and common aliases.
+ */
+function resolveDeviceId(id: string): string {
+	return DEVICE_ID_ALIASES[id] ?? id;
+}
+
+/**
  * RemoteControlInterface provides frame-synchronized programmatic control of an XRDevice.
  *
  * This class implements a command queue that processes actions during each frame update,
@@ -313,14 +342,24 @@ export class RemoteControlInterface {
 
 				if (action.elapsedMs >= action.durationMs) {
 					// Complete - apply final state
-					this.applyDurationFinalState(action);
-					action.resolve(this.getDurationResult(action));
+					try {
+						this.applyDurationFinalState(action);
+						action.resolve(this.getDurationResult(action));
+					} catch (error) {
+						action.reject(error as Error);
+					}
 					this.commandQueue.shift();
 					// Continue to next action
 				} else {
 					// In progress - lerp
-					const t = action.elapsedMs / action.durationMs;
-					this.applyDurationLerpState(action, t);
+					try {
+						const t = action.elapsedMs / action.durationMs;
+						this.applyDurationLerpState(action, t);
+					} catch (error) {
+						action.reject(error as Error);
+						this.commandQueue.shift();
+						continue;
+					}
 					// Stop processing - wait for next frame
 					break;
 				}
@@ -1289,6 +1328,11 @@ export class RemoteControlInterface {
 		method: string,
 		params: Record<string, unknown> = {},
 	): Promise<unknown> {
+		// Normalize device identifier aliases (e.g. "right" -> "controller-right")
+		if (typeof params.device === 'string') {
+			params.device = resolveDeviceId(params.device);
+		}
+
 		// Immediate methods execute synchronously without queue
 		if (RemoteControlInterface.IMMEDIATE_METHODS.has(method)) {
 			// Active immediate methods trigger capture mode
@@ -1388,6 +1432,9 @@ export class RemoteControlInterface {
 	 */
 	private executeSelectSequence(params: SelectParams): Promise<SelectResult> {
 		const { device: deviceId, duration = 0.15 } = params;
+
+		// Validate device upfront to prevent sub-actions from failing in the frame loop
+		this.getDeviceSelectValue(deviceId);
 
 		return new Promise((resolve, reject) => {
 			// Track completion of all three actions
