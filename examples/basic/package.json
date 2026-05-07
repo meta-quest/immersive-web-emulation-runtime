@@ -1,0 +1,24 @@
+{
+  "name": "iwer-example",
+  "private": true,
+  "devDependencies": {
+    "css-loader": "^7.1.4",
+    "html-webpack-plugin": "^5.6.7",
+    "pre-commit": "^2.0.0",
+    "style-loader": "4.0.0",
+    "webpack": "^5.106.2",
+    "webpack-cli": "7.0.2",
+    "webpack-dev-server": "5.2.3"
+  },
+  "scripts": {
+    "build": "webpack",
+    "ci-build": "pnpm install --ignore-workspace --no-frozen-lockfile --no-lockfile && NODE_ENV=production pnpm run build",
+    "serve": "webpack serve"
+  },
+  "dependencies": {
+    "@iwer/devui": "file:../../packages/devui",
+    "dat.gui": "0.7.9",
+    "iwer": "file:../../packages/iwer",
+    "three": "npm:super-three@0.181.0"
+  }
+}

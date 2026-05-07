@@ -1,0 +1,56 @@
+{
+  "name": "@iwer/devui",
+  "version": "2.3.0",
+  "description": "Dev UI for IWER",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "build",
+    "lib"
+  ],
+  "scripts": {
+    "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
+    "build": "tsc && rollup -c",
+    "prepublishOnly": "pnpm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meta-quest/immersive-web-emulation-runtime.git"
+  },
+  "keywords": [],
+  "author": "Felix Zhang <fe1ix@meta.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/meta-quest/immersive-web-emulation-runtime/issues"
+  },
+  "homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
+  "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "7.2.0",
+    "@fortawesome/free-solid-svg-icons": "7.2.0",
+    "@fortawesome/react-fontawesome": "3.3.1",
+    "@pmndrs/handle": "^6.6.29",
+    "@pmndrs/pointer-events": "^6.6.29",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "styled-components": "^6.4.1",
+    "three": "^0.184.0",
+    "zustand": "^5.0.13"
+  },
+  "peerDependencies": {
+    "iwer": "^2.3.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-replace": "^6.0.3",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.0",
+    "iwer": "workspace:*",
+    "rollup": "^4.60.3",
+    "rollup-plugin-peer-deps-external": "^2.2.4",
+    "typescript": "^6.0.3"
+  }
+}

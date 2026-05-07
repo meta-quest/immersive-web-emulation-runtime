@@ -1,24 +1,41 @@
 {
-  "name": "iwer",
-  "version": "2.2.1",
-  "description": "Javascript WebXR Runtime for Emulation",
+  "name": "iwer-monorepo",
+  "description": "Javascript WebXR Runtime for Emulation - Monorepo",
+  "private": true,
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "files": [
-    "build",
-    "lib"
-  ],
+  "packageManager": "pnpm@10.33.4",
   "scripts": {
-    "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
-    "build": "tsc && rollup -c",
-    "doc": "typedoc",
-    "format": "prettier --write ./src/**/*",
-    "test": "jest",
-    "prepublishOnly": "npm run build",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "build": "pnpm --filter iwer run build",
+    "build:all": "pnpm --filter iwer run build && pnpm --filter @iwer/devui run build && pnpm --filter @iwer/sem run build",
+    "build:tgz": "bash ./scripts/build-tgz.sh",
+    "test": "pnpm --filter iwer run test",
+    "test:all": "pnpm --filter iwer run test && pnpm test:e2e",
+    "test:e2e": "pnpm --filter @iwer/e2e exec playwright install chromium && pnpm --filter @iwer/e2e run test",
+    "typecheck": "pnpm --filter @iwer/e2e run typecheck",
+    "examples:build": "pnpm build:all && pnpm --dir examples/basic run ci-build && pnpm --dir examples/devui-demo run ci-build",
+    "verify": "pnpm build:all && pnpm typecheck && pnpm test:all && pnpm lint && pnpm format:check && pnpm changeset:status && pnpm docs:build && pnpm build:tgz && pnpm examples:build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docs:dev": "pnpm --filter iwer run prebuild && vitepress dev docs",
+    "docs:build": "pnpm build:all && vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "lint-staged": "lint-staged",
+    "prepare": "husky",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "version": "changeset version && pnpm install --lockfile-only",
+    "release": "pnpm build:all && changeset publish"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   },
   "repository": {
     "type": "git",
@@ -32,37 +49,27 @@
   },
   "homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^25.0.7",
-    "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-terser": "^0.4.4",
-    "@types/gl-matrix": "^3.2.0",
-    "@types/jest": "^29.5.11",
-    "@types/node": "^18.7.13",
-    "@types/three": "^0.149.0",
-    "@types/uuid": "^9.0.8",
-    "@types/webxr": "^0.5.8",
-    "@typescript-eslint/eslint-plugin": "^8.56.0",
-    "@typescript-eslint/parser": "^8.56.0",
-    "eslint": "^9.39.3",
+    "@changesets/cli": "^2.31.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
+    "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-prettier": "^5.0.1",
-    "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
-    "prettier": "^3.0.3",
-    "renamer": "^4.0.0",
-    "rimraf": "^5.0.5",
-    "rollup": "^2.79.1",
-    "ts-jest": "^29.1.1",
-    "typescript": "^4.9.5",
-    "vitepress": "^2.0.0-alpha.16"
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.2",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "vitepress": "2.0.0-alpha.17"
   },
-  "overrides": {
-    "ajv": "^8.18.0",
-    "minimatch": "^10.0.0"
+  "pnpm": {
+    "overrides": {
+      "minimatch": "^10.0.0"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
-  "dependencies": {
-    "gl-matrix": "^3.4.3",
-    "webxr-layers-polyfill": "^1.1.0"
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

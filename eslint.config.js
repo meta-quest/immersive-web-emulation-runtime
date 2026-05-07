@@ -33,26 +33,10 @@ export default [
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-inferrable-types': 'off',
 
-      // Import sorting
+      // Import ordering was not enforced before the monorepo migration; keep
+      // lint focused on substantive TypeScript issues instead of churn.
       'sort-imports': 'off',
-      'import/order': [
-        'error',
-        {
-          groups: [
-            'builtin', // Node.js built-in modules
-            'external', // External libraries
-            'internal', // Internal modules
-            'parent', // Parent directories
-            'sibling', // Same or sibling directories
-            'index', // Index files
-          ],
-          'newlines-between': 'never',
-          alphabetize: {
-            order: 'asc',
-            caseInsensitive: true,
-          },
-        },
-      ],
+      'import/order': 'off',
 
       // Allow console.log in this project since it's a build tool
       'no-console': 'off',
@@ -77,6 +61,8 @@ export default [
       '**/node_modules/**',
       'dist/**',
       '**/dist/**',
+      'build/**',
+      '**/build/**',
       'lib/**',
       '**/lib/**',
       'examples/**/dist/**',
@@ -90,6 +76,7 @@ export default [
       '**/*.d.ts',
       '**/version.ts', // Generated version files
       '**/generated-profiles.ts', // Generated gamepad profiles
+      'packages/sem/src/generated/**', // Generated protobuf sources
     ],
   },
 

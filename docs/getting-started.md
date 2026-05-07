@@ -27,7 +27,7 @@ Include the UMD build script in the `<head>` of your HTML file, ensuring to repl
 
 ```html
 <head>
-	<script src="https://unpkg.com/iwer@<version>/build/iwer.min.js"></script>
+  <script src="https://unpkg.com/iwer@<version>/build/iwer.min.js"></script>
 </head>
 ```
 
@@ -37,11 +37,11 @@ Alternatively, you can use an import map. Add the following script tag to your H
 
 ```html
 <script type="importmap">
-	{
-		"imports": {
-			"iwer": "https://unpkg.com/iwer@<version>/build/iwer.module.js"
-		}
-	}
+  {
+    "imports": {
+      "iwer": "https://unpkg.com/iwer@<version>/build/iwer.module.js"
+    }
+  }
 </script>
 ```
 
@@ -228,12 +228,12 @@ The pinch gesture serves as a core interaction mechanism, commonly used for acti
 const leftHand = xrDevice.hands['left'];
 let pinchVal = leftHand.pinchValue; // Start from the current pinch value.
 const pinchGestureJob = setInterval(() => {
-	pinchVal += 0.05;
-	if (pinchVal > 1) {
-		clearInterval(pinchGestureJob);
-		return;
-	}
-	leftHand.updatePinchValue(pinchVal);
+  pinchVal += 0.05;
+  if (pinchVal > 1) {
+    clearInterval(pinchGestureJob);
+    return;
+  }
+  leftHand.updatePinchValue(pinchVal);
 }, 25); // Update interval in milliseconds.
 ```
 

@@ -1,0 +1,49 @@
+{
+  "name": "iwer",
+  "version": "2.3.0",
+  "description": "Javascript WebXR Runtime for Emulation",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "build",
+    "lib"
+  ],
+  "scripts": {
+    "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
+    "build": "tsc && rollup -c",
+    "doc": "typedoc",
+    "format": "prettier --write ./src/**/*",
+    "test": "jest --watchman=false",
+    "prepublishOnly": "pnpm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meta-quest/immersive-web-emulation-runtime.git"
+  },
+  "keywords": [],
+  "author": "Felix Zhang <fe1ix@meta.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/meta-quest/immersive-web-emulation-runtime/issues"
+  },
+  "homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.6.0",
+    "@types/three": "^0.184.0",
+    "@types/webxr": "^0.5.24",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "rollup": "^4.60.3",
+    "ts-jest": "^29.4.9",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "gl-matrix": "^3.4.4",
+    "webxr-layers-polyfill": "^1.1.0"
+  }
+}

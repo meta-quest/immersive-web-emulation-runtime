@@ -12,10 +12,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @iwer/e2e exec playwright install --with-deps chromium
+      - run: pnpm build:all
+      - run: pnpm typecheck
+      - run: pnpm test:all
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm changeset:status
+      - run: pnpm docs:build
+      - run: pnpm build:tgz
+      - run: pnpm examples:build

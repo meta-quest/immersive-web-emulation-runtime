@@ -35,7 +35,7 @@ Immersive Web Emulation Runtime uses `eslint` and `prettier` to lint and format 
 You can format manually by running:
 
 ```
-$ npm run format
+$ pnpm format
 ```
 
 There are also VSCode extensions that can run those linters / formatters for you. Prettier has a [VSCode Plugin](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode), which allows you to format on save.
@@ -49,8 +49,18 @@ Immersive Web Emulation Runtime uses `jest` to conduct unit testing for all its 
 You can run tests manually by running:
 
 ```
-$ npm run test
+$ pnpm test
 ```
+
+## Changesets
+
+This repository releases `iwer`, `@iwer/devui`, and `@iwer/sem` in lockstep via [Changesets](https://github.com/changesets/changesets) using a `fixed` group, so any user-facing change should ship with a changeset.
+
+```
+$ pnpm changeset
+```
+
+Pick the bump level (`patch`, `minor`, `major`) that matches the most impactful change in your PR. The changeset generator will commit a markdown file under `.changeset/` describing the change; include it in your pull request. Maintainers run `pnpm run version` and `pnpm release` to apply pending changesets and publish to npm.
 
 ## License
 
