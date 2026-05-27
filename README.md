@@ -25,3 +25,21 @@ IWER is licensed under the MIT License. For more details, see the [LICENSE](http
 ## Contributing
 
 Your contributions are welcome! Please feel free to submit issues and pull requests. Before contributing, make sure to review our [Contributing Guidelines](https://github.com/meta-quest/immersive-web-emulation-runtime/blob/main/CONTRIBUTING.md) and [Code of Conduct](https://github.com/meta-quest/immersive-web-emulation-runtime/blob/main/CODE_OF_CONDUCT.md).
+
+## Agent-ready development
+
+This sample is configured for AI coding agents.
+
+For the best experience in VS Code or Cursor, install the Meta Horizon extension:
+
+https://marketplace.visualstudio.com/items?itemName=meta.meta-vr-dev
+
+This repository also includes agent instructions and MCP configuration for Meta Quest Agentic Tools:
+
+https://github.com/meta-quest/agentic-tools
+
+Suggested first prompt:
+
+```text
+Read AGENTS.md, detect what type of Meta Quest sample this is, enable the hzdb MCP server if available, and explain how to build, run, and debug this sample on a Quest device.
+```
