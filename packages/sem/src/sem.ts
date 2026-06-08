@@ -32,6 +32,10 @@ import { VERSION } from './version.js';
 import { mat4 } from 'gl-matrix';
 
 const forwardVector = new Vector3(0, 0, -1);
+// Scratch Color reused to read back the renderer's clear color before depth
+// passes. getClearColor() copies into this and the value is consumed (restored
+// via setClearColor) within the same call, so it never escapes to callers.
+const tempClearColor = new Color();
 
 // Mirrors iwer's XRHitTestTrackableType. Declared locally because iwer does not
 // re-export the type from its package entry point.
@@ -346,7 +350,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
     this.scene.background = null;
 
     this.renderer.setRenderTarget(this.depthRenderTarget);
-    const prevClearColor = this.renderer.getClearColor(new Color());
+    const prevClearColor = this.renderer.getClearColor(tempClearColor);
     const prevClearAlpha = this.renderer.getClearAlpha();
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.clear();

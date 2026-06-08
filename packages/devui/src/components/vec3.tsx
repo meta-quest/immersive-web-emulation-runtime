@@ -67,13 +67,15 @@ export const Vector3Input = ({
 
   const animationFrameId = useRef<number | null>(null);
 
+  // Reused scratch to avoid allocating a fresh object every frame
+  const scratchValues = useRef({ x: 0, y: 0, z: 0 });
+
   // Sync display values with actual values (optimized)
   const syncValues = () => {
-    const currentActualValues = {
-      x: round(vector.x / multiplier, precision),
-      y: round(vector.y / multiplier, precision),
-      z: round(vector.z / multiplier, precision),
-    };
+    const currentActualValues = scratchValues.current;
+    currentActualValues.x = round(vector.x / multiplier, precision);
+    currentActualValues.y = round(vector.y / multiplier, precision);
+    currentActualValues.z = round(vector.z / multiplier, precision);
 
     const { x, y, z } = actualValuesRef.current;
 
@@ -83,7 +85,11 @@ export const Vector3Input = ({
       currentActualValues.y !== y ||
       currentActualValues.z !== z
     ) {
-      actualValuesRef.current = currentActualValues;
+      actualValuesRef.current = {
+        x: currentActualValues.x,
+        y: currentActualValues.y,
+        z: currentActualValues.z,
+      };
       setDisplayValues({
         x: currentActualValues.x.toFixed(precision),
         y: currentActualValues.y.toFixed(precision),

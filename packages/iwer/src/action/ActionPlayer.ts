@@ -67,6 +67,12 @@ export class ActionPlayer {
     viewSpaces: { [key in XREye]: XRSpace };
     vec3: vec3;
     quat: quat;
+    f1p: vec3;
+    f1q: quat;
+    f2p: vec3;
+    f2q: quat;
+    lastFrameInputs: Map<number, ProcessedInputData>;
+    nextFrameInputs: Map<number, ProcessedInputData>;
   };
 
   constructor(
@@ -107,6 +113,12 @@ export class ActionPlayer {
       viewSpaces,
       vec3: vec3.create(),
       quat: quat.create(),
+      f1p: vec3.create(),
+      f1q: quat.create(),
+      f2p: vec3.create(),
+      f2q: quat.create(),
+      lastFrameInputs: new Map(),
+      nextFrameInputs: new Map(),
     };
 
     mat4.fromTranslation(
@@ -278,7 +290,8 @@ export class ActionPlayer {
       alpha,
     );
 
-    const lastFrameInputs: Map<number, ProcessedInputData> = new Map();
+    const lastFrameInputs = this[P_ACTION_PLAYER].lastFrameInputs;
+    lastFrameInputs.clear();
     for (let i = 8; i < lastFrameData.length; i++) {
       const { index, inputData } = this.processRawInputData(
         lastFrameData[i] as any[],
@@ -286,7 +299,8 @@ export class ActionPlayer {
       lastFrameInputs.set(index, inputData);
     }
 
-    const nextFrameInputs: Map<number, ProcessedInputData> = new Map();
+    const nextFrameInputs = this[P_ACTION_PLAYER].nextFrameInputs;
+    nextFrameInputs.clear();
     for (let i = 8; i < nextFrameData.length; i++) {
       const { index, inputData } = this.processRawInputData(
         nextFrameData[i] as any[],
@@ -386,23 +400,27 @@ export class ActionPlayer {
     nextTransform: number[],
     alpha: number,
   ) {
-    const f1p = vec3.fromValues(
+    const f1p = vec3.set(
+      this[P_ACTION_PLAYER].f1p,
       lastTransform[0],
       lastTransform[1],
       lastTransform[2],
     );
-    const f1q = quat.fromValues(
+    const f1q = quat.set(
+      this[P_ACTION_PLAYER].f1q,
       lastTransform[3],
       lastTransform[4],
       lastTransform[5],
       lastTransform[6],
     );
-    const f2p = vec3.fromValues(
+    const f2p = vec3.set(
+      this[P_ACTION_PLAYER].f2p,
       nextTransform[0],
       nextTransform[1],
       nextTransform[2],
     );
-    const f2q = quat.fromValues(
+    const f2q = quat.set(
+      this[P_ACTION_PLAYER].f2q,
       nextTransform[3],
       nextTransform[4],
       nextTransform[5],

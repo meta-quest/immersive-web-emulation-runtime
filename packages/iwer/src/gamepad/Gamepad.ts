@@ -99,6 +99,10 @@ export class Gamepad {
     };
     axesSequence: (string | null)[];
     hapticActuators: GamepadHapticActuator[];
+    // Cached views so the per-frame buttons/axes getters don't allocate.
+    buttonsView: (GamepadButton | EmptyGamepadButton | null)[];
+    axesView: (number | null)[];
+    axesResolvers: ({ axisId: string; isY: boolean } | null)[];
   };
 
   constructor(
@@ -117,6 +121,9 @@ export class Gamepad {
       axesMap: {},
       axesSequence: [],
       hapticActuators: [],
+      buttonsView: [],
+      axesView: [],
+      axesResolvers: [],
     };
     gamepadConfig.buttons.forEach((buttonConfig) => {
       if (buttonConfig === null) {
@@ -139,6 +146,24 @@ export class Gamepad {
         }
       }
     });
+
+    // Build the cached buttons array once. The GamepadButton instances are
+    // stable references mutated in place, so the cached array always reflects
+    // current state; null slots get a shared empty button.
+    this[P_GAMEPAD].buttonsView = this[P_GAMEPAD].buttonsSequence.map((id) =>
+      id === null ? new EmptyGamepadButton() : this[P_GAMEPAD].buttonsMap[id],
+    );
+    // Precompute axis resolvers and a reusable axes array (values written in
+    // place on each read).
+    this[P_GAMEPAD].axesResolvers = this[P_GAMEPAD].axesSequence.map((id) =>
+      id === null
+        ? null
+        : {
+            axisId: id.substring(0, id.length - 6),
+            isY: id.substring(id.length - 6) === 'y-axis',
+          },
+    );
+    this[P_GAMEPAD].axesView = this[P_GAMEPAD].axesResolvers.map(() => null);
   }
 
   get id() {
@@ -162,28 +187,22 @@ export class Gamepad {
   }
 
   get axes() {
-    const axes: (number | null)[] = [];
-    this[P_GAMEPAD].axesSequence.forEach((id) => {
-      if (id === null) {
-        axes.push(null);
+    const { axesView, axesResolvers, axesMap } = this[P_GAMEPAD];
+    for (let i = 0; i < axesResolvers.length; i++) {
+      const resolver = axesResolvers[i];
+      if (resolver === null) {
+        axesView[i] = null;
       } else {
-        const axisId = id.substring(0, id.length - 6);
-        const axisType = id.substring(id.length - 6);
-        axes.push(
-          // if axis type is manual, then return the x value
-          axisType === 'y-axis'
-            ? this[P_GAMEPAD].axesMap[axisId].y
-            : this[P_GAMEPAD].axesMap[axisId].x,
-        );
+        const axis = axesMap[resolver.axisId];
+        // manual axes fall through to the x value, matching the prior behavior
+        axesView[i] = resolver.isY ? axis.y : axis.x;
       }
-    });
-    return axes;
+    }
+    return axesView;
   }
 
   get buttons() {
-    return this[P_GAMEPAD].buttonsSequence.map((id) =>
-      id === null ? new EmptyGamepadButton() : this[P_GAMEPAD].buttonsMap[id],
-    );
+    return this[P_GAMEPAD].buttonsView;
   }
 
   get hapticActuators() {

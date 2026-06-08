@@ -21,8 +21,10 @@ export interface InputFrame {
   };
   hand?: {
     [joint in XRHandJoint]: {
-      position: vec3;
-      quaternion: quat;
+      // Pre-compressed at record time using shared scratch buffers, so these
+      // are plain number[] rather than vec3/quat.
+      position: number[];
+      quaternion: number[];
       radius: number;
     };
   };
@@ -55,10 +57,43 @@ export interface ActionFrame {
 const compress = (arr: vec3 | quat) => {
   const out: number[] = [];
   Array.from(arr).forEach((num) => {
-    out.push(parseFloat(num.toFixed(3)));
+    out.push(Math.round(num * 1000) / 1000);
   });
   return out;
 };
+
+// Module-level scratch buffers reused for per-joint translation/rotation
+// extraction. Their contents are compressed (copied out) immediately after
+// each use, so they are never retained across joints or frames.
+const _scratchJointVec3 = vec3.create();
+const _scratchJointQuat = quat.create();
+
+/**
+ * Policy applied when a recording cap (maxFrames / maxDurationMs) is reached.
+ * - 'stop' (default): stop recording new frames; already-recorded frames are
+ *   kept intact.
+ * - 'drop': drop the oldest recorded frame(s) to make room for new ones,
+ *   keeping a sliding window of the most recent frames.
+ */
+export type RecordingCapPolicy = 'stop' | 'drop';
+
+export interface ActionRecorderOptions {
+  /**
+   * Maximum number of frames to keep. Omit (or use a non-positive value) for
+   * unlimited recording (default).
+   */
+  maxFrames?: number;
+  /**
+   * Maximum recording duration in milliseconds, measured from the first
+   * recorded frame's timestamp. Omit (or use a non-positive value) for
+   * unlimited recording (default).
+   */
+  maxDurationMs?: number;
+  /**
+   * Behavior when a cap is reached. Defaults to 'stop'.
+   */
+  capPolicy?: RecordingCapPolicy;
+}
 
 export class ActionRecorder {
   [P_ACTION_RECORDER]: {
@@ -69,9 +104,18 @@ export class ActionRecorder {
     compressedFrames: any[];
     jointRadii: Float32Array;
     jointTransforms: Float32Array;
+    maxFrames: number;
+    maxDurationMs: number;
+    capPolicy: RecordingCapPolicy;
+    firstTimeStamp: number | null;
+    lastTimeStamp: number | null;
   };
 
-  constructor(session: XRSession, refSpace: XRReferenceSpace) {
+  constructor(
+    session: XRSession,
+    refSpace: XRReferenceSpace,
+    options: ActionRecorderOptions = {},
+  ) {
     this[P_ACTION_RECORDER] = {
       session,
       refSpace,
@@ -80,11 +124,57 @@ export class ActionRecorder {
       compressedFrames: [],
       jointRadii: new Float32Array(25),
       jointTransforms: new Float32Array(25 * 16),
+      maxFrames:
+        options.maxFrames != null && options.maxFrames > 0
+          ? options.maxFrames
+          : Infinity,
+      maxDurationMs:
+        options.maxDurationMs != null && options.maxDurationMs > 0
+          ? options.maxDurationMs
+          : Infinity,
+      capPolicy: options.capPolicy ?? 'stop',
+      firstTimeStamp: null,
+      lastTimeStamp: null,
     };
   }
 
+  /** Number of frames currently recorded. */
+  get frameCount(): number {
+    return this[P_ACTION_RECORDER].compressedFrames.length;
+  }
+
+  /**
+   * Duration of the recording in milliseconds, measured from the first to the
+   * most recently recorded frame. Returns 0 when fewer than two frames have
+   * been recorded.
+   */
+  get durationMs(): number {
+    const state = this[P_ACTION_RECORDER];
+    if (state.firstTimeStamp == null || state.lastTimeStamp == null) {
+      return 0;
+    }
+    return state.lastTimeStamp - state.firstTimeStamp;
+  }
+
   recordFrame(frame: XRFrame) {
+    const state = this[P_ACTION_RECORDER];
     const timeStamp = performance.now();
+    // Enforce the duration cap up front: under the 'stop' policy, once the cap
+    // is reached we keep what we have and skip recording new frames entirely.
+    if (
+      state.capPolicy === 'stop' &&
+      state.firstTimeStamp != null &&
+      timeStamp - state.firstTimeStamp >= state.maxDurationMs
+    ) {
+      return;
+    }
+    // Likewise, under 'stop' refuse new frames once the frame cap is hit.
+    if (
+      state.capPolicy === 'stop' &&
+      state.compressedFrames.length >= state.maxFrames
+    ) {
+      return;
+    }
     const viewerMatrix = frame.getViewerPose(this[P_ACTION_RECORDER].refSpace)
       ?.transform.matrix;
     if (!viewerMatrix) return;
@@ -179,8 +269,8 @@ export class ActionRecorder {
           if (allValid) {
             const hand: {
               [joint in XRHandJoint]: {
-                position: vec3;
-                quaternion: quat;
+                position: number[];
+                quaternion: number[];
                 radius: number;
               };
             } = {} as any;
@@ -190,8 +280,12 @@ export class ActionRecorder {
                 (offset + 1) * 16,
               );
               const radius = this[P_ACTION_RECORDER].jointRadii[offset];
-              const position = mat4.getTranslation(vec3.create(), jointMatrix);
-              const quaternion = mat4.getRotation(quat.create(), jointMatrix);
+              // Reuse module-level scratch buffers, then compress (copy out)
+              // immediately so the scratch contents are never retained.
+              mat4.getTranslation(_scratchJointVec3, jointMatrix);
+              mat4.getRotation(_scratchJointQuat, jointMatrix);
+              const position = compress(_scratchJointVec3);
+              const quaternion = compress(_scratchJointQuat);
               const jointName = jointSpaces[offset].jointName as XRHandJoint;
               hand[jointName] = { position, quaternion, radius };
             }
@@ -214,9 +308,29 @@ export class ActionRecorder {
         actionFrame.inputFrames.push(inputFrame);
       }
     });
-    this[P_ACTION_RECORDER].compressedFrames.push(
-      this.compressActionFrame(actionFrame),
-    );
+    const frames = state.compressedFrames;
+    frames.push(this.compressActionFrame(actionFrame));
+    if (state.firstTimeStamp == null) {
+      state.firstTimeStamp = timeStamp;
+    }
+    state.lastTimeStamp = timeStamp;
+    // Under the 'drop' policy, maintain a sliding window by discarding the
+    // oldest frames once a cap is exceeded.
+    if (state.capPolicy === 'drop') {
+      while (frames.length > state.maxFrames) {
+        frames.shift();
+      }
+      while (
+        frames.length > 1 &&
+        timeStamp - state.firstTimeStamp! >= state.maxDurationMs
+      ) {
+        frames.shift();
+        // firstTimeStamp tracks the oldest retained frame's timestamp; since
+        // individual frame timestamps are compressed in storage, advance it by
+        // re-reading the new head frame's timeStamp (stored at index 0).
+        state.firstTimeStamp = frames[0][0];
+      }
+    }
   }
 
   compressActionFrame(af: ActionFrame): any[] {
@@ -243,10 +357,11 @@ export class ActionRecorder {
         const handArr: number[] = [];
         Object.values(inputFrame.hand!).forEach(
           ({ position, quaternion, radius }) => {
+            // position/quaternion were already compressed at record time.
             handArr.push(
-              ...compress(position),
-              ...compress(quaternion),
-              parseFloat(radius.toFixed(3)),
+              ...position,
+              ...quaternion,
+              Math.round(radius * 1000) / 1000,
             );
           },
         );

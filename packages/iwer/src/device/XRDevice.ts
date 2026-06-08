@@ -154,6 +154,11 @@ const Z_INDEX_APP_CANVAS = 2;
 const Z_INDEX_DEVUI_CANVAS = 3;
 const Z_INDEX_DEVUI_CONTAINER = 4;
 
+// scratch buffers for per-frame view offset updates (consumed synchronously
+// within updateViews via mat4.fromTranslation, never returned to callers)
+const leftViewOffsetScratch = vec3.create();
+const rightViewOffsetScratch = vec3.create();
+
 /**
  * XRDevice is not a standard API class outlined in the WebXR Device API Specifications
  * Instead, it serves as an user-facing interface to control the emulated XR Device
@@ -204,6 +209,7 @@ export class XRDevice {
     canvasContainer: HTMLDivElement;
 
     getViewport: (layer: XRWebGLLayer, view: XRView) => XRViewport;
+    viewportCache: { [key in XREye]?: XRViewport };
     updateViews: () => void;
     onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => void;
     onSessionEnd: () => void;
@@ -316,25 +322,50 @@ export class XRDevice {
       getViewport: (layer: XRWebGLLayer, view: XRView) => {
         const canvas = layer.context.canvas;
         const { width, height } = canvas;
-        switch (view.eye) {
+        const stereoEnabled = this[P_DEVICE].stereoEnabled;
+        const eye = view.eye;
+        let x: number;
+        let y: number;
+        let vpWidth: number;
+        let vpHeight: number;
+        switch (eye) {
           case XREye.None:
-            return new XRViewport(0, 0, width, height);
+            x = 0;
+            y = 0;
+            vpWidth = width;
+            vpHeight = height;
+            break;
           case XREye.Left:
-            return new XRViewport(
-              0,
-              0,
-              this[P_DEVICE].stereoEnabled ? width / 2 : width,
-              height,
-            );
+            x = 0;
+            y = 0;
+            vpWidth = stereoEnabled ? width / 2 : width;
+            vpHeight = height;
+            break;
           case XREye.Right:
-            return new XRViewport(
-              width / 2,
-              0,
-              this[P_DEVICE].stereoEnabled ? width / 2 : 0,
-              height,
-            );
+            x = width / 2;
+            y = 0;
+            // zero-width right viewport in mono is deliberate
+            vpWidth = stereoEnabled ? width / 2 : 0;
+            vpHeight = height;
+            break;
         }
+        // cache per (eye, width, height, stereoEnabled): return the cached
+        // instance unless one of those changed
+        const cached = this[P_DEVICE].viewportCache[eye];
+        if (
+          cached &&
+          cached.x === x &&
+          cached.y === y &&
+          cached.width === vpWidth &&
+          cached.height === vpHeight
+        ) {
+          return cached;
+        }
+        const viewport = new XRViewport(x, y, vpWidth, vpHeight);
+        this[P_DEVICE].viewportCache[eye] = viewport;
+        return viewport;
       },
+      viewportCache: {},
       updateViews: () => {
         // update viewerSpace
         const viewerSpace = this[P_DEVICE].viewerSpace;
@@ -345,13 +376,15 @@ export class XRDevice {
         );
 
         // update viewSpaces
+        vec3.set(leftViewOffsetScratch, -this[P_DEVICE].ipd / 2, 0, 0);
         mat4.fromTranslation(
           this[P_DEVICE].viewSpaces[XREye.Left][P_SPACE].offsetMatrix,
-          vec3.fromValues(-this[P_DEVICE].ipd / 2, 0, 0),
+          leftViewOffsetScratch,
         );
+        vec3.set(rightViewOffsetScratch, this[P_DEVICE].ipd / 2, 0, 0);
         mat4.fromTranslation(
           this[P_DEVICE].viewSpaces[XREye.Right][P_SPACE].offsetMatrix,
-          vec3.fromValues(this[P_DEVICE].ipd / 2, 0, 0),
+          rightViewOffsetScratch,
         );
       },
       onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => {
@@ -432,7 +465,6 @@ export class XRDevice {
           this[P_DEVICE].actionPlayer.playFrame();
         } else {
           const session = frame.session;
-          this[P_DEVICE].updateViews();
 
           if (this[P_DEVICE].pendingVisibilityState) {
             this[P_DEVICE].visibilityState =

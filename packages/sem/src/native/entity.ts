@@ -61,6 +61,7 @@ export class SpatialEntity extends Mesh {
     SpatialEntityComponent
   > = new Map();
   private _nativeEntity: NativePlane | NativeMesh | undefined;
+  private _entityType: SpatialEntityType | undefined;
 
   constructor(uuid: string = generateUUID()) {
     super(
@@ -195,16 +196,19 @@ export class SpatialEntity extends Mesh {
           SpatialEntityComponentType.Bounded2D,
           pbEntity.bounded2D_META,
         );
+        spatialEntity._entityType = SpatialEntityType.Plane;
       } else if (pbEntity.bounded3D_META) {
         spatialEntity.addComponent(
           SpatialEntityComponentType.Bounded3D,
           pbEntity.bounded3D_META,
         );
+        spatialEntity._entityType = SpatialEntityType.Box;
       } else if (pbEntity.triangleMesh_META) {
         spatialEntity.addComponent(
           SpatialEntityComponentType.TriangleMesh,
           pbEntity.triangleMesh_META,
         );
+        spatialEntity._entityType = SpatialEntityType.Mesh;
       }
       return spatialEntity;
     }
@@ -212,6 +216,11 @@ export class SpatialEntity extends Mesh {
   }
 
   get entityType() {
+    // Resolved once in fromPBJSON; fall back to component lookups for entities
+    // constructed via other paths (e.g. duplicate()).
+    if (this._entityType !== undefined) {
+      return this._entityType;
+    }
     if (this.getComponent(SpatialEntityComponentType.Bounded2D)) {
       return SpatialEntityType.Plane;
     } else if (this.getComponent(SpatialEntityComponentType.Bounded3D)) {

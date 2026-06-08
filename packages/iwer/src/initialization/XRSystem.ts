@@ -87,9 +87,13 @@ export class XRSystem extends EventTarget {
         this[P_SYSTEM].activeSession = session;
 
         // Listen for session end to clear the active session
-        session.addEventListener('end', () => {
-          this[P_SYSTEM].activeSession = undefined;
-        });
+        session.addEventListener(
+          'end',
+          () => {
+            this[P_SYSTEM].activeSession = undefined;
+          },
+          { once: true },
+        );
 
         resolve(session);
       },

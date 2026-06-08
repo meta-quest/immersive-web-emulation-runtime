@@ -86,8 +86,8 @@ export class XRAnchorUtils {
     const persistentAnchors = JSON.parse(
       localStorage.getItem(PersistentAnchorsStorageKey) || '{}',
     ) as { [uuid: string]: mat4 };
+    const globalSpace = session[P_SESSION].device[P_DEVICE].globalSpace;
     Object.entries(persistentAnchors).forEach(([uuid, offsetMatrix]) => {
-      const globalSpace = session[P_SESSION].device[P_DEVICE].globalSpace;
       const anchorSpace = new XRSpace(globalSpace, offsetMatrix);
       const anchor = new XRAnchor(anchorSpace, session);
       session[P_SESSION].persistentAnchors.set(uuid, anchor);

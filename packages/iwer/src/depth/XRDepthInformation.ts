@@ -31,6 +31,7 @@ export class XRCPUDepthInformation {
     normDepthBufferFromNormView: XRRigidTransform;
     rawValueToMeters: number;
     dataFormat: XRDepthDataFormat;
+    view: Float32Array | Uint8Array;
   };
 
   constructor(
@@ -48,6 +49,10 @@ export class XRCPUDepthInformation {
       normDepthBufferFromNormView,
       rawValueToMeters,
       dataFormat,
+      view:
+        dataFormat === 'float32'
+          ? new Float32Array(data)
+          : new Uint8Array(data),
     };
   }
 
@@ -76,7 +81,7 @@ export class XRCPUDepthInformation {
   }
 
   getDepthInMeters(x: number, y: number): number {
-    const { width, height, rawValueToMeters, data, dataFormat } =
+    const { width, height, rawValueToMeters, dataFormat, view } =
       this[P_DEPTH_INFO];
 
     if (x < 0 || x >= 1 || y < 0 || y >= 1) {
@@ -87,12 +92,12 @@ export class XRCPUDepthInformation {
     const row = Math.floor(y * height);
 
     if (dataFormat === 'float32') {
-      const floatView = new Float32Array(data);
+      const floatView = view as Float32Array;
       const index = row * width + col;
       return floatView[index] * rawValueToMeters;
     } else {
       // luminance-alpha: 16-bit unsigned int packed as two bytes
-      const byteView = new Uint8Array(data);
+      const byteView = view as Uint8Array;
       const index = (row * width + col) * 2;
       const rawValue = byteView[index] + byteView[index + 1] * 256;
       return rawValue * rawValueToMeters;

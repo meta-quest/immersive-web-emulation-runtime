@@ -138,13 +138,20 @@ export function lookRotationGimbal(direction: Vec3): Quat {
   // Negative direction.y (target below) = negative pitch (look down)
   const pitch = Math.atan2(direction.y, horizontalDist);
 
-  // Convert to degrees and create quaternion (roll = 0)
-  const RAD_TO_DEG = 180 / Math.PI;
-  return eulerToQuat({
-    pitch: pitch * RAD_TO_DEG,
-    yaw: yaw * RAD_TO_DEG,
-    roll: 0,
-  });
+  // Build the quaternion directly from radians (roll = 0). This matches
+  // eulerToQuat's YXZ formulas with cz = 1, sz = 0, avoiding the
+  // radians -> degrees -> radians round trip.
+  const cx = Math.cos(pitch * 0.5);
+  const sx = Math.sin(pitch * 0.5);
+  const cy = Math.cos(yaw * 0.5);
+  const sy = Math.sin(yaw * 0.5);
+
+  return {
+    w: cx * cy,
+    x: sx * cy,
+    y: cx * sy,
+    z: -sx * sy,
+  };
 }
 
 /**

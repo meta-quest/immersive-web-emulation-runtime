@@ -36,7 +36,7 @@ export const ControlsUI: React.FC<ControlsProps> = ({
   inputLayer,
   pointerLocked,
 }) => {
-  const { inputMode } = useInputModeStore();
+  const inputMode = useInputModeStore((state) => state.inputMode);
   return (
     <>
       {inputMode === 'controller'

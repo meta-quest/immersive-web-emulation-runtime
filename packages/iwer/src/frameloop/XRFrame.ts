@@ -35,6 +35,15 @@ const spaceGlobalMatrix = mat4.create();
 const baseSpaceGlobalMatrix = mat4.create();
 const baseSpaceGlobalMatrixInverse = mat4.create();
 
+// Scratch reused by getPose; values are copied into the returned pose's
+// DOMPointInit literals before the next call, so reuse is safe.
+const scratchPosition = vec3.create();
+const scratchOrientation = quat.create();
+
+// Hoisted eye lists so getViewerPose doesn't allocate a fresh array per frame.
+const INLINE_EYES = [XREye.None];
+const STEREO_EYES = [XREye.Left, XREye.Right];
+
 const getOffsetMatrix = (
   offsetMatrix: mat4,
   space: XRSpace,
@@ -101,18 +110,21 @@ export class XRFrame {
       );
     }
     getOffsetMatrix(this[P_FRAME].tempMat4, space, baseSpace);
-    const position = vec3.create();
-    mat4.getTranslation(position, this[P_FRAME].tempMat4);
-    const orientation = quat.create();
-    mat4.getRotation(orientation, this[P_FRAME].tempMat4);
+    mat4.getTranslation(scratchPosition, this[P_FRAME].tempMat4);
+    mat4.getRotation(scratchOrientation, this[P_FRAME].tempMat4);
     return new XRPose(
       new XRRigidTransform(
-        { x: position[0], y: position[1], z: position[2], w: 1.0 },
         {
-          x: orientation[0],
-          y: orientation[1],
-          z: orientation[2],
-          w: orientation[3],
+          x: scratchPosition[0],
+          y: scratchPosition[1],
+          z: scratchPosition[2],
+          w: 1.0,
+        },
+        {
+          x: scratchOrientation[0],
+          y: scratchOrientation[1],
+          z: scratchOrientation[2],
+          w: scratchOrientation[3],
         },
       ),
       space[P_SPACE].emulated,
@@ -130,9 +142,7 @@ export class XRFrame {
     const device = session[P_SESSION].device;
     const pose = this.getPose(device.viewerSpace, referenceSpace);
     const eyes =
-      session[P_SESSION].mode === 'inline'
-        ? [XREye.None]
-        : [XREye.Left, XREye.Right];
+      session[P_SESSION].mode === 'inline' ? INLINE_EYES : STEREO_EYES;
 
     const views: XRView[] = [];
     eyes.forEach((eye) => {
@@ -201,9 +211,7 @@ export class XRFrame {
     }
     spaces.forEach((space, i) => {
       getOffsetMatrix(this[P_FRAME].tempMat4, space, baseSpace);
-      for (let j = 0; j < 16; j++) {
-        transforms[i * 16 + j] = this[P_FRAME].tempMat4[j];
-      }
+      transforms.set(this[P_FRAME].tempMat4, i * 16);
     });
     return true;
   }

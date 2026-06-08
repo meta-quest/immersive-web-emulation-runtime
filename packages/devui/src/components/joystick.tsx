@@ -119,6 +119,8 @@ export const Joystick: React.FC<JoystickProps> = ({
     right: false,
     pressed: false,
   });
+  const keyStatesRef = useRef(keyStates);
+  keyStatesRef.current = keyStates;
 
   const handedness = xrController.inputSource.handedness;
 
@@ -171,7 +173,7 @@ export const Joystick: React.FC<JoystickProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const newKeyStates = { ...keyStates };
+      const newKeyStates = { ...keyStatesRef.current };
 
       if (event.code === mappedKeyUp) newKeyStates.up = true;
       if (event.code === mappedKeyDown) newKeyStates.down = true;
@@ -186,7 +188,7 @@ export const Joystick: React.FC<JoystickProps> = ({
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      const newKeyStates = { ...keyStates };
+      const newKeyStates = { ...keyStatesRef.current };
 
       if (event.code === mappedKeyUp) newKeyStates.up = false;
       if (event.code === mappedKeyDown) newKeyStates.down = false;
@@ -232,7 +234,6 @@ export const Joystick: React.FC<JoystickProps> = ({
     mappedKeyLeft,
     mappedKeyRight,
     pointerLocked,
-    keyStates,
   ]);
 
   useEffect(() => {

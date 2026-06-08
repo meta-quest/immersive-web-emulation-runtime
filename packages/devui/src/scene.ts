@@ -42,8 +42,12 @@ export class InputLayer {
   private quat: Quaternion = new Quaternion();
   private quatB: Quaternion = new Quaternion();
   private quatInv: Quaternion = new Quaternion();
+  private quatMouse: Quaternion = new Quaternion();
   private euler: Euler = new Euler();
   private mouseMoveHandler: (event: MouseEvent) => void;
+  private pointerLockChangeHandlerBound: () => void;
+  private keyDownHandlerBound: (event: KeyboardEvent) => void;
+  private keyUpHandlerBound: (event: KeyboardEvent) => void;
   private headsetDefaultPosition: Vector3;
   private headsetDefaultQuaternion: Quaternion;
   private keyState: { [key: string]: boolean } = {
@@ -155,7 +159,7 @@ export class InputLayer {
       this.cameraRig.rotation.x -= movementY * 0.002;
 
       xrDevice.quaternion.copy(
-        this.cameraRig.getWorldQuaternion(new Quaternion()) as any,
+        this.cameraRig.getWorldQuaternion(this.quatMouse) as any,
       );
     };
 
@@ -168,24 +172,29 @@ export class InputLayer {
       this.scene,
     ).update;
 
+    this.pointerLockChangeHandlerBound =
+      this.pointerLockChangeHandler.bind(this);
+    this.keyDownHandlerBound = this.keyDownHandler.bind(this);
+    this.keyUpHandlerBound = this.keyUpHandler.bind(this);
+
     document.addEventListener(
       'pointerlockchange',
-      this.pointerLockChangeHandler.bind(this),
+      this.pointerLockChangeHandlerBound,
       false,
     );
     document.addEventListener(
       'mozpointerlockchange',
-      this.pointerLockChangeHandler.bind(this),
+      this.pointerLockChangeHandlerBound,
       false,
     );
     document.addEventListener(
       'webkitpointerlockchange',
-      this.pointerLockChangeHandler.bind(this),
+      this.pointerLockChangeHandlerBound,
       false,
     );
 
-    document.addEventListener('keydown', this.keyDownHandler.bind(this), false);
-    document.addEventListener('keyup', this.keyUpHandler.bind(this), false);
+    document.addEventListener('keydown', this.keyDownHandlerBound, false);
+    document.addEventListener('keyup', this.keyUpHandlerBound, false);
   }
 
   lockPointer() {
@@ -437,25 +446,21 @@ export class InputLayer {
     this.renderer.dispose();
     document.removeEventListener(
       'pointerlockchange',
-      this.pointerLockChangeHandler.bind(this),
+      this.pointerLockChangeHandlerBound,
       false,
     );
     document.removeEventListener(
       'mozpointerlockchange',
-      this.pointerLockChangeHandler.bind(this),
+      this.pointerLockChangeHandlerBound,
       false,
     );
     document.removeEventListener(
       'webkitpointerlockchange',
-      this.pointerLockChangeHandler.bind(this),
+      this.pointerLockChangeHandlerBound,
       false,
     );
     document.removeEventListener('mousemove', this.mouseMoveHandler, false);
-    document.removeEventListener(
-      'keydown',
-      this.keyDownHandler.bind(this),
-      false,
-    );
-    document.removeEventListener('keyup', this.keyUpHandler.bind(this), false);
+    document.removeEventListener('keydown', this.keyDownHandlerBound, false);
+    document.removeEventListener('keyup', this.keyUpHandlerBound, false);
   }
 }

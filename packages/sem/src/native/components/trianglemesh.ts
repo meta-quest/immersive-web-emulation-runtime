@@ -12,19 +12,8 @@ import {
 import { TriangleMeshMETA } from '../../generated/protos/openxr_scene.js';
 import { Vector3 } from '../../generated/protos/openxr_core.js';
 
-function vec3ArrayToFloat32Array(arr: Vector3[]): Float32Array {
-  const result = new Float32Array(arr.length * 3);
-  let index = 0;
-  for (const vec of arr) {
-    result[index++] = vec.x;
-    result[index++] = vec.y;
-    result[index++] = vec.z;
-  }
-  return result;
-}
-
 export class TriangleMeshComponent extends SpatialEntityComponent {
-  private _vertices: Vector3[];
+  private _vertices: Float32Array;
   private _indices: number[];
   private _polygonCount: number = 0;
   private _vertexCount: number = 0;
@@ -34,17 +23,11 @@ export class TriangleMeshComponent extends SpatialEntityComponent {
   constructor(spatialEntity: Mesh, initData: TriangleMeshMETA) {
     super(spatialEntity);
     const { vertices, indices } = initData;
-    const verticesArray = new Float32Array(vertices.buffer);
     const indicesArray = new Uint32Array(indices.buffer);
-    const vec3Array: Vector3[] = [];
-    for (let i = 0; i < verticesArray.length / 3; i++) {
-      vec3Array.push({
-        x: verticesArray[3 * i],
-        y: verticesArray[3 * i + 1],
-        z: verticesArray[3 * i + 2],
-      });
-    }
-    this._vertices = vec3Array;
+    // Keep the decoded vertex positions as a flat Float32Array and feed it
+    // straight into the position BufferAttribute; materialize Vector3 objects
+    // only where consumers actually need them (initData).
+    this._vertices = new Float32Array(vertices.buffer);
     this._indices = [...indicesArray];
     this.buildGeometry();
     const material = spatialEntity.material as MeshBasicMaterial;
@@ -57,8 +40,7 @@ export class TriangleMeshComponent extends SpatialEntityComponent {
 
   private buildGeometry() {
     const geometry = new BufferGeometry();
-    const vertices = vec3ArrayToFloat32Array(this._vertices);
-    geometry.setAttribute('position', new BufferAttribute(vertices, 3));
+    geometry.setAttribute('position', new BufferAttribute(this._vertices, 3));
     // Indices are decoded as Uint32; pick a 16- or 32-bit index buffer based on
     // the max index so meshes with >65535 vertices aren't silently truncated.
     const maxIndex = this._indices.reduce((max, i) => (i > max ? i : max), 0);
@@ -96,17 +78,24 @@ export class TriangleMeshComponent extends SpatialEntityComponent {
   }
 
   get initData() {
+    const vertices: Vector3[] = [];
+    for (let i = 0; i < this._vertices.length / 3; i++) {
+      vertices.push({
+        x: this._vertices[3 * i],
+        y: this._vertices[3 * i + 1],
+        z: this._vertices[3 * i + 2],
+      });
+    }
     return {
-      vertices: this._vertices,
+      vertices,
       indices: this._indices,
     };
   }
 
   get pbData() {
-    const verticesArray = vec3ArrayToFloat32Array(this._vertices);
     const indicesArray = new Uint32Array(this._indices);
     return {
-      vertices: new Uint8Array(verticesArray.buffer),
+      vertices: new Uint8Array(this._vertices.buffer),
       indices: new Uint8Array(indicesArray.buffer),
     } as TriangleMeshMETA;
   }

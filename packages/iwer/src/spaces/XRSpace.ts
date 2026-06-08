@@ -9,6 +9,10 @@ import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { P_SPACE } from '../private.js';
 
+// Module-level scratch reused by XRSpaceUtils to avoid per-call allocations on
+// the per-frame pose path. Each use is fully consumed before the next call.
+const scratchTranslation = vec3.create();
+
 export class XRSpace extends EventTarget {
   [P_SPACE]: {
     parentSpace: XRSpace | undefined;
@@ -42,9 +46,8 @@ export class XRSpaceUtils {
   // Update the rotation component of the offsetMatrix of a given XRSpace using a quaternion
   static updateOffsetQuaternion(space: XRSpace, quaternion: quat): void {
     const offsetMatrix = space[P_SPACE].offsetMatrix;
-    const translation = vec3.create();
-    mat4.getTranslation(translation, offsetMatrix);
-    mat4.fromRotationTranslation(offsetMatrix, quaternion, translation);
+    mat4.getTranslation(scratchTranslation, offsetMatrix);
+    mat4.fromRotationTranslation(offsetMatrix, quaternion, scratchTranslation);
   }
 
   // Update the offsetMatrix of a given XRSpace directly
@@ -53,16 +56,31 @@ export class XRSpaceUtils {
     mat4.copy(offsetMatrix, matrix);
   }
 
-  // Calculate the global offset matrix for a given XRSpace
+  // Calculate the global offset matrix for a given XRSpace.
+  //
+  // Walks up the parent chain iteratively and folds each ancestor's offset
+  // matrix into `globalOffset` (root-first). The previous recursive form
+  // allocated a throwaway mat4 for every level of the hierarchy on every call,
+  // which is hot: getPose -> getOffsetMatrix calls this twice per pose, many
+  // times per frame. This version allocates nothing beyond the (small) chain
+  // array and never shares module scratch, so callers that pass two distinct
+  // output matrices (see getOffsetMatrix) stay correct.
   static calculateGlobalOffsetMatrix(
     space: XRSpace,
     globalOffset: mat4 = mat4.create(),
   ): mat4 {
-    const parentOffset = space[P_SPACE].parentSpace
-      ? XRSpaceUtils.calculateGlobalOffsetMatrix(space[P_SPACE].parentSpace)
-      : mat4.create(); // Identity matrix for GlobalSpace
+    const chain: XRSpace[] = [];
+    let current: XRSpace | undefined = space;
+    while (current) {
+      chain.push(current);
+      current = current[P_SPACE].parentSpace;
+    }
 
-    mat4.multiply(globalOffset, parentOffset, space[P_SPACE].offsetMatrix);
+    // chain is [space, ..., root]; multiply offsets in root -> space order.
+    mat4.identity(globalOffset);
+    for (let i = chain.length - 1; i >= 0; i--) {
+      mat4.multiply(globalOffset, globalOffset, chain[i][P_SPACE].offsetMatrix);
+    }
     return globalOffset;
   }
 }

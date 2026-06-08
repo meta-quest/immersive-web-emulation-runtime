@@ -90,6 +90,14 @@ export class XRSession extends EventTarget {
   [P_SESSION]: {
     device: XRDevice;
     enabledFeatures: Array<string>;
+    // feature flags derived once from enabledFeatures for per-frame reuse
+    hasAnchors: boolean;
+    hasPlanes: boolean;
+    hasMeshes: boolean;
+    hasDepth: boolean;
+    hasHitTest: boolean;
+    // cached immutable copy of device.supportedFrameRates
+    supportedFrameRates: Float32Array;
     isSystemKeyboardSupported: boolean;
     mode: XRSessionMode;
     ended: boolean;
@@ -144,6 +152,10 @@ export class XRSession extends EventTarget {
     depthTexture: WebGLTexture | null;
     depthTextureWidth: number;
     depthTextureHeight: number;
+    // reusable scratch buffer for the GPU depth vertical-flip path,
+    // reallocated only when width*height changes
+    depthFlipScratch: Float32Array | null;
+    depthFlipScratchSize: number;
     computeDepthSensing: (frame: XRFrame) => void;
     activeFrame: XRFrame | null;
     // event handlers
@@ -172,6 +184,12 @@ export class XRSession extends EventTarget {
       renderState: new XRRenderState(),
       pendingRenderState: null,
       enabledFeatures: enabledFeatures,
+      hasAnchors: enabledFeatures.includes('anchors'),
+      hasPlanes: enabledFeatures.includes('plane-detection'),
+      hasMeshes: enabledFeatures.includes('mesh-detection'),
+      hasDepth: enabledFeatures.includes('depth-sensing'),
+      hasHitTest: enabledFeatures.includes('hit-test'),
+      supportedFrameRates: new Float32Array(device.supportedFrameRates),
       isSystemKeyboardSupported: false,
       ended: false,
       projectionMatrices: {
@@ -308,40 +326,40 @@ export class XRSession extends EventTarget {
           );
         }
 
+        const now = performance.now();
         const frame = new XRFrame(
           this,
           this[P_SESSION].frameHandle,
           true,
           true,
-          performance.now(),
+          now,
         );
 
-        const time = performance.now();
         const devui = this[P_SESSION].device[P_DEVICE].devui;
         if (devui) {
-          devui.render(time);
+          devui.render(now);
         }
 
         if (this[P_SESSION].mode === 'immersive-ar') {
           const sem = this[P_SESSION].device[P_DEVICE].sem;
           if (sem) {
-            sem.render(time);
+            sem.render(now);
           }
         }
 
-        if (this[P_SESSION].enabledFeatures.includes('anchors')) {
+        if (this[P_SESSION].hasAnchors) {
           this[P_SESSION].updateTrackedAnchors();
         }
-        if (this[P_SESSION].enabledFeatures.includes('plane-detection')) {
+        if (this[P_SESSION].hasPlanes) {
           this[P_SESSION].updateTrackedPlanes(frame);
         }
-        if (this[P_SESSION].enabledFeatures.includes('mesh-detection')) {
+        if (this[P_SESSION].hasMeshes) {
           this[P_SESSION].updateTrackedMeshes(frame);
         }
-        if (this[P_SESSION].enabledFeatures.includes('depth-sensing')) {
+        if (this[P_SESSION].hasDepth) {
           this[P_SESSION].computeDepthSensing(frame);
         }
-        if (this[P_SESSION].enabledFeatures.includes('hit-test')) {
+        if (this[P_SESSION].hasHitTest) {
           this[P_SESSION].computeHitTestResults(frame);
         }
 
@@ -361,11 +379,10 @@ export class XRSession extends EventTarget {
           this[P_SESSION].frameCallbacks);
         // - Set session’s list of animation frame callbacks to the empty list.
         this[P_SESSION].frameCallbacks = [];
-        const rightNow = performance.now();
         for (let i = 0; i < callbacks.length; i++) {
           try {
             if (!callbacks[i].cancelled) {
-              callbacks[i].callback(rightNow, frame);
+              callbacks[i].callback(now, frame);
             }
           } catch (err) {
             console.error(err);
@@ -505,6 +522,8 @@ export class XRSession extends EventTarget {
       depthTexture: null,
       depthTextureWidth: 0,
       depthTextureHeight: 0,
+      depthFlipScratch: null,
+      depthFlipScratchSize: 0,
       activeFrame: null,
       computeDepthSensing: (frame: XRFrame) => {
         const sem = this[P_SESSION].device[P_DEVICE].sem;
@@ -599,7 +618,15 @@ export class XRSession extends EventTarget {
               }
 
               const srcData = new Float32Array(result.data);
-              const flippedData = new Float32Array(srcData.length);
+              const flipSize = dw * dh;
+              if (
+                !this[P_SESSION].depthFlipScratch ||
+                this[P_SESSION].depthFlipScratchSize !== flipSize
+              ) {
+                this[P_SESSION].depthFlipScratch = new Float32Array(flipSize);
+                this[P_SESSION].depthFlipScratchSize = flipSize;
+              }
+              const flippedData = this[P_SESSION].depthFlipScratch;
               for (let row = 0; row < dh; row++) {
                 const srcRow = dh - 1 - row;
                 for (let col = 0; col < dw; col++) {
@@ -712,7 +739,7 @@ export class XRSession extends EventTarget {
   }
 
   get supportedFrameRates(): Float32Array | undefined {
-    return new Float32Array(this[P_SESSION].device.supportedFrameRates);
+    return this[P_SESSION].supportedFrameRates;
   }
 
   get renderState(): XRRenderState {
@@ -932,6 +959,34 @@ export class XRSession extends EventTarget {
         globalThis.cancelAnimationFrame(this[P_SESSION].deviceFrameHandle!);
         this[P_SESSION].deviceFrameHandle = undefined;
         this[P_SESSION].device[P_DEVICE].onSessionEnd();
+
+        // Tear down per-session state so it doesn't dangle after end.
+        this[P_SESSION].frameCallbacks.length = 0;
+        this[P_SESSION].currentFrameCallbacks = null;
+        this[P_SESSION].referenceSpaces.length = 0;
+        this[P_SESSION].hitTestSources.clear();
+        this[P_SESSION].trackedPlanes.clear();
+        this[P_SESSION].trackedMeshes.clear();
+        // Per-session tracked anchors only; persistentAnchors survive by design.
+        this[P_SESSION].trackedAnchors.clear();
+        this[P_SESSION].frameTrackedAnchors.clear();
+        // Reject any pending anchor-creation promises so they don't dangle.
+        this[P_SESSION].newAnchors.forEach(({ reject: rejectAnchor }) => {
+          rejectAnchor(
+            new DOMException(
+              'XRSession has ended before the anchor was resolved.',
+              'InvalidStateError',
+            ),
+          );
+        });
+        this[P_SESSION].newAnchors.clear();
+        // Release the depth texture via the base layer context, if any.
+        if (this[P_SESSION].depthTexture) {
+          const depthContext = this[P_SESSION].renderState.baseLayer?.context;
+          depthContext?.deleteTexture(this[P_SESSION].depthTexture);
+          this[P_SESSION].depthTexture = null;
+        }
+
         this.dispatchEvent(new XRSessionEvent('end', { session: this }));
         resolve();
       }
