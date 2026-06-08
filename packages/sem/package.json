@@ -3,6 +3,7 @@
   "version": "2.3.0",
   "description": "Synthetic Environment Module for IWER",
   "type": "module",
+  "sideEffects": false,
   "main": "lib/src/index.js",
   "types": "lib/src/index.d.ts",
   "files": [
@@ -11,8 +12,9 @@
     "captures"
   ],
   "scripts": {
-    "prebuild": "node scripts/prebuild.cjs",
-    "build": "tsc && rollup -c",
+    "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts && node scripts/prebuild.cjs",
+    "clean": "node -e \"const{rmSync}=require('fs');rmSync('lib',{recursive:true,force:true});rmSync('build',{recursive:true,force:true})\"",
+    "build": "pnpm run clean && tsc && rollup -c",
     "prepublishOnly": "pnpm run build"
   },
   "repository": {

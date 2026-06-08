@@ -3,6 +3,7 @@
   "version": "2.3.0",
   "description": "Javascript WebXR Runtime for Emulation",
   "type": "module",
+  "sideEffects": false,
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "files": [
@@ -11,7 +12,8 @@
   ],
   "scripts": {
     "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
-    "build": "tsc && rollup -c",
+    "clean": "node -e \"const{rmSync}=require('fs');rmSync('lib',{recursive:true,force:true});rmSync('build',{recursive:true,force:true})\"",
+    "build": "pnpm run clean && tsc && rollup -c",
     "doc": "typedoc",
     "format": "prettier --write ./src/**/*",
     "test": "jest --watchman=false",
