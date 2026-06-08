@@ -18,13 +18,15 @@ export class XRRenderState {
 
   constructor(init: Partial<XRRenderStateInit> = {}, oldState?: XRRenderState) {
     this[P_RENDER_STATE] = {
-      depthNear: init.depthNear || oldState?.depthNear || 0.1,
-      depthFar: init.depthFar || oldState?.depthFar || 1000.0,
+      // Use nullish coalescing so a legitimate 0 (e.g.
+      // inlineVerticalFieldOfView=0) is not replaced by the default.
+      depthNear: init.depthNear ?? oldState?.depthNear ?? 0.1,
+      depthFar: init.depthFar ?? oldState?.depthFar ?? 1000.0,
       inlineVerticalFieldOfView:
-        init.inlineVerticalFieldOfView ||
-        oldState?.inlineVerticalFieldOfView ||
+        init.inlineVerticalFieldOfView ??
+        oldState?.inlineVerticalFieldOfView ??
         null,
-      baseLayer: init.baseLayer || oldState?.baseLayer || null,
+      baseLayer: init.baseLayer ?? oldState?.baseLayer ?? null,
     };
   }
 

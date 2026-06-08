@@ -174,6 +174,15 @@ export class SyntheticEnvironmentModule extends EventTarget {
     (json as SceneFile).spatialEntities.forEach((spatialEntityJSON) => {
       const spatialEntity = SpatialEntity.fromPBJSON(spatialEntityJSON);
       if (spatialEntity) {
+        // Tear down any prior entity sharing this uuid (duplicate within a single
+        // load) before adding the replacement, so its nativeEntity isn't left
+        // dangling in trackedMeshes/trackedPlanes.
+        const oldMesh = this.objectMap.get(spatialEntityJSON.uuid);
+        if (oldMesh) {
+          oldMesh.removeFromParent();
+          this.trackedMeshes.delete(oldMesh.nativeEntity as NativeMesh);
+          this.trackedPlanes.delete(oldMesh.nativeEntity as NativePlane);
+        }
         switch (spatialEntity.entityType) {
           case SpatialEntityType.Box:
             this.boxes.add(spatialEntity);
@@ -187,10 +196,6 @@ export class SyntheticEnvironmentModule extends EventTarget {
             this.meshes.add(spatialEntity);
             this.trackedMeshes.add(spatialEntity.nativeEntity as NativeMesh);
             break;
-        }
-        const oldMesh = this.objectMap.get(spatialEntityJSON.uuid);
-        if (oldMesh) {
-          oldMesh.removeFromParent();
         }
         this.objectMap.set(spatialEntityJSON.uuid, spatialEntity);
       }

@@ -784,21 +784,23 @@ export class XRSession extends EventTarget {
     }
 
     const compoundStateInit: XRRenderStateInit = {
+      // Use nullish coalescing so legitimate 0 values (e.g.
+      // inlineVerticalFieldOfView=0) are preserved instead of being dropped.
       baseLayer:
-        state.baseLayer ||
-        this[P_SESSION].pendingRenderState?.baseLayer ||
+        state.baseLayer ??
+        this[P_SESSION].pendingRenderState?.baseLayer ??
         undefined,
       depthFar:
-        state.depthFar ||
-        this[P_SESSION].pendingRenderState?.depthFar ||
+        state.depthFar ??
+        this[P_SESSION].pendingRenderState?.depthFar ??
         undefined,
       depthNear:
-        state.depthNear ||
-        this[P_SESSION].pendingRenderState?.depthNear ||
+        state.depthNear ??
+        this[P_SESSION].pendingRenderState?.depthNear ??
         undefined,
       inlineVerticalFieldOfView:
-        state.inlineVerticalFieldOfView ||
-        this[P_SESSION].pendingRenderState?.inlineVerticalFieldOfView ||
+        state.inlineVerticalFieldOfView ??
+        this[P_SESSION].pendingRenderState?.inlineVerticalFieldOfView ??
         undefined,
     };
 
@@ -919,12 +921,16 @@ export class XRSession extends EventTarget {
 
   async end(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (this[P_SESSION].ended || this[P_SESSION].deviceFrameHandle === null) {
+      if (this[P_SESSION].ended) {
         reject(
           new DOMException('XRSession has already ended.', 'InvalidStateError'),
         );
       } else {
+        // Mark the session as ended so the device frameloop early-returns and
+        // requestAnimationFrame/updateRenderState behave per spec after end.
+        this[P_SESSION].ended = true;
         globalThis.cancelAnimationFrame(this[P_SESSION].deviceFrameHandle!);
+        this[P_SESSION].deviceFrameHandle = undefined;
         this[P_SESSION].device[P_DEVICE].onSessionEnd();
         this.dispatchEvent(new XRSessionEvent('end', { session: this }));
         resolve();

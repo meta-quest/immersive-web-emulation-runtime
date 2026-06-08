@@ -59,7 +59,14 @@ export class TriangleMeshComponent extends SpatialEntityComponent {
     const geometry = new BufferGeometry();
     const vertices = vec3ArrayToFloat32Array(this._vertices);
     geometry.setAttribute('position', new BufferAttribute(vertices, 3));
-    geometry.setIndex(new BufferAttribute(new Uint16Array(this._indices), 1));
+    // Indices are decoded as Uint32; pick a 16- or 32-bit index buffer based on
+    // the max index so meshes with >65535 vertices aren't silently truncated.
+    const maxIndex = this._indices.reduce((max, i) => (i > max ? i : max), 0);
+    const indexArray =
+      maxIndex < 65536
+        ? new Uint16Array(this._indices)
+        : new Uint32Array(this._indices);
+    geometry.setIndex(new BufferAttribute(indexArray, 1));
     this._spatialEntity.geometry?.dispose();
     this._spatialEntity.geometry = geometry;
     geometry.computeVertexNormals();

@@ -1466,15 +1466,19 @@ describe('RemoteControlInterface', () => {
           duration: 0.1,
         });
 
-        // Advance timer past the release timeout
-        jest.advanceTimersByTime(remote.RELEASE_TIMEOUT_MS + 1000);
-
-        // Process the queue - this should have cancelled the timer
-        remote.update(150);
-        await promise;
-
-        // Should still be captured because queue was active
+        // Drive frames to process the queued action. While the queue is active
+        // the release timer is cancelled, so capture must persist across the
+        // animation. (Frames must keep coming for the queue to advance — a
+        // queued action no longer survives an indefinite render-loop stall.)
+        remote.update(50);
         expect(remote.isCaptured).toBe(true);
+        remote.update(60); // completes the 0.1s animation; queue drains
+        await promise;
+        expect(remote.isCaptured).toBe(true);
+
+        // Once the queue is empty, the release timer eventually drops capture.
+        jest.advanceTimersByTime(remote.RELEASE_TIMEOUT_MS + 1000);
+        expect(remote.isCaptured).toBe(false);
       });
     });
 

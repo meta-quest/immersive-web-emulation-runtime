@@ -155,6 +155,12 @@ export class XRSystem extends EventTarget {
             return;
           }
 
+          // Reject any previously pending offer so its promise settles
+          // instead of being silently orphaned by this newer offer.
+          this[P_SYSTEM].offeredSessionConfig?.reject(
+            new Error('Offer superseded by a new offerSession call.'),
+          );
+
           this[P_SYSTEM].offeredSessionConfig = {
             resolve,
             reject,

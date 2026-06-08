@@ -164,6 +164,44 @@ export class ActionPlayer {
       });
       this[P_ACTION_PLAYER].inputSchemas.set(index, schema);
     });
+
+    // Validate up front that every recorded frame's gamepad data matches the
+    // expected button/axis counts, so a malformed recording fails loudly here
+    // instead of crashing deep inside playback.
+    frames.forEach((frame: any[], frameIndex: number) => {
+      for (let i = 8; i < frame.length; i++) {
+        const inputDataRaw = frame[i] as any[];
+        const index = inputDataRaw[0] as number;
+        const schema = this[P_ACTION_PLAYER].inputSchemas.get(index);
+        if (!schema) {
+          throw new DOMException(
+            `recording frame ${frameIndex} references unknown input source ${index}`,
+            'NotSupportedError',
+          );
+        }
+        if (schema.hasGamepad) {
+          let dataCounter = 8;
+          if (schema.hasGrip) dataCounter++;
+          if (schema.hasHand) dataCounter++;
+          const gamepadData = inputDataRaw[dataCounter] as any[];
+          const expectedLength = schema.numButtons! + schema.numAxes!;
+          if (
+            !Array.isArray(gamepadData) ||
+            gamepadData.length !== expectedLength
+          ) {
+            const actualLength = Array.isArray(gamepadData)
+              ? gamepadData.length
+              : 'no';
+            throw new DOMException(
+              `recording frame ${frameIndex} input source ${index} has ` +
+                `${actualLength} gamepad entries, expected ${expectedLength} ` +
+                `(${schema.numButtons} buttons + ${schema.numAxes} axes)`,
+              'NotSupportedError',
+            );
+          }
+        }
+      }
+    });
   }
 
   play() {
@@ -201,29 +239,37 @@ export class ActionPlayer {
     const delta = now - this[P_ACTION_PLAYER].actualTimeStamp!;
     this[P_ACTION_PLAYER].actualTimeStamp = now;
     this[P_ACTION_PLAYER].playbackTime! += delta;
+    const frames = this[P_ACTION_PLAYER].frames;
     if (
       this[P_ACTION_PLAYER].playbackTime! >
       this[P_ACTION_PLAYER].endingTimeStamp
     ) {
+      // Clamp to the recording's end so the final frame's pose is rendered once
+      // (and single-frame recordings render at all) before playback stops.
+      this[P_ACTION_PLAYER].playbackTime =
+        this[P_ACTION_PLAYER].endingTimeStamp;
       this.stop();
-      return;
     }
+    // Guard the advance so we never read past the last frame.
     while (
-      (this[P_ACTION_PLAYER].frames[
-        this[P_ACTION_PLAYER].recordedFramePointer + 1
-      ][0] as number) < this[P_ACTION_PLAYER].playbackTime
+      this[P_ACTION_PLAYER].recordedFramePointer + 1 < frames.length &&
+      (frames[this[P_ACTION_PLAYER].recordedFramePointer + 1][0] as number) <
+        this[P_ACTION_PLAYER].playbackTime
     ) {
       this[P_ACTION_PLAYER].recordedFramePointer++;
     }
-    const lastFrameData =
-      this[P_ACTION_PLAYER].frames[this[P_ACTION_PLAYER].recordedFramePointer];
-    const nextFrameData =
-      this[P_ACTION_PLAYER].frames[
-        this[P_ACTION_PLAYER].recordedFramePointer + 1
-      ];
-    const alpha =
-      ((this[P_ACTION_PLAYER].playbackTime - lastFrameData[0]) as number) /
-      (((nextFrameData[0] as number) - lastFrameData[0]) as number);
+    const lastFrameData = frames[this[P_ACTION_PLAYER].recordedFramePointer];
+    // When there is no next frame (single-frame recording or pointer at the
+    // end), snap to the last frame's pose instead of dereferencing frames[ptr+1].
+    const hasNextFrame =
+      this[P_ACTION_PLAYER].recordedFramePointer + 1 < frames.length;
+    const nextFrameData = hasNextFrame
+      ? frames[this[P_ACTION_PLAYER].recordedFramePointer + 1]
+      : lastFrameData;
+    const alpha = hasNextFrame
+      ? ((this[P_ACTION_PLAYER].playbackTime - lastFrameData[0]) as number) /
+        (((nextFrameData[0] as number) - lastFrameData[0]) as number)
+      : 0;
 
     this.updateXRSpaceFromMergedFrames(
       this[P_ACTION_PLAYER].viewerSpace,

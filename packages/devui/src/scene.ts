@@ -41,6 +41,7 @@ export class InputLayer {
   private vec3: Vector3 = new Vector3();
   private quat: Quaternion = new Quaternion();
   private quatB: Quaternion = new Quaternion();
+  private quatInv: Quaternion = new Quaternion();
   private euler: Euler = new Euler();
   private mouseMoveHandler: (event: MouseEvent) => void;
   private headsetDefaultPosition: Vector3;
@@ -211,14 +212,8 @@ export class InputLayer {
 
     if (this.isPointerLocked) {
       document.addEventListener('mousemove', this.mouseMoveHandler, false);
-      Object.values(this.transformHandles).forEach((transformHandle) => {
-        transformHandle.visible = false;
-      });
     } else {
       document.removeEventListener('mousemove', this.mouseMoveHandler, false);
-      Object.values(this.transformHandles).forEach((transformHandle) => {
-        transformHandle.visible = !this.isInProgrammaticMode;
-      });
     }
   }
 
@@ -331,6 +326,11 @@ export class InputLayer {
     // Force Three.js to update world matrices
     playerRig.updateMatrixWorld(true);
 
+    // cameraRig world quaternion inverse is constant across the loop, so
+    // compute it once into a distinct scratch (quatInv) to avoid recomputing
+    // and to avoid clobbering this.quat used above.
+    cameraRig.getWorldQuaternion(this.quatInv).invert();
+
     // Sync controller/hand transforms
     transformHandles.forEach((transformHandle, handedness) => {
       const emulatedInput =
@@ -348,14 +348,13 @@ export class InputLayer {
       transformHandle.position.copy(worldPos);
 
       // Convert world quaternion to cameraRig local quaternion
-      cameraRig.getWorldQuaternion(this.quat);
       this.quatB.set(
         emulatedInput.quaternion.x,
         emulatedInput.quaternion.y,
         emulatedInput.quaternion.z,
         emulatedInput.quaternion.w,
       );
-      this.quatB.premultiply(this.quat.invert());
+      this.quatB.premultiply(this.quatInv);
       transformHandle.quaternion.copy(this.quatB);
     });
   }

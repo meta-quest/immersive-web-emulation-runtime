@@ -187,6 +187,55 @@ function resolveDeviceId(id: string): string {
   return DEVICE_ID_ALIASES[id] ?? id;
 }
 
+/** Default duration (seconds) for the high-level `select` action. */
+const DEFAULT_SELECT_DURATION_S = 0.15;
+
+function isFiniteNumber(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Validate a position, throwing on any non-finite component so a bad input
+ * cannot permanently corrupt the device pose.
+ */
+function validatePosition(p: Vec3): void {
+  if (!isFiniteNumber(p.x) || !isFiniteNumber(p.y) || !isFiniteNumber(p.z)) {
+    throw new Error(
+      `Invalid position: x, y, z must be finite numbers (got ${JSON.stringify(
+        p,
+      )}).`,
+    );
+  }
+}
+
+/**
+ * Validate a quaternion and return a normalized copy. Throws on non-finite
+ * components or a near-zero-length quaternion.
+ */
+function validateAndNormalizeQuat(q: Quat): Quat {
+  if (
+    !isFiniteNumber(q.x) ||
+    !isFiniteNumber(q.y) ||
+    !isFiniteNumber(q.z) ||
+    !isFiniteNumber(q.w)
+  ) {
+    throw new Error(
+      `Invalid orientation: x, y, z, w must be finite numbers (got ${JSON.stringify(
+        q,
+      )}).`,
+    );
+  }
+  const len = Math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+  if (len < 1e-6) {
+    throw new Error('Invalid orientation: quaternion has near-zero length.');
+  }
+  return { x: q.x / len, y: q.y / len, z: q.z / len, w: q.w / len };
+}
+
 /**
  * RemoteControlInterface provides frame-synchronized programmatic control of an XRDevice.
  *
@@ -226,6 +275,14 @@ export class RemoteControlInterface {
 
   /** Release timeout in milliseconds (default: 30000 = 30 seconds) */
   readonly RELEASE_TIMEOUT_MS = 30000;
+
+  /**
+   * Per-action timeout in milliseconds. A queued action is rejected if no frame
+   * advances the queue within this window (plus the action's own duration), so
+   * callers don't hang forever when the XR render loop is paused or throttled.
+   */
+  readonly ACTION_TIMEOUT_MS = 10000;
+  private actionTimers = new WeakMap<Action, ReturnType<typeof setTimeout>>();
 
   constructor(device: XRDevice) {
     this.device = device;
@@ -275,6 +332,7 @@ export class RemoteControlInterface {
         reject,
       };
       this.commandQueue.push(action);
+      this.armActionTimeout(action, method);
     });
   }
 
@@ -302,7 +360,43 @@ export class RemoteControlInterface {
         reject,
       };
       this.commandQueue.push(action);
+      // Give duration actions their full runtime plus the standard grace window.
+      this.armActionTimeout(action, method, durationMs);
     });
+  }
+
+  /**
+   * Arm a timeout that rejects and removes a queued action if no frame processes
+   * it in time. Without this, a state-mutating dispatch hangs forever when the
+   * render loop that drives update() is paused.
+   */
+  private armActionTimeout(action: Action, method: string, extraMs = 0): void {
+    const timeoutMs = this.ACTION_TIMEOUT_MS + extraMs;
+    const timer = setTimeout(() => {
+      const index = this.commandQueue.indexOf(action);
+      if (index === -1) {
+        return;
+      }
+      this.commandQueue.splice(index, 1);
+      this.actionTimers.delete(action);
+      action.reject(
+        new Error(
+          `RemoteControlInterface: action '${method}' timed out after ` +
+            `${timeoutMs}ms with no frame processing the queue ` +
+            `(is the XR render loop running?).`,
+        ),
+      );
+    }, timeoutMs);
+    this.actionTimers.set(action, timer);
+  }
+
+  /** Clear a queued action's timeout once it has been settled. */
+  private clearActionTimeout(action: Action): void {
+    const timer = this.actionTimers.get(action);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.actionTimers.delete(action);
+    }
   }
 
   /**
@@ -336,6 +430,7 @@ export class RemoteControlInterface {
         } catch (error) {
           action.reject(error as Error);
         }
+        this.clearActionTimeout(action);
         this.commandQueue.shift();
         // Continue to next action
       } else {
@@ -350,6 +445,7 @@ export class RemoteControlInterface {
           } catch (error) {
             action.reject(error as Error);
           }
+          this.clearActionTimeout(action);
           this.commandQueue.shift();
           // Continue to next action
         } else {
@@ -359,6 +455,7 @@ export class RemoteControlInterface {
             this.applyDurationLerpState(action, t);
           } catch (error) {
             action.reject(error as Error);
+            this.clearActionTimeout(action);
             this.commandQueue.shift();
             continue;
           }
@@ -455,18 +552,21 @@ export class RemoteControlInterface {
     position?: Vec3,
     orientation?: Quat,
   ): void {
+    // Validate both inputs before applying either, so an invalid orientation
+    // can't leave a half-applied (position-only) and permanently corrupt pose.
+    if (position) {
+      validatePosition(position);
+    }
+    const orient = orientation
+      ? validateAndNormalizeQuat(orientation)
+      : undefined;
     switch (deviceId) {
       case 'headset':
         if (position) {
           this.device.position.set(position.x, position.y, position.z);
         }
-        if (orientation) {
-          this.device.quaternion.set(
-            orientation.x,
-            orientation.y,
-            orientation.z,
-            orientation.w,
-          );
+        if (orient) {
+          this.device.quaternion.set(orient.x, orient.y, orient.z, orient.w);
         }
         break;
       case 'controller-left': {
@@ -475,13 +575,8 @@ export class RemoteControlInterface {
         if (position) {
           controller.position.set(position.x, position.y, position.z);
         }
-        if (orientation) {
-          controller.quaternion.set(
-            orientation.x,
-            orientation.y,
-            orientation.z,
-            orientation.w,
-          );
+        if (orient) {
+          controller.quaternion.set(orient.x, orient.y, orient.z, orient.w);
         }
         break;
       }
@@ -491,13 +586,8 @@ export class RemoteControlInterface {
         if (position) {
           controller.position.set(position.x, position.y, position.z);
         }
-        if (orientation) {
-          controller.quaternion.set(
-            orientation.x,
-            orientation.y,
-            orientation.z,
-            orientation.w,
-          );
+        if (orient) {
+          controller.quaternion.set(orient.x, orient.y, orient.z, orient.w);
         }
         break;
       }
@@ -507,13 +597,8 @@ export class RemoteControlInterface {
         if (position) {
           hand.position.set(position.x, position.y, position.z);
         }
-        if (orientation) {
-          hand.quaternion.set(
-            orientation.x,
-            orientation.y,
-            orientation.z,
-            orientation.w,
-          );
+        if (orient) {
+          hand.quaternion.set(orient.x, orient.y, orient.z, orient.w);
         }
         break;
       }
@@ -523,13 +608,8 @@ export class RemoteControlInterface {
         if (position) {
           hand.position.set(position.x, position.y, position.z);
         }
-        if (orientation) {
-          hand.quaternion.set(
-            orientation.x,
-            orientation.y,
-            orientation.z,
-            orientation.w,
-          );
+        if (orient) {
+          hand.quaternion.set(orient.x, orient.y, orient.z, orient.w);
         }
         break;
       }
@@ -970,9 +1050,11 @@ export class RemoteControlInterface {
     if (buttons) {
       for (const btn of buttons) {
         const buttonName = buttonIndexToName[btn.index];
-        if (buttonName) {
+        // Only apply (and count) finite values; clamp into the valid [0,1]
+        // range so an out-of-range value can't silently no-op yet still count.
+        if (buttonName && isFiniteNumber(btn.value)) {
           // Use updateButtonValue for proper event triggering
-          controller.updateButtonValue(buttonName, btn.value);
+          controller.updateButtonValue(buttonName, clamp(btn.value, 0, 1));
           if (btn.touched !== undefined) {
             controller.updateButtonTouch(buttonName, btn.touched);
           }
@@ -985,11 +1067,14 @@ export class RemoteControlInterface {
       let xValue: number | undefined;
       let yValue: number | undefined;
       for (const axis of axes) {
+        if (!isFiniteNumber(axis.value)) {
+          continue;
+        }
         if (axis.index === 0) {
-          xValue = axis.value;
+          xValue = clamp(axis.value, -1, 1);
           axesSet++;
         } else if (axis.index === 1) {
-          yValue = axis.value;
+          yValue = clamp(axis.value, -1, 1);
           axesSet++;
         }
       }
@@ -1107,6 +1192,13 @@ export class RemoteControlInterface {
     } else {
       // Apply partial state
       if (state.headset) {
+        // Validate before applying either component (atomic, no corruption).
+        if (state.headset.position) {
+          validatePosition(state.headset.position);
+        }
+        const headsetOrient = state.headset.orientation
+          ? validateAndNormalizeQuat(state.headset.orientation)
+          : undefined;
         if (state.headset.position) {
           this.device.position.set(
             state.headset.position.x,
@@ -1114,12 +1206,12 @@ export class RemoteControlInterface {
             state.headset.position.z,
           );
         }
-        if (state.headset.orientation) {
+        if (headsetOrient) {
           this.device.quaternion.set(
-            state.headset.orientation.x,
-            state.headset.orientation.y,
-            state.headset.orientation.z,
-            state.headset.orientation.w,
+            headsetOrient.x,
+            headsetOrient.y,
+            headsetOrient.z,
+            headsetOrient.w,
           );
         }
       }
@@ -1356,9 +1448,12 @@ export class RemoteControlInterface {
     params: Record<string, unknown> = {},
   ): Promise<unknown> {
     // Normalize device identifier aliases (e.g. "right" -> "controller-right")
-    if (typeof params.device === 'string') {
-      params.device = resolveDeviceId(params.device);
-    }
+    // into a copy — never mutate the caller's params object (it may be reused,
+    // frozen, or aliased onto a queued action).
+    const normalizedParams =
+      typeof params.device === 'string'
+        ? { ...params, device: resolveDeviceId(params.device) }
+        : params;
 
     // Immediate methods execute synchronously without queue
     if (RemoteControlInterface.IMMEDIATE_METHODS.has(method)) {
@@ -1366,7 +1461,7 @@ export class RemoteControlInterface {
       if (RemoteControlInterface.ACTIVE_IMMEDIATE_METHODS.has(method)) {
         this.activateCaptureMode();
       }
-      return this.executeImmediateMethod(method, params);
+      return this.executeImmediateMethod(method, normalizedParams);
     }
 
     // Methods that modify state require an active session
@@ -1381,7 +1476,7 @@ export class RemoteControlInterface {
 
     // Handle animate_to specially - it's a duration action
     if (method === 'animate_to') {
-      const animateParams = params as unknown as AnimateToParams;
+      const animateParams = normalizedParams as unknown as AnimateToParams;
       const currentTransform = this.getDeviceTransform(animateParams.device);
       const durationMs = (animateParams.duration ?? 0.5) * 1000;
 
@@ -1396,7 +1491,7 @@ export class RemoteControlInterface {
 
       return this.enqueueDuration(
         method,
-        params,
+        normalizedParams,
         durationMs,
         {
           position: animateParams.position
@@ -1415,12 +1510,12 @@ export class RemoteControlInterface {
 
     // Handle select specially - it's a discrete action that enqueues multiple sub-actions
     if (method === 'select') {
-      const selectParams = params as unknown as SelectParams;
+      const selectParams = normalizedParams as unknown as SelectParams;
       return this.executeSelectSequence(selectParams);
     }
 
     // All other methods are discrete actions that go through the queue
-    return this.enqueueDiscrete(method, params);
+    return this.enqueueDiscrete(method, normalizedParams);
   }
 
   /**
@@ -1466,7 +1561,7 @@ export class RemoteControlInterface {
    * The caller's promise resolves when all sub-actions complete
    */
   private executeSelectSequence(params: SelectParams): Promise<SelectResult> {
-    const { device: deviceId, duration = 0.15 } = params;
+    const { device: deviceId, duration = DEFAULT_SELECT_DURATION_S } = params;
 
     // Validate device upfront to prevent sub-actions from failing in the frame loop
     this.getDeviceSelectValue(deviceId);
@@ -1548,18 +1643,35 @@ export class RemoteControlInterface {
     this.cancelReleaseTimer();
     this._isCaptured = false;
     this.device.controlMode = 'manual';
-    // Clear pending actions
+    // Clear pending actions (and their timeout timers)
     for (const action of this.commandQueue) {
+      this.clearActionTimeout(action);
       action.reject(new Error('Capture released'));
     }
     this.commandQueue = [];
 
-    // Reset any stuck select/trigger values
+    // Reset any stuck input values on BOTH controllers and hands so an
+    // interrupted select/squeeze/thumbstick (or hand pinch) doesn't stay
+    // engaged. Poses are intentionally left where they are.
     for (const hand of ['left', 'right'] as const) {
       const controller = this.device.controllers[hand];
       if (controller) {
-        controller.updateButtonValue('trigger', 0);
-        controller.updateButtonValue('squeeze', 0);
+        const buttonNames = [
+          'trigger',
+          'squeeze',
+          'thumbstick',
+          'thumbrest',
+          hand === 'left' ? 'x-button' : 'a-button',
+          hand === 'left' ? 'y-button' : 'b-button',
+        ];
+        for (const name of buttonNames) {
+          controller.updateButtonValue(name, 0);
+        }
+        controller.updateAxes('thumbstick', 0, 0);
+      }
+      const handInput = this.device.hands[hand];
+      if (handInput) {
+        handInput.updatePinchValue(0);
       }
     }
   }
