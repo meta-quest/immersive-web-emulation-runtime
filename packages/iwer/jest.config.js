@@ -22,4 +22,6 @@ export default {
     'node_modules/(?!(webxr-layers-polyfill|gl-matrix)/)',
   ],
   testEnvironment: 'jsdom',
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/version.ts'],
+  coverageDirectory: 'coverage',
 };

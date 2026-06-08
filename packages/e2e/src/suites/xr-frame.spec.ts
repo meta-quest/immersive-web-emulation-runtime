@@ -246,23 +246,15 @@ export function registerXRFrameTests(harness: TestHarness): void {
       async () => {
         const staleFrame = await getStaleFrame(session);
 
-        let threw = false;
-        try {
-          const _planes = staleFrame.detectedPlanes;
-        } catch (e: any) {
-          threw = true;
-          harness.assert(
-            e instanceof DOMException,
-            'Should throw DOMException',
-          );
-        }
-        if (!threw) {
-          // If detectedPlanes is not available, it may be undefined instead of throwing
-          harness.assert(
-            true,
-            'detectedPlanes did not throw (may not be implemented)',
-          );
-        }
+        // iwer now guards inactive-frame access, so reading detectedPlanes
+        // on a stale frame throws InvalidStateError per spec.
+        harness.assertDOMException(
+          () => {
+            const _planes = staleFrame.detectedPlanes;
+          },
+          'InvalidStateError',
+          'detectedPlanes on inactive frame should throw InvalidStateError',
+        );
       },
     );
 
@@ -272,22 +264,15 @@ export function registerXRFrameTests(harness: TestHarness): void {
       async () => {
         const staleFrame = await getStaleFrame(session);
 
-        let threw = false;
-        try {
-          const _meshes = (staleFrame as any).detectedMeshes;
-        } catch (e: any) {
-          threw = true;
-          harness.assert(
-            e instanceof DOMException,
-            'Should throw DOMException',
-          );
-        }
-        if (!threw) {
-          harness.assert(
-            true,
-            'detectedMeshes did not throw (may not be implemented)',
-          );
-        }
+        // iwer now guards inactive-frame access, so reading detectedMeshes
+        // on a stale frame throws InvalidStateError per spec.
+        harness.assertDOMException(
+          () => {
+            const _meshes = (staleFrame as any).detectedMeshes;
+          },
+          'InvalidStateError',
+          'detectedMeshes on inactive frame should throw InvalidStateError',
+        );
       },
     );
 
@@ -297,22 +282,15 @@ export function registerXRFrameTests(harness: TestHarness): void {
       async () => {
         const staleFrame = await getStaleFrame(session);
 
-        let threw = false;
-        try {
-          const _anchors = staleFrame.trackedAnchors;
-        } catch (e: any) {
-          threw = true;
-          harness.assert(
-            e instanceof DOMException,
-            'Should throw DOMException',
-          );
-        }
-        if (!threw) {
-          harness.assert(
-            true,
-            'trackedAnchors did not throw (may not be implemented)',
-          );
-        }
+        // iwer now guards inactive-frame access, so reading trackedAnchors
+        // on a stale frame throws InvalidStateError per spec.
+        harness.assertDOMException(
+          () => {
+            const _anchors = staleFrame.trackedAnchors;
+          },
+          'InvalidStateError',
+          'trackedAnchors on inactive frame should throw InvalidStateError',
+        );
       },
     );
 

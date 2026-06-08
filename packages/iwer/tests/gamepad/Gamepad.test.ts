@@ -8,6 +8,7 @@
 import {
   Gamepad,
   GamepadButton,
+  GamepadHapticActuator,
   GamepadMappingType,
 } from '../../src/gamepad/Gamepad.js';
 import { P_GAMEPAD } from '../../src/private.js';
@@ -173,16 +174,16 @@ describe('Gamepad', () => {
     expect(Array.isArray(gamepad.hapticActuators)).toBe(true);
   });
 
-  test('should return null for vibrationActuator', () => {
+  test('should return null for vibrationActuator when no haptic actuators', () => {
     const config = {
       mapping: GamepadMappingType.Standard,
       buttons: [],
       axes: [],
     };
 
+    // Default numHapticActuators is 0.
     const gamepad = new Gamepad(config, 'test-gamepad', 0);
 
-    // vibrationActuator should always return null
     expect(gamepad.vibrationActuator).toBeNull();
   });
 
@@ -208,5 +209,103 @@ describe('Gamepad', () => {
     expect(axes[0]).toBe(0.5); // stick1 x-axis
     expect(axes[1]).toBe(-0.3); // stick1 y-axis
     expect(axes[2]).toBe(0.8); // stick2 x-axis
+  });
+});
+
+describe('GamepadHapticActuator', () => {
+  test('should default to vibration type', () => {
+    const actuator = new GamepadHapticActuator();
+    expect(actuator.type).toBe('vibration');
+  });
+
+  test('should expose the configured type', () => {
+    const actuator = new GamepadHapticActuator('dual-rumble');
+    expect(actuator.type).toBe('dual-rumble');
+  });
+
+  test('should have no last pulse before pulsing', () => {
+    const actuator = new GamepadHapticActuator();
+    expect(actuator[P_GAMEPAD].lastPulse).toBeNull();
+  });
+
+  test('pulse should resolve true and record the last pulse', async () => {
+    const actuator = new GamepadHapticActuator();
+
+    const result = await actuator.pulse(0.5, 100);
+    expect(result).toBe(true);
+
+    const lastPulse = actuator[P_GAMEPAD].lastPulse;
+    expect(lastPulse).not.toBeNull();
+    expect(lastPulse!.value).toBe(0.5);
+    expect(lastPulse!.duration).toBe(100);
+    expect(typeof lastPulse!.startTime).toBe('number');
+  });
+
+  test('pulse should overwrite the previous last pulse', async () => {
+    const actuator = new GamepadHapticActuator();
+
+    await actuator.pulse(0.25, 50);
+    await actuator.pulse(1, 200);
+
+    const lastPulse = actuator[P_GAMEPAD].lastPulse;
+    expect(lastPulse!.value).toBe(1);
+    expect(lastPulse!.duration).toBe(200);
+  });
+});
+
+describe('Gamepad haptics', () => {
+  const baseConfig = {
+    mapping: GamepadMappingType.XRStandard,
+    buttons: [],
+    axes: [],
+  };
+
+  test('should populate N GamepadHapticActuator instances', () => {
+    const gamepad = new Gamepad(baseConfig, 'test-gamepad', 0, 2);
+
+    expect(gamepad.hapticActuators).toHaveLength(2);
+    gamepad.hapticActuators.forEach((actuator) => {
+      expect(actuator).toBeInstanceOf(GamepadHapticActuator);
+      expect(actuator.type).toBe('vibration');
+    });
+  });
+
+  test('should support a single haptic actuator', () => {
+    const gamepad = new Gamepad(baseConfig, 'test-gamepad', 0, 1);
+
+    expect(gamepad.hapticActuators).toHaveLength(1);
+    expect(gamepad.hapticActuators[0]).toBeInstanceOf(GamepadHapticActuator);
+  });
+
+  test('vibrationActuator should return the first actuator', () => {
+    const gamepad = new Gamepad(baseConfig, 'test-gamepad', 0, 2);
+
+    expect(gamepad.vibrationActuator).toBe(gamepad.hapticActuators[0]);
+  });
+
+  test('vibrationActuator pulse should record the last pulse', async () => {
+    const gamepad = new Gamepad(baseConfig, 'test-gamepad', 0, 1);
+
+    const actuator = gamepad.vibrationActuator!;
+    const result = await actuator.pulse(0.75, 120);
+
+    expect(result).toBe(true);
+    const lastPulse = actuator[P_GAMEPAD].lastPulse;
+    expect(lastPulse!.value).toBe(0.75);
+    expect(lastPulse!.duration).toBe(120);
+  });
+
+  test('with zero actuators hapticActuators is empty and vibrationActuator is null', () => {
+    const gamepad = new Gamepad(baseConfig, 'test-gamepad', 0, 0);
+
+    expect(gamepad.hapticActuators).toHaveLength(0);
+    expect(gamepad.vibrationActuator).toBeNull();
+  });
+
+  test('should treat a negative actuator count as zero', () => {
+    const gamepad = new Gamepad(baseConfig, 'test-gamepad', 0, -3);
+
+    expect(gamepad.hapticActuators).toHaveLength(0);
+    expect(gamepad.vibrationActuator).toBeNull();
   });
 });

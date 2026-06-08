@@ -421,6 +421,7 @@ export class TestHarness {
         let error: string | undefined;
         let skipReason: string | undefined;
 
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
         try {
           const testBody = async () => {
             for (const bfn of suite.beforeEach) {
@@ -431,15 +432,15 @@ export class TestHarness {
 
           await Promise.race([
             testBody(),
-            new Promise<never>((_, reject) =>
-              setTimeout(
+            new Promise<never>((_, reject) => {
+              timeoutId = setTimeout(
                 () =>
                   reject(
                     new Error(`Test timed out after ${TEST_TIMEOUT_MS}ms`),
                   ),
                 TEST_TIMEOUT_MS,
-              ),
-            ),
+              );
+            }),
           ]);
         } catch (e: any) {
           if (e instanceof SkipError) {
@@ -450,6 +451,11 @@ export class TestHarness {
             error = e.message || String(e);
           }
         } finally {
+          // Clear the per-test timeout so the 5000ms timer doesn't dangle
+          // after the test resolves (or rejects) ahead of the deadline.
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+          }
           try {
             for (const afn of suite.afterEach) {
               await afn();

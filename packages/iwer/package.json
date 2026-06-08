@@ -17,6 +17,7 @@
     "doc": "typedoc",
     "format": "prettier --write ./src/**/*",
     "test": "jest --watchman=false",
+    "test:coverage": "jest --watchman=false --coverage",
     "prepublishOnly": "pnpm run build"
   },
   "repository": {

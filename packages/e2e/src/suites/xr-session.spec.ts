@@ -395,19 +395,16 @@ export function registerXRSessionTests(harness: TestHarness): void {
       },
     );
 
-    // 21. updateRenderState on ended session [DEVIATION]
+    // 21. updateRenderState on ended session throws InvalidStateError
     harness.it(
-      'updateRenderState on ended session [DEVIATION: does not throw]',
+      'updateRenderState on ended session throws InvalidStateError',
       async () => {
-        // iwer doesn't set ended flag, so this won't throw InvalidStateError
-        // per spec it should, but we document the deviation
-        let threw = false;
-        try {
-          endedSession.updateRenderState({});
-        } catch (_) {
-          threw = true;
-        }
-        harness.assert(true, `updateRenderState on ended: threw=${threw}`);
+        // iwer now sets the ended flag, so updateRenderState throws per spec.
+        harness.assertDOMException(
+          () => endedSession.updateRenderState({}),
+          'InvalidStateError',
+          'updateRenderState on ended session should throw InvalidStateError',
+        );
       },
     );
 
@@ -445,15 +442,12 @@ export function registerXRSessionTests(harness: TestHarness): void {
       },
     );
 
-    // 29. rAF on ended session returns 0 [DEVIATION]
-    harness.it(
-      'rAF on ended session returns 0 [DEVIATION: ended flag]',
-      async () => {
-        const handle = endedSession.requestAnimationFrame(() => {});
-        // Spec says should return 0 on ended session; iwer may not
-        harness.assert(true, `rAF on ended session returned handle=${handle}`);
-      },
-    );
+    // 29. rAF on ended session returns 0
+    harness.it('rAF on ended session returns 0', async () => {
+      const handle = endedSession.requestAnimationFrame(() => {});
+      // iwer now sets the ended flag, so rAF returns 0 per spec.
+      harness.assertEqual(handle, 0, 'rAF on ended session should return 0');
+    });
   });
 
   // --- Lifecycle: tests that end sessions (isolated) ---
