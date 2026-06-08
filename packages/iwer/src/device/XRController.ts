@@ -59,7 +59,12 @@ export class XRController extends XRTrackedInput {
       XRTargetRayMode.TrackedPointer,
       profiles,
       targetRaySpace,
-      new Gamepad(controllerConfig.layout[handedness]!.gamepad),
+      new Gamepad(
+        controllerConfig.layout[handedness]!.gamepad,
+        '',
+        -1,
+        controllerConfig.layout[handedness]!.numHapticActuators,
+      ),
       gripSpace,
     );
 

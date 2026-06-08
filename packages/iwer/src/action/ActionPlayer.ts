@@ -32,7 +32,10 @@ import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { InputSchema } from './ActionRecorder.js';
 import { XREye } from '../views/XRView.js';
+import type { XRFrame } from '../frameloop/XRFrame.js';
+import { XRInputSourceEvent } from '../events/XRInputSourceEvent.js';
 import { XRJointSpace } from '../spaces/XRJointSpace.js';
+import type { XRSession } from '../session/XRSession.js';
 import { XRSpace } from '../spaces/XRSpace.js';
 
 export interface CompressedRecording {
@@ -50,6 +53,36 @@ type ProcessedInputData = {
   buttons?: { 0: 0 | 1; 1: 0 | 1; 2: number }[];
   axes?: number[];
 };
+
+/**
+ * Context the player needs to dispatch XRInputSourceEvents
+ * (selectstart/select/selectend and the squeeze variants) on edges detected
+ * during playback. It mirrors XRTrackedInput.onFrameStart's dispatch, which
+ * targets the session and stamps each event with the current XRFrame. The
+ * player only emits events when this context has been attached (via the
+ * constructor option or setEventContext); otherwise edge detection is skipped
+ * and playback behaves exactly as before.
+ */
+export interface ActionPlayerEventContext {
+  session: XRSession;
+  /** Returns the XRFrame to stamp on dispatched events, or null to skip. */
+  getFrame: () => XRFrame | null | undefined;
+}
+
+export interface ActionPlayerOptions {
+  /**
+   * When true, playback restarts from the beginning instead of stopping once
+   * the final frame is reached. Defaults to false.
+   */
+  loop?: boolean;
+  /**
+   * Multiplier applied to the per-frame wall-clock delta in playFrame(). 1 is
+   * realtime (default); 2 plays back twice as fast, 0.5 half speed.
+   */
+  playbackRate?: number;
+  /** Optional event context enabling select/squeeze dispatch during playback. */
+  eventContext?: ActionPlayerEventContext;
+}
 
 export class ActionPlayer {
   [P_ACTION_PLAYER]: {
@@ -73,6 +106,13 @@ export class ActionPlayer {
     f2q: quat;
     lastFrameInputs: Map<number, ProcessedInputData>;
     nextFrameInputs: Map<number, ProcessedInputData>;
+    loop: boolean;
+    playbackRate: number;
+    eventContext?: ActionPlayerEventContext;
+    // Index of the recorded frame whose button states were last used as the
+    // baseline for select/squeeze edge detection. -1 means none yet (so the
+    // first applied frame establishes the baseline without firing edges).
+    lastEventFramePointer: number;
   };
 
   constructor(
@@ -85,6 +125,7 @@ export class ActionPlayer {
       frames: any[];
     },
     ipd: number,
+    options: ActionPlayerOptions = {},
   ) {
     const { schema, frames } = recording;
     if (!frames || !schema || frames.length === 0) {
@@ -119,6 +160,13 @@ export class ActionPlayer {
       f2q: quat.create(),
       lastFrameInputs: new Map(),
       nextFrameInputs: new Map(),
+      loop: options.loop ?? false,
+      playbackRate:
+        options.playbackRate != null && options.playbackRate > 0
+          ? options.playbackRate
+          : 1,
+      eventContext: options.eventContext,
+      lastEventFramePointer: -1,
     };
 
     mat4.fromTranslation(
@@ -222,6 +270,8 @@ export class ActionPlayer {
       this[P_ACTION_PLAYER].startingTimeStamp;
     this[P_ACTION_PLAYER].playing = true;
     this[P_ACTION_PLAYER].actualTimeStamp = performance.now();
+    // Reset edge-detection baseline so the first frame doesn't spuriously fire.
+    this[P_ACTION_PLAYER].lastEventFramePointer = -1;
   }
 
   stop() {
@@ -246,9 +296,140 @@ export class ActionPlayer {
       .map((wrapper) => wrapper.source);
   }
 
+  get loop(): boolean {
+    return this[P_ACTION_PLAYER].loop;
+  }
+
+  set loop(value: boolean) {
+    this[P_ACTION_PLAYER].loop = value;
+  }
+
+  get playbackRate(): number {
+    return this[P_ACTION_PLAYER].playbackRate;
+  }
+
+  set playbackRate(value: number) {
+    // Ignore non-positive rates so the wall-clock advance never stalls/reverses.
+    if (value > 0) {
+      this[P_ACTION_PLAYER].playbackRate = value;
+    }
+  }
+
+  /**
+   * Attach (or clear) the event context used to dispatch select/squeeze events
+   * during playback. Passing undefined disables event dispatch.
+   */
+  setEventContext(context?: ActionPlayerEventContext) {
+    this[P_ACTION_PLAYER].eventContext = context;
+  }
+
+  /**
+   * Total length of the recording in milliseconds (last frame timestamp minus
+   * first). 0 for a single-frame recording.
+   */
+  get duration(): number {
+    return (
+      this[P_ACTION_PLAYER].endingTimeStamp -
+      this[P_ACTION_PLAYER].startingTimeStamp
+    );
+  }
+
+  /**
+   * Current playback position in milliseconds, relative to the start of the
+   * recording (0 at the first frame).
+   */
+  get currentTime(): number {
+    return (
+      this[P_ACTION_PLAYER].playbackTime -
+      this[P_ACTION_PLAYER].startingTimeStamp
+    );
+  }
+
+  /**
+   * Jump playback to an absolute position, expressed in milliseconds relative to
+   * the start of the recording. The time is clamped to [0, duration]. The frame
+   * pointer is resolved with a binary search over the frames (sorted ascending
+   * by timestamp at frame[0]), so backward seeks work correctly. Does not render
+   * a frame on its own; the next playFrame()/stepFrames() call samples the new
+   * position. The wall-clock anchor is reset so a subsequent playFrame() doesn't
+   * fast-forward across the jump.
+   */
+  seek(timeMs: number) {
+    const state = this[P_ACTION_PLAYER];
+    const clamped = Math.max(0, Math.min(timeMs, this.duration));
+    const absolute = state.startingTimeStamp + clamped;
+    state.playbackTime = absolute;
+    state.recordedFramePointer = this.findFramePointer(absolute);
+    // A seek is a discontinuity: reset the edge baseline so the jump itself
+    // doesn't manufacture select/squeeze edges.
+    state.lastEventFramePointer = -1;
+    // Re-anchor wall-clock playback so the next delta starts from this instant.
+    state.actualTimeStamp = performance.now();
+  }
+
+  /**
+   * Binary search for the index of the last frame whose timestamp is <= the
+   * given absolute time. Returns 0 when the time precedes the first frame.
+   */
+  private findFramePointer(absoluteTime: number): number {
+    const frames = this[P_ACTION_PLAYER].frames;
+    let lo = 0;
+    let hi = frames.length - 1;
+    let result = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if ((frames[mid][0] as number) <= absoluteTime) {
+        result = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Advance playback by exactly n recorded frames (default 1), deterministically
+   * and independent of wall-clock time, for headless/agent driving. Each step
+   * samples the recording at a frame boundary (alpha == 0, no interpolation) and
+   * dispatches any select/squeeze edges between consecutive frames. When loop is
+   * enabled, stepping past the final frame wraps to the start; otherwise it
+   * clamps to the final frame and stops playback. Sets playing to true on entry
+   * so the surrounding pose getters report this player's spaces.
+   */
+  stepFrames(n = 1) {
+    const state = this[P_ACTION_PLAYER];
+    const frames = state.frames;
+    state.playing = true;
+    for (let step = 0; step < n; step++) {
+      if (state.recordedFramePointer + 1 >= frames.length) {
+        if (state.loop) {
+          state.recordedFramePointer = 0;
+          state.playbackTime = state.startingTimeStamp;
+          // The wrap is a discontinuity; don't fire edges across it.
+          state.lastEventFramePointer = -1;
+        } else {
+          state.playbackTime = state.endingTimeStamp;
+          this.applyFrameAtPointer(0);
+          this.stop();
+          return;
+        }
+      } else {
+        state.recordedFramePointer++;
+        state.playbackTime = frames[state.recordedFramePointer][0] as number;
+      }
+      this.applyFrameAtPointer(0);
+    }
+    // Keep the wall-clock anchor fresh so a later switch back to play() doesn't
+    // jump.
+    state.actualTimeStamp = performance.now();
+  }
+
   playFrame() {
     const now = performance.now();
-    const delta = now - this[P_ACTION_PLAYER].actualTimeStamp!;
+    const delta =
+      (now - this[P_ACTION_PLAYER].actualTimeStamp!) *
+      this[P_ACTION_PLAYER].playbackRate;
     this[P_ACTION_PLAYER].actualTimeStamp = now;
     this[P_ACTION_PLAYER].playbackTime! += delta;
     const frames = this[P_ACTION_PLAYER].frames;
@@ -256,11 +437,29 @@ export class ActionPlayer {
       this[P_ACTION_PLAYER].playbackTime! >
       this[P_ACTION_PLAYER].endingTimeStamp
     ) {
-      // Clamp to the recording's end so the final frame's pose is rendered once
-      // (and single-frame recordings render at all) before playback stops.
-      this[P_ACTION_PLAYER].playbackTime =
-        this[P_ACTION_PLAYER].endingTimeStamp;
-      this.stop();
+      if (this[P_ACTION_PLAYER].loop) {
+        // Wrap back to the start, preserving any overshoot past the end so the
+        // loop stays smooth, then resolve the pointer for the wrapped time.
+        const overshoot =
+          this[P_ACTION_PLAYER].playbackTime! -
+          this[P_ACTION_PLAYER].endingTimeStamp;
+        const wrapped =
+          this.duration > 0
+            ? this[P_ACTION_PLAYER].startingTimeStamp +
+              (overshoot % this.duration)
+            : this[P_ACTION_PLAYER].startingTimeStamp;
+        this[P_ACTION_PLAYER].playbackTime = wrapped;
+        this[P_ACTION_PLAYER].recordedFramePointer =
+          this.findFramePointer(wrapped);
+        // The wrap is a discontinuity; don't manufacture edges across it.
+        this[P_ACTION_PLAYER].lastEventFramePointer = -1;
+      } else {
+        // Clamp to the recording's end so the final frame's pose is rendered
+        // once (and single-frame recordings render at all) before stopping.
+        this[P_ACTION_PLAYER].playbackTime =
+          this[P_ACTION_PLAYER].endingTimeStamp;
+        this.stop();
+      }
     }
     // Guard the advance so we never read past the last frame.
     while (
@@ -270,11 +469,9 @@ export class ActionPlayer {
     ) {
       this[P_ACTION_PLAYER].recordedFramePointer++;
     }
-    const lastFrameData = frames[this[P_ACTION_PLAYER].recordedFramePointer];
-    // When there is no next frame (single-frame recording or pointer at the
-    // end), snap to the last frame's pose instead of dereferencing frames[ptr+1].
     const hasNextFrame =
       this[P_ACTION_PLAYER].recordedFramePointer + 1 < frames.length;
+    const lastFrameData = frames[this[P_ACTION_PLAYER].recordedFramePointer];
     const nextFrameData = hasNextFrame
       ? frames[this[P_ACTION_PLAYER].recordedFramePointer + 1]
       : lastFrameData;
@@ -282,6 +479,27 @@ export class ActionPlayer {
       ? ((this[P_ACTION_PLAYER].playbackTime - lastFrameData[0]) as number) /
         (((nextFrameData[0] as number) - lastFrameData[0]) as number)
       : 0;
+    this.applyFrameAtPointer(alpha);
+  }
+
+  /**
+   * Sample the recording at the current frame pointer, applying poses, hands,
+   * gamepad state, and active flags, and dispatch any select/squeeze edges
+   * crossed since the previous applied frame. `alpha` is the interpolation
+   * factor toward the next frame (0 snaps exactly to the pointer's frame, as the
+   * deterministic stepFrames path uses). When there is no next frame the pointer
+   * frame is used for both ends.
+   */
+  private applyFrameAtPointer(alpha: number) {
+    const frames = this[P_ACTION_PLAYER].frames;
+    // When there is no next frame (single-frame recording or pointer at the
+    // end), snap to the last frame's pose instead of dereferencing frames[ptr+1].
+    const hasNextFrame =
+      this[P_ACTION_PLAYER].recordedFramePointer + 1 < frames.length;
+    const lastFrameData = frames[this[P_ACTION_PLAYER].recordedFramePointer];
+    const nextFrameData = hasNextFrame
+      ? frames[this[P_ACTION_PLAYER].recordedFramePointer + 1]
+      : lastFrameData;
 
     this.updateXRSpaceFromMergedFrames(
       this[P_ACTION_PLAYER].viewerSpace,
@@ -324,6 +542,139 @@ export class ActionPlayer {
         alpha,
       );
     });
+
+    this.dispatchSelectSqueezeEdges();
+  }
+
+  /**
+   * Detect rising/falling edges of select/squeeze-triggering buttons between the
+   * previously applied frame and the one at the current pointer, then dispatch
+   * the corresponding XRInputSourceEvents on the session — mirroring
+   * XRTrackedInput.onFrameStart's edge logic (lastValue 0 -> >0 fires
+   * <trigger>+<trigger>start; >0 -> 0 fires <trigger>end). All frame boundaries
+   * skipped since the last applied frame are scanned so no edge is missed when
+   * the pointer advances by more than one frame. No-ops unless an event context
+   * is attached and yields a frame. The recording format does not persist
+   * per-button eventTrigger, so the xr-standard convention is used: button 0 ->
+   * 'select', button 1 -> 'squeeze'.
+   */
+  private dispatchSelectSqueezeEdges() {
+    const state = this[P_ACTION_PLAYER];
+    const context = state.eventContext;
+    const pointer = state.recordedFramePointer;
+    // Without a context we still maintain the baseline so a later attach starts
+    // clean, but emit nothing.
+    if (!context) {
+      state.lastEventFramePointer = pointer;
+      return;
+    }
+    const baseline = state.lastEventFramePointer;
+    if (baseline < 0 || baseline === pointer) {
+      // First applied frame (or no advance): establish the baseline silently.
+      state.lastEventFramePointer = pointer;
+      return;
+    }
+    const frame = context.getFrame();
+    if (!frame) {
+      state.lastEventFramePointer = pointer;
+      return;
+    }
+    const frames = state.frames;
+    const step = pointer > baseline ? 1 : -1;
+    // Walk every adjacent frame pair from the baseline to the current pointer so
+    // multi-frame jumps still fire each edge in order.
+    for (let from = baseline; from !== pointer; from += step) {
+      const a = step > 0 ? from : from - 1;
+      const b = a + 1;
+      this.dispatchEdgesBetweenFrames(frames[a], frames[b], context, frame);
+    }
+    state.lastEventFramePointer = pointer;
+  }
+
+  /**
+   * Compare the recorded button values of two adjacent frames and dispatch the
+   * select/squeeze edges between them on the given session/frame.
+   */
+  private dispatchEdgesBetweenFrames(
+    fromFrame: any[],
+    toFrame: any[],
+    context: ActionPlayerEventContext,
+    frame: XRFrame,
+  ) {
+    // Build a quick lookup of the "from" frame's processed inputs by index.
+    const fromInputs = new Map<number, ProcessedInputData>();
+    for (let i = 8; i < fromFrame.length; i++) {
+      const { index, inputData } = this.processRawInputData(
+        fromFrame[i] as any[],
+      );
+      fromInputs.set(index, inputData);
+    }
+    for (let i = 8; i < toFrame.length; i++) {
+      const { index, inputData } = this.processRawInputData(
+        toFrame[i] as any[],
+      );
+      const schema = this[P_ACTION_PLAYER].inputSchemas.get(index);
+      if (!schema || !schema.hasGamepad || !inputData.buttons) {
+        continue;
+      }
+      const fromData = fromInputs.get(index);
+      // A source that wasn't present last frame has no baseline; skip edges.
+      if (!fromData || !fromData.buttons) {
+        continue;
+      }
+      const inputSource = this[P_ACTION_PLAYER].inputSources.get(index)?.source;
+      if (!inputSource) {
+        continue;
+      }
+      inputData.buttons.forEach((states, buttonIndex) => {
+        const eventTrigger = this.eventTriggerForButton(schema, buttonIndex);
+        if (eventTrigger == null) {
+          return;
+        }
+        const lastValue = fromData.buttons![buttonIndex]?.[2] ?? 0;
+        const nextValue = states[2];
+        if (lastValue === 0 && nextValue > 0) {
+          context.session.dispatchEvent(
+            new XRInputSourceEvent(eventTrigger, { frame, inputSource }),
+          );
+          context.session.dispatchEvent(
+            new XRInputSourceEvent(eventTrigger + 'start', {
+              frame,
+              inputSource,
+            }),
+          );
+        } else if (lastValue > 0 && nextValue === 0) {
+          context.session.dispatchEvent(
+            new XRInputSourceEvent(eventTrigger + 'end', {
+              frame,
+              inputSource,
+            }),
+          );
+        }
+      });
+    }
+  }
+
+  /**
+   * Map a recorded button index to its event trigger using the xr-standard
+   * mapping convention (button 0 -> 'select', button 1 -> 'squeeze'), matching
+   * how IWER's controller/hand configs assign eventTrigger. Other buttons (and
+   * non-xr-standard mappings) have no trigger.
+   */
+  private eventTriggerForButton(
+    schema: InputSchema,
+    buttonIndex: number,
+  ): 'select' | 'squeeze' | null {
+    if (schema.mapping !== GamepadMappingType.XRStandard) {
+      return null;
+    }
+    if (buttonIndex === 0) {
+      return 'select';
+    }
+    if (buttonIndex === 1) {
+      return 'squeeze';
+    }
+    return null;
   }
 
   updateInputSource(

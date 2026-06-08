@@ -7,7 +7,10 @@
 
 import { vec3 } from 'gl-matrix';
 
-import type { XRDevice } from '../device/XRDevice.js';
+import type {
+  XRDevice,
+  SyntheticEnvironmentModule,
+} from '../device/XRDevice.js';
 import type { Vec3, Quat } from '../types/state.js';
 import { P_SESSION, P_SPACE } from '../private.js';
 import type {
@@ -772,6 +775,10 @@ export class RemoteControlInterface {
         return this.executeSetSelectValue(
           params as unknown as SetSelectValueParams,
         );
+      case 'set_hand_pose':
+        return this.executeSetHandPose(
+          params as unknown as { device: InputDeviceId; poseId: string },
+        );
 
       // Gamepad tools
       case 'get_gamepad_state':
@@ -825,10 +832,10 @@ export class RemoteControlInterface {
       isRuntimeInstalled: true,
       sessionActive: !!session,
       sessionOffered: this.device.sessionOffered,
-      sessionMode: session ? ((session as any).mode as any) : null,
-      enabledFeatures: session
-        ? Array.from((session as any).enabledFeatures || [])
-        : [],
+      // `mode` is non-standard and lives only under the P_SESSION symbol; the
+      // old `(session as any).mode` read undefined.
+      sessionMode: session ? session[P_SESSION].mode : null,
+      enabledFeatures: session ? Array.from(session.enabledFeatures) : [],
       visibilityState: this.device.visibilityState,
     };
   }
@@ -969,6 +976,151 @@ export class RemoteControlInterface {
     const { device: deviceId, value } = params;
     this.setDeviceSelectValue(deviceId, value);
     return { device: deviceId, value };
+  }
+
+  private executeSetHandPose(params: {
+    device: InputDeviceId;
+    poseId: string;
+  }): { device: InputDeviceId; poseId: string } {
+    const { device: deviceId, poseId } = params;
+    const hand =
+      deviceId === 'hand-left'
+        ? 'left'
+        : deviceId === 'hand-right'
+          ? 'right'
+          : null;
+    if (!hand) {
+      throw new Error(
+        `set_hand_pose requires device 'hand-left' or 'hand-right', got '${deviceId}'.`,
+      );
+    }
+    const handInput = this.device.hands[hand];
+    if (!handInput) {
+      throw new Error(`Hand ${hand} not available`);
+    }
+    // poseId is a public, validated setter on XRHandInput.
+    handInput.poseId = poseId;
+    return { device: deviceId, poseId };
+  }
+
+  // =============================================================================
+  // World / scene queries (require the synthetic environment module, SEM)
+  // =============================================================================
+
+  private requireSem(): SyntheticEnvironmentModule {
+    const sem = this.device.sem;
+    if (!sem) {
+      throw new Error(
+        'Scene understanding (SEM) is not installed on this device. ' +
+          'Install @iwer/sem to query the emulated world.',
+      );
+    }
+    return sem;
+  }
+
+  private executeGetObjects(): {
+    objects: { type: 'plane' | 'mesh'; semanticLabel: string | null }[];
+  } {
+    const sem = this.requireSem();
+    const objects: {
+      type: 'plane' | 'mesh';
+      semanticLabel: string | null;
+    }[] = [];
+    sem.trackedPlanes.forEach((plane) => {
+      objects.push({
+        type: 'plane',
+        semanticLabel: plane.semanticLabel ?? null,
+      });
+    });
+    sem.trackedMeshes.forEach((mesh) => {
+      objects.push({ type: 'mesh', semanticLabel: mesh.semanticLabel ?? null });
+    });
+    // NOTE: object poses are intentionally omitted for now — SEM tracks them in
+    // GlobalSpace and they need transforming into the app's XR-origin space.
+    // Follow-up: add poses + a raycast query once that transform is wired.
+    return { objects };
+  }
+
+  private executeGetWorldState(): {
+    planeCount: number;
+    meshCount: number;
+    objects: { type: 'plane' | 'mesh'; semanticLabel: string | null }[];
+  } {
+    const sem = this.requireSem();
+    return {
+      planeCount: sem.trackedPlanes.size,
+      meshCount: sem.trackedMeshes.size,
+      objects: this.executeGetObjects().objects,
+    };
+  }
+
+  // =============================================================================
+  // Capability discovery & transport
+  // =============================================================================
+
+  /**
+   * Describe the methods this interface exposes so an agent (or an MCP bridge)
+   * can discover capabilities at runtime rather than relying on hard-coded
+   * strings. `immediate` methods run synchronously; `requiresSession` methods
+   * are queued and need an active, rendering XR session.
+   */
+  listMethods(): {
+    method: string;
+    immediate: boolean;
+    requiresSession: boolean;
+  }[] {
+    const methods: {
+      method: string;
+      immediate: boolean;
+      requiresSession: boolean;
+    }[] = [];
+    RemoteControlInterface.IMMEDIATE_METHODS.forEach((method) => {
+      methods.push({ method, immediate: true, requiresSession: false });
+    });
+    RemoteControlInterface.SESSION_REQUIRED_METHODS.forEach((method) => {
+      methods.push({ method, immediate: false, requiresSession: true });
+    });
+    return methods;
+  }
+
+  /** Alias for {@link listMethods}; returns the capability manifest. */
+  describe(): ReturnType<RemoteControlInterface['listMethods']> {
+    return this.listMethods();
+  }
+
+  /**
+   * Opt-in transport bridge. Connect a message port (a MessagePort, Worker, or
+   * WebSocket-like object) so a remote agent can drive the device by posting
+   * `{ id, method, params }` envelopes and receiving `{ id, result }` or
+   * `{ id, error }` replies. Kept out of the constructor to preserve the
+   * dependency-light, in-process default.
+   */
+  connectTransport(port: {
+    postMessage(message: unknown): void;
+    addEventListener(
+      type: 'message',
+      listener: (event: { data: unknown }) => void,
+    ): void;
+  }): void {
+    port.addEventListener('message', (event) => {
+      const envelope = event.data as {
+        id?: unknown;
+        method?: unknown;
+        params?: Record<string, unknown>;
+      };
+      if (!envelope || typeof envelope.method !== 'string') {
+        return;
+      }
+      const { id, method, params } = envelope;
+      this.dispatch(method, params ?? {})
+        .then((result) => port.postMessage({ id, result }))
+        .catch((error: unknown) =>
+          port.postMessage({
+            id,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+    });
   }
 
   // =============================================================================
@@ -1310,7 +1462,19 @@ export class RemoteControlInterface {
 
     // Convert to base64
     const mimeType = `image/${format}`;
-    const dataUrl = tempCanvas.toDataURL(mimeType, quality);
+    let dataUrl: string;
+    try {
+      dataUrl = tempCanvas.toDataURL(mimeType, quality);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'SecurityError') {
+        throw new Error(
+          'capture_canvas failed: the canvas is tainted by cross-origin ' +
+            'content and cannot be read back. Ensure all drawn images/textures ' +
+            'are same-origin or CORS-enabled.',
+        );
+      }
+      throw error;
+    }
     const imageData = dataUrl.split(',')[1]; // Remove data URL prefix
 
     return {
@@ -1392,6 +1556,9 @@ export class RemoteControlInterface {
     'get_device_state',
     // Canvas capture - reads current canvas state
     'capture_canvas',
+    // World/scene introspection - reads the synthetic environment (SEM)
+    'get_world_state',
+    'get_objects',
   ]);
 
   /**
@@ -1417,6 +1584,7 @@ export class RemoteControlInterface {
     'select',
     'set_gamepad_state',
     'set_device_state',
+    'set_hand_pose',
   ]);
 
   /**
@@ -1551,6 +1719,10 @@ export class RemoteControlInterface {
         return this.executeCaptureCanvas(
           params as unknown as CaptureCanvasParams,
         );
+      case 'get_world_state':
+        return this.executeGetWorldState();
+      case 'get_objects':
+        return this.executeGetObjects();
       default:
         throw new Error(`Unknown immediate method: ${method}`);
     }

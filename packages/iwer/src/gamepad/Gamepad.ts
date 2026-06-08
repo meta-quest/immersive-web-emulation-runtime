@@ -83,6 +83,39 @@ export class EmptyGamepadButton {
   value = 0;
 }
 
+export type GamepadHapticActuatorType = 'vibration' | 'dual-rumble';
+
+export class GamepadHapticActuator {
+  [P_GAMEPAD]: {
+    type: GamepadHapticActuatorType;
+    lastPulse: {
+      value: number;
+      duration: number;
+      startTime: DOMHighResTimeStamp;
+    } | null;
+  };
+
+  constructor(type: GamepadHapticActuatorType = 'vibration') {
+    this[P_GAMEPAD] = {
+      type,
+      lastPulse: null,
+    };
+  }
+
+  get type() {
+    return this[P_GAMEPAD].type;
+  }
+
+  pulse(value: number, duration: number): Promise<boolean> {
+    this[P_GAMEPAD].lastPulse = {
+      value,
+      duration,
+      startTime: performance.now(),
+    };
+    return Promise.resolve(true);
+  }
+}
+
 export class Gamepad {
   [P_GAMEPAD]: {
     id: string;
@@ -109,6 +142,7 @@ export class Gamepad {
     gamepadConfig: GamepadConfig,
     id: string = '',
     index: number = -1,
+    numHapticActuators: number = 0,
   ) {
     this[P_GAMEPAD] = {
       id,
@@ -120,7 +154,10 @@ export class Gamepad {
       buttonsSequence: [],
       axesMap: {},
       axesSequence: [],
-      hapticActuators: [],
+      hapticActuators: Array.from(
+        { length: Math.max(0, numHapticActuators) },
+        () => new GamepadHapticActuator('vibration'),
+      ),
       buttonsView: [],
       axesView: [],
       axesResolvers: [],
@@ -210,6 +247,6 @@ export class Gamepad {
   }
 
   get vibrationActuator() {
-    return null;
+    return this[P_GAMEPAD].hapticActuators[0] ?? null;
   }
 }

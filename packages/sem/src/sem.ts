@@ -177,7 +177,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
     this.trackedPlanes.clear();
   }
 
-  loadEnvironment(json: any) {
+  loadEnvironment(json: SceneFile) {
     this.deleteAll();
     (json as SceneFile).spatialEntities.forEach((spatialEntityJSON) => {
       const spatialEntity = SpatialEntity.fromPBJSON(spatialEntityJSON);
@@ -208,13 +208,20 @@ export class SyntheticEnvironmentModule extends EventTarget {
         this.objectMap.set(spatialEntityJSON.uuid, spatialEntity);
       }
     });
+    // Notify listeners (e.g. agent tooling) that the loaded environment
+    // changed. Additive: callers that don't subscribe are unaffected.
+    this.dispatchEvent(
+      new CustomEvent('environmentchange', {
+        detail: { entityCount: this.objectMap.size },
+      }),
+    );
   }
 
-  loadDefaultEnvironment(envId: string) {
+  loadDefaultEnvironment(envId: string): Promise<void> {
     if (typeof __IS_UMD__ !== 'undefined' && __IS_UMD__) {
       // Use fetch for UMD builds to load JSON from CDN
       const url = `https://www.unpkg.com/@iwer/sem@${VERSION}/captures/${envId}.json`;
-      fetch(url)
+      return fetch(url)
         .then((response) => {
           if (!response.ok) {
             throw new Error(
@@ -224,25 +231,32 @@ export class SyntheticEnvironmentModule extends EventTarget {
           return response.json();
         })
         .then((envJson) => {
-          this.loadEnvironment(envJson);
+          this.loadEnvironment(envJson as SceneFile);
         })
         .catch((error) => {
+          // Preserve the existing log for backward compatibility, but also
+          // reject so callers awaiting the promise can handle the failure.
           console.error(`Error loading environment ${envId} from CDN`, error);
+          throw error;
         });
     } else {
       // Use dynamic import for ES builds
       const importEnv = Environments[envId];
       if (!importEnv) {
-        console.error(`Requested environment ${envId} does not exist`);
-        return;
+        const error = new Error(
+          `Requested environment ${envId} does not exist`,
+        );
+        console.error(error.message);
+        return Promise.reject(error);
       }
-      importEnv()
+      return importEnv()
         .then((module) => {
           const envJson = module.default;
-          this.loadEnvironment(envJson);
+          this.loadEnvironment(envJson as SceneFile);
         })
         .catch((error) => {
           console.error(`Error loading environment ${envId} locally`, error);
+          throw error;
         });
     }
   }

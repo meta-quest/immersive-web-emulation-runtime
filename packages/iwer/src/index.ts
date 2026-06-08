@@ -14,6 +14,20 @@ export {
   oculusQuest1,
 } from './device/configs/headset/meta.js';
 
+// Controller Configs
+export {
+  oculusTouchV2,
+  oculusTouchV3,
+  metaQuestTouchPro,
+  metaQuestTouchPlus,
+} from './device/configs/controller/meta.js';
+export { generic } from './device/configs/controller/generic.js';
+
+// Controller / Gamepad Config Types
+export type { XRControllerConfig } from './device/XRController.js';
+export { GamepadMappingType } from './gamepad/Gamepad.js';
+export type { GamepadConfig, Button, Axis } from './gamepad/Gamepad.js';
+
 // Remote Control Interface
 export { RemoteControlInterface } from './remote/index.js';
 export type {
@@ -143,6 +157,7 @@ export { XRReferenceSpaceEvent } from './events/XRReferenceSpaceEvent.js';
 
 // Action Recording/Playback
 export { ActionRecorder } from './action/ActionRecorder.js';
+export type { CompressedRecording } from './action/ActionPlayer.js';
 
 // Private Keys
 export * from './private.js';

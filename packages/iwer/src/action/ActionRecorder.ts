@@ -379,11 +379,28 @@ export class ActionRecorder {
     return out;
   }
 
-  log() {
-    const out = {
+  /**
+   * Build the serialized recording object (the same shape ActionPlayer's
+   * constructor consumes): the schema entries paired with the compressed frame
+   * rows. Returned by reference, so callers that mutate it affect the recorder's
+   * live buffers; clone if you need a detached snapshot.
+   */
+  getRecording(): {
+    schema: [number, InputSchema][];
+    frames: any[];
+  } {
+    return {
       schema: Array.from(this[P_ACTION_RECORDER].schemaMap.entries()),
       frames: this[P_ACTION_RECORDER].compressedFrames,
     };
-    console.log(JSON.stringify(out));
+  }
+
+  /** Serialize the current recording to a JSON string. */
+  toJSON(): string {
+    return JSON.stringify(this.getRecording());
+  }
+
+  log() {
+    console.log(this.toJSON());
   }
 }

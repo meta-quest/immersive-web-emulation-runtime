@@ -38,8 +38,7 @@ import {
 } from '../spaces/XRReferenceSpace.js';
 import { mat4, vec3 } from 'gl-matrix';
 
-import { ActionPlayer } from '../action/ActionPlayer.js';
-import { InputSchema } from '../action/ActionRecorder.js';
+import { ActionPlayer, CompressedRecording } from '../action/ActionPlayer.js';
 import { VERSION } from '../version.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRHand } from '../input/XRHand.js';
@@ -125,7 +124,10 @@ export interface SEMConstructor {
 export interface SyntheticEnvironmentModule {
   version: string;
   render(time: number): void;
-  loadEnvironment(json: any): void;
+  // The concrete environment schema (`SceneFile`) is defined in the `sem`
+  // package, which depends on `iwer`; importing it here would create a
+  // circular dependency. The SEM implementation casts this to its schema.
+  loadEnvironment(json: unknown): void;
   loadDefaultEnvironment(envId: string): void;
   planesVisible: boolean;
   boundingBoxesVisible: boolean;
@@ -144,9 +146,20 @@ export interface SyntheticEnvironmentModule {
   ): DepthSensingData | null;
 }
 
+// globalObject receives the WebXR constructor globals (XRSession, XRFrame,
+// ...). It is keyed by arbitrary string names, so it is typed as a generic
+// indexable record rather than `any`.
+type GlobalObject = Record<string, unknown>;
+
 interface RuntimeOptions {
-  globalObject: any;
+  globalObject: GlobalObject;
   polyfillLayers: boolean;
+  /**
+   * When a native `navigator.xr` is already present, installRuntime skips
+   * clobbering the existing runtime and warns instead. Set this to `true` to
+   * force the emulated runtime to be installed over the native one.
+   */
+  forceInstall?: boolean;
 }
 
 const Z_INDEX_SEM_CANVAS = 1;
@@ -193,6 +206,17 @@ export class XRDevice {
     visibilityState: XRVisibilityState;
     pendingVisibilityState: XRVisibilityState | null;
     xrSystem: XRSystem | null;
+
+    // runtime install/uninstall bookkeeping: descriptors captured at install
+    // time so uninstallRuntime can best-effort restore the previous globals.
+    installedGlobalObject: GlobalObject | null;
+    previousNavigatorXRDescriptor: PropertyDescriptor | null;
+    previousUserAgentDescriptor: PropertyDescriptor | null;
+    previousGlobals: Map<string, { existed: boolean; value: unknown }> | null;
+    previousMakeXRCompatible: Map<
+      object,
+      { existed: boolean; descriptor: PropertyDescriptor | undefined }
+    > | null;
 
     matrix: mat4;
     globalSpace: GlobalSpace;
@@ -312,6 +336,12 @@ export class XRDevice {
       visibilityState: 'visible',
       pendingVisibilityState: null,
       xrSystem: null,
+
+      installedGlobalObject: null,
+      previousNavigatorXRDescriptor: null,
+      previousUserAgentDescriptor: null,
+      previousGlobals: null,
+      previousMakeXRCompatible: null,
 
       matrix: mat4.create(),
       globalSpace,
@@ -519,61 +549,184 @@ export class XRDevice {
     globalThis;
   }
 
+  /**
+   * Whether a native (non-emulated) WebXR runtime is already present on
+   * `navigator.xr`. installRuntime uses this to avoid clobbering a real
+   * runtime unless `forceInstall` is set.
+   */
+  isNativeXRAvailable(): boolean {
+    const nativeXR = (globalThis.navigator as Navigator | undefined)?.xr;
+    // An emulated runtime installed by IWER is an XRSystem instance; anything
+    // else present is treated as a native runtime.
+    return Boolean(nativeXR) && !(nativeXR instanceof XRSystem);
+  }
+
   installRuntime(options?: RuntimeOptions) {
-    const globalObject = options?.globalObject ?? globalThis;
+    const globalObject = (options?.globalObject ?? globalThis) as GlobalObject;
     const polyfillLayers = options?.polyfillLayers;
-    Object.defineProperty(
-      WebGL2RenderingContext.prototype,
-      'makeXRCompatible',
-      {
+
+    // Skip clobbering a real WebXR runtime unless the caller forces it.
+    if (this.isNativeXRAvailable() && !options?.forceInstall) {
+      console.warn(
+        'IWER: a native WebXR runtime is already available on navigator.xr; ' +
+          'skipping installRuntime. Pass { forceInstall: true } to override.',
+      );
+      return;
+    }
+
+    // Track which globals/descriptors we overwrite so uninstallRuntime can
+    // best-effort restore them later.
+    const previousGlobals = new Map<
+      string,
+      { existed: boolean; value: unknown }
+    >();
+    const previousMakeXRCompatible = new Map<
+      object,
+      { existed: boolean; descriptor: PropertyDescriptor | undefined }
+    >();
+    this[P_DEVICE].installedGlobalObject = globalObject;
+    this[P_DEVICE].previousGlobals = previousGlobals;
+    this[P_DEVICE].previousMakeXRCompatible = previousMakeXRCompatible;
+
+    const defineMakeXRCompatible = (proto: object | undefined) => {
+      if (!proto) return;
+      previousMakeXRCompatible.set(proto, {
+        existed: 'makeXRCompatible' in (proto as Record<string, unknown>),
+        descriptor: Object.getOwnPropertyDescriptor(proto, 'makeXRCompatible'),
+      });
+      Object.defineProperty(proto, 'makeXRCompatible', {
         value: function () {
           return new Promise((resolve, _reject) => {
             resolve(true);
           });
         },
         configurable: true,
-      },
+      });
+    };
+    defineMakeXRCompatible(WebGL2RenderingContext.prototype);
+    // Also patch WebGL1 contexts, which can request XR compatibility too.
+    defineMakeXRCompatible(
+      (globalThis as { WebGLRenderingContext?: { prototype: object } })
+        .WebGLRenderingContext?.prototype,
     );
+
     this[P_DEVICE].xrSystem = new XRSystem(this);
+
+    // Capture the previous navigator.xr / userAgent descriptors before
+    // overwriting so uninstallRuntime can restore them.
+    this[P_DEVICE].previousNavigatorXRDescriptor =
+      Object.getOwnPropertyDescriptor(globalThis.navigator, 'xr') ?? null;
+    this[P_DEVICE].previousUserAgentDescriptor =
+      Object.getOwnPropertyDescriptor(navigator, 'userAgent') ?? null;
+
     Object.defineProperty(globalThis.navigator, 'xr', {
       value: this[P_DEVICE].xrSystem,
       configurable: true,
     });
+    // userAgent is configurable so uninstallRuntime can restore the original.
     Object.defineProperty(navigator, 'userAgent', {
       value: this[P_DEVICE].userAgent,
       writable: false,
-      configurable: false,
+      configurable: true,
       enumerable: true,
     });
-    globalObject['XRSystem'] = XRSystem;
-    globalObject['XRSession'] = XRSession;
-    globalObject['XRRenderState'] = XRRenderState;
-    globalObject['XRFrame'] = XRFrame;
-    globalObject['XRSpace'] = XRSpace;
-    globalObject['XRReferenceSpace'] = XRReferenceSpace;
-    globalObject['XRJointSpace'] = XRJointSpace;
-    globalObject['XRView'] = XRView;
-    globalObject['XRViewport'] = XRViewport;
-    globalObject['XRRigidTransform'] = XRRigidTransform;
-    globalObject['XRPose'] = XRPose;
-    globalObject['XRViewerPose'] = XRViewerPose;
-    globalObject['XRJointPose'] = XRJointPose;
-    globalObject['XRInputSource'] = XRInputSource;
-    globalObject['XRInputSourceArray'] = XRInputSourceArray;
-    globalObject['XRHand'] = XRHand;
-    globalObject['XRLayer'] = XRLayer;
-    globalObject['XRWebGLLayer'] = XRWebGLLayer;
-    globalObject['XRSessionEvent'] = XRSessionEvent;
-    globalObject['XRInputSourceEvent'] = XRInputSourceEvent;
-    globalObject['XRInputSourcesChangeEvent'] = XRInputSourcesChangeEvent;
-    globalObject['XRReferenceSpaceEvent'] = XRReferenceSpaceEvent;
+
+    const setGlobal = (name: string, value: unknown) => {
+      previousGlobals.set(name, {
+        existed: name in globalObject,
+        value: globalObject[name],
+      });
+      globalObject[name] = value;
+    };
+
+    setGlobal('XRSystem', XRSystem);
+    setGlobal('XRSession', XRSession);
+    setGlobal('XRRenderState', XRRenderState);
+    setGlobal('XRFrame', XRFrame);
+    setGlobal('XRSpace', XRSpace);
+    setGlobal('XRReferenceSpace', XRReferenceSpace);
+    setGlobal('XRJointSpace', XRJointSpace);
+    setGlobal('XRView', XRView);
+    setGlobal('XRViewport', XRViewport);
+    setGlobal('XRRigidTransform', XRRigidTransform);
+    setGlobal('XRPose', XRPose);
+    setGlobal('XRViewerPose', XRViewerPose);
+    setGlobal('XRJointPose', XRJointPose);
+    setGlobal('XRInputSource', XRInputSource);
+    setGlobal('XRInputSourceArray', XRInputSourceArray);
+    setGlobal('XRHand', XRHand);
+    setGlobal('XRLayer', XRLayer);
+    setGlobal('XRWebGLLayer', XRWebGLLayer);
+    setGlobal('XRSessionEvent', XRSessionEvent);
+    setGlobal('XRInputSourceEvent', XRInputSourceEvent);
+    setGlobal('XRInputSourcesChangeEvent', XRInputSourcesChangeEvent);
+    setGlobal('XRReferenceSpaceEvent', XRReferenceSpaceEvent);
 
     if (polyfillLayers) {
       new WebXRLayerPolyfill();
     } else {
-      globalObject['XRMediaBinding'] = undefined;
+      setGlobal('XRMediaBinding', undefined);
     }
-    globalObject['XRWebGLBinding'] = XRWebGLBinding;
+    setGlobal('XRWebGLBinding', XRWebGLBinding);
+  }
+
+  /**
+   * Best-effort reversal of installRuntime: restores the previous
+   * navigator.xr / navigator.userAgent descriptors, the WebGL makeXRCompatible
+   * methods, and the overwritten global constructors. Safe to call even if
+   * installRuntime was never invoked (no-op in that case).
+   */
+  uninstallRuntime() {
+    const previousGlobals = this[P_DEVICE].previousGlobals;
+    const globalObject = this[P_DEVICE].installedGlobalObject;
+
+    // Restore overwritten global constructors.
+    if (previousGlobals && globalObject) {
+      previousGlobals.forEach(({ existed, value }, name) => {
+        if (existed) {
+          globalObject[name] = value;
+        } else {
+          delete globalObject[name];
+        }
+      });
+    }
+
+    // Restore navigator.xr.
+    const navXrDescriptor = this[P_DEVICE].previousNavigatorXRDescriptor;
+    if (navXrDescriptor) {
+      Object.defineProperty(globalThis.navigator, 'xr', navXrDescriptor);
+    } else if (
+      Object.getOwnPropertyDescriptor(globalThis.navigator, 'xr')?.configurable
+    ) {
+      delete (globalThis.navigator as { xr?: unknown }).xr;
+    }
+
+    // Restore navigator.userAgent (now configurable, so this can succeed).
+    const userAgentDescriptor = this[P_DEVICE].previousUserAgentDescriptor;
+    if (
+      userAgentDescriptor &&
+      Object.getOwnPropertyDescriptor(navigator, 'userAgent')?.configurable
+    ) {
+      Object.defineProperty(navigator, 'userAgent', userAgentDescriptor);
+    }
+
+    // Restore makeXRCompatible on the WebGL prototypes.
+    this[P_DEVICE].previousMakeXRCompatible?.forEach(
+      ({ existed, descriptor }, proto) => {
+        if (existed && descriptor) {
+          Object.defineProperty(proto, 'makeXRCompatible', descriptor);
+        } else {
+          delete (proto as Record<string, unknown>).makeXRCompatible;
+        }
+      },
+    );
+
+    this[P_DEVICE].xrSystem = null;
+    this[P_DEVICE].installedGlobalObject = null;
+    this[P_DEVICE].previousGlobals = null;
+    this[P_DEVICE].previousMakeXRCompatible = null;
+    this[P_DEVICE].previousNavigatorXRDescriptor = null;
+    this[P_DEVICE].previousUserAgentDescriptor = null;
   }
 
   installDevUI(devUIConstructor: DevUIConstructor) {
@@ -783,13 +936,7 @@ export class XRDevice {
 
   createActionPlayer(
     refSpace: XRReferenceSpace,
-    recording: {
-      schema: {
-        0: number;
-        1: InputSchema;
-      }[];
-      frames: any[];
-    },
+    recording: CompressedRecording,
   ) {
     this[P_DEVICE].actionPlayer = new ActionPlayer(
       refSpace,

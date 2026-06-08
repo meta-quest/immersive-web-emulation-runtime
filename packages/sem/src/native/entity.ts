@@ -27,6 +27,18 @@ export enum SpatialEntityType {
   Mesh = 'mesh',
 }
 
+// Derive a stable 24-bit color from a string (the entity's spatialUUID or
+// semantic label) so material colors are deterministic across loads and
+// screenshots are reproducible. Replaces the previous Math.random() source.
+const colorFromString = (source: string): number => {
+  // djb2 string hash → 32-bit unsigned.
+  let hash = 5381;
+  for (let i = 0; i < source.length; i++) {
+    hash = (hash * 33) ^ source.charCodeAt(i);
+  }
+  return (hash >>> 0) & 0xffffff;
+};
+
 const WebXRSemanticLabelMap: Record<SemanticLabelMETA, XRSemanticLabels> = {
   [SemanticLabelMETA.OTHER]: XRSemanticLabels.Other,
   [SemanticLabelMETA.TABLE]: XRSemanticLabels.Table,
@@ -67,7 +79,10 @@ export class SpatialEntity extends Mesh {
     super(
       undefined,
       new MeshMatcapMaterial({
-        color: 0xffffff * Math.random(),
+        // Deterministic per-entity color derived from the uuid, so repeated
+        // loads of the same scene produce identical screenshots. The
+        // TriangleMesh component still overrides this with a fixed color.
+        color: colorFromString(uuid),
         flatShading: true,
       }),
     );
@@ -177,7 +192,7 @@ export class SpatialEntity extends Mesh {
     return this._nativeEntity;
   }
 
-  static fromPBJSON(json: any) {
+  static fromPBJSON(json: PBSpatialEntity) {
     const pbEntity = PBSpatialEntity.fromJSON(json);
     if (pbEntity.locatable_META) {
       const spatialEntity = new SpatialEntity(pbEntity.uuid);
