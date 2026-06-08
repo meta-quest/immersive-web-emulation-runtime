@@ -56,7 +56,7 @@ export class XRMesh {
     return this[P_MESH].lastChangedTime;
   }
 
-  get semanticLabel() {
+  get semanticLabel(): XRSemanticLabels | undefined {
     return this[P_MESH].semanticLabel;
   }
 }

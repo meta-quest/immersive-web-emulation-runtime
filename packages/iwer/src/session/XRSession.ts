@@ -1021,7 +1021,7 @@ export class XRSession extends EventTarget {
 
   // events
   get onend() {
-    return this[P_SESSION].onend ?? (() => {});
+    return this[P_SESSION].onend!;
   }
 
   set onend(callback: XRSessionEventHandler) {
@@ -1035,7 +1035,7 @@ export class XRSession extends EventTarget {
   }
 
   get oninputsourceschange() {
-    return this[P_SESSION].oninputsourceschange ?? (() => {});
+    return this[P_SESSION].oninputsourceschange!;
   }
 
   set oninputsourceschange(callback: XRInputSourcesChangeEventHandler) {
@@ -1052,7 +1052,7 @@ export class XRSession extends EventTarget {
   }
 
   get onselect() {
-    return this[P_SESSION].onselect ?? (() => {});
+    return this[P_SESSION].onselect!;
   }
 
   set onselect(callback: XRInputSourceEventHandler) {
@@ -1069,7 +1069,7 @@ export class XRSession extends EventTarget {
   }
 
   get onselectstart() {
-    return this[P_SESSION].onselectstart ?? (() => {});
+    return this[P_SESSION].onselectstart!;
   }
 
   set onselectstart(callback: XRInputSourceEventHandler) {
@@ -1086,7 +1086,7 @@ export class XRSession extends EventTarget {
   }
 
   get onselectend() {
-    return this[P_SESSION].onselectend ?? (() => {});
+    return this[P_SESSION].onselectend!;
   }
 
   set onselectend(callback: XRInputSourceEventHandler) {
@@ -1103,7 +1103,7 @@ export class XRSession extends EventTarget {
   }
 
   get onsqueeze() {
-    return this[P_SESSION].onsqueeze ?? (() => {});
+    return this[P_SESSION].onsqueeze!;
   }
 
   set onsqueeze(callback: XRInputSourceEventHandler) {
@@ -1120,7 +1120,7 @@ export class XRSession extends EventTarget {
   }
 
   get onsqueezestart() {
-    return this[P_SESSION].onsqueezestart ?? (() => {});
+    return this[P_SESSION].onsqueezestart!;
   }
 
   set onsqueezestart(callback: XRInputSourceEventHandler) {
@@ -1137,7 +1137,7 @@ export class XRSession extends EventTarget {
   }
 
   get onsqueezeend() {
-    return this[P_SESSION].onsqueezeend ?? (() => {});
+    return this[P_SESSION].onsqueezeend!;
   }
 
   set onsqueezeend(callback: XRInputSourceEventHandler) {
@@ -1154,7 +1154,7 @@ export class XRSession extends EventTarget {
   }
 
   get onvisibilitychange() {
-    return this[P_SESSION].onvisibilitychange ?? (() => {});
+    return this[P_SESSION].onvisibilitychange!;
   }
 
   set onvisibilitychange(callback: XRSessionEventHandler) {
@@ -1171,7 +1171,7 @@ export class XRSession extends EventTarget {
   }
 
   get onframeratechange() {
-    return this[P_SESSION].onframeratechange ?? (() => {});
+    return this[P_SESSION].onframeratechange!;
   }
 
   set onframeratechange(callback: XRSessionEventHandler) {

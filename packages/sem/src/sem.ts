@@ -33,6 +33,10 @@ import { mat4 } from 'gl-matrix';
 
 const forwardVector = new Vector3(0, 0, -1);
 
+// Mirrors iwer's XRHitTestTrackableType. Declared locally because iwer does not
+// re-export the type from its package entry point.
+type HitTestTrackableType = 'point' | 'plane' | 'mesh';
+
 export class SyntheticEnvironmentModule extends EventTarget {
   public readonly trackedPlanes: Set<NativePlane> = new Set();
   public readonly trackedMeshes: Set<NativeMesh> = new Set();
@@ -239,7 +243,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
     }
   }
 
-  computeHitTestResults(mat4: mat4) {
+  computeHitTestResults(mat4: mat4, entityTypes?: HitTestTrackableType[]) {
     this.tempMatrix.fromArray(mat4);
     this.tempMatrix.decompose(
       this.tempPosition,
@@ -252,7 +256,18 @@ export class SyntheticEnvironmentModule extends EventTarget {
       .applyQuaternion(this.tempQuaternion)
       .normalize();
     this.raycaster.set(this.tempPosition, this.tempDirection);
-    const intersections = this.raycaster.intersectObject(this.meshes, true);
+    // Raycast against every tracked entity group, not just meshes, so plane and
+    // box hits are reported too. When an entityTypes filter is supplied, restrict
+    // to the requested groups; otherwise default to all.
+    const targets: Object3D[] = [];
+    if (!entityTypes || entityTypes.includes('mesh')) {
+      targets.push(this.meshes, this.boxes);
+    }
+    if (!entityTypes || entityTypes.includes('plane')) {
+      targets.push(this.planes);
+    }
+    // intersectObjects keeps results distance-sorted across all targets.
+    const intersections = this.raycaster.intersectObjects(targets, true);
     const results = intersections.map((intersection) => {
       const point = intersection.point;
       this.hitTestTarget.position.copy(point);

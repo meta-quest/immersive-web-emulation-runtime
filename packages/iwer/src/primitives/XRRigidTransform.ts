@@ -14,6 +14,8 @@ export class XRRigidTransform {
     matrix: mat4;
     position: vec3;
     orientation: quat;
+    positionPoint: DOMPointReadOnly;
+    orientationPoint: DOMPointReadOnly;
     inverse: XRRigidTransform | null;
   };
 
@@ -22,22 +24,37 @@ export class XRRigidTransform {
     const defaultPosition = vec3.fromValues(0, 0, 0);
     const defaultOrientation = quat.create();
 
+    const resolvedPosition = position
+      ? vec3.fromValues(position.x!, position.y!, position.z!)
+      : defaultPosition;
+    const resolvedOrientation = orientation
+      ? quat.normalize(
+          quat.create(),
+          quat.fromValues(
+            orientation.x!,
+            orientation.y!,
+            orientation.z!,
+            orientation.w!,
+          ),
+        )
+      : defaultOrientation;
+
     this[P_RIGID_TRANSFORM] = {
       matrix: mat4.create(),
-      position: position
-        ? vec3.fromValues(position.x!, position.y!, position.z!)
-        : defaultPosition,
-      orientation: orientation
-        ? quat.normalize(
-            quat.create(),
-            quat.fromValues(
-              orientation.x!,
-              orientation.y!,
-              orientation.z!,
-              orientation.w!,
-            ),
-          )
-        : defaultOrientation,
+      position: resolvedPosition,
+      orientation: resolvedOrientation,
+      positionPoint: new DOMPointReadOnly(
+        resolvedPosition[0],
+        resolvedPosition[1],
+        resolvedPosition[2],
+        1,
+      ),
+      orientationPoint: new DOMPointReadOnly(
+        resolvedOrientation[0],
+        resolvedOrientation[1],
+        resolvedOrientation[2],
+        resolvedOrientation[3],
+      ),
       inverse: null,
     };
 
@@ -57,13 +74,11 @@ export class XRRigidTransform {
   }
 
   get position(): DOMPointReadOnly {
-    const pos = this[P_RIGID_TRANSFORM].position;
-    return new DOMPointReadOnly(pos[0], pos[1], pos[2], 1);
+    return this[P_RIGID_TRANSFORM].positionPoint;
   }
 
   get orientation(): DOMPointReadOnly {
-    const ori = this[P_RIGID_TRANSFORM].orientation;
-    return new DOMPointReadOnly(ori[0], ori[1], ori[2], ori[3]);
+    return this[P_RIGID_TRANSFORM].orientationPoint;
   }
 
   get inverse(): XRRigidTransform {

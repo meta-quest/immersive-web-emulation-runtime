@@ -14,9 +14,12 @@ import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSession } from '../session/XRSession.js';
 import { XRSpace } from '../spaces/XRSpace.js';
 
+export type XRHitTestTrackableType = 'point' | 'plane' | 'mesh';
+
 export interface XRHitTestOptionsInit {
   space: XRSpace;
-  offsetRay: XRRay;
+  offsetRay?: XRRay;
+  entityTypes?: XRHitTestTrackableType[];
 }
 
 export class XRHitTestSource {
@@ -24,6 +27,7 @@ export class XRHitTestSource {
     session: XRSession;
     space: XRSpace;
     offsetRay: XRRay;
+    entityTypes?: XRHitTestTrackableType[];
   };
 
   constructor(session: XRSession, options: XRHitTestOptionsInit) {
@@ -31,6 +35,7 @@ export class XRHitTestSource {
       session,
       space: options.space,
       offsetRay: options.offsetRay ?? new XRRay(),
+      entityTypes: options.entityTypes,
     };
   }
 

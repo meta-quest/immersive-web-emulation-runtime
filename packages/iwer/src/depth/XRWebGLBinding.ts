@@ -58,13 +58,24 @@ export class XRWebGLBinding {
   }
 
   getDepthInformation(view: XRView): XRWebGLDepthInformation | null {
-    if (this._session[P_SESSION].depthSensingUsage !== 'gpu-optimized') {
-      return null;
-    }
-
     const frame: XRFrame | null = this._session[P_SESSION].activeFrame;
     if (!frame || !frame[P_FRAME].active) {
-      return null;
+      throw new DOMException(
+        'XRFrame access outside the callback that produced it is invalid.',
+        'InvalidStateError',
+      );
+    }
+    if (!this._session[P_SESSION].enabledFeatures.includes('depth-sensing')) {
+      throw new DOMException(
+        'depth-sensing feature is not enabled on this session.',
+        'InvalidStateError',
+      );
+    }
+    if (this._session[P_SESSION].depthSensingUsage !== 'gpu-optimized') {
+      throw new DOMException(
+        'getDepthInformation on XRWebGLBinding requires gpu-optimized depth sensing usage.',
+        'InvalidStateError',
+      );
     }
 
     const eye = view[P_VIEW].eye;

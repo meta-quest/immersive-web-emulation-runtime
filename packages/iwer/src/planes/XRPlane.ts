@@ -85,7 +85,7 @@ export class XRPlane {
     return this[P_PLANE].lastChangedTime;
   }
 
-  get semanticLabel() {
+  get semanticLabel(): XRSemanticLabels | undefined {
     return this[P_PLANE].semanticLabel;
   }
 }

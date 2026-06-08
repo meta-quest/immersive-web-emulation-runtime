@@ -24,7 +24,7 @@ export class XRReferenceSpace extends XRSpace {
     onreset: XRReferenceSpaceEventHandler | null;
   } = {
     type: null as any,
-    onreset: () => {},
+    onreset: null,
   };
 
   constructor(
@@ -36,8 +36,8 @@ export class XRReferenceSpace extends XRSpace {
     this[P_REF_SPACE].type = type;
   }
 
-  get onreset(): XRReferenceSpaceEventHandler {
-    return this[P_REF_SPACE].onreset ?? (() => {});
+  get onreset(): XRReferenceSpaceEventHandler | null {
+    return this[P_REF_SPACE].onreset;
   }
 
   set onreset(callback: XRReferenceSpaceEventHandler) {

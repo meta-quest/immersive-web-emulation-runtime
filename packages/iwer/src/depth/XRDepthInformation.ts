@@ -71,6 +71,10 @@ export class XRCPUDepthInformation {
     return this[P_DEPTH_INFO].rawValueToMeters;
   }
 
+  get dataFormat(): XRDepthDataFormat {
+    return this[P_DEPTH_INFO].dataFormat;
+  }
+
   getDepthInMeters(x: number, y: number): number {
     const { width, height, rawValueToMeters, data, dataFormat } =
       this[P_DEPTH_INFO];
