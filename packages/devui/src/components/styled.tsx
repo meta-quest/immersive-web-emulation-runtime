@@ -5,15 +5,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { styled } from 'styled-components';
 
 export const Colors = {
-  textWhite: 'rgba(223, 223, 223, 1)',
-  textGrey: 'rgba(156, 156, 156, 1)',
+  textWhite: '#EDEDED',
+  textGrey: '#9C9C9C',
+  textTertiary: '#6B6B6E',
   dangerRed: 'rgba(243, 151, 143, 1)',
   dangerRedPressed: 'rgba(240, 97, 84,1)',
-  panelBackground: 'rgba(38, 38, 38, 0.7)',
+  // Accent — the single interactive/brand blue (active states, joystick
+  // knob, slider thumb, focus). Maps to the in-overlay live readout.
+  accent: '#2D7FF9',
+  accentInk: '#FFFFFF',
+  accentGlow: 'rgba(45, 127, 249, 0.35)',
+  panelBackground: 'rgba(38, 38, 38, 0.72)',
   panelBorder: 'rgba(61, 61, 63, 0.7)',
   buttonBackground: 'rgba(61, 61, 63, 0.6)',
   buttonHovered: 'rgba(61, 61, 63, 0.8)',
@@ -54,7 +59,12 @@ export const Button = styled.button<{ $reverse?: boolean }>`
   transition: all 0.2s ease-in-out;
   text-transform: none;
   box-shadow: none;
-  font-family: Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
 
   &:first-child {
     border-radius: ${({ $reverse }) =>
@@ -76,17 +86,20 @@ export const Button = styled.button<{ $reverse?: boolean }>`
 `;
 
 export const HeaderButtonsContainer = styled.div`
-  padding: 2px;
+  padding: 4px;
   display: flex;
+  gap: 2px;
   background-color: ${Colors.panelBackground};
   border: 1px solid ${Colors.panelBorder};
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
+  box-shadow:
+    0 5px 10px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   justify-content: center;
   pointer-events: all;
   border-radius: 14px;
   align-items: center;
-  height: 24px;
 `;
 
 export const HeaderButton = styled.button`
@@ -97,38 +110,30 @@ export const HeaderButton = styled.button`
   justify-content: center;
   cursor: pointer;
   color: ${Colors.textWhite};
-  border-radius: 4px;
-  font-size: 16px;
-  height: 24px;
-  min-width: 24px;
-  transition: all 0.2s ease-in-out;
+  border-radius: 8px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  transition: all 0.15s ease-in-out;
   text-transform: none;
   box-shadow: none;
-  padding: 1px 5px;
-  font-family: Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
 
   &:hover {
-    background-color: ${Colors.buttonPressed};
+    background-color: rgba(255, 255, 255, 0.06);
   }
 
   &:active {
-    background-color: ${Colors.buttonPressed};
+    background-color: rgba(255, 255, 255, 0.1);
   }
 
   &:focus {
     outline: none;
-  }
-
-  &:first-child {
-    border-radius: 12px 4px 4px 12px;
-  }
-
-  &:last-child {
-    border-radius: 4px 12px 12px 4px;
-  }
-
-  &:first-child:last-child {
-    border-radius: 12px;
   }
 `;
 
@@ -142,10 +147,46 @@ export const MappedKeyBlock = styled.div<{ $pressed: boolean }>`
   color: ${Colors.textWhite};
   border-radius: 8px;
   font-size: 14px;
-  font-family: Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   height: 30px;
   width: 30px;
   transition: all 0.2s ease-in-out;
+`;
+
+// Collapsed (play-mode) keymap layout — the original's compact "icon + key"
+// rows, restyled. GlyphCircle is the button identifier; MappedKeyBlock is the
+// bound key. Both 30px so rows stay on the original grid.
+export const CollapsedRow = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 3px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+export const GlyphCircle = styled.div`
+  flex: none;
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid ${Colors.panelBorder};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: ${Colors.textGrey};
 `;
 
 export const ButtonContainer = styled.div<{ $reverse?: boolean }>`
@@ -190,7 +231,8 @@ export const JoystickButton = styled.button`
 
 export const JoystickInner = styled.div`
   position: absolute;
-  background-color: ${Colors.textWhite};
+  background-color: ${Colors.accent};
+  box-shadow: 0 0 8px ${Colors.accentGlow};
   border-radius: 50%;
   width: 36px;
   height: 36px;
@@ -220,21 +262,21 @@ export const RangeSelector = styled.input.attrs({ type: 'range' })<{
     appearance: none;
     width: 8px;
     height: 30px;
-    background-color: ${Colors.textWhite};
+    background-color: ${Colors.accent};
     border-radius: ${ControlButtonStyles.radiusMiddle};
   }
 
   &::-moz-range-thumb {
     width: 10px;
     height: 30px;
-    background-color: ${Colors.textWhite};
+    background-color: ${Colors.accent};
     border-radius: ${ControlButtonStyles.radiusMiddle};
   }
 
   &::-ms-thumb {
     width: 8px;
     height: 24px;
-    background-color: ${Colors.textWhite};
+    background-color: ${Colors.accent};
     border-radius: ${ControlButtonStyles.radiusMiddle};
   }
 `;
@@ -254,34 +296,38 @@ export const KeyRow = styled.div<{ $reverse: boolean }>`
   justify-content: center;
 `;
 
-export const FAIcon = styled(FontAwesomeIcon)<{
-  $size?: number;
-  $reverse?: boolean;
-}>`
-  height: ${({ $size = 14 }) => `${$size}px`};
-  min-height: ${({ $size = 14 }) => `${$size}px`};
-  max-height: ${({ $size = 14 }) => `${$size}px`};
-  width: ${({ $size = 14 }) => `${$size}px`};
-  min-width: ${({ $size = 14 }) => `${$size}px`};
-  max-width: ${({ $size = 14 }) => `${$size}px`};
-  transform: ${({ $reverse }) => ($reverse ? 'scaleX(-1)' : 'unset')};
-`;
+// Control-row grid — shared widths so the value fields, scrub cells, and
+// the stick's axis readouts line up in the same columns across every row.
+export const Layout = {
+  labelW: '40px',
+  fieldW: '52px',
+  gap: '4px',
+  rowH: '26px',
+  cellRadius: '8px',
+  inset: 'rgba(0, 0, 0, 0.25)',
+  accentSoft: 'rgba(45, 127, 249, 0.45)',
+  accentTint: 'rgba(45, 127, 249, 0.18)',
+};
 
-export const FAControlIcon = styled(FontAwesomeIcon)<{ $reverse?: boolean }>`
-  height: 18px;
-  min-height: 18px;
-  max-height: 18px;
-  width: 18px;
-  min-width: 18px;
-  max-width: 18px;
-  margin: 6px;
-  transform: ${({ $reverse }) => ($reverse ? 'scaleX(-1)' : 'unset')};
+// A small monospace label identifying a control row (Stick / Trig / Grip / X /
+// Y / Rest / Pose / Pinch) — replaces the old per-button glyphs.
+export const RowLabel = styled.span`
+  flex: none;
+  width: ${Layout.labelW};
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: ${Colors.textGrey};
 `;
 
 export const ControlPanel = styled.div`
   position: fixed;
   padding: 5px;
-  font-family: Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   color: ${Colors.textWhite};
   pointer-events: all;
   background-color: ${Colors.panelBackground};
@@ -332,24 +378,26 @@ export const PanelHeaderButton = styled.button<{ $isRed?: boolean }>`
 export const ValuesContainer = styled.div`
   display: flex;
   flex-direction: row;
-  gap: ${ControlButtonStyles.gap};
-  height: 25px;
+  gap: ${Layout.gap};
+  height: ${Layout.rowH};
 `;
 
 export const ValueInput = styled.input.attrs({ type: 'text' })`
-  width: 50px;
+  width: ${Layout.fieldW};
   outline: none;
-  background: ${Colors.gradientGrey};
-  border: 1px solid transparent;
-  border-radius: 5px;
-  height: 25px;
+  background: ${Layout.inset};
+  border: 1px solid ${Colors.panelBorder};
+  border-radius: ${Layout.cellRadius};
+  height: ${Layout.rowH};
   color: ${Colors.textWhite};
   padding: 0 10px 0 5px;
   box-sizing: border-box;
   font-size: 10px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   &:read-only {
-    background: ${Colors.gradientGreyTranslucent};
+    background: ${Layout.inset};
+    cursor: default;
   }
 
   &:invalid {
@@ -365,4 +413,5 @@ export const InputSuffix = styled.span`
   pointer-events: none;
   color: ${Colors.textGrey};
   font-size: 10px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 `;

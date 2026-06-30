@@ -28,6 +28,17 @@ const FREE_MOVEMENT_SPEED = 2;
 
 type Handedness = 'left' | 'right';
 
+export interface PoseTransform {
+  position: [number, number, number];
+  quaternion: [number, number, number, number];
+}
+
+export interface DefaultPose {
+  headset: PoseTransform;
+  controllers?: Partial<Record<Handedness, PoseTransform>>;
+  hands?: Partial<Record<Handedness, PoseTransform>>;
+}
+
 export class InputLayer {
   public transformHandles: Map<Handedness, TransformHandles>;
   public combinedCameraPosition: Vector3 = new Vector3();
@@ -282,6 +293,66 @@ export class InputLayer {
         transformHandle.userData.defaultQuaternion,
       );
     });
+  }
+
+  captureDefaultPose(): DefaultPose {
+    const headsetPosition = this.cameraRig
+      .getWorldPosition(this.vec3)
+      .toArray();
+    const headsetQuaternion = this.cameraRig
+      .getWorldQuaternion(this.quat)
+      .toArray();
+    const controllers: Partial<Record<Handedness, PoseTransform>> = {};
+    const hands: Partial<Record<Handedness, PoseTransform>> = {};
+    this.transformHandles.forEach((transformHandle, handedness) => {
+      const position = transformHandle
+        .getWorldPosition(this.vec3)
+        .toArray() as [number, number, number];
+      const quaternion = transformHandle
+        .getWorldQuaternion(this.quat)
+        .toArray() as [number, number, number, number];
+      const pose = {
+        position,
+        quaternion,
+      };
+      controllers[handedness] = pose;
+      hands[handedness] = {
+        position: [...position],
+        quaternion: [...quaternion],
+      };
+    });
+    return {
+      headset: {
+        position: headsetPosition,
+        quaternion: headsetQuaternion,
+      },
+      controllers,
+      hands,
+    };
+  }
+
+  applyDefaultPose(defaultPose: DefaultPose) {
+    const { headset, controllers, hands } = defaultPose;
+    this.headsetDefaultPosition.fromArray(headset.position);
+    this.headsetDefaultQuaternion.fromArray(headset.quaternion);
+    this.quatInv.copy(this.headsetDefaultQuaternion).invert();
+    this.transformHandles.forEach((transformHandle, handedness) => {
+      const inputPose = controllers?.[handedness] ?? hands?.[handedness];
+      if (!inputPose) return;
+      this.vec3
+        .fromArray(inputPose.position)
+        .sub(this.headsetDefaultPosition)
+        .applyQuaternion(this.quatInv);
+      this.quat.fromArray(inputPose.quaternion).premultiply(this.quatInv);
+      transformHandle.userData.defaultPosition = this.vec3.toArray();
+      transformHandle.userData.defaultQuaternion = this.quat.toArray();
+    });
+    this.resetDeviceTransforms();
+    // Keep the combined camera position in sync with the restored headset pose,
+    // otherwise the next non-pointer-locked render frame overwrites cameraRig.y
+    // (and playerRig x/z) with the stale construction-time camera position,
+    // reverting the saved headset height.
+    this.combinedCameraPosition.copy(this.headsetDefaultPosition);
   }
 
   syncDeviceTransforms() {

@@ -6,9 +6,8 @@
  */
 
 import {
-  ControlButtonStyles,
   ControlPanel,
-  FAIcon,
+  Layout,
   PanelHeaderButton,
   SectionBreak,
 } from './styled.js';
@@ -17,17 +16,11 @@ import {
   Button as GamepadButton,
   GamepadConfig,
 } from 'iwer/lib/gamepad/Gamepad.js';
-import {
-  faCircleXmark,
-  faGamepad,
-  faGear,
-  faPlug,
-} from '@fortawesome/free-solid-svg-icons';
 
-import { AnalogButton } from './analog.js';
-import { BinaryButton } from './binary.js';
+import { Icon } from './icon.js';
 import { Joystick } from './joystick.js';
 import React from 'react';
+import { ScrubControl } from './scrub.js';
 import { TransformHandles } from '@pmndrs/handle';
 import { Vector3Input } from './vec3.js';
 import type { XRController } from 'iwer/lib/device/XRController.js';
@@ -38,34 +31,42 @@ type TransformedConfig = {
   hasAxes: boolean;
 };
 
+const BUTTON_LABELS: Record<string, string> = {
+  thumbstick: 'Stick',
+  trigger: 'Trig',
+  squeeze: 'Grip',
+  'a-button': 'A',
+  'b-button': 'B',
+  'x-button': 'X',
+  'y-button': 'Y',
+  thumbrest: 'Rest',
+  menu: 'Menu',
+};
+
+function labelFor(id: string): string {
+  if (BUTTON_LABELS[id]) return BUTTON_LABELS[id];
+  return id.charAt(0).toUpperCase() + id.slice(1).replace(/-button$/, '');
+}
+
 function transformGamepadConfig(
   gamepadConfig: GamepadConfig,
 ): TransformedConfig[] {
   const axesSet = new Set<string>();
-
-  // Add all axis ids to the set
   for (const axis of gamepadConfig.axes) {
-    if (axis && axis.id) {
-      axesSet.add(axis.id);
-    }
+    if (axis && axis.id) axesSet.add(axis.id);
   }
-
-  // Transform buttons to the desired format
   const transformed = gamepadConfig.buttons
-    .filter((button): button is GamepadButton => button !== null) // Filter out null values
+    .filter((button): button is GamepadButton => button !== null)
     .map((button) => ({
       id: button.id,
       type: button.type,
       hasAxes: axesSet.has(button.id),
     }));
-
-  // Sort the array by hasAxes
   transformed.sort((a, b) => {
     if (a.hasAxes && !b.hasAxes) return -1;
     if (!a.hasAxes && b.hasAxes) return 1;
     return 0;
   });
-
   return transformed;
 }
 
@@ -86,24 +87,21 @@ export const ControllerUI: React.FC<ControllerProps> = ({
   const [connected, setConnected] = React.useState(controller.connected);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const transformedConfig = transformGamepadConfig(controller.gamepadConfig);
-  const actions = transformedConfig.flatMap((config) => {
-    if (config.hasAxes) {
-      return [
-        `${config.id}-left`,
-        `${config.id}-right`,
-        `${config.id}-up`,
-        `${config.id}-down`,
-        config.id,
-      ];
-    } else {
-      return config.id;
-    }
-  });
+  const actions = transformedConfig.flatMap((config) =>
+    config.hasAxes
+      ? [
+          `${config.id}-left`,
+          `${config.id}-right`,
+          `${config.id}-up`,
+          `${config.id}-down`,
+          config.id,
+        ]
+      : config.id,
+  );
   React.useEffect(() => {
-    if (pointerLocked) {
-      setSettingsOpen(false);
-    }
+    if (pointerLocked) setSettingsOpen(false);
   }, [pointerLocked]);
+
   return (
     <ControlPanel
       key={handedness}
@@ -114,74 +112,61 @@ export const ControllerUI: React.FC<ControllerProps> = ({
       }
     >
       {!pointerLocked && (
-        <>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
           <div
             style={{
+              fontSize: '14px',
+              fontWeight: 600,
               display: 'flex',
               flexDirection: 'row',
-              justifyContent: 'space-between',
               alignItems: 'center',
+              gap: '6px',
             }}
           >
-            <div
-              style={{
-                fontSize: '13px',
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-            >
-              <FAIcon icon={faGamepad} style={{ marginRight: '5px' }} />
-              Controller&nbsp;
-              <span style={{ fontWeight: 'bold' }}>
-                [{handedness === 'left' ? 'L' : 'R'}]
-              </span>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                gap: '1px',
-              }}
-            >
-              {connected ? (
-                <>
-                  <PanelHeaderButton
-                    title={`Click to ${
-                      settingsOpen ? 'close' : 'change'
-                    } key bindings`}
-                    onClick={() => {
-                      setSettingsOpen(!settingsOpen);
-                    }}
-                  >
-                    <FAIcon icon={faGear} />
-                  </PanelHeaderButton>
-                  <PanelHeaderButton
-                    title={`Click to disconnect ${handedness} controller`}
-                    $isRed={true}
-                    onClick={() => {
-                      controller.connected = false;
-                      setConnected(false);
-                    }}
-                  >
-                    <FAIcon icon={faCircleXmark} />
-                  </PanelHeaderButton>
-                </>
-              ) : (
-                <PanelHeaderButton
-                  title={`Click to reconnect ${handedness} controller`}
-                  onClick={() => {
-                    controller.connected = true;
-                    setConnected(true);
-                  }}
-                  style={{ marginLeft: '5px' }}
-                >
-                  <FAIcon icon={faPlug} />
-                </PanelHeaderButton>
-              )}
-            </div>
+            <Icon name="gamepad-2" size={15} />
+            Controller [{handedness === 'left' ? 'L' : 'R'}]
           </div>
-        </>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '1px' }}>
+            {connected ? (
+              <>
+                <PanelHeaderButton
+                  title={`Click to ${settingsOpen ? 'close' : 'change'} key bindings`}
+                  onClick={() => setSettingsOpen(!settingsOpen)}
+                >
+                  <Icon name="settings" size={14} />
+                </PanelHeaderButton>
+                <PanelHeaderButton
+                  title={`Click to disconnect ${handedness} controller`}
+                  $isRed={true}
+                  onClick={() => {
+                    controller.connected = false;
+                    setConnected(false);
+                  }}
+                >
+                  <Icon name="circle-x" size={14} />
+                </PanelHeaderButton>
+              </>
+            ) : (
+              <PanelHeaderButton
+                title={`Click to reconnect ${handedness} controller`}
+                onClick={() => {
+                  controller.connected = true;
+                  setConnected(true);
+                }}
+                style={{ marginLeft: '5px' }}
+              >
+                <Icon name="plug" size={14} />
+              </PanelHeaderButton>
+            )}
+          </div>
+        </div>
       )}
       {connected && !pointerLocked && (
         <>
@@ -190,10 +175,10 @@ export const ControllerUI: React.FC<ControllerProps> = ({
               <SectionBreak />
               <Vector3Input
                 vector={handle.position}
-                label="Position"
-                marginBottom={ControlButtonStyles.gap}
+                label="Pos"
+                marginBottom={Layout.gap}
               />
-              <Vector3Input vector={handle.rotation} label="Rotation" />
+              <Vector3Input vector={handle.rotation} label="Rot" />
             </>
           )}
           <SectionBreak />
@@ -211,9 +196,7 @@ export const ControllerUI: React.FC<ControllerProps> = ({
                   xrController={controller}
                   pointerLocked={pointerLocked}
                   buttonId={buttonConfig.id}
-                  mappedKeyUp={
-                    keyMap[handedness as XRHandedness]![`${buttonConfig.id}-up`]
-                  }
+                  mappedKeyUp={mapping[`${buttonConfig.id}-up`]}
                   mappedKeyDown={mapping[`${buttonConfig.id}-down`]}
                   mappedKeyLeft={mapping[`${buttonConfig.id}-left`]}
                   mappedKeyRight={mapping[`${buttonConfig.id}-right`]}
@@ -221,27 +204,19 @@ export const ControllerUI: React.FC<ControllerProps> = ({
                   key={buttonConfig.id}
                 />
               );
-            } else if (buttonConfig.type === 'analog') {
-              return (
-                <AnalogButton
-                  xrController={controller}
-                  buttonId={buttonConfig.id}
-                  mappedKey={mapping[buttonConfig.id]}
-                  pointerLocked={pointerLocked}
-                  key={buttonConfig.id}
-                />
-              );
-            } else {
-              return (
-                <BinaryButton
-                  xrController={controller}
-                  buttonId={buttonConfig.id}
-                  mappedKey={mapping[buttonConfig.id]}
-                  pointerLocked={pointerLocked}
-                  key={buttonConfig.id}
-                />
-              );
             }
+            return (
+              <ScrubControl
+                key={buttonConfig.id}
+                label={labelFor(buttonConfig.id)}
+                analog={buttonConfig.type === 'analog'}
+                supportsTouch
+                mappedKey={mapping[buttonConfig.id]}
+                pointerLocked={pointerLocked}
+                onValue={(v) => controller.updateButtonValue(buttonConfig.id, v)}
+                onTouch={(t) => controller.updateButtonTouch(buttonConfig.id, t)}
+              />
+            );
           })
         ))}
     </ControlPanel>

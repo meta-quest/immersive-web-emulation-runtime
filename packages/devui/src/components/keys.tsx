@@ -5,19 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MouseLeft, MouseRight } from './icons.js';
-import {
-  faAngleUp,
-  faArrowRightToBracket,
-  faArrowTurnDown,
-  faCaretDown,
-  faCaretLeft,
-  faCaretRight,
-  faCaretUp,
-  faDeleteLeft,
-} from '@fortawesome/free-solid-svg-icons';
-
-import { FAIcon } from './styled.js';
+import { Icon } from './icon.js';
 import type { ReactElement } from 'react';
 
 export const MappedKeyDisplay: {
@@ -59,23 +47,16 @@ export const MappedKeyDisplay: {
   Digit7: '7',
   Digit8: '8',
   Digit9: '9',
-  Tab: <FAIcon icon={faArrowRightToBracket} />,
-  Backspace: <FAIcon icon={faDeleteLeft} />,
-  Enter: (
-    <FAIcon
-      style={{
-        transform: 'rotate(90deg)',
-      }}
-      icon={faArrowTurnDown}
-    />
-  ),
-  ShiftLeft: <FAIcon icon={faAngleUp} />,
-  ShiftRight: <FAIcon icon={faAngleUp} />,
+  Tab: <Icon name="arrow-right-to-line" size={15} />,
+  Backspace: <Icon name="delete" size={15} />,
+  Enter: <Icon name="corner-down-left" size={15} />,
+  ShiftLeft: <Icon name="arrow-big-up" size={15} />,
+  ShiftRight: <Icon name="arrow-big-up" size={15} />,
   Space: ' ',
-  ArrowUp: <FAIcon icon={faCaretUp} />,
-  ArrowDown: <FAIcon icon={faCaretDown} />,
-  ArrowLeft: <FAIcon icon={faCaretLeft} />,
-  ArrowRight: <FAIcon icon={faCaretRight} />,
+  ArrowUp: <Icon name="arrow-up" size={15} />,
+  ArrowDown: <Icon name="arrow-down" size={15} />,
+  ArrowLeft: <Icon name="arrow-left" size={15} />,
+  ArrowRight: <Icon name="arrow-right" size={15} />,
   Semicolon: ';',
   Equal: '=',
   Comma: ',',
@@ -87,6 +68,6 @@ export const MappedKeyDisplay: {
   Backslash: '\\',
   BracketRight: ']',
   Quote: "'",
-  MouseLeft: <MouseLeft />,
-  MouseRight: <MouseRight />,
+  MouseLeft: <Icon name="mouse-left" size={15} />,
+  MouseRight: <Icon name="mouse-right" size={15} />,
 };

@@ -10,13 +10,13 @@ import { HeaderButton, HeaderButtonsContainer } from './components/styled.js';
 import React, { useEffect, useState } from 'react';
 
 import { HeaderUI } from './components/header.js';
-import { HeadsetUI } from './components/headset.js';
-import { IWERIcon } from './components/icons.js';
+import { Icon } from './components/icon.js';
 import { InputLayer } from './scene.js';
 import { StyleSheetManager } from 'styled-components';
 import { VERSION } from './version.js';
 import { XRDevice } from 'iwer';
 import type { ControlMode } from 'iwer';
+import type { DefaultPose } from './scene.js';
 import { createRoot } from 'react-dom/client';
 
 export class DevUI {
@@ -95,6 +95,10 @@ export class DevUI {
 
   render(time: number) {
     this.inputLayer.renderScene(time);
+  }
+
+  applyDefaultPose(defaultPose: DefaultPose) {
+    this.inputLayer.applyDefaultPose(defaultPose);
   }
 
   dispose() {
@@ -233,11 +237,6 @@ const Overlay: React.FC<OverlayProps> = ({
         {controlMode !== 'programmatic' && (
           <>
             <HeaderUI xrDevice={xrDevice} inputLayer={inputLayer} />
-            <HeadsetUI
-              xrDevice={xrDevice}
-              inputLayer={inputLayer}
-              pointerLocked={pointerLocked}
-            />
             <ControlsUI
               xrDevice={xrDevice}
               inputLayer={inputLayer}
@@ -290,7 +289,7 @@ const OfferSessionUI: React.FC<OfferSessionProps> = ({
           gap: '3px',
         }}
       >
-        <IWERIcon size={24} />
+        <Icon name="iwer" size={24} />
         <HeaderButton
           onClick={() => {
             xrDevice.grantOfferedSession();
@@ -307,3 +306,17 @@ const OfferSessionUI: React.FC<OfferSessionProps> = ({
 };
 
 export { VERSION };
+export {
+  DEFAULT_KEYMAP,
+  useKeyMapStore,
+  type KeyMapType,
+} from './components/mapper.js';
+export {
+  emitPrefsPatch,
+  emitPrefsPatchDebounced,
+  IWE_PREFS_CHANNEL,
+  setEnvironmentLoader,
+  getEnvironmentLoader,
+  type EnvironmentLoader,
+} from './prefs.js';
+export type { DefaultPose, PoseTransform } from './scene.js';

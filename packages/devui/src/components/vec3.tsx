@@ -5,10 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { FAIcon, InputSuffix, ValueInput, ValuesContainer } from './styled.js';
+import { InputSuffix, RowLabel, ValueInput, ValuesContainer } from './styled.js';
 import { useEffect, useRef, useState } from 'react';
 
-import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import { styled } from 'styled-components';
 
 export function round(number: number, decimalPlaces: number) {
@@ -27,27 +26,29 @@ type Vector3Like = {
 interface Vector3InputProps {
   vector: Vector3Like;
   label?: string;
-  icon?: IconDefinition;
   multiplier?: number;
   precision?: number;
   onValidInput?: () => void;
   marginBottom?: string;
 }
 
-const Vector3Container = styled.div`
+const Row = styled.div<{ $mb?: string }>`
   width: 100%;
   display: flex;
   flex-direction: row;
-  justify-content: space-between;
   align-items: center;
-  margin: 0;
-  font-size: 12px;
+  margin-bottom: ${({ $mb }) => $mb ?? '0'};
+`;
+
+const Field = styled.div`
+  position: relative;
+  display: inline-block;
+  height: 26px;
 `;
 
 export const Vector3Input = ({
   vector,
   label = '',
-  icon,
   multiplier = 1,
   precision = 2,
   onValidInput = () => {},
@@ -66,63 +67,38 @@ export const Vector3Input = ({
   });
 
   const animationFrameId = useRef<number | null>(null);
-
-  // Reused scratch to avoid allocating a fresh object every frame
   const scratchValues = useRef({ x: 0, y: 0, z: 0 });
 
-  // Sync display values with actual values (optimized)
   const syncValues = () => {
-    const currentActualValues = scratchValues.current;
-    currentActualValues.x = round(vector.x / multiplier, precision);
-    currentActualValues.y = round(vector.y / multiplier, precision);
-    currentActualValues.z = round(vector.z / multiplier, precision);
-
+    const cur = scratchValues.current;
+    cur.x = round(vector.x / multiplier, precision);
+    cur.y = round(vector.y / multiplier, precision);
+    cur.z = round(vector.z / multiplier, precision);
     const { x, y, z } = actualValuesRef.current;
-
-    // Only update state if actual values have changed
-    if (
-      currentActualValues.x !== x ||
-      currentActualValues.y !== y ||
-      currentActualValues.z !== z
-    ) {
-      actualValuesRef.current = {
-        x: currentActualValues.x,
-        y: currentActualValues.y,
-        z: currentActualValues.z,
-      };
+    if (cur.x !== x || cur.y !== y || cur.z !== z) {
+      actualValuesRef.current = { x: cur.x, y: cur.y, z: cur.z };
       setDisplayValues({
-        x: currentActualValues.x.toFixed(precision),
-        y: currentActualValues.y.toFixed(precision),
-        z: currentActualValues.z.toFixed(precision),
+        x: cur.x.toFixed(precision),
+        y: cur.y.toFixed(precision),
+        z: cur.z.toFixed(precision),
       });
     }
-
-    // Schedule the next frame
     animationFrameId.current = requestAnimationFrame(syncValues);
   };
 
   useEffect(() => {
-    // Start the synchronization loop
     animationFrameId.current = requestAnimationFrame(syncValues);
-
     return () => {
-      // Cleanup the animation frame on unmount
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-      }
+      if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vector, multiplier, precision]);
 
-  // Handle user input changes
   const handleInputChange =
     (axis: Axis) => (event: React.ChangeEvent<HTMLInputElement>) => {
       const newValue = event.target.value;
       const parsedValue = parseFloat(newValue);
-
-      // Update display values immediately
       setDisplayValues((prev) => ({ ...prev, [axis]: newValue }));
-
-      // If valid, update the actual values and the vector
       if (!isNaN(parsedValue)) {
         actualValuesRef.current[axis] = parsedValue;
         vector[axis] = parsedValue * multiplier;
@@ -131,36 +107,24 @@ export const Vector3Input = ({
     };
 
   return (
-    <Vector3Container style={{ marginBottom }}>
-      {icon ? (
-        <FAIcon icon={icon} style={{ marginRight: '5px' }} />
-      ) : (
-        <span style={{ marginRight: '5px' }}>{label}</span>
-      )}
+    <Row $mb={marginBottom}>
+      <RowLabel>{label}</RowLabel>
       <ValuesContainer>
-        {['x', 'y', 'z'].map((axis) => (
-          <div
-            key={`${label}-${axis}`}
-            style={{
-              position: 'relative',
-              display: 'inline-block',
-              height: '25px',
-            }}
-          >
+        {(['x', 'y', 'z'] as Axis[]).map((axis) => (
+          <Field key={`${label}-${axis}`}>
             <ValueInput
-              value={displayValues[axis as Axis]}
-              onChange={handleInputChange(axis as Axis)}
+              value={displayValues[axis]}
+              onChange={handleInputChange(axis)}
               className={
-                parseFloat(displayValues[axis as Axis]) !==
-                actualValuesRef.current[axis as Axis]
+                parseFloat(displayValues[axis]) !== actualValuesRef.current[axis]
                   ? 'invalid'
                   : undefined
               }
             />
             <InputSuffix>{axis.toUpperCase()}</InputSuffix>
-          </div>
+          </Field>
         ))}
       </ValuesContainer>
-    </Vector3Container>
+    </Row>
   );
 };

@@ -12,6 +12,7 @@
   "scripts": {
     "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
     "build": "tsc && rollup -c",
+    "test": "pnpm run build && node --test tests/*.test.mjs",
     "prepublishOnly": "pnpm run build"
   },
   "repository": {
@@ -26,9 +27,7 @@
   },
   "homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
   "dependencies": {
-    "@fortawesome/fontawesome-svg-core": "7.2.0",
-    "@fortawesome/free-solid-svg-icons": "7.2.0",
-    "@fortawesome/react-fontawesome": "3.3.1",
+    "lucide-react": "^1.20.0",
     "@pmndrs/handle": "^6.6.29",
     "@pmndrs/pointer-events": "^6.6.29",
     "react": "^19.2.6",

@@ -6,23 +6,17 @@
  */
 
 import {
-  ControlButtonStyles,
   ControlPanel,
-  FAIcon,
+  Layout,
   PanelHeaderButton,
   SectionBreak,
 } from './styled.js';
 import { ControlsMapper, useKeyMapStore } from './mapper.js';
-import {
-  faCircleXmark,
-  faGear,
-  faHand,
-  faPlug,
-} from '@fortawesome/free-solid-svg-icons';
 
-import { PinchControl } from './pinch.js';
+import { Icon } from './icon.js';
 import { PoseSelector } from './pose.js';
 import React from 'react';
+import { ScrubControl } from './scrub.js';
 import { TransformHandles } from '@pmndrs/handle';
 import { Vector3Input } from './vec3.js';
 import type { XRHandInput } from 'iwer/lib/device/XRHandInput.js';
@@ -44,10 +38,9 @@ export const HandUI: React.FC<HandProps> = ({
   const [connected, setConnected] = React.useState(hand.connected);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   React.useEffect(() => {
-    if (pointerLocked) {
-      setSettingsOpen(false);
-    }
+    if (pointerLocked) setSettingsOpen(false);
   }, [pointerLocked]);
+
   return (
     <ControlPanel
       key={handedness}
@@ -58,78 +51,61 @@ export const HandUI: React.FC<HandProps> = ({
       }
     >
       {!pointerLocked && (
-        <>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
           <div
             style={{
+              fontSize: '14px',
+              fontWeight: 600,
               display: 'flex',
               flexDirection: 'row',
-              justifyContent: 'space-between',
               alignItems: 'center',
+              gap: '6px',
             }}
           >
-            <div
-              style={{
-                fontSize: '13px',
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-            >
-              <FAIcon
-                icon={faHand}
-                $reverse={handedness === 'left'}
-                style={{ marginRight: '5px' }}
-              />
-              Hand&nbsp;
-              <span style={{ fontWeight: 'bold' }}>
-                [{handedness === 'left' ? 'L' : 'R'}]
-              </span>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                gap: '1px',
-              }}
-            >
-              {connected ? (
-                <>
-                  <PanelHeaderButton
-                    title={`Click to ${
-                      settingsOpen ? 'close' : 'change'
-                    } key bindings`}
-                    onClick={() => {
-                      setSettingsOpen(!settingsOpen);
-                    }}
-                  >
-                    <FAIcon icon={faGear} />
-                  </PanelHeaderButton>
-                  <PanelHeaderButton
-                    title={`Click to disconnect ${handedness} controller`}
-                    $isRed={true}
-                    onClick={() => {
-                      hand.connected = false;
-                      setConnected(false);
-                    }}
-                  >
-                    <FAIcon icon={faCircleXmark} />
-                  </PanelHeaderButton>
-                </>
-              ) : (
-                <PanelHeaderButton
-                  title={`Click to reconnect ${handedness} controller`}
-                  onClick={() => {
-                    hand.connected = true;
-                    setConnected(true);
-                  }}
-                  style={{ marginLeft: '5px' }}
-                >
-                  <FAIcon icon={faPlug} />
-                </PanelHeaderButton>
-              )}
-            </div>
+            <Icon name="hand" size={15} />
+            Hand [{handedness === 'left' ? 'L' : 'R'}]
           </div>
-        </>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '1px' }}>
+            {connected ? (
+              <>
+                <PanelHeaderButton
+                  title={`Click to ${settingsOpen ? 'close' : 'change'} key bindings`}
+                  onClick={() => setSettingsOpen(!settingsOpen)}
+                >
+                  <Icon name="settings" size={14} />
+                </PanelHeaderButton>
+                <PanelHeaderButton
+                  title={`Click to disconnect ${handedness} hand`}
+                  $isRed={true}
+                  onClick={() => {
+                    hand.connected = false;
+                    setConnected(false);
+                  }}
+                >
+                  <Icon name="circle-x" size={14} />
+                </PanelHeaderButton>
+              </>
+            ) : (
+              <PanelHeaderButton
+                title={`Click to reconnect ${handedness} hand`}
+                onClick={() => {
+                  hand.connected = true;
+                  setConnected(true);
+                }}
+                style={{ marginLeft: '5px' }}
+              >
+                <Icon name="plug" size={14} />
+              </PanelHeaderButton>
+            )}
+          </div>
+        </div>
       )}
       {connected && !pointerLocked && (
         <>
@@ -138,10 +114,10 @@ export const HandUI: React.FC<HandProps> = ({
               <SectionBreak />
               <Vector3Input
                 vector={handle.position}
-                label="Position"
-                marginBottom={ControlButtonStyles.gap}
+                label="Pos"
+                marginBottom={Layout.gap}
               />
-              <Vector3Input vector={handle.rotation} label="Rotation" />
+              <Vector3Input vector={handle.rotation} label="Rot" />
             </>
           )}
           <SectionBreak />
@@ -160,10 +136,13 @@ export const HandUI: React.FC<HandProps> = ({
               pointerLocked={pointerLocked}
               mappedKey={keyMap[handedness as XRHandedness]!.pose}
             />
-            <PinchControl
-              hand={hand}
-              pointerLocked={pointerLocked}
+            <ScrubControl
+              label="Pinch"
+              analog
+              supportsTouch={false}
               mappedKey={keyMap[handedness as XRHandedness]!.pinch}
+              pointerLocked={pointerLocked}
+              onValue={(v) => hand.updatePinchValue(v)}
             />
           </>
         ))}
