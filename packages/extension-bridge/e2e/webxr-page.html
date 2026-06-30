@@ -1,0 +1,90 @@
+<!doctype html>
+<!-- Minimal self-contained WebXR page for the MCP bridge E2E. Waits for
+     IWER (injected by the extension), then an "Enter XR" button requests an
+     immersive-vr session and runs a frame loop that paints the canvas (so
+     screenshots have pixels). -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>IWER E2E</title>
+  </head>
+  <body
+    style="margin: 0; background: #111; color: #eee; font-family: system-ui"
+  >
+    <button
+      id="enter"
+      style="
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 10;
+        padding: 10px 16px;
+        font-size: 16px;
+      "
+    >
+      Enter XR
+    </button>
+    <canvas id="c" width="640" height="480" style="display: block"></canvas>
+    <script>
+      window.__iwerE2E = {
+        iwer: false,
+        entering: false,
+        sessionActive: false,
+        frames: 0,
+        error: null,
+      };
+      const canvas = document.getElementById('c');
+      function paint(gl) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.clearColor(0.1, 0.45, 0.85, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      }
+      async function enterXR() {
+        window.__iwerE2E.entering = true;
+        try {
+          const gl = canvas.getContext('webgl', {
+            xrCompatible: true,
+            preserveDrawingBuffer: true,
+          });
+          paint(gl);
+          const session = await navigator.xr.requestSession('immersive-vr', {
+            optionalFeatures: ['local-floor'],
+          });
+          window.__iwerE2E.sessionActive = true;
+          if (gl.makeXRCompatible) {
+            try {
+              await gl.makeXRCompatible();
+            } catch (e) {}
+          }
+          const layer = new XRWebGLLayer(session, gl);
+          session.updateRenderState({ baseLayer: layer });
+          await session
+            .requestReferenceSpace('local')
+            .catch(() => session.requestReferenceSpace('viewer'));
+          session.addEventListener('end', () => {
+            window.__iwerE2E.sessionActive = false;
+          });
+          const onFrame = () => {
+            window.__iwerE2E.frames++;
+            paint(gl);
+            if (window.__iwerE2E.sessionActive)
+              session.requestAnimationFrame(onFrame);
+          };
+          session.requestAnimationFrame(onFrame);
+        } catch (e) {
+          window.__iwerE2E.error = String(e);
+        }
+      }
+      document.getElementById('enter').addEventListener('click', enterXR);
+      (function poll() {
+        if (
+          window.CustomWebXRPolyfill &&
+          navigator.xr &&
+          navigator.xr.requestSession
+        ) {
+          window.__iwerE2E.iwer = true;
+        } else setTimeout(poll, 40);
+      })();
+    </script>
+  </body>
+</html>

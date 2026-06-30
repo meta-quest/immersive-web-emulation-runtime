@@ -1,0 +1,64 @@
+{
+  "name": "@iwer/extension-bridge",
+  "version": "2.3.0",
+  "description": "Local MCP daemon bridging coding agents to the Immersive Web Emulator (IWER device.remote) over a localhost WebSocket. Drive any WebXR page from Claude Code, Codex, Cursor and friends — no dev server required.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "bin": {
+    "iwer-bridge": "bin/iwer-bridge.mjs"
+  },
+  "files": [
+    "bin",
+    "lib"
+  ],
+  "scripts": {
+    "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
+    "clean": "node -e \"const{rmSync}=require('fs');rmSync('lib',{recursive:true,force:true})\"",
+    "build": "pnpm run clean && tsc",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --watchman=false",
+    "test:e2e": "node e2e/bridge.e2e.mjs",
+    "prepublishOnly": "pnpm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meta-quest/immersive-web-emulation-runtime.git"
+  },
+  "keywords": [
+    "webxr",
+    "mcp",
+    "model-context-protocol",
+    "iwer",
+    "agent",
+    "emulator"
+  ],
+  "author": "Felix Zhang <fe1ix@meta.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/meta-quest/immersive-web-emulation-runtime/issues"
+  },
+  "homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "ws": "^8.18.0",
+    "zod": "^3.25.0"
+  },
+  "peerDependencies": {
+    "iwer": "^2.3.0"
+  },
+  "peerDependenciesMeta": {
+    "iwer": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.6.0",
+    "@types/ws": "^8.5.12",
+    "iwer": "workspace:*",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
+    "typescript": "^6.0.3"
+  }
+}
