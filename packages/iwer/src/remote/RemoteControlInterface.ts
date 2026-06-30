@@ -41,8 +41,6 @@ import type {
   GetGamepadStateResult,
   SetGamepadStateParams,
   SetGamepadStateResult,
-  CaptureCanvasParams,
-  CaptureCanvasResult,
   RemoteSessionStatus,
   AcceptSessionResult,
   EndSessionResult,
@@ -797,10 +795,6 @@ export class RemoteControlInterface {
         return this.executeSetDeviceState(
           params as unknown as SetDeviceStateParams,
         );
-      case 'capture_canvas':
-        return this.executeCaptureCanvas(
-          params as unknown as CaptureCanvasParams,
-        );
 
       // Internal select sequence actions
       case '_select_press': {
@@ -1403,89 +1397,6 @@ export class RemoteControlInterface {
     }
   }
 
-  private executeCaptureCanvas(
-    params: CaptureCanvasParams,
-  ): CaptureCanvasResult {
-    const { maxWidth = 800, format = 'png', quality = 0.92 } = params;
-
-    // Get the app canvas - try device first, then fallback to DOM query
-    let canvas: HTMLCanvasElement | null | undefined = this.device.appCanvas;
-
-    if (!canvas) {
-      // No active session - try to find the canvas in the DOM
-      // Before XR session, only the app's canvas is in the DOM
-      // (IWER's canvases are not added until session starts)
-      const canvases = document.querySelectorAll('canvas');
-      if (canvases.length === 1) {
-        canvas = canvases[0];
-      } else if (canvases.length > 1) {
-        // Multiple canvases - try to find the most likely app canvas
-        // Prefer the largest visible canvas
-        let bestCanvas: HTMLCanvasElement | null = null;
-        let bestArea = 0;
-        canvases.forEach((c) => {
-          const rect = c.getBoundingClientRect();
-          const area = rect.width * rect.height;
-          if (area > bestArea && rect.width > 0 && rect.height > 0) {
-            bestArea = area;
-            bestCanvas = c;
-          }
-        });
-        canvas = bestCanvas;
-      }
-    }
-
-    if (!canvas) {
-      throw new Error(
-        'No canvas available. Either start an XR session or ensure an app canvas is in the DOM.',
-      );
-    }
-
-    // Create a temporary canvas for scaling
-    const tempCanvas = document.createElement('canvas');
-    const ctx = tempCanvas.getContext('2d');
-
-    if (!ctx) {
-      throw new Error('Failed to create canvas context');
-    }
-
-    // Calculate scaled dimensions
-    const aspectRatio = canvas.height / canvas.width;
-    const targetWidth = Math.min(canvas.width, maxWidth);
-    const targetHeight = Math.round(targetWidth * aspectRatio);
-
-    tempCanvas.width = targetWidth;
-    tempCanvas.height = targetHeight;
-
-    // Draw scaled image
-    ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
-
-    // Convert to base64
-    const mimeType = `image/${format}`;
-    let dataUrl: string;
-    try {
-      dataUrl = tempCanvas.toDataURL(mimeType, quality);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'SecurityError') {
-        throw new Error(
-          'capture_canvas failed: the canvas is tainted by cross-origin ' +
-            'content and cannot be read back. Ensure all drawn images/textures ' +
-            'are same-origin or CORS-enabled.',
-        );
-      }
-      throw error;
-    }
-    const imageData = dataUrl.split(',')[1]; // Remove data URL prefix
-
-    return {
-      imageData,
-      width: targetWidth,
-      height: targetHeight,
-      format,
-      timestamp: Date.now(),
-    };
-  }
-
   // =============================================================================
   // Duration Action Handling
   // =============================================================================
@@ -1554,8 +1465,6 @@ export class RemoteControlInterface {
     'get_select_value',
     'get_gamepad_state',
     'get_device_state',
-    // Canvas capture - reads current canvas state
-    'capture_canvas',
     // World/scene introspection - reads the synthetic environment (SEM)
     'get_world_state',
     'get_objects',
@@ -1715,10 +1624,6 @@ export class RemoteControlInterface {
         );
       case 'get_device_state':
         return this.executeGetDeviceState();
-      case 'capture_canvas':
-        return this.executeCaptureCanvas(
-          params as unknown as CaptureCanvasParams,
-        );
       case 'get_world_state':
         return this.executeGetWorldState();
       case 'get_objects':

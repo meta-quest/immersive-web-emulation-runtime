@@ -307,26 +307,6 @@ export interface SetGamepadStateResult {
   axesSet: number;
 }
 
-/**
- * Parameters for capture_canvas tool
- */
-export interface CaptureCanvasParams {
-  maxWidth?: number; // default: 800
-  format?: 'png' | 'jpeg' | 'webp'; // default: 'png'
-  quality?: number; // 0-1 for jpeg/webp, default: 0.92
-}
-
-/**
- * Result of capture_canvas tool
- */
-export interface CaptureCanvasResult {
-  imageData: string; // base64 encoded
-  width: number;
-  height: number;
-  format: string;
-  timestamp: number;
-}
-
 // =============================================================================
 // Session Types
 // =============================================================================

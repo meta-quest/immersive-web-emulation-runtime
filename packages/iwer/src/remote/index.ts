@@ -40,8 +40,6 @@ export type {
   GamepadAxisInput,
   SetGamepadStateParams,
   SetGamepadStateResult,
-  CaptureCanvasParams,
-  CaptureCanvasResult,
   RemoteSessionStatus,
   AcceptSessionResult,
   EndSessionResult,

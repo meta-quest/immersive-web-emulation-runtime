@@ -114,6 +114,7 @@ export interface DevUIConstructor {
 export interface DevUI {
   version: string;
   render(time: number): void;
+  applyDefaultPose?(defaultPose: unknown): void;
   get devUICanvas(): HTMLCanvasElement;
   get devUIContainer(): HTMLDivElement;
 }
@@ -135,6 +136,7 @@ export interface SyntheticEnvironmentModule {
   get environmentCanvas(): HTMLCanvasElement;
   get trackedPlanes(): Set<NativePlane>;
   get trackedMeshes(): Set<NativeMesh>;
+  deleteAll(): void;
   computeHitTestResults(rayMatrix: mat4): mat4[];
   computeDepthBuffer(
     viewMatrix: mat4,
@@ -152,12 +154,13 @@ export interface SyntheticEnvironmentModule {
 type GlobalObject = Record<string, unknown>;
 
 interface RuntimeOptions {
-  globalObject: GlobalObject;
-  polyfillLayers: boolean;
+  globalObject?: GlobalObject;
+  polyfillLayers?: boolean;
   /**
    * When a native `navigator.xr` is already present, installRuntime skips
    * clobbering the existing runtime and warns instead. Set this to `true` to
-   * force the emulated runtime to be installed over the native one.
+   * force the emulated runtime to be installed over the native one. Required for
+   * browser-extension use, where the whole point is to override native WebXR.
    */
   forceInstall?: boolean;
 }
