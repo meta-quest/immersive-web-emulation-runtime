@@ -1,0 +1,37 @@
+{
+  "name": "@iwer/extension",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prebuild": "node scripts/gen-tool-catalog.mjs",
+    "clean": "node -e \"const{rmSync}=require('fs');rmSync('lib',{recursive:true,force:true});rmSync('build',{recursive:true,force:true})\"",
+    "build": "pnpm run clean && pnpm run prebuild && tsc && rollup -c && node scripts/copy-pages.mjs",
+    "test": "pnpm --filter @iwer/extension-bridge run build && pnpm run build && node --test tests/*.test.mjs",
+    "typecheck:bridge": "tsc -p tsconfig.bridge.json",
+    "zip": "rimraf iwe-release.zip && pnpm run build && bestzip iwe-release.zip build/* icons/* manifest.json LICENSE"
+  },
+  "dependencies": {
+    "@iwer/devui": "workspace:*",
+    "@iwer/sem": "workspace:*",
+    "iwer": "workspace:*",
+    "three": "^0.184.0",
+    "tldts": "^6.1.75"
+  },
+  "devDependencies": {
+    "@iwer/extension-bridge": "workspace:*",
+    "@rollup/plugin-commonjs": "^29.0.2",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-replace": "^6.0.3",
+    "@rollup/plugin-strip": "^3.0.4",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@types/chrome": "^0.0.299",
+    "@types/node": "^25.6.0",
+    "@types/three": "^0.184.0",
+    "bestzip": "^2.2.1",
+    "rimraf": "^6.0.1",
+    "rollup": "^4.60.3",
+    "typescript": "^6.0.3"
+  }
+}

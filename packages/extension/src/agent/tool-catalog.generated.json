@@ -1,0 +1,125 @@
+{
+  "mcpVersion": "2.3.0",
+  "tools": [
+    {
+      "name": "xr_get_session_status",
+      "title": "Get XR session status",
+      "description": "Report XR session + device status: device name, whether a session is offered/active, session mode, enabled features, and visibility. Call this first to orient.",
+      "readOnly": true
+    },
+    {
+      "name": "xr_accept_session",
+      "title": "Accept XR session",
+      "description": "Accept an offered XR session (equivalent to the user clicking \"Enter XR\"). Then poll xr_get_session_status until sessionActive is true.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_end_session",
+      "title": "End XR session",
+      "description": "End the active XR session.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_get_transform",
+      "title": "Get device transform",
+      "description": "Get the position, orientation (quaternion), and euler angles of a tracked device.",
+      "readOnly": true
+    },
+    {
+      "name": "xr_set_transform",
+      "title": "Set device transform",
+      "description": "Set a device position and/or orientation immediately. Requires an active session.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_look_at",
+      "title": "Look at a point",
+      "description": "Orient a device toward an XR-origin-relative world point. Optionally move it to a given distance from the target. Requires an active session.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_animate_to",
+      "title": "Animate device pose",
+      "description": "Smoothly animate a device to a target position and/or orientation over `duration` seconds (default 0.5). Requires an active, rendering session.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_set_input_mode",
+      "title": "Set input mode",
+      "description": "Switch the primary input between motion controllers and hand tracking.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_set_connected",
+      "title": "Connect/disconnect input",
+      "description": "Connect or disconnect a controller or hand.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_get_select_value",
+      "title": "Get select value",
+      "description": "Get the current select value (controller trigger or hand pinch), 0..1.",
+      "readOnly": true
+    },
+    {
+      "name": "xr_set_select_value",
+      "title": "Set select value",
+      "description": "Set the select value (trigger/pinch), 0..1. Use xr_select for a full press+release.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_select",
+      "title": "Select (press + release)",
+      "description": "Perform a full select gesture (fires selectstart → select → selectend) over `duration` seconds (default 0.15). Requires an active session.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_get_gamepad_state",
+      "title": "Get gamepad state",
+      "description": "Get all buttons/axes for a controller (index 0=trigger, 1=squeeze, 2=thumbstick, 3=A/X, 4=B/Y, 5=thumbrest; axes 0=stick-x, 1=stick-y).",
+      "readOnly": true
+    },
+    {
+      "name": "xr_set_gamepad_state",
+      "title": "Set gamepad state",
+      "description": "Set controller buttons and/or thumbstick axes by index.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_get_device_state",
+      "title": "Get device state",
+      "description": "Get a full snapshot: headset pose, input mode, controllers, hands, stereo, FOV.",
+      "readOnly": true
+    },
+    {
+      "name": "xr_set_device_state",
+      "title": "Set device state",
+      "description": "Apply a partial device state. Call with no `state` to reset everything to defaults.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_set_hand_pose",
+      "title": "Set hand pose",
+      "description": "Set a named hand pose (e.g. \"relaxed\", \"point\", \"pinch\") on a hand device.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_get_world_state",
+      "title": "Get world state",
+      "description": "Summarize the emulated environment (SEM): plane/mesh counts and the list of tracked objects with semantic labels. Requires the Synthetic Environment Module.",
+      "readOnly": true
+    },
+    {
+      "name": "xr_get_objects",
+      "title": "Get tracked objects",
+      "description": "List the SEM tracked planes/meshes with their semantic labels (e.g. wall, floor, table).",
+      "readOnly": true
+    },
+    {
+      "name": "browser_screenshot",
+      "title": "Screenshot the browser tab",
+      "description": "Capture the visible browser tab — the composited frame the developer sees — as an image. Serviced by the extension (captureVisibleTab), so it works on any page regardless of how the WebXR scene is rendered. Defaults to a downscaled JPEG to stay within model image limits; override maxWidth/format/quality if needed.",
+      "readOnly": true
+    }
+  ]
+}

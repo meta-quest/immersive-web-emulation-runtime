@@ -1,0 +1,237 @@
+<!doctype html>
+<!-- Copyright (c) Meta Platforms, Inc. and affiliates. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Immersive Web Emulator</title>
+    <style>
+      /* Unified dark frosted-glass styling (see @iwer/devui) */
+      :root {
+        --substrate: #101013;
+        --hairline: rgba(61, 61, 63, 0.7);
+        --p0: #1b1b1d;
+        --raised: #202022;
+        --inset: #161618;
+        --hover: #2a2a2c;
+        --text: #ededed;
+        --text2: #9c9c9c;
+        --text3: #6b6b6e;
+        --accent: #2d7ff9;
+        --online: #4fe0b0;
+        --danger: #f3978f;
+        --code: #ceced2;
+        --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        width: 320px;
+        margin: 0;
+        padding: 16px;
+        font: 13px/1.5 var(--sans);
+        background: var(--substrate);
+        color: var(--text);
+      }
+      h1 {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.1px;
+        margin: 0 0 2px;
+      }
+      h2 {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text3);
+        margin: 0 0 8px;
+      }
+      .muted {
+        opacity: 1;
+        color: var(--text2);
+        font-size: 12px;
+        word-break: break-word;
+      }
+      section {
+        border-top: 1px solid var(--hairline);
+        padding-top: 14px;
+        margin-top: 14px;
+      }
+      .state {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+        font-size: 13px;
+        color: var(--text);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text3);
+        flex: none;
+      }
+      .dot.on {
+        background: var(--online);
+        box-shadow: 0 0 8px var(--online);
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      button {
+        font: 500 13px var(--sans);
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        background: var(--raised);
+        color: var(--text);
+        transition: background 0.15s ease;
+      }
+      button:hover {
+        background: var(--hover);
+      }
+      #stopBtn {
+        width: 100%;
+        background: transparent;
+        border-color: rgba(243, 151, 143, 0.35);
+        color: var(--danger);
+      }
+      #stopBtn:hover {
+        background: rgba(243, 151, 143, 0.08);
+      }
+      pre {
+        background: var(--inset);
+        border: 1px solid var(--hairline);
+        color: var(--code);
+        padding: 12px;
+        border-radius: 10px;
+        font: 12px/1.5 var(--mono);
+        overflow-x: auto;
+        margin: 8px 0;
+      }
+      .codeblock {
+        position: relative;
+        margin: 8px 0;
+      }
+      .codeblock pre {
+        margin: 0;
+        padding-right: 40px;
+      }
+      .copy-icon {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--raised);
+        border: 1px solid var(--hairline);
+        border-radius: 7px;
+        color: var(--text2);
+      }
+      .copy-icon:hover {
+        background: var(--hover);
+        color: var(--text);
+      }
+      .copy-icon svg {
+        width: 14px;
+        height: 14px;
+      }
+      .copy-icon.copied {
+        color: var(--online);
+        border-color: rgba(79, 224, 176, 0.45);
+      }
+      strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .err {
+        color: var(--danger);
+        margin: 8px 0 0;
+        font-size: 12px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Immersive Web Emulator</h1>
+    <div class="muted" id="tab">—</div>
+
+    <section style="border-top: none; padding-top: 0">
+      <div class="state">
+        <span class="dot on"></span> Emulating WebXR on this site
+      </div>
+      <div class="actions">
+        <button id="stopBtn">Stop emulating</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>AI agent</h2>
+      <div class="state">
+        <span class="dot" id="dot"></span><span id="agentState">…</span>
+      </div>
+      <p class="muted" id="agentHint">
+        Start your coding agent — it connects automatically. The first time it
+        acts on this tab, click <strong>Allow</strong> in the prompt that
+        appears on the page.
+      </p>
+    </section>
+
+    <section>
+      <h2>Connect your agent</h2>
+      <p class="muted">Add this to your agent's MCP config, then restart it:</p>
+      <div class="codeblock">
+        <button
+          id="copyBtn"
+          class="copy-icon"
+          title="Copy config"
+          aria-label="Copy config"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+            <path
+              d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+            ></path>
+          </svg>
+        </button>
+        <pre id="snippet">
+{
+  "mcpServers": {
+    "iwer": {
+      "command": "npx",
+      "args": ["-y", "@iwer/extension-bridge"]
+    }
+  }
+}</pre
+        >
+      </div>
+      <div class="muted">
+        Codex uses TOML. Full settings + tool docs: open DevTools → the
+        <strong>WebXR</strong> panel.
+      </div>
+    </section>
+
+    <p class="err" id="err" hidden></p>
+
+    <script src="popup.min.js"></script>
+  </body>
+</html>

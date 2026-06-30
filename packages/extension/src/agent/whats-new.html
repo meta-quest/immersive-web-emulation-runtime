@@ -1,0 +1,150 @@
+<!doctype html>
+<!-- Copyright (c) Meta Platforms, Inc. and affiliates. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>IWE 2.0</title>
+    <style>
+      /* Unified dark frosted-glass styling (see @iwer/devui) */
+      :root {
+        --substrate: #101013;
+        --hairline: rgba(61, 61, 63, 0.7);
+        --inset: #161618;
+        --text: #ededed;
+        --text2: #9c9c9c;
+        --accent: #2d7ff9;
+        --accent-press: #1c6fe0;
+        --code: #ceced2;
+        --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 48px;
+        font: 14px/1.5 var(--sans);
+        color: var(--text);
+        background:
+          radial-gradient(
+            620px 440px at 88% -12%,
+            rgba(45, 127, 249, 0.14),
+            transparent 70%
+          ),
+          var(--substrate);
+      }
+      .card {
+        width: 100%;
+        max-width: 720px;
+        background: #17171b;
+        border: 1px solid var(--hairline);
+        border-radius: 14px;
+        padding: 32px;
+        box-shadow:
+          0 16px 50px rgba(0, 0, 0, 0.5),
+          inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      }
+      h1 {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.4px;
+        margin: 0;
+      }
+      .divider {
+        height: 1px;
+        background: var(--hairline);
+        margin: 22px 0;
+      }
+      section {
+        border: none;
+        padding: 0;
+      }
+      h2 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 10px;
+        display: flex;
+        align-items: center;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent);
+        margin-right: 8px;
+      }
+      p {
+        margin: 0 0 8px;
+        color: var(--text2);
+        line-height: 1.55;
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 0.9em;
+        background: var(--inset);
+        border: 1px solid var(--hairline);
+        padding: 1px 6px;
+        border-radius: 6px;
+        color: var(--code);
+      }
+      strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      button#done {
+        font: 500 14px var(--sans);
+        margin-top: 8px;
+        padding: 9px 16px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow: 0 2px 10px rgba(45, 127, 249, 0.3);
+      }
+      button#done:hover {
+        background: var(--accent-press);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Immersive Web Emulator 2.0</h1>
+      <div class="divider"></div>
+      <section>
+        <h2>Where are the live controls?</h2>
+        <p>
+          The headset, controller, and hand controls moved out of the old
+          DevTools "WebXR" tab and into a floating overlay on the WebXR page
+          itself.
+        </p>
+        <p>
+          The DevTools "WebXR" panel is now for persistent settings: default
+          device and environment, input mode, key bindings, and AI-agent setup.
+        </p>
+        <p>
+          Settings reset in 2.0. Set your defaults once in the panel and they
+          will persist across reloads.
+        </p>
+      </section>
+      <div class="divider"></div>
+      <section>
+        <h2><span class="dot"></span>Drive it with an AI agent</h2>
+        <p>
+          Point a coding agent at the local
+          <code>@iwer/extension-bridge</code> MCP server and it can drive an
+          emulated WebXR tab. The first time it acts on a tab, you approve an
+          <strong>Allow</strong> prompt right on the page — no pairing codes.
+        </p>
+      </section>
+      <button id="done">Got it</button>
+    </main>
+    <script src="whats-new.min.js"></script>
+  </body>
+</html>

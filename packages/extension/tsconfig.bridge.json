@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["chrome", "node"],
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/agent/protocol.ts",
+    "src/agent/bridge-page.ts",
+    "src/agent/content-bridge.ts",
+    "src/agent/devtools.ts",
+    "src/agent/offscreen.ts",
+    "src/agent/panel.ts",
+    "src/agent/popup.ts",
+    "src/agent/prefs-seeder.ts",
+    "src/agent/prefs.ts",
+    "src/agent/whats-new.ts",
+    "src/service-worker.ts"
+  ]
+}
