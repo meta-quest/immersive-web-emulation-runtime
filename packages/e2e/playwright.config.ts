@@ -7,6 +7,8 @@
 
 import { defineConfig } from '@playwright/test';
 
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+
 export default defineConfig({
   testDir: './tests',
   timeout: 60_000,
@@ -15,6 +17,7 @@ export default defineConfig({
     browserName: 'chromium',
     headless: true,
     launchOptions: {
+      executablePath: chromiumExecutablePath,
       args: [
         '--use-gl=swiftshader',
         '--enable-unsafe-swiftshader',

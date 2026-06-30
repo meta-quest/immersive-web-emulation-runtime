@@ -37,3 +37,9 @@ examples/**/pnpm-lock.yaml
 
 # Husky internal runtime (we track .husky/pre-commit but not its scaffolding)
 .husky/_
+# Chrome for Testing download for e2e
+packages/e2e/.cft/
+
+# @iwer/extension-bridge e2e screenshot artifacts
+packages/extension-bridge/e2e/look/
+packages/extension-bridge/e2e/last-screenshot.*
