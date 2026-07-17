@@ -606,7 +606,10 @@ export class XRDevice {
         configurable: true,
       });
     };
-    defineMakeXRCompatible(WebGL2RenderingContext.prototype);
+    defineMakeXRCompatible(
+      (globalThis as { WebGL2RenderingContext?: { prototype: object } })
+        .WebGL2RenderingContext?.prototype,
+    );
     // Also patch WebGL1 contexts, which can request XR compatibility too.
     defineMakeXRCompatible(
       (globalThis as { WebGLRenderingContext?: { prototype: object } })
