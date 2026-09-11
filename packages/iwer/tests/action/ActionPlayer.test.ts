@@ -17,8 +17,9 @@ import {
 
 import { GamepadMappingType } from '../../src/gamepad/Gamepad.js';
 import { InputSchema } from '../../src/action/ActionRecorder.js';
-import { P_SPACE } from '../../src/private.js';
+import { P_ACTION_PLAYER, P_SPACE } from '../../src/private.js';
 import { mat4, vec3 } from 'gl-matrix';
+import type { XRSession } from '../../src/session/XRSession.js';
 
 // Helper: build a fresh local reference space rooted at a GlobalSpace, matching
 // what XRSession.requestReferenceSpace would hand the player.
@@ -181,6 +182,40 @@ describe('ActionPlayer', () => {
       expect(player.currentTime).toBe(20);
     });
 
+    it('notifies discontinuity only when seek changes the sampled frame', () => {
+      const onDiscontinuity = jest.fn();
+      const refSpace = makeRefSpace();
+      const player = new ActionPlayer(
+        refSpace,
+        {
+          schema: [],
+          frames: [
+            viewerFrame(1000, [0, 0, 0]),
+            viewerFrame(1100, [1, 0, 0]),
+            viewerFrame(1200, [2, 0, 0]),
+          ],
+        },
+        0.063,
+        {
+          eventContext: {
+            session: {} as XRSession,
+            getFrame: () => null,
+            onDiscontinuity,
+          },
+        },
+      );
+
+      player.seek(0);
+      player.seek(50);
+      expect(onDiscontinuity).not.toHaveBeenCalled();
+
+      player.seek(100);
+      expect(onDiscontinuity).toHaveBeenCalledTimes(1);
+
+      player.seek(150);
+      expect(onDiscontinuity).toHaveBeenCalledTimes(1);
+    });
+
     it('seek lands on the frame at the sought time and a following playFrame renders it', () => {
       const player = buildPlayer();
       player.play();
@@ -230,6 +265,16 @@ describe('ActionPlayer', () => {
       player.stepFrames(10);
       expect(player.currentTime).toBe(player.duration);
       expect(player.playing).toBe(false);
+    });
+
+    it('restores automatic advance when stopped after manual stepping', () => {
+      const player = buildPlayer();
+      player.stepFrames(1);
+      expect(player[P_ACTION_PLAYER].autoAdvance).toBe(false);
+
+      player.stop();
+      expect(player[P_ACTION_PLAYER].autoAdvance).toBe(true);
+      expect(player[P_ACTION_PLAYER].manualFrameActive).toBe(false);
     });
 
     it('wraps to the start when loop is on', () => {

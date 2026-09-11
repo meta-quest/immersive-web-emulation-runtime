@@ -7,6 +7,7 @@
 
 // model
 export { XRDevice, XRDeviceConfig } from './device/XRDevice.js';
+export type { RuntimeOptions, XRGlobalObject } from './device/XRDevice.js';
 export {
   metaQuest2,
   metaQuest3,
@@ -95,6 +96,23 @@ export {
 // Initialization
 export { XRSystem } from './initialization/XRSystem.js';
 
+// Native WebXR selective override
+export {
+  getNativeOverride,
+  getNativeOverrideSupport,
+  installNativeOverride,
+  XRNativeOverride,
+} from './native/index.js';
+export type {
+  NativeOverrideCapabilities,
+  NativeOverrideEnvironment,
+  NativeOverrideHandle,
+  NativeOverrideOptions,
+  NativeOverridePhase,
+  NativeOverrideSupport,
+  NativeSessionInfo,
+} from './native/index.js';
+
 // Session
 export { XRRenderState } from './session/XRRenderState.js';
 export { XRSession } from './session/XRSession.js';
@@ -103,8 +121,11 @@ export { XRSession } from './session/XRSession.js';
 export { XRFrame } from './frameloop/XRFrame.js';
 
 // Spaces
-export { XRSpace } from './spaces/XRSpace.js';
-export { XRReferenceSpace } from './spaces/XRReferenceSpace.js';
+export { XRSpace, GlobalSpace } from './spaces/XRSpace.js';
+export {
+  XRReferenceSpace,
+  XRReferenceSpaceType,
+} from './spaces/XRReferenceSpace.js';
 export { XRJointSpace } from './spaces/XRJointSpace.js';
 
 // Views
@@ -155,7 +176,12 @@ export { XRReferenceSpaceEvent } from './events/XRReferenceSpaceEvent.js';
 
 // Action Recording/Playback
 export { ActionRecorder } from './action/ActionRecorder.js';
-export type { CompressedRecording } from './action/ActionPlayer.js';
+export { ActionPlayer } from './action/ActionPlayer.js';
+export type {
+  ActionPlayerEventContext,
+  ActionPlayerOptions,
+  CompressedRecording,
+} from './action/ActionPlayer.js';
 
 // Private Keys
 export * from './private.js';

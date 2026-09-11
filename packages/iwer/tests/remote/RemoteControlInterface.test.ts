@@ -386,6 +386,25 @@ describe('RemoteControlInterface', () => {
         expect(result.enabledFeatures).toEqual([]);
         expect(result.visibilityState).toBe('visible');
       });
+
+      test('supports a structural session without internal reference spaces', async () => {
+        Object.defineProperty(device, 'activeSession', {
+          get: () => ({
+            mode: 'immersive-vr',
+            enabledFeatures: [],
+            visibilityState: 'visible',
+            [P_SESSION]: { mode: 'immersive-vr' },
+          }),
+          configurable: true,
+        });
+
+        await expect(
+          remote.dispatch('get_session_status', {}),
+        ).resolves.toMatchObject({
+          sessionActive: true,
+          sessionMode: 'immersive-vr',
+        });
+      });
     });
 
     describe('accept_session', () => {

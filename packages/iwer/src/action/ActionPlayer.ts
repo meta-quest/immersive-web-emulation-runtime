@@ -67,6 +67,11 @@ export interface ActionPlayerEventContext {
   session: XRSession;
   /** Returns the XRFrame to stamp on dispatched events, or null to skip. */
   getFrame: () => XRFrame | null | undefined;
+  /**
+   * Called before playback jumps without traversing intervening button state,
+   * allowing a host to terminate actions that were active before the jump.
+   */
+  onDiscontinuity?: () => void;
 }
 
 export interface ActionPlayerOptions {
@@ -80,7 +85,11 @@ export interface ActionPlayerOptions {
    * realtime (default); 2 plays back twice as fast, 0.5 half speed.
    */
   playbackRate?: number;
-  /** Optional event context enabling select/squeeze dispatch during playback. */
+  /**
+   * Advanced event adapter for hosts that dispatch playback input events.
+   * A native override temporarily replaces this value while wired and restores
+   * the previous value when unwired.
+   */
   eventContext?: ActionPlayerEventContext;
 }
 
@@ -96,6 +105,13 @@ export class ActionPlayer {
     playbackTime: DOMHighResTimeStamp;
     actualTimeStamp?: DOMHighResTimeStamp;
     playing: boolean;
+    /** Whether native frame cadence should advance wall-clock playback. */
+    autoAdvance: boolean;
+    /**
+     * Whether native mode should keep presenting the most recently sampled
+     * manual frame after non-looping playback reaches its end.
+     */
+    manualFrameActive: boolean;
     viewerSpace: XRReferenceSpace;
     viewSpaces: { [key in XREye]: XRSpace };
     vec3: vec3;
@@ -150,6 +166,8 @@ export class ActionPlayer {
       endingTimeStamp: frames[frames.length - 1][0] as number,
       playbackTime: frames[0][0] as number,
       playing: false,
+      autoAdvance: true,
+      manualFrameActive: false,
       viewerSpace,
       viewSpaces,
       vec3: vec3.create(),
@@ -265,10 +283,13 @@ export class ActionPlayer {
   }
 
   play() {
+    this[P_ACTION_PLAYER].eventContext?.onDiscontinuity?.();
     this[P_ACTION_PLAYER].recordedFramePointer = 0;
     this[P_ACTION_PLAYER].playbackTime =
       this[P_ACTION_PLAYER].startingTimeStamp;
     this[P_ACTION_PLAYER].playing = true;
+    this[P_ACTION_PLAYER].autoAdvance = true;
+    this[P_ACTION_PLAYER].manualFrameActive = false;
     this[P_ACTION_PLAYER].actualTimeStamp = performance.now();
     // Reset edge-detection baseline so the first frame doesn't spuriously fire.
     this[P_ACTION_PLAYER].lastEventFramePointer = -1;
@@ -276,6 +297,8 @@ export class ActionPlayer {
 
   stop() {
     this[P_ACTION_PLAYER].playing = false;
+    this[P_ACTION_PLAYER].autoAdvance = true;
+    this[P_ACTION_PLAYER].manualFrameActive = false;
   }
 
   get playing() {
@@ -358,11 +381,15 @@ export class ActionPlayer {
     const state = this[P_ACTION_PLAYER];
     const clamped = Math.max(0, Math.min(timeMs, this.duration));
     const absolute = state.startingTimeStamp + clamped;
+    const nextFramePointer = this.findFramePointer(absolute);
+    if (nextFramePointer !== state.recordedFramePointer) {
+      state.eventContext?.onDiscontinuity?.();
+      // A frame-changing seek is a discontinuity: reset the edge baseline so
+      // the jump itself doesn't manufacture select/squeeze edges.
+      state.lastEventFramePointer = -1;
+    }
     state.playbackTime = absolute;
-    state.recordedFramePointer = this.findFramePointer(absolute);
-    // A seek is a discontinuity: reset the edge baseline so the jump itself
-    // doesn't manufacture select/squeeze edges.
-    state.lastEventFramePointer = -1;
+    state.recordedFramePointer = nextFramePointer;
     // Re-anchor wall-clock playback so the next delta starts from this instant.
     state.actualTimeStamp = performance.now();
   }
@@ -401,9 +428,12 @@ export class ActionPlayer {
     const state = this[P_ACTION_PLAYER];
     const frames = state.frames;
     state.playing = true;
+    state.autoAdvance = false;
+    state.manualFrameActive = true;
     for (let step = 0; step < n; step++) {
       if (state.recordedFramePointer + 1 >= frames.length) {
         if (state.loop) {
+          state.eventContext?.onDiscontinuity?.();
           state.recordedFramePointer = 0;
           state.playbackTime = state.startingTimeStamp;
           // The wrap is a discontinuity; don't fire edges across it.
@@ -411,7 +441,9 @@ export class ActionPlayer {
         } else {
           state.playbackTime = state.endingTimeStamp;
           this.applyFrameAtPointer(0);
-          this.stop();
+          // Publicly the player is stopped at the end, but native mode keeps
+          // presenting this explicitly selected frame until stop() or play().
+          state.playing = false;
           return;
         }
       } else {
@@ -438,6 +470,7 @@ export class ActionPlayer {
       this[P_ACTION_PLAYER].endingTimeStamp
     ) {
       if (this[P_ACTION_PLAYER].loop) {
+        this[P_ACTION_PLAYER].eventContext?.onDiscontinuity?.();
         // Wrap back to the start, preserving any overshoot past the end so the
         // loop stays smooth, then resolve the pointer for the wrapped time.
         const overshoot =

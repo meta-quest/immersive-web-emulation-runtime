@@ -12,7 +12,7 @@ import type {
   SyntheticEnvironmentModule,
 } from '../device/XRDevice.js';
 import type { Vec3, Quat } from '../types/state.js';
-import { P_SESSION, P_SPACE } from '../private.js';
+import { P_DEVICE } from '../private.js';
 import type {
   DeviceId,
   InputDeviceId,
@@ -626,20 +626,12 @@ export class RemoteControlInterface {
    * from get_object_transform are relative to the XR origin.
    */
   private transformXROriginToGlobal(position: Vec3): Vec3 {
-    const session = this.device.activeSession;
+    const session = this.device[P_DEVICE].runtime.getSession();
     if (!session) {
       return position;
     }
 
-    const refSpaces = (session as any)[P_SESSION]?.referenceSpaces;
-    if (!refSpaces || refSpaces.length === 0) {
-      return position;
-    }
-
-    // Use the first reference space (primary one requested by app)
-    const primaryRefSpace = refSpaces[0];
-    const offsetMatrix = primaryRefSpace[P_SPACE]?.offsetMatrix;
-
+    const offsetMatrix = session.originOffsetMatrix;
     if (!offsetMatrix) {
       return position;
     }
@@ -820,21 +812,25 @@ export class RemoteControlInterface {
   // =============================================================================
 
   private executeGetSessionStatus(): RemoteSessionStatus {
-    const session = this.device.activeSession;
+    const runtime = this.device[P_DEVICE].runtime;
+    const session = runtime.getSession();
     return {
       deviceName: this.device.name,
       isRuntimeInstalled: true,
       sessionActive: !!session,
-      sessionOffered: this.device.sessionOffered,
-      // `mode` is non-standard and lives only under the P_SESSION symbol; the
-      // old `(session as any).mode` read undefined.
-      sessionMode: session ? session[P_SESSION].mode : null,
+      sessionOffered: runtime.kind === 'emulated' && this.device.sessionOffered,
+      sessionMode: session?.mode ?? null,
       enabledFeatures: session ? Array.from(session.enabledFeatures) : [],
-      visibilityState: this.device.visibilityState,
+      visibilityState: session?.visibilityState ?? this.device.visibilityState,
     };
   }
 
   private executeAcceptSession(): AcceptSessionResult {
+    if (this.device[P_DEVICE].runtime.kind === 'native') {
+      throw new Error(
+        'Session start is app-driven in native override mode; immersive sessions require a user gesture.',
+      );
+    }
     if (!this.device.sessionOffered) {
       throw new Error('No session has been offered');
     }
@@ -844,7 +840,7 @@ export class RemoteControlInterface {
   }
 
   private executeEndSession(): EndSessionResult {
-    const session = this.device.activeSession;
+    const session = this.device[P_DEVICE].runtime.getSession();
     if (!session) {
       throw new Error('No active session');
     }
@@ -975,7 +971,10 @@ export class RemoteControlInterface {
   private executeSetHandPose(params: {
     device: InputDeviceId;
     poseId: string;
-  }): { device: InputDeviceId; poseId: string } {
+  }): {
+    device: InputDeviceId;
+    poseId: string;
+  } {
     const { device: deviceId, poseId } = params;
     const hand =
       deviceId === 'hand-left'
@@ -1543,10 +1542,13 @@ export class RemoteControlInterface {
 
     // Methods that modify state require an active session
     if (RemoteControlInterface.SESSION_REQUIRED_METHODS.has(method)) {
-      if (!this.device.activeSession) {
+      if (!this.device[P_DEVICE].runtime.getSession()) {
+        const guidance =
+          this.device[P_DEVICE].runtime.kind === 'native'
+            ? 'The application must start its native immersive session first.'
+            : `Use 'get_session_status' to check session state, and 'accept_session' to start a session.`;
         throw new Error(
-          `Cannot execute '${method}': No active XR session. ` +
-            `Use 'get_session_status' to check session state, and 'accept_session' to start a session.`,
+          `Cannot execute '${method}': No active XR session. ` + guidance,
         );
       }
     }
@@ -1700,6 +1702,11 @@ export class RemoteControlInterface {
    * Accept an offered XR session (async wrapper for proper session activation)
    */
   async acceptSession(): Promise<AcceptSessionResult> {
+    if (this.device[P_DEVICE].runtime.kind === 'native') {
+      throw new Error(
+        'Session start is app-driven in native override mode; immersive sessions require a user gesture.',
+      );
+    }
     if (!this.device.sessionOffered) {
       throw new Error('No session has been offered');
     }

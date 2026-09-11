@@ -38,7 +38,11 @@ import {
 } from '../spaces/XRReferenceSpace.js';
 import { mat4, vec3 } from 'gl-matrix';
 
-import { ActionPlayer, CompressedRecording } from '../action/ActionPlayer.js';
+import {
+  ActionPlayer,
+  ActionPlayerOptions,
+  CompressedRecording,
+} from '../action/ActionPlayer.js';
 import { VERSION } from '../version.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRHand } from '../input/XRHand.js';
@@ -59,6 +63,7 @@ import { NativePlane } from '../planes/XRPlane.js';
 import { NativeMesh } from '../meshes/XRMesh.js';
 import type { DepthSensingData } from '../depth/XRDepthInformation.js';
 import { XRWebGLBinding } from '../depth/XRWebGLBinding.js';
+import type { XRRuntimeAdapter } from '../types/runtime-session.js';
 // @ts-ignore
 import WebXRLayerPolyfill from 'webxr-layers-polyfill';
 
@@ -148,13 +153,18 @@ export interface SyntheticEnvironmentModule {
   ): DepthSensingData | null;
 }
 
-// globalObject receives the WebXR constructor globals (XRSession, XRFrame,
-// ...). It is keyed by arbitrary string names, so it is typed as a generic
-// indexable record rather than `any`.
-type GlobalObject = Record<string, unknown>;
+/**
+ * Host object that receives or supplies WebXR constructor globals. Both arms
+ * are load-bearing: the record arm accepts partial test doubles, and the
+ * `typeof globalThis` arm keeps `window` (typed `Window & typeof globalThis`)
+ * assignable without a cast. Do not collapse to one.
+ */
+export type XRGlobalObject = typeof globalThis | Record<string, unknown>;
 
-interface RuntimeOptions {
-  globalObject?: GlobalObject;
+type GlobalObjectRecord = Record<string, unknown>;
+
+export interface RuntimeOptions {
+  globalObject?: XRGlobalObject;
   polyfillLayers?: boolean;
   /**
    * When a native `navigator.xr` is already present, installRuntime skips
@@ -212,7 +222,7 @@ export class XRDevice {
 
     // runtime install/uninstall bookkeeping: descriptors captured at install
     // time so uninstallRuntime can best-effort restore the previous globals.
-    installedGlobalObject: GlobalObject | null;
+    installedGlobalObject: GlobalObjectRecord | null;
     previousNavigatorXRDescriptor: PropertyDescriptor | null;
     previousUserAgentDescriptor: PropertyDescriptor | null;
     previousGlobals: Map<string, { existed: boolean; value: unknown }> | null;
@@ -256,6 +266,8 @@ export class XRDevice {
 
     // remote control interface
     remote: RemoteControlInterface;
+    // runtime-neutral session bridge used by RemoteControlInterface
+    runtime: XRRuntimeAdapter;
 
     // frame timing for remote update
     lastFrameTime: number;
@@ -540,12 +552,41 @@ export class XRDevice {
 
       // remote control interface - initialized after this object
       remote: null as any,
+      runtime: null as any,
 
       // frame timing for remote update
       lastFrameTime: 0,
     };
 
     // Initialize remote control interface
+    this[P_DEVICE].runtime = {
+      kind: 'emulated',
+      getSession: () => {
+        const session = this.activeSession;
+        if (!session) {
+          return null;
+        }
+        // Keep the adapter structural so lightweight XRDevice test doubles and
+        // integrations that replace activeSession continue to work.
+        const sessionState = session[P_SESSION];
+        const structuralSession = session as unknown as {
+          mode?: XRSessionMode;
+          enabledFeatures?: readonly string[];
+          visibilityState?: XRVisibilityState;
+          end?: () => void | Promise<void>;
+        };
+        const primaryReferenceSpace = sessionState?.referenceSpaces?.[0];
+        return {
+          mode: sessionState?.mode ?? structuralSession.mode ?? 'immersive-vr',
+          enabledFeatures: structuralSession.enabledFeatures ?? [],
+          visibilityState:
+            structuralSession.visibilityState ?? this.visibilityState,
+          originOffsetMatrix:
+            primaryReferenceSpace?.[P_SPACE].offsetMatrix ?? null,
+          end: () => structuralSession.end?.(),
+        };
+      },
+    };
     this[P_DEVICE].remote = new RemoteControlInterface(this);
 
     this[P_DEVICE].updateViews();
@@ -565,7 +606,14 @@ export class XRDevice {
   }
 
   installRuntime(options?: RuntimeOptions) {
-    const globalObject = (options?.globalObject ?? globalThis) as GlobalObject;
+    if (this[P_DEVICE].runtime.kind === 'native') {
+      throw new DOMException(
+        'Cannot install the emulated runtime while a native override is installed.',
+        'InvalidStateError',
+      );
+    }
+    const globalObject = (options?.globalObject ??
+      globalThis) as GlobalObjectRecord;
     const polyfillLayers = options?.polyfillLayers;
 
     // Skip clobbering a real WebXR runtime unless the caller forces it.
@@ -940,13 +988,17 @@ export class XRDevice {
   createActionPlayer(
     refSpace: XRReferenceSpace,
     recording: CompressedRecording,
+    options: ActionPlayerOptions = {},
   ) {
-    this[P_DEVICE].actionPlayer = new ActionPlayer(
+    const player = new ActionPlayer(
       refSpace,
       recording,
       this[P_DEVICE].ipd,
+      options,
     );
-    return this[P_DEVICE].actionPlayer;
+    this[P_DEVICE].actionPlayer = player;
+    this[P_DEVICE].runtime.onActionPlayerCreated?.(player);
+    return player;
   }
 
   get devui() {

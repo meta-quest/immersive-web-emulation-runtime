@@ -86,6 +86,7 @@ export default defineConfig({
         text: 'API Reference',
         items: [
           { text: 'XRDevice Class', link: '/api/xr-device' },
+          { text: 'Native WebXR Override', link: '/api/native-webxr-override' },
           { text: 'XRController Class', link: '/api/xr-controller' },
           { text: 'XRHandInput Class', link: '/api/xr-hand-input' },
           { text: 'Config Interfaces', link: '/api/config-interfaces' },
