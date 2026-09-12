@@ -9,7 +9,6 @@
  * tsc to preserve one. All real logic lives in lib/cli.js.
  */
 import('../lib/cli.js').catch((err) => {
-  // eslint-disable-next-line no-console
   console.error(err);
   process.exit(1);
 });

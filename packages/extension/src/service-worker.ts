@@ -674,10 +674,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleTabUpdate(tabId: number, urlString: string | undefined) {
   if (!urlString) return;
   const domain = extractDomain(urlString);
-  setActionForTab(
-    tabId,
-    domain ? await hasRegisteredScript(domain) : false,
-  );
+  setActionForTab(tabId, domain ? await hasRegisteredScript(domain) : false);
 }
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {

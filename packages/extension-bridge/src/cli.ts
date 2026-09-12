@@ -22,14 +22,20 @@ function printHelp(): void {
   );
   out('');
   out('Usage:');
-  out('  iwer-bridge            Start the MCP daemon (spawned by your agent over stdio).');
+  out(
+    '  iwer-bridge            Start the MCP daemon (spawned by your agent over stdio).',
+  );
   out('  iwer-bridge serve      Same as above (explicit).');
   out('  iwer-bridge help       Show this help.');
   out('');
   out('Point your agent at it by adding this to its MCP config:');
-  out('  { "mcpServers": { "iwer": { "command": "npx", "args": ["-y", "@iwer/extension-bridge"] } } }');
+  out(
+    '  { "mcpServers": { "iwer": { "command": "npx", "args": ["-y", "@iwer/extension-bridge"] } } }',
+  );
   out('');
-  out('Then open a WebXR page, enable the Immersive Web Emulator on it, and click');
+  out(
+    'Then open a WebXR page, enable the Immersive Web Emulator on it, and click',
+  );
   out('Allow when the agent first acts on the page.');
 }
 

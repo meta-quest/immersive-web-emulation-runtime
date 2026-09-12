@@ -14,6 +14,7 @@ export default [
       '@typescript-eslint': (await import('@typescript-eslint/eslint-plugin'))
         .default,
       import: (await import('eslint-plugin-import')).default,
+      'react-hooks': (await import('eslint-plugin-react-hooks')).default,
     },
     rules: {
       // TypeScript rules
@@ -37,6 +38,10 @@ export default [
       // lint focused on substantive TypeScript issues instead of churn.
       'sort-imports': 'off',
       'import/order': 'off',
+
+      // React Hooks correctness
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
 
       // Allow console.log in this project since it's a build tool
       'no-console': 'off',

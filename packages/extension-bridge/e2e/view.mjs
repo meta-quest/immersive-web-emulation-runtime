@@ -13,7 +13,10 @@ import { chromium } from '@playwright/test';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..', '..', '..'); // webxr-dev-platform
-const EXT = path.join(REPO, 'immersive-web-emulation-runtime/packages/extension');
+const EXT = path.join(
+  REPO,
+  'immersive-web-emulation-runtime/packages/extension',
+);
 const CFT = path.join(
   REPO,
   'immersive-web-emulation-runtime/packages/e2e/.cft/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
@@ -22,9 +25,12 @@ const targetUrl =
   process.argv[2] ||
   'https://immersive-web.github.io/webxr-samples/immersive-vr-session.html';
 
-if (!fs.existsSync(CFT)) throw new Error(`Chrome for Testing missing at ${CFT}`);
+if (!fs.existsSync(CFT))
+  throw new Error(`Chrome for Testing missing at ${CFT}`);
 if (!fs.existsSync(path.join(EXT, 'build', 'iwe.min.js')))
-  throw new Error('Extension not built — run `pnpm --filter @iwer/extension run build` first.');
+  throw new Error(
+    'Extension not built — run `pnpm --filter @iwer/extension run build` first.',
+  );
 
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'iwe-view-'));
 const ctx = await chromium.launchPersistentContext(userDataDir, {
@@ -57,9 +63,28 @@ await sw.evaluate(async (d) => {
     await chrome.scripting.unregisterContentScripts({ ids });
   } catch {}
   await chrome.scripting.registerContentScripts([
-    { id: `iwe-prefs-seeder-${d}`, matches, js: ['build/prefs-seeder.min.js'], allFrames: true, runAt: 'document_start' },
-    { id: `iwe-injection-${d}`, matches, js: ['build/iwe.min.js'], allFrames: true, runAt: 'document_start', world: 'MAIN' },
-    { id: `iwe-bridge-${d}`, matches, js: ['build/content-bridge.min.js'], allFrames: true, runAt: 'document_start' },
+    {
+      id: `iwe-prefs-seeder-${d}`,
+      matches,
+      js: ['build/prefs-seeder.min.js'],
+      allFrames: true,
+      runAt: 'document_start',
+    },
+    {
+      id: `iwe-injection-${d}`,
+      matches,
+      js: ['build/iwe.min.js'],
+      allFrames: true,
+      runAt: 'document_start',
+      world: 'MAIN',
+    },
+    {
+      id: `iwe-bridge-${d}`,
+      matches,
+      js: ['build/content-bridge.min.js'],
+      allFrames: true,
+      runAt: 'document_start',
+    },
   ]);
   if (!((await chrome.offscreen.hasDocument?.()) ?? false)) {
     await chrome.offscreen.createDocument({
@@ -80,8 +105,12 @@ await page.bringToFront().catch(() => {});
 console.error(`\n[iwe-view] Chrome for Testing is open.`);
 console.error(`[iwe-view] extension id: ${extId}`);
 console.error(`[iwe-view] page: ${targetUrl}`);
-console.error(`[iwe-view] Emulation is on + the offscreen bridge is connecting to the daemon (:8723).`);
-console.error(`[iwe-view] When the agent first acts, an "Allow agent control of this tab?" prompt`);
+console.error(
+  `[iwe-view] Emulation is on + the offscreen bridge is connecting to the daemon (:8723).`,
+);
+console.error(
+  `[iwe-view] When the agent first acts, an "Allow agent control of this tab?" prompt`,
+);
 console.error(`[iwe-view] appears on the page — click Allow.`);
 console.error(`[iwe-view] Close the browser window when you're done.\n`);
 

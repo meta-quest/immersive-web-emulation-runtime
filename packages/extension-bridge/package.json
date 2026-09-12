@@ -1,6 +1,6 @@
 {
   "name": "@iwer/extension-bridge",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Local MCP daemon bridging coding agents to the Immersive Web Emulator (IWER device.remote) over a localhost WebSocket. Drive any WebXR page from Claude Code, Codex, Cursor and friends — no dev server required.",
   "type": "module",
   "main": "lib/index.js",

@@ -1,5 +1,5 @@
 {
-  "mcpVersion": "2.3.0",
+  "mcpVersion": "2.4.0",
   "tools": [
     {
       "name": "xr_get_session_status",

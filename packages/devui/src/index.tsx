@@ -269,6 +269,8 @@ const OfferSessionUI: React.FC<OfferSessionProps> = ({
     return () => {
       clearInterval(intervalId);
     };
+    // The interval intentionally polls mutable state on this stable device.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

@@ -5,7 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { InputSuffix, RowLabel, ValueInput, ValuesContainer } from './styled.js';
+import {
+  InputSuffix,
+  RowLabel,
+  ValueInput,
+  ValuesContainer,
+} from './styled.js';
 import { useEffect, useRef, useState } from 'react';
 
 import { styled } from 'styled-components';
@@ -89,7 +94,8 @@ export const Vector3Input = ({
   useEffect(() => {
     animationFrameId.current = requestAnimationFrame(syncValues);
     return () => {
-      if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
+      if (animationFrameId.current)
+        cancelAnimationFrame(animationFrameId.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vector, multiplier, precision]);
@@ -116,7 +122,8 @@ export const Vector3Input = ({
               value={displayValues[axis]}
               onChange={handleInputChange(axis)}
               className={
-                parseFloat(displayValues[axis]) !== actualValuesRef.current[axis]
+                parseFloat(displayValues[axis]) !==
+                actualValuesRef.current[axis]
                   ? 'invalid'
                   : undefined
               }

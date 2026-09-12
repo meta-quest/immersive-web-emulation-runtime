@@ -213,8 +213,12 @@ export const ControllerUI: React.FC<ControllerProps> = ({
                 supportsTouch
                 mappedKey={mapping[buttonConfig.id]}
                 pointerLocked={pointerLocked}
-                onValue={(v) => controller.updateButtonValue(buttonConfig.id, v)}
-                onTouch={(t) => controller.updateButtonTouch(buttonConfig.id, t)}
+                onValue={(v) =>
+                  controller.updateButtonValue(buttonConfig.id, v)
+                }
+                onTouch={(t) =>
+                  controller.updateButtonTouch(buttonConfig.id, t)
+                }
               />
             );
           })

@@ -13,11 +13,7 @@
   "background": {
     "service_worker": "build/service-worker.min.js"
   },
-  "permissions": [
-    "storage",
-    "scripting",
-    "offscreen"
-  ],
+  "permissions": ["storage", "scripting", "offscreen"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_icon": {

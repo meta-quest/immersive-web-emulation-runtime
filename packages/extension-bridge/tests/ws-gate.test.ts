@@ -59,6 +59,7 @@ describe('WS server guards (live)', () => {
     const ws = connect({ Origin: 'chrome-extension://test' });
     const ack = await new Promise<Record<string, unknown>>(
       (resolve, reject) => {
+        const timeoutId = setTimeout(() => reject(new Error('timeout')), 4000);
         ws.on('open', () =>
           ws.send(
             JSON.stringify({
@@ -68,9 +69,14 @@ describe('WS server guards (live)', () => {
             }),
           ),
         );
-        ws.on('message', (d) => resolve(JSON.parse(d.toString())));
-        ws.on('error', reject);
-        setTimeout(() => reject(new Error('timeout')), 4000);
+        ws.on('message', (d) => {
+          clearTimeout(timeoutId);
+          resolve(JSON.parse(d.toString()));
+        });
+        ws.on('error', (error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        });
       },
     );
     expect(ack.type).toBe('iwer_hello_ack');
@@ -82,9 +88,12 @@ describe('WS server guards (live)', () => {
   it('rejects a non-extension Origin (close 1008)', async () => {
     const ws = connect({ Origin: 'https://evil.com' });
     const code = await new Promise<number>((resolve, reject) => {
-      ws.on('close', (c) => resolve(c));
+      const timeoutId = setTimeout(() => reject(new Error('timeout')), 4000);
+      ws.on('close', (c) => {
+        clearTimeout(timeoutId);
+        resolve(c);
+      });
       ws.on('error', () => {});
-      setTimeout(() => reject(new Error('timeout')), 4000);
     });
     expect(code).toBe(1008);
   });

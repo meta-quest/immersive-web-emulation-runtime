@@ -1,5 +1,11 @@
 # @iwer/devui
 
+## 2.4.0
+
+### Minor Changes
+
+- Versioned in lockstep with `iwer` 2.4.0; no package-specific behavior changes.
+
 ## 2.3.0
 
 ### Minor Changes

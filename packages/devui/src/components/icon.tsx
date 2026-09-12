@@ -103,7 +103,10 @@ const IwerLogo: React.FC<{
     fill="none"
     style={style}
   >
-    <path fill={color} d="M10.5 8.367a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8Z" />
+    <path
+      fill={color}
+      d="M10.5 8.367a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8Z"
+    />
     <path
       fill={color}
       fillRule="evenodd"
@@ -127,7 +130,8 @@ export const Icon: React.FC<IconProps> = ({
   strokeWidth = 2,
   style,
 }) => {
-  if (name === 'iwer') return <IwerLogo size={size} color={color} style={style} />;
+  if (name === 'iwer')
+    return <IwerLogo size={size} color={color} style={style} />;
   const Cmp = MAP[name];
   if (!Cmp) return null;
   return (
