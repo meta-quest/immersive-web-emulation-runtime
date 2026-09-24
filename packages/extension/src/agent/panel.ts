@@ -11,6 +11,7 @@ import {
   ENABLED_DOMAINS_KEY,
   ENVIRONMENT_CATALOG,
   STORAGE_KEY,
+  deviceSupportsVisibilityMask,
   isOverridden,
   resolveAll,
   type DeviceId,
@@ -216,6 +217,8 @@ function row(
 
 function settingsHtml(): string {
   const domain = status?.domain ?? 'this site';
+  const selectedDevice = value('device');
+  const visibilityMaskSupported = deviceSupportsVisibilityMask(selectedDevice);
   return `<section>
 		<h2>Persistent Settings</h2>
 		<div class="segment" aria-label="Settings scope">
@@ -267,6 +270,22 @@ function settingsHtml(): string {
       )}"/><div class="muted">${Math.round((value('fovy') / Math.PI) * 180)} deg</div>`,
     )}
 		${row(
+      'visibilityMaskEnabled',
+      'FOV Mask',
+      `<label class="${visibilityMaskSupported ? '' : 'disabled-control'}" title="${
+        visibilityMaskSupported
+          ? 'Toggle the selected device profile mask'
+          : 'Unavailable for this device profile'
+      }"><input id="visibilityMaskEnabled" type="checkbox" ${
+        visibilityMaskSupported && value('visibilityMaskEnabled')
+          ? 'checked'
+          : ''
+      } ${visibilityMaskSupported ? '' : 'disabled'}/> Enabled</label>`,
+      visibilityMaskSupported
+        ? ''
+        : '<div class="muted">Unavailable for this device profile</div>',
+    )}
+		${row(
       'defaultPose',
       'Default Pose',
       value('defaultPose')
@@ -292,7 +311,7 @@ function introHtml(): string {
 			<strong>Pin IWE to your toolbar.</strong>
 			<div>Use the toolbar button to enable or disable WebXR emulation for the current site, open page-level controls, and connect AI agents. If you do not see it, open Chrome's Extensions menu and pin Immersive Web Emulator.</div>
 		</div>
-		<p>This panel is for persistent defaults that survive reloads: device, environment, input mode, stereo rendering, IPD, FOV-Y, and saved default pose.</p>
+		<p>This panel is for persistent defaults that survive reloads: device, environment, input mode, stereo rendering, IPD, FOV-Y, FOV mask, and saved default pose.</p>
 		<div class="banner" id="movedBanner" role="status" ${showBanner ? '' : 'hidden'}>
 			<strong>Where are the live controls?</strong>
 			<div>The headset, controller, hand, and button-mapping controls are now in the floating overlay on the WebXR page itself. Coming from the old DevTools WebXR tab? Those live controls moved onto the page; this panel now focuses on persistent defaults like device, environment, IPD, and FOV-Y.</div>
@@ -403,6 +422,13 @@ function bind(): void {
     });
   bindRange('ipd', (value) => `${value.toFixed(3)} m`);
   bindRange('fovy', (value) => `${Math.round((value / Math.PI) * 180)} deg`);
+  document
+    .getElementById('visibilityMaskEnabled')
+    ?.addEventListener('change', (event) => {
+      void writePatch({
+        visibilityMaskEnabled: (event.target as HTMLInputElement).checked,
+      });
+    });
   document.getElementById('reload')?.addEventListener('click', () => {
     void reloadInspectedTab();
   });

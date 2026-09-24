@@ -175,6 +175,9 @@ function sanitizePrefsPatch(
   if (isFiniteNumberInRange(patch.fovy, Math.PI / 6, Math.PI / 1.5)) {
     out.fovy = patch.fovy;
   }
+  if (typeof patch.visibilityMaskEnabled === 'boolean') {
+    out.visibilityMaskEnabled = patch.visibilityMaskEnabled;
+  }
   const keymap = sanitizeKeymap(patch.keymap);
   if (keymap) out.keymap = keymap;
   const handPoses = sanitizeHandPoses(patch.handPoses);

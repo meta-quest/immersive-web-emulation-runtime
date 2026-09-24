@@ -17,6 +17,28 @@ import {
 } from '../controller/meta.js';
 
 import { XRDeviceConfig } from '../../XRDevice.js';
+import type { XRVisibilityMask } from '../../XRVisibilityMask.js';
+
+const degrees = (value: number): number => (value * Math.PI) / 180;
+
+/**
+ * Angular bounds sampled from Meta VR Glasses XRView projection matrices. The same
+ * projection was reported for both eyes in immersive-vr and immersive-ar.
+ */
+export const metaVRGlassesVisibilityMask: XRVisibilityMask = {
+  left: {
+    angleLeft: degrees(37),
+    angleRight: degrees(37),
+    angleUp: degrees(25),
+    angleDown: degrees(43),
+  },
+  right: {
+    angleLeft: degrees(37),
+    angleRight: degrees(37),
+    angleUp: degrees(25),
+    angleDown: degrees(43),
+  },
+};
 
 export const oculusQuest1: XRDeviceConfig = {
   name: 'Oculus Quest 1',
@@ -127,4 +149,12 @@ export const metaQuest3: XRDeviceConfig = {
   interactionMode: XRInteractionMode.WorldSpace,
   userAgent:
     'Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/33.0.0.x.x.x Chrome/126.0.6478.122 VR Safari/537.36',
+};
+
+/** Quest-compatible input/runtime profile with Meta VR Glasses' narrower view mask. */
+export const metaVRGlasses: XRDeviceConfig = {
+  ...metaQuest3,
+  name: 'Meta VR Glasses',
+  supportedFrameRates: [72, 90, 96, 100, 120],
+  visibilityMask: metaVRGlassesVisibilityMask,
 };

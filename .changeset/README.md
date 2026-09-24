@@ -14,6 +14,11 @@ The publishable packages in this monorepo are released **lockstep** via the `fix
 
 A changeset that bumps any one of them bumps all three to the same version. Use the highest semver level that any change in the changeset warrants (for example, a `minor` bump in `iwer` plus a `patch` in `@iwer/sem` results in a `minor` for the whole group).
 
+Compatible changes to `iwer` do not bump packages that merely peer-depend on
+it. The `onlyUpdatePeerDependentsWhenOutOfRange` Changesets option preserves
+the declared semver contract: dependents receive a breaking bump only when the
+next `iwer` version falls outside their peer range.
+
 ## Workflow
 
 ```bash

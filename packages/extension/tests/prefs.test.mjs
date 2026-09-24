@@ -15,6 +15,8 @@ import {
 import {
   DEFAULT_KEYMAP,
   DEFAULTS,
+  DEVICE_CATALOG,
+  deviceSupportsVisibilityMask,
   mergePrefs,
   resolveAll,
   shouldShowMovedNotice,
@@ -48,6 +50,20 @@ test('resolves defaults, all-sites prefs, and per-origin overrides', () => {
   assert.equal(resolved.environment, 'office_small');
   assert.equal(resolved.keymap.left.trigger, 'KeyT');
   assert.equal(resolved.keymap.right.trigger, 'KeyY');
+});
+
+test('offers the Meta VR Glasses visibility profile', () => {
+  assert.equal(DEVICE_CATALOG.includes('metaVRGlasses'), true);
+  const blob = mergePrefs({ version: 1 }, 'origin', 'example.com', {
+    device: 'metaVRGlasses',
+  });
+  assert.equal(resolveAll(blob, 'example.com').device, 'metaVRGlasses');
+});
+
+test('only enables the mask setting for profiles with mask data', () => {
+  assert.equal(deviceSupportsVisibilityMask('metaVRGlasses'), true);
+  assert.equal(deviceSupportsVisibilityMask('metaQuest3'), false);
+  assert.equal(deviceSupportsVisibilityMask('unknown-profile'), false);
 });
 
 test('vendored default keymap stays equal to @iwer/devui', () => {
@@ -185,6 +201,7 @@ test('DevUI prefs postMessage survives as a runtime write message', () => {
       patch: {
         keymap: { left: { trigger: 'KeyG' } },
         fovy: Math.PI / 2,
+        visibilityMaskEnabled: false,
         unknown: true,
       },
     }),
@@ -193,6 +210,7 @@ test('DevUI prefs postMessage survives as a runtime write message', () => {
       scope: 'origin',
       patch: {
         fovy: Math.PI / 2,
+        visibilityMaskEnabled: false,
         keymap: { left: { trigger: 'KeyG' } },
       },
     },

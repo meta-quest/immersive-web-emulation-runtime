@@ -14,7 +14,8 @@ export type DeviceId =
   | 'oculusQuest1'
   | 'metaQuest2'
   | 'metaQuestPro'
-  | 'metaQuest3';
+  | 'metaQuest3'
+  | 'metaVRGlasses';
 export type EnvironmentId =
   | 'living_room'
   | 'meeting_room'
@@ -45,6 +46,7 @@ export interface OriginPrefs {
   stereoEnabled: boolean;
   ipd: number;
   fovy: number;
+  visibilityMaskEnabled: boolean;
   keymap: KeyMapType;
   handPoses: Record<Handedness, HandPoseId>;
   defaultPose: DefaultPose | null;
@@ -76,7 +78,22 @@ export const DEVICE_CATALOG: readonly DeviceId[] = [
   'metaQuest2',
   'metaQuestPro',
   'metaQuest3',
+  'metaVRGlasses',
 ];
+
+const DEVICE_CAPABILITIES: Readonly<
+  Record<DeviceId, { visibilityMask: boolean }>
+> = Object.freeze({
+  oculusQuest1: { visibilityMask: false },
+  metaQuest2: { visibilityMask: false },
+  metaQuestPro: { visibilityMask: false },
+  metaQuest3: { visibilityMask: false },
+  metaVRGlasses: { visibilityMask: true },
+});
+
+export function deviceSupportsVisibilityMask(device: DeviceId): boolean {
+  return DEVICE_CAPABILITIES[device]?.visibilityMask ?? false;
+}
 
 export const ENVIRONMENT_CATALOG: readonly EnvironmentId[] = [
   'living_room',
@@ -123,6 +140,7 @@ export const DEFAULTS: Readonly<OriginPrefs> = Object.freeze({
   stereoEnabled: false,
   ipd: 0.063,
   fovy: Math.PI / 2,
+  visibilityMaskEnabled: true,
   keymap: DEFAULT_KEYMAP,
   handPoses: Object.freeze({ left: 'default', right: 'default' }),
   defaultPose: null,

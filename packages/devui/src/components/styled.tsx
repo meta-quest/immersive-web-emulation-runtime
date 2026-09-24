@@ -135,6 +135,16 @@ export const HeaderButton = styled.button`
   &:focus {
     outline: none;
   }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  &:disabled:hover,
+  &:disabled:active {
+    background-color: transparent;
+  }
 `;
 
 export const MappedKeyBlock = styled.div<{ $pressed: boolean }>`

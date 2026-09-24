@@ -73,6 +73,24 @@ The Field of View on the Y-axis, controlling how wide the visible area is in the
 
 - **Type**: `number`
 
+### `visibilityMask`
+
+The optional per-eye angular visibility mask supplied by the selected device
+profile. The mask affects the emulator preview only; it does not rewrite the
+WebXR `XRView.projectionMatrix` exposed to the application.
+
+- **Type**: `XRVisibilityMask | undefined`
+- **Readonly**
+
+### `visibilityMaskEnabled`
+
+Controls whether the configured per-eye visibility mask is displayed. The
+getter reports its current state, and the setter toggles the mask at runtime.
+Setting it to `true` has no effect when the selected profile has no
+visibility-mask data.
+
+- **Type**: `boolean`
+
 ### `position`
 
 The current position of the emulated device in the 3D space. This vector represents where the device is located within the virtual environment.

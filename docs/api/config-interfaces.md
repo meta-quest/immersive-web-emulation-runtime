@@ -27,6 +27,12 @@ outline: deep
 - **`internalNominalFrameRate`**: **number**  
   The device's nominal internal frame rate.
 
+- **`visibilityMask`**: **XRVisibilityMask?**
+  Optional per-eye angular bounds used to obscure content outside a narrower
+  headset field of view. Supply `left` and `right` eye objects; each contains
+  positive `angleLeft`, `angleRight`, `angleUp`, and `angleDown` values in
+  radians.
+
 ## XRDeviceOptions
 
 - **`ipd`**: **number**  
@@ -46,6 +52,14 @@ outline: deep
 
 - **`canvasContainer`**: **HTMLDivElement**  
   The HTML container for the rendering canvas.
+
+- **`visibilityMask`**: **XRVisibilityMask | null**
+  Overrides the selected device profile's mask. Pass `null` to disable it.
+
+- **`visibilityMaskEnabled`**: **boolean**
+  Controls whether a configured visibility mask starts enabled. It defaults to
+  `true` when mask data exists and remains `false` for profiles without mask
+  data.
 
 ## XRControllerConfig
 

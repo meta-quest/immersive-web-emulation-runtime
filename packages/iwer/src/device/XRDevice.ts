@@ -64,6 +64,10 @@ import { NativeMesh } from '../meshes/XRMesh.js';
 import type { DepthSensingData } from '../depth/XRDepthInformation.js';
 import { XRWebGLBinding } from '../depth/XRWebGLBinding.js';
 import type { XRRuntimeAdapter } from '../types/runtime-session.js';
+import {
+  calculateVisibilityMaskBounds,
+  type XRVisibilityMask,
+} from './XRVisibilityMask.js';
 // @ts-ignore
 import WebXRLayerPolyfill from 'webxr-layers-polyfill';
 
@@ -94,6 +98,8 @@ export interface XRDeviceConfig {
   }>;
   interactionMode: XRInteractionMode;
   userAgent: string;
+  /** Optional per-eye angular mask used to preview a narrower headset FOV. */
+  visibilityMask?: XRVisibilityMask;
 }
 
 export interface XRDeviceOptions {
@@ -103,6 +109,10 @@ export interface XRDeviceOptions {
   headsetPosition: Vector3;
   headsetQuaternion: Quaternion;
   canvasContainer: HTMLDivElement;
+  /** Override or disable the device config's visibility mask. */
+  visibilityMask: XRVisibilityMask | null;
+  /** Whether a configured visibility mask starts enabled. */
+  visibilityMaskEnabled: boolean;
 }
 
 const DEFAULTS = {
@@ -178,7 +188,8 @@ export interface RuntimeOptions {
 const Z_INDEX_SEM_CANVAS = 1;
 const Z_INDEX_APP_CANVAS = 2;
 const Z_INDEX_DEVUI_CANVAS = 3;
-const Z_INDEX_DEVUI_CONTAINER = 4;
+const Z_INDEX_VISIBILITY_MASK = 4;
+const Z_INDEX_DEVUI_CONTAINER = 5;
 
 // scratch buffers for per-frame view offset updates (consumed synchronously
 // within updateViews via mat4.fromTranslation, never returned to callers)
@@ -212,6 +223,9 @@ export class XRDevice {
     stereoEnabled: boolean;
     ipd: number;
     fovy: number;
+    visibilityMask?: XRVisibilityMask;
+    visibilityMaskEnabled: boolean;
+    visibilityMaskCanvas?: HTMLCanvasElement;
     controllers: { [key in XRHandedness]?: XRController };
     hands: { [key in XRHandedness]?: XRHandInput };
     primaryInputMode: 'controller' | 'hand';
@@ -325,6 +339,22 @@ export class XRDevice {
     canvasContainer.style.alignItems = 'center';
     canvasContainer.style.overflow = 'hidden';
     canvasContainer.style.zIndex = '999';
+    const visibilityMask =
+      deviceOptions.visibilityMask === null
+        ? undefined
+        : (deviceOptions.visibilityMask ?? deviceConfig.visibilityMask);
+    const visibilityMaskCanvas = visibilityMask
+      ? document.createElement('canvas')
+      : undefined;
+    if (visibilityMaskCanvas) {
+      visibilityMaskCanvas.dataset.webxrVisibilityMask = deviceConfig.name;
+      visibilityMaskCanvas.style.position = 'absolute';
+      visibilityMaskCanvas.style.inset = '0';
+      visibilityMaskCanvas.style.width = '100%';
+      visibilityMaskCanvas.style.height = '100%';
+      visibilityMaskCanvas.style.pointerEvents = 'none';
+      visibilityMaskCanvas.style.zIndex = Z_INDEX_VISIBILITY_MASK.toString();
+    }
 
     this[P_DEVICE] = {
       name: deviceConfig.name,
@@ -344,6 +374,11 @@ export class XRDevice {
       stereoEnabled: deviceOptions.stereoEnabled ?? DEFAULTS.stereoEnabled,
       ipd: deviceOptions.ipd ?? DEFAULTS.ipd,
       fovy: deviceOptions.fovy ?? DEFAULTS.fovy,
+      visibilityMask,
+      visibilityMaskEnabled:
+        Boolean(visibilityMask) &&
+        (deviceOptions.visibilityMaskEnabled ?? true),
+      visibilityMaskCanvas,
       controllers,
       hands,
       primaryInputMode: 'controller',
@@ -460,6 +495,11 @@ export class XRDevice {
           };
           canvas.style.zIndex = Z_INDEX_APP_CANVAS.toString();
           this[P_DEVICE].canvasContainer.appendChild(canvas);
+          if (this[P_DEVICE].visibilityMaskCanvas) {
+            this[P_DEVICE].canvasContainer.appendChild(
+              this[P_DEVICE].visibilityMaskCanvas,
+            );
+          }
           document.body.appendChild(this[P_DEVICE].canvasContainer);
         }
 
@@ -486,6 +526,13 @@ export class XRDevice {
           const sem = this[P_DEVICE].sem;
           if (sem) {
             this[P_DEVICE].canvasContainer.removeChild(sem.environmentCanvas);
+          }
+          const visibilityMaskCanvas = this[P_DEVICE].visibilityMaskCanvas;
+          if (
+            visibilityMaskCanvas?.parentElement ===
+            this[P_DEVICE].canvasContainer
+          ) {
+            this[P_DEVICE].canvasContainer.removeChild(visibilityMaskCanvas);
           }
           document.body.removeChild(this[P_DEVICE].canvasContainer);
           this[P_DEVICE].canvasData = undefined;
@@ -543,6 +590,7 @@ export class XRDevice {
         }
 
         this[P_DEVICE].updateViews();
+        this.drawVisibilityMask();
       },
 
       // control mode for programmatic access
@@ -591,6 +639,49 @@ export class XRDevice {
 
     this[P_DEVICE].updateViews();
     globalThis;
+  }
+
+  private drawVisibilityMask(): void {
+    const mask = this[P_DEVICE].visibilityMask;
+    const maskCanvas = this[P_DEVICE].visibilityMaskCanvas;
+    const appCanvas = this[P_DEVICE].canvasData?.canvas;
+    if (
+      !this[P_DEVICE].visibilityMaskEnabled ||
+      !mask ||
+      !maskCanvas ||
+      !appCanvas
+    ) {
+      return;
+    }
+
+    const width = appCanvas.width;
+    const height = appCanvas.height;
+    if (width <= 0 || height <= 0) return;
+    if (maskCanvas.width !== width || maskCanvas.height !== height) {
+      maskCanvas.width = width;
+      maskCanvas.height = height;
+    }
+
+    const context = maskCanvas.getContext('2d');
+    if (!context) return;
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = '#000';
+
+    const eyes = this[P_DEVICE].stereoEnabled
+      ? (['left', 'right'] as const)
+      : (['left'] as const);
+    const eyeWidth = width / eyes.length;
+    eyes.forEach((eye, index) => {
+      const eyeX = index * eyeWidth;
+      const bounds = calculateVisibilityMaskBounds(
+        mask[eye],
+        this[P_DEVICE].fovy,
+        eyeWidth,
+        height,
+      );
+      context.fillRect(eyeX, 0, eyeWidth, height);
+      context.clearRect(eyeX + bounds.x, bounds.y, bounds.width, bounds.height);
+    });
   }
 
   /**
@@ -830,6 +921,26 @@ export class XRDevice {
 
   set fovy(value: number) {
     this[P_DEVICE].fovy = value;
+  }
+
+  get visibilityMask(): XRVisibilityMask | undefined {
+    return this[P_DEVICE].visibilityMask;
+  }
+
+  /**
+   * Whether this device's configured visibility mask is currently displayed.
+   * Profiles without a visibility mask always remain disabled.
+   */
+  get visibilityMaskEnabled(): boolean {
+    return this[P_DEVICE].visibilityMaskEnabled;
+  }
+
+  set visibilityMaskEnabled(value: boolean) {
+    const enabled = Boolean(this[P_DEVICE].visibilityMask) && value;
+    this[P_DEVICE].visibilityMaskEnabled = enabled;
+    if (this[P_DEVICE].visibilityMaskCanvas) {
+      this[P_DEVICE].visibilityMaskCanvas.style.display = enabled ? '' : 'none';
+    }
   }
 
   get position(): Vector3 {

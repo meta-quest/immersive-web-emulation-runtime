@@ -8,12 +8,21 @@
 // model
 export { XRDevice, XRDeviceConfig } from './device/XRDevice.js';
 export type { RuntimeOptions, XRGlobalObject } from './device/XRDevice.js';
+export type { XRDeviceOptions } from './device/XRDevice.js';
 export {
   metaQuest2,
   metaQuest3,
   metaQuestPro,
+  metaVRGlasses,
   oculusQuest1,
+  metaVRGlassesVisibilityMask,
 } from './device/configs/headset/meta.js';
+export type {
+  XRFieldOfView,
+  XRVisibilityMask,
+  XRVisibilityMaskBounds,
+} from './device/XRVisibilityMask.js';
+export { calculateVisibilityMaskBounds } from './device/XRVisibilityMask.js';
 
 // Controller Configs
 export {

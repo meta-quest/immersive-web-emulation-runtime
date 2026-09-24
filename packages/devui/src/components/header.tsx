@@ -88,6 +88,10 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
   const [meshesVisible, setMeshesVisible] = React.useState(
     Boolean(xrDevice.sem?.meshesVisible),
   );
+  const visibilityMaskSupported = xrDevice.visibilityMask !== undefined;
+  const [visibilityMaskEnabled, setVisibilityMaskEnabled] = React.useState(
+    xrDevice.visibilityMaskEnabled,
+  );
   const { inputMode, setInputMode } = useInputModeStore();
   const {
     infoPanelOpen,
@@ -155,6 +159,36 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
               name="glasses"
               size={16}
               color={headsetOpen ? Colors.accent : Colors.textWhite}
+            />
+          </HeaderButton>
+          <HeaderButton
+            aria-label="Field-of-view mask"
+            aria-pressed={visibilityMaskEnabled}
+            disabled={!visibilityMaskSupported}
+            title={
+              visibilityMaskSupported
+                ? (visibilityMaskEnabled ? 'Disable' : 'Enable') +
+                  ' field-of-view mask'
+                : 'Field-of-view mask unavailable for this device profile'
+            }
+            onClick={() => {
+              xrDevice.visibilityMaskEnabled = !xrDevice.visibilityMaskEnabled;
+              setVisibilityMaskEnabled(xrDevice.visibilityMaskEnabled);
+              emitPrefsPatch({
+                visibilityMaskEnabled: xrDevice.visibilityMaskEnabled,
+              });
+            }}
+          >
+            <Icon
+              name="scan"
+              size={16}
+              color={
+                visibilityMaskSupported
+                  ? visibilityMaskEnabled
+                    ? Colors.accent
+                    : Colors.textGrey
+                  : Colors.textTertiary
+              }
             />
           </HeaderButton>
           {xrDevice.sem && (

@@ -129,6 +129,28 @@ xrDevice.fovy = Math.PI / 2; // Set FOV on Y-axis
 
 This flexibility ensures that developers can tailor the virtual experience precisely, from basic positioning to fine-tuning visual parameters.
 
+For Meta VR Glasses visibility testing, use the built-in `metaVRGlasses` profile. It
+retains the Quest-compatible runtime and input capabilities while masking the
+desktop preview to the measured 74° horizontal by 68° vertical view. The
+vertical opening is asymmetric: 25° above and 43° below the optical axis.
+
+```javascript
+import { XRDevice, metaVRGlasses } from 'iwer';
+
+const xrDevice = new XRDevice(metaVRGlasses);
+xrDevice.installRuntime();
+```
+
+The existing FOV-Y control still sets IWER's symmetric preview projection. The
+Meta VR Glasses profile then crops that projection to its independent left, right, up,
+and down bounds, which is what allows it to represent the asymmetric vertical
+view. Keep the preview projection wide enough to contain all target bounds. In
+DevUI, use the field-of-view mask button beside the headset controls to compare
+the masked and unmasked views. The button is disabled for device profiles that
+do not provide visibility-mask data. When using the browser extension, the FOV
+Mask setting beside FOV-Y saves the same choice as a per-site or all-sites
+default.
+
 ## Emulated Controllers
 
 ### Accessing the Controllers

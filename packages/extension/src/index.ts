@@ -9,6 +9,7 @@ import {
   XRDevice,
   metaQuest2,
   metaQuest3,
+  metaVRGlasses,
   metaQuestPro,
   oculusQuest1,
 } from 'iwer';
@@ -34,6 +35,7 @@ const DEVICE_CONFIGS = {
   metaQuest2,
   metaQuestPro,
   metaQuest3,
+  metaVRGlasses,
 };
 
 const ENVIRONMENTS = {
@@ -103,6 +105,8 @@ export const injectRuntime = async () => {
   const xrDevice = new XRDevice(deviceConfig(prefs.device), {
     stereoEnabled: prefs.stereoEnabled ?? DEFAULTS.stereoEnabled,
     fovy: prefs.fovy ?? DEFAULTS.fovy,
+    visibilityMaskEnabled:
+      prefs.visibilityMaskEnabled ?? DEFAULTS.visibilityMaskEnabled,
   });
   xrDevice.primaryInputMode = prefs.inputMode ?? DEFAULTS.inputMode;
   // forceInstall: the extension must override native WebXR — modern Chrome
