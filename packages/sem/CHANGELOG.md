@@ -1,5 +1,13 @@
 # @iwer/sem
 
+## 2.5.0
+
+### Patch Changes
+
+- 8f8dbf5: Correct synthetic depth decoding for small near clip planes and render
+  environment depth from both sides so one-sided room surfaces occlude from
+  either viewing direction.
+
 ## 2.4.0
 
 ### Minor Changes
