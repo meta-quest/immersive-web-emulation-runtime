@@ -12,7 +12,10 @@ import {
   type CompressedRecording,
 } from '../../src/action/ActionPlayer.js';
 import type { InputSchema } from '../../src/action/ActionRecorder.js';
-import { metaQuest3 } from '../../src/device/configs/headset/meta.js';
+import {
+  metaQuest3,
+  metaQuestPro,
+} from '../../src/device/configs/headset/meta.js';
 import { XRDevice } from '../../src/device/XRDevice.js';
 import { GamepadMappingType } from '../../src/gamepad/Gamepad.js';
 import { XRHandJoint as IwerHandJoint } from '../../src/input/XRHand.js';
@@ -383,6 +386,18 @@ class MockSession extends EventTarget {
   }
 }
 
+class DataPropertyInputSourcesSession extends MockSession {
+  constructor(mode: XRSessionMode, enabledFeatures?: string[]) {
+    super(mode, enabledFeatures);
+    Object.defineProperty(this, 'inputSources', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: this.nativeInputSources,
+    });
+  }
+}
+
 class LocalFallbackSession extends MockSession {
   readonly requestedReferenceSpaces: XRReferenceSpaceType[] = [];
 
@@ -398,13 +413,86 @@ class LocalFallbackSession extends MockSession {
 
 class MockXRSystem {
   readonly requestedModes: XRSessionMode[] = [];
+  readonly offeredModes: XRSessionMode[] = [];
+  lastOptions: XRSessionInit | undefined;
   lastSession: MockSession | null = null;
 
   constructor(readonly features: string[] = ['local-floor']) {}
 
-  async requestSession(mode: XRSessionMode): Promise<MockSession> {
+  async requestSession(
+    mode: XRSessionMode,
+    options?: XRSessionInit,
+  ): Promise<MockSession> {
     this.requestedModes.push(mode);
-    const session = new MockSession(mode, this.features);
+    this.lastOptions = options;
+    const session = new MockSession(mode, this.negotiatedFeatures(options));
+    this.lastSession = session;
+    return session;
+  }
+
+  async offerSession(
+    mode: XRSessionMode,
+    options?: XRSessionInit,
+  ): Promise<MockSession> {
+    this.offeredModes.push(mode);
+    this.lastOptions = options;
+    const session = new MockSession(mode, this.negotiatedFeatures(options));
+    this.lastSession = session;
+    return session;
+  }
+
+  /** Mirrors a browser enabling exactly the features it was asked for. */
+  protected negotiatedFeatures(options?: XRSessionInit): string[] {
+    const requested = [
+      ...Array.from(options?.requiredFeatures ?? []),
+      ...Array.from(options?.optionalFeatures ?? []),
+    ];
+    return requested.length === 0
+      ? this.features
+      : Array.from(new Set([...this.features, ...requested]));
+  }
+}
+
+class DataPropertyInputSourcesXRSystem extends MockXRSystem {
+  override async requestSession(
+    mode: XRSessionMode,
+    options?: XRSessionInit,
+  ): Promise<MockSession> {
+    this.requestedModes.push(mode);
+    this.lastOptions = options;
+    const session = new DataPropertyInputSourcesSession(
+      mode,
+      this.negotiatedFeatures(options),
+    );
+    this.lastSession = session;
+    return session;
+  }
+}
+
+/** Returns the same space object every time, which attachment must reject. */
+class ReusingMockSpace extends MockSpace {
+  override getOffsetReferenceSpace(): MockSpace {
+    return this;
+  }
+}
+
+class FailingAttachSession extends MockSession {
+  override requestReferenceSpace(): Promise<MockSpace> {
+    return Promise.resolve(new ReusingMockSpace());
+  }
+}
+
+class FailingAttachXRSystem extends MockXRSystem {
+  override async requestSession(
+    mode: XRSessionMode,
+    options?: XRSessionInit,
+  ): Promise<MockSession> {
+    this.requestedModes.push(mode);
+    this.lastOptions = options;
+    const session = new FailingAttachSession(
+      mode,
+      this.negotiatedFeatures(options),
+    );
     this.lastSession = session;
     return session;
   }
@@ -431,6 +519,68 @@ class PrototypeFallbackXRSystem extends MockXRSystem {
     Object.preventExtensions(session);
     this.sessions.push(session);
     this.lastSession = session;
+    return session;
+  }
+}
+
+class PrototypeEnabledFeaturesSession extends MockSession {
+  readonly nativeEnabledFeatures: string[];
+
+  constructor(mode: XRSessionMode, features: string[]) {
+    super(mode, features);
+    this.nativeEnabledFeatures = features;
+    Reflect.deleteProperty(this, 'enabledFeatures');
+    Object.preventExtensions(this);
+  }
+}
+Object.defineProperty(
+  PrototypeEnabledFeaturesSession.prototype,
+  'enabledFeatures',
+  {
+    configurable: true,
+    enumerable: true,
+    get(this: PrototypeEnabledFeaturesSession) {
+      return this.nativeEnabledFeatures;
+    },
+    set(this: PrototypeEnabledFeaturesSession, features: string[]) {
+      // MockSession assigns this parameter property from super(); a native
+      // prototype accessor accepts that write without creating an own value.
+      Object.defineProperty(this, 'nativeEnabledFeatures', {
+        configurable: true,
+        writable: true,
+        value: features,
+      });
+    },
+  },
+);
+
+class PrototypeEnabledFeaturesXRSystem extends MockXRSystem {
+  readonly sessions: PrototypeEnabledFeaturesSession[] = [];
+
+  override async requestSession(
+    mode: XRSessionMode,
+    options?: XRSessionInit,
+  ): Promise<PrototypeEnabledFeaturesSession> {
+    this.requestedModes.push(mode);
+    this.lastOptions = options;
+    const session = new PrototypeEnabledFeaturesSession(
+      mode,
+      this.negotiatedFeatures(options),
+    );
+    this.sessions.push(session);
+    this.lastSession = session;
+    return session;
+  }
+}
+
+class NoEnabledFeaturesXRSystem extends MockXRSystem {
+  override async requestSession(
+    mode: XRSessionMode,
+    options?: XRSessionInit,
+  ): Promise<MockSession> {
+    const session = await super.requestSession(mode, options);
+    Reflect.deleteProperty(session, 'enabledFeatures');
+    Object.preventExtensions(session);
     return session;
   }
 }
@@ -1367,6 +1517,9 @@ describe('XRNativeOverride', () => {
     const session = await nativeXR.requestSession('immersive-vr');
     publishInitialInputSources(session);
     const stableSources = session.inputSources;
+    const rightSource = stableSources.find(
+      (source) => (source as XRInputSource).handedness === 'right',
+    ) as XRInputSource;
     const events: string[] = [];
     for (const type of ['selectstart', 'select', 'selectend']) {
       session.addEventListener(type, () => events.push(type));
@@ -1381,6 +1534,7 @@ describe('XRNativeOverride', () => {
     device.controllers.right!.updateButtonValue('trigger', 1);
     session.requestAnimationFrame(() => {});
     session.fireFrame(50);
+    expect(rightSource.gamepad!.buttons[0].pressed).toBe(false);
     session.setVisibility('visible');
     expect(device.visibilityState).toBe('visible');
     expect(session.inputSources).toHaveLength(2);
@@ -1443,10 +1597,67 @@ describe('XRNativeOverride', () => {
     session.fireFrame(80);
 
     expect(callbackCount).toBe(2);
+    expect(override.capabilities.supported).toBe(true);
     expect(warning).toHaveBeenCalledWith(
       expect.stringContaining('application frame was preserved'),
     );
     update.mockRestore();
+    warning.mockRestore();
+  });
+
+  test('marks persistent frame failures unhealthy and restores support on recovery', async () => {
+    const device = new XRDevice(metaQuest3);
+    const nativeXR = new MockXRSystem();
+    override = installNativeOverride(device, {
+      xrSystem: nativeXR as unknown as XRSystem,
+      globalObject: makeNativeGlobal(),
+      onUnsupported: 'throw',
+    });
+    const session = await nativeXR.requestSession('immersive-vr');
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const update = jest
+      .spyOn(device.remote, 'update')
+      .mockImplementation(() => {
+        throw new Error('persistent listener failure');
+      });
+    let callbackCount = 0;
+
+    for (const time of [70, 80, 90]) {
+      session.requestAnimationFrame(() => {
+        callbackCount += 1;
+      });
+      session.fireFrame(time);
+    }
+
+    for (let frame = 4; frame <= 180; frame += 1) {
+      session.requestAnimationFrame(() => {
+        callbackCount += 1;
+      });
+      session.fireFrame(frame * 10 + 60);
+    }
+
+    expect(callbackCount).toBe(180);
+    expect(override.capabilities.supported).toBe(false);
+    const preparationNotes = override.capabilities.notes.filter((note) =>
+      note.startsWith('Native frame preparation failed'),
+    );
+    expect(preparationNotes).toHaveLength(3);
+    expect(preparationNotes).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('3 consecutive times'),
+        expect.stringContaining('60 consecutive times'),
+      ]),
+    );
+    expect(warning).toHaveBeenCalledTimes(3);
+    update.mockRestore();
+
+    session.requestAnimationFrame(() => {
+      callbackCount += 1;
+    });
+    session.fireFrame(1870);
+
+    expect(callbackCount).toBe(181);
+    expect(override.capabilities.supported).toBe(true);
     warning.mockRestore();
   });
 
@@ -1732,6 +1943,956 @@ describe('XRNativeOverride', () => {
     expect(changes).toHaveLength(0);
   });
 
+  describe('synthetic gaze', () => {
+    test('attaches gaze to sessions created through the native offer flow', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      const originalOfferSession = nativeXR.offerSession;
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        mode: 'gaze-only',
+        onUnsupported: 'throw',
+      });
+
+      expect(override.capabilities.offerSession).toBe(true);
+      const options = Object.freeze({
+        requiredFeatures: Object.freeze(['local-floor']),
+        optionalFeatures: Object.freeze(['gaze-tracking']),
+      });
+      const session = await nativeXR.offerSession(
+        'immersive-vr',
+        options as XRSessionInit,
+      );
+      publishInitialInputSources(session);
+
+      expect(nativeXR.offeredModes).toEqual(['immersive-vr']);
+      expect(nativeXR.requestedModes).toEqual([]);
+      expect(nativeXR.lastOptions).not.toBe(options);
+      expect(nativeXR.lastOptions?.requiredFeatures).toEqual(['local-floor']);
+      expect(nativeXR.lastOptions?.optionalFeatures).toEqual([]);
+      expect(override.sessions).toHaveLength(1);
+      expect(override.sessions[0].session).toBe(session);
+      expect(session.inputSources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            handedness: 'none',
+            targetRayMode: 'gaze',
+            profiles: ['eye-gaze'],
+          }),
+        ]),
+      );
+
+      override.uninstall();
+      expect(nativeXR.offerSession).toBe(originalOfferSession);
+      expect(session.inputSources).toBe(session.nativeInputSources);
+    });
+
+    test('gaze-only mode preserves native tracking and adds only requested gaze', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        mode: 'gaze-only',
+        onUnsupported: 'throw',
+      });
+      expect(override.mode).toBe('gaze-only');
+
+      const session = await nativeXR.requestSession('immersive-vr', {
+        requiredFeatures: ['gaze-tracking'],
+      });
+      const nativeSource = session
+        .nativeInputSources[0] as unknown as XRInputSource;
+      const sourceChanges: XRInputSourcesChangeEvent[] = [];
+      const nativeSelect = jest.fn();
+      session.addEventListener('inputsourceschange', (event) => {
+        sourceChanges.push(event as XRInputSourcesChangeEvent);
+      });
+      session.addEventListener('selectstart', nativeSelect);
+
+      publishInitialInputSources(session);
+      const gaze = session.inputSources.find(
+        (source) => (source as XRInputSource).targetRayMode === 'gaze',
+      ) as XRInputSource | undefined;
+      expect(gaze).toBeDefined();
+      expect(session.inputSources).toContain(nativeSource);
+      expect(session.inputSources).toHaveLength(2);
+      expect(sourceChanges).toHaveLength(1);
+      expect(Array.from(sourceChanges[0].added)).toEqual([gaze]);
+
+      const referenceSpace = await session.requestReferenceSpace('local-floor');
+      let viewerPosition: [number, number, number] | undefined;
+      let gazePosition: [number, number, number] | undefined;
+      session.requestAnimationFrame((_time, frame) => {
+        viewerPosition = position(
+          frame.getViewerPose(referenceSpace)!.transform,
+        );
+        gazePosition = position(
+          frame.getPose(
+            gaze!.targetRaySpace as unknown as MockSpace,
+            referenceSpace,
+          )!.transform,
+        );
+      });
+      session.fireFrame(16);
+      expect(viewerPosition).toEqual([10, 2, 3]);
+      expect(gazePosition).toEqual([10, 2, 3]);
+      expect(override.capabilities.viewerPose).toBe(false);
+
+      const selectEvent = new Event('selectstart');
+      Object.defineProperty(selectEvent, 'inputSource', {
+        value: nativeSource,
+      });
+      session.dispatchEvent(selectEvent);
+      expect(nativeSelect).toHaveBeenCalledWith(selectEvent);
+
+      const secondNativeSource = {
+        handedness: 'left',
+        native: true,
+      };
+      session.nativeInputSources.push(secondNativeSource);
+      const nativeChange = new Event('inputsourceschange');
+      Object.defineProperties(nativeChange, {
+        added: {
+          value: Object.freeze([
+            secondNativeSource as unknown as XRInputSource,
+          ]),
+        },
+        removed: { value: Object.freeze([]) },
+        session: { value: session },
+      });
+      session.dispatchEvent(nativeChange);
+      expect(session.inputSources).toContain(nativeSource);
+      expect(session.inputSources).toContain(
+        secondNativeSource as unknown as XRInputSource,
+      );
+      expect(session.inputSources).toContain(gaze);
+      expect(sourceChanges[sourceChanges.length - 1]).toBe(nativeChange);
+
+      const disconnect = device.remote.dispatch('set_connected', {
+        device: 'gaze',
+        connected: false,
+      });
+      publishInitialInputSources(session, 32);
+      await expect(disconnect).resolves.toMatchObject({
+        device: 'gaze',
+        connected: false,
+      });
+      expect(session.inputSources).toEqual([nativeSource, secondNativeSource]);
+      expect(
+        Array.from(sourceChanges[sourceChanges.length - 1].removed),
+      ).toEqual([gaze]);
+    });
+
+    test('announces gaze when native sources change before the first frame', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        mode: 'gaze-only',
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr', {
+        optionalFeatures: ['gaze-tracking'],
+      });
+      const changes: XRInputSourcesChangeEvent[] = [];
+      session.addEventListener('inputsourceschange', (event) => {
+        changes.push(event as XRInputSourcesChangeEvent);
+      });
+
+      const nativeSource = {
+        handedness: 'left',
+        native: true,
+      };
+      session.nativeInputSources.push(nativeSource);
+      const nativeChange = new Event('inputsourceschange');
+      Object.defineProperties(nativeChange, {
+        added: {
+          value: Object.freeze([nativeSource as unknown as XRInputSource]),
+        },
+        removed: { value: Object.freeze([]) },
+        session: { value: session },
+      });
+      session.dispatchEvent(nativeChange);
+
+      const gaze = session.inputSources.find(
+        (source) => (source as XRInputSource).targetRayMode === 'gaze',
+      ) as XRInputSource;
+      expect(gaze).toBeDefined();
+      expect(changes).toHaveLength(2);
+      expect(Array.from(changes[0].added)).toEqual([gaze]);
+      expect(changes[1]).toBe(nativeChange);
+
+      publishInitialInputSources(session);
+      expect(changes).toHaveLength(2);
+    });
+
+    test('tracks native membership exposed through an own data property', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new DataPropertyInputSourcesXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        mode: 'gaze-only',
+        onUnsupported: 'throw',
+      });
+      const session = (await nativeXR.requestSession('immersive-vr', {
+        optionalFeatures: ['gaze-tracking'],
+      })) as DataPropertyInputSourcesSession;
+      publishInitialInputSources(session);
+      const originalNative = session
+        .nativeInputSources[0] as unknown as XRInputSource;
+      const gaze = session.inputSources.find(
+        (source) => (source as XRInputSource).targetRayMode === 'gaze',
+      );
+
+      const replacement = {
+        handedness: 'left',
+        native: true,
+      } as unknown as XRInputSource;
+      session.nativeInputSources.splice(
+        0,
+        session.nativeInputSources.length,
+        replacement as any,
+      );
+      const change = new Event('inputsourceschange');
+      Object.defineProperties(change, {
+        added: { value: Object.freeze([replacement]) },
+        removed: { value: Object.freeze([originalNative]) },
+        session: { value: session },
+      });
+      session.dispatchEvent(change);
+
+      expect(session.inputSources).toContain(replacement);
+      expect(session.inputSources).toContain(gaze);
+      expect(session.inputSources).not.toContain(originalNative);
+
+      const lateNative = {
+        handedness: 'right',
+        native: true,
+      } as unknown as XRInputSource;
+      session.nativeInputSources.push(lateNative as any);
+      const hostileChange = new Event('inputsourceschange');
+      Object.defineProperties(hostileChange, {
+        added: {
+          get() {
+            throw new Error('hostile added getter');
+          },
+        },
+        removed: { value: Object.freeze([]) },
+        session: { value: session },
+      });
+      session.dispatchEvent(hostileChange);
+      expect(session.inputSources).toContain(lateNative);
+    });
+
+    test('reports gaze untracked when gaze-only frame preparation fails', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        mode: 'gaze-only',
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr', {
+        optionalFeatures: ['gaze-tracking'],
+      });
+      const referenceSpace = await session.requestReferenceSpace('local-floor');
+      publishInitialInputSources(session);
+      const gaze = session.inputSources.find(
+        (source) => (source as XRInputSource).targetRayMode === 'gaze',
+      ) as XRInputSource;
+      const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest.spyOn(device.remote, 'update').mockImplementationOnce(() => {
+        throw new Error('remote failure');
+      });
+      let gazePose: MockPose | null | undefined;
+
+      session.requestAnimationFrame((_time, frame) => {
+        gazePose = frame.getPose(
+          gaze.targetRaySpace as unknown as MockSpace,
+          referenceSpace,
+        );
+      });
+      session.fireFrame(16);
+
+      expect(gazePose).toBeNull();
+      expect(
+        override.capabilities.notes.some((note) =>
+          note.startsWith('A synthetic pose could not be resolved'),
+        ),
+      ).toBe(false);
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('Native frame preparation failed'),
+      );
+    });
+
+    test('keeps gaze valid for every callback sharing one native frame', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        mode: 'gaze-only',
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr', {
+        optionalFeatures: ['gaze-tracking'],
+      });
+      const referenceSpace = await session.requestReferenceSpace('local-floor');
+      publishInitialInputSources(session);
+      const gaze = session.inputSources.find(
+        (source) => (source as XRInputSource).targetRayMode === 'gaze',
+      ) as XRInputSource;
+      const poses: Array<MockPose | null | undefined> = [];
+
+      for (let index = 0; index < 2; index += 1) {
+        session.requestAnimationFrame((_time, frame) => {
+          poses.push(
+            frame.getPose(
+              gaze.targetRaySpace as unknown as MockSpace,
+              referenceSpace,
+            ),
+          );
+        });
+      }
+      session.fireFrame(16);
+
+      expect(poses).toHaveLength(2);
+      expect(poses.every(Boolean)).toBe(true);
+      expect(() =>
+        session.frame.getPose(
+          gaze.targetRaySpace as unknown as MockSpace,
+          referenceSpace,
+        ),
+      ).toThrow(expect.objectContaining({ name: 'InvalidStateError' }));
+    });
+
+    test('gaze-only mode leaves sessions that did not request gaze untouched', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        mode: 'gaze-only',
+        onUnsupported: 'throw',
+      });
+
+      const session = await nativeXR.requestSession('immersive-vr', {
+        optionalFeatures: ['anchors'],
+      });
+
+      expect(override.sessions).toHaveLength(0);
+      expect(session.inputSources).toBe(session.nativeInputSources);
+      expect(session.enabledFeatures).toEqual(['local-floor', 'anchors']);
+      let nativeViewerPosition: [number, number, number] | undefined;
+      const referenceSpace = await session.requestReferenceSpace('local-floor');
+      session.requestAnimationFrame((_time, frame) => {
+        nativeViewerPosition = position(
+          frame.getViewerPose(referenceSpace)!.transform,
+        );
+      });
+      session.fireFrame(1);
+      expect(nativeViewerPosition).toEqual([10, 2, 3]);
+    });
+
+    test('gaze-only uninstall removes only the synthetic gaze facade', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        mode: 'gaze-only',
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr', {
+        optionalFeatures: ['gaze-tracking'],
+      });
+      publishInitialInputSources(session);
+      const gaze = session.inputSources.find(
+        (source) => (source as XRInputSource).targetRayMode === 'gaze',
+      ) as XRInputSource;
+      const changes: XRInputSourcesChangeEvent[] = [];
+      session.addEventListener('inputsourceschange', (event) => {
+        changes.push(event as XRInputSourcesChangeEvent);
+      });
+
+      override.uninstall();
+
+      expect(session.inputSources).toBe(session.nativeInputSources);
+      expect(changes).toHaveLength(1);
+      expect(Array.from(changes[0].added)).toEqual([]);
+      expect(Array.from(changes[0].removed)).toEqual([gaze]);
+    });
+
+    test('owns gaze aliases without mutating the caller session options', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const requiredFeatures = Object.freeze(['local-floor', 'gaze-tracking']);
+      const optionalFeatures = Object.freeze(['anchors', 'eye-tracking']);
+      const options = Object.freeze({ requiredFeatures, optionalFeatures });
+
+      const session = await nativeXR.requestSession(
+        'immersive-vr',
+        options as XRSessionInit,
+      );
+      publishInitialInputSources(session);
+
+      expect(nativeXR.lastOptions).not.toBe(options);
+      expect(nativeXR.lastOptions?.requiredFeatures).toEqual(['local-floor']);
+      expect(nativeXR.lastOptions?.optionalFeatures).toEqual(['anchors']);
+      expect(options.requiredFeatures).toEqual([
+        'local-floor',
+        'gaze-tracking',
+      ]);
+      expect(options.optionalFeatures).toEqual(['anchors', 'eye-tracking']);
+      expect(session.enabledFeatures).toEqual([
+        'local-floor',
+        'anchors',
+        'gaze-tracking',
+        'eye-tracking',
+      ]);
+
+      const gazeSources = session.inputSources.filter(
+        (source) => (source as XRInputSource).targetRayMode === 'gaze',
+      ) as XRInputSource[];
+      expect(gazeSources).toHaveLength(1);
+      expect(gazeSources[0]).toMatchObject({
+        handedness: 'none',
+        targetRayMode: 'gaze',
+        profiles: ['eye-gaze'],
+        gamepad: null,
+        gripSpace: null,
+        hand: null,
+      });
+      await expect(
+        device.remote.dispatch('get_session_status'),
+      ).resolves.toMatchObject({
+        runtimeKind: 'native',
+        enabledFeatures: expect.arrayContaining([
+          'gaze-tracking',
+          'eye-tracking',
+        ]),
+      });
+      expect(override!.capabilities.enabledFeatures).toBe(true);
+
+      await session.end();
+      expect(session.enabledFeatures).toEqual(['local-floor', 'anchors']);
+      expect(session.inputSources).toBe(session.nativeInputSources);
+    });
+
+    test('reports gaze through prototype enabledFeatures on non-extensible sessions', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new PrototypeEnabledFeaturesXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+
+      const first = await nativeXR.requestSession('immersive-vr', {
+        requiredFeatures: ['gaze-tracking'],
+      });
+      expect(
+        Object.prototype.hasOwnProperty.call(first, 'enabledFeatures'),
+      ).toBe(false);
+      expect(first.enabledFeatures).toEqual(['local-floor', 'gaze-tracking']);
+      publishInitialInputSources(first);
+      expect(
+        first.inputSources.some(
+          (source) => (source as XRInputSource).targetRayMode === 'gaze',
+        ),
+      ).toBe(true);
+      await first.end();
+      expect(first.enabledFeatures).toEqual(['local-floor']);
+
+      const second = await nativeXR.requestSession('immersive-vr', {
+        requiredFeatures: ['eye-tracking'],
+      });
+      expect(second.enabledFeatures).toEqual(['local-floor', 'eye-tracking']);
+      await second.end();
+      expect(second.enabledFeatures).toEqual(['local-floor']);
+    });
+
+    test('fails required and degrades optional gaze when enabledFeatures cannot be exposed', async () => {
+      const requiredDevice = new XRDevice(metaQuestPro);
+      const requiredXR = new NoEnabledFeaturesXRSystem();
+      override = installNativeOverride(requiredDevice, {
+        xrSystem: requiredXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'warn',
+      });
+
+      await expect(
+        requiredXR.requestSession('immersive-vr', {
+          requiredFeatures: ['gaze-tracking'],
+        }),
+      ).rejects.toMatchObject({
+        name: 'NotSupportedError',
+        message: expect.stringContaining('XRSession.enabledFeatures'),
+      });
+      expect(requiredXR.lastSession?.endCalls).toBe(1);
+      override.uninstall();
+
+      const optionalDevice = new XRDevice(metaQuestPro);
+      const optionalXR = new NoEnabledFeaturesXRSystem();
+      const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      override = installNativeOverride(optionalDevice, {
+        xrSystem: optionalXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const optionalSession = await optionalXR.requestSession('immersive-vr', {
+        optionalFeatures: ['gaze-tracking'],
+      });
+
+      expect(optionalSession.endCalls).toBe(0);
+      expect(optionalSession.enabledFeatures).toBeUndefined();
+      expect(optionalSession.inputSources).toBe(
+        optionalSession.nativeInputSources,
+      );
+      expect(override.sessions).toHaveLength(0);
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('Native session override was skipped'),
+      );
+      warning.mockRestore();
+    });
+
+    test('passes inline and foreign-XRSystem calls through without cloning options', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const options = Object.freeze({
+        requiredFeatures: Object.freeze(['gaze-tracking']),
+      }) as unknown as XRSessionInit;
+
+      await nativeXR.requestSession('inline', options);
+      expect(nativeXR.lastOptions).toBe(options);
+      expect(override!.sessions).toHaveLength(0);
+
+      const foreignXR = new MockXRSystem();
+      const wrappedRequest = nativeXR.requestSession;
+      await wrappedRequest.call(foreignXR, 'immersive-vr', options);
+      expect(foreignXR.lastOptions).toBe(options);
+      expect(override!.sessions).toHaveLength(0);
+    });
+
+    test('omits gaze when no alias is requested or an optional alias is unsupported', async () => {
+      const proDevice = new XRDevice(metaQuestPro);
+      const proXR = new MockXRSystem();
+      override = installNativeOverride(proDevice, {
+        xrSystem: proXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const withoutGaze = await proXR.requestSession('immersive-vr', {
+        optionalFeatures: ['anchors'],
+      });
+      publishInitialInputSources(withoutGaze);
+      expect(
+        withoutGaze.inputSources.some(
+          (source) => (source as XRInputSource).targetRayMode === 'gaze',
+        ),
+      ).toBe(false);
+      await withoutGaze.end();
+      override.uninstall();
+
+      // metaQuest3 advertises neither alias, so an optional request is
+      // dropped from the browser options and simply produces no gaze source.
+      const quest3Device = new XRDevice(metaQuest3);
+      const quest3XR = new MockXRSystem();
+      override = installNativeOverride(quest3Device, {
+        xrSystem: quest3XR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const optional = await quest3XR.requestSession('immersive-vr', {
+        optionalFeatures: ['anchors', 'gaze-tracking'],
+      });
+      publishInitialInputSources(optional);
+      expect(quest3XR.lastOptions?.optionalFeatures).toEqual(['anchors']);
+      expect(optional.enabledFeatures).not.toContain('gaze-tracking');
+      expect(
+        optional.inputSources.some(
+          (source) => (source as XRInputSource).targetRayMode === 'gaze',
+        ),
+      ).toBe(false);
+      expect(override!.capabilities.notes).toContain(
+        'Optional gaze tracking was not enabled because the selected IWER device profile does not advertise gaze support.',
+      );
+    });
+
+    test('rejects required gaze outside the selected synthetic profile', async () => {
+      const device = new XRDevice(metaQuest3);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'warn',
+      });
+
+      await expect(
+        nativeXR.requestSession('immersive-vr', {
+          requiredFeatures: ['eye-tracking'],
+        }),
+      ).rejects.toMatchObject({
+        name: 'NotSupportedError',
+        message: expect.stringContaining('Meta Quest 3'),
+      });
+      expect(nativeXR.requestedModes).toEqual([]);
+    });
+
+    test('ends on required gaze attachment failure but degrades optional gaze', async () => {
+      const requiredDevice = new XRDevice(metaQuestPro);
+      const requiredXR = new FailingAttachXRSystem();
+      override = installNativeOverride(requiredDevice, {
+        xrSystem: requiredXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'warn',
+      });
+
+      await expect(
+        requiredXR.requestSession('immersive-vr', {
+          requiredFeatures: ['gaze-tracking'],
+        }),
+      ).rejects.toMatchObject({
+        name: 'NotSupportedError',
+        message: expect.stringContaining('reused a space object'),
+      });
+      expect(requiredXR.lastSession?.endCalls).toBe(1);
+      override.uninstall();
+
+      // An optional alias outranks onUnsupported: 'throw', because WebXR
+      // requires an optional feature to degrade rather than fail the request.
+      const optionalDevice = new XRDevice(metaQuestPro);
+      const optionalXR = new FailingAttachXRSystem();
+      const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      override = installNativeOverride(optionalDevice, {
+        xrSystem: optionalXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const optionalSession = await optionalXR.requestSession('immersive-vr', {
+        optionalFeatures: ['gaze-tracking'],
+      });
+
+      expect(optionalSession.endCalls).toBe(0);
+      expect(optionalSession.inputSources).toBe(
+        optionalSession.nativeInputSources,
+      );
+      expect(override!.sessions).toHaveLength(0);
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('Native session override was skipped'),
+      );
+      warning.mockRestore();
+    });
+
+    test('does not let unsupported optional gaze mask strict attachment failures', async () => {
+      const device = new XRDevice(metaQuest3);
+      const nativeXR = new FailingAttachXRSystem();
+      const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+
+      await expect(
+        nativeXR.requestSession('immersive-vr', {
+          optionalFeatures: ['gaze-tracking'],
+        }),
+      ).rejects.toThrow('reused a space object');
+
+      expect(nativeXR.lastOptions?.optionalFeatures).toEqual([]);
+      expect(nativeXR.lastSession?.endCalls).toBe(1);
+      expect(override.sessions).toHaveLength(0);
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Optional gaze tracking was not enabled because the selected IWER device profile',
+        ),
+      );
+      expect(warning).not.toHaveBeenCalledWith(
+        expect.stringContaining('Native session override was skipped'),
+      );
+      warning.mockRestore();
+    });
+
+    test('restores native feature reporting after late optional gaze attachment failure', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem(HAND_FEATURES);
+      const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      // Fail after enabledFeatures has already been patched with the synthetic
+      // alias. This exercises the rollback path rather than an early attach
+      // failure that never exposed the alias.
+      let exposedAtFailure: readonly string[] | undefined;
+      const patchInputSources = jest
+        .spyOn(
+          override as unknown as {
+            patchInputSources: (adapter: unknown) => boolean;
+          },
+          'patchInputSources',
+        )
+        .mockImplementation(() => {
+          exposedAtFailure = [...(nativeXR.lastSession?.enabledFeatures ?? [])];
+          return false;
+        });
+
+      const session = await nativeXR.requestSession('immersive-vr', {
+        optionalFeatures: ['gaze-tracking'],
+      });
+      patchInputSources.mockRestore();
+
+      expect(exposedAtFailure).toContain('gaze-tracking');
+      expect(session.endCalls).toBe(0);
+      expect(session.enabledFeatures).toEqual(HAND_FEATURES);
+      expect(session.enabledFeatures).not.toContain('gaze-tracking');
+      expect(session.inputSources).toBe(session.nativeInputSources);
+      expect(override.sessions).toHaveLength(0);
+      expect(override.capabilities).toMatchObject({
+        phase: 'installed',
+        inputSources: false,
+        inputEvents: false,
+        enabledFeatures: false,
+        viewerSpaceTagging: false,
+        handInput: false,
+      });
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('Native session override was skipped'),
+      );
+      warning.mockRestore();
+    });
+
+    test('resolves a stable gaze pose from the viewer-relative input space', async () => {
+      const device = new XRDevice(metaQuestPro);
+      device.position.set(0.2, 1.7, -0.5);
+      device.quaternion.set(0, Math.sin(Math.PI / 8), 0, Math.cos(Math.PI / 8));
+      device.gaze!.quaternion.set(
+        Math.sin(Math.PI / 12),
+        0,
+        0,
+        Math.cos(Math.PI / 12),
+      );
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr', {
+        requiredFeatures: ['gaze-tracking'],
+      });
+      const referenceSpace = await session.requestReferenceSpace('local-floor');
+      publishInitialInputSources(session, 100);
+      const stableGaze = session.inputSources.find(
+        (source) => (source as XRInputSource).targetRayMode === 'gaze',
+      ) as XRInputSource;
+      const changes: XRInputSourcesChangeEvent[] = [];
+      session.addEventListener('inputsourceschange', (event) => {
+        changes.push(event as XRInputSourcesChangeEvent);
+      });
+
+      session.requestAnimationFrame((_time, frame) => {
+        const pose = frame.getPose(
+          stableGaze.targetRaySpace as unknown as MockSpace,
+          referenceSpace,
+        );
+        // Gaze rides the headset origin and contributes only orientation.
+        expect(position(pose!.transform as XRRigidTransform)).toEqual([
+          0.20000000298023224, 1.7000000476837158, -0.5,
+        ]);
+
+        const expected = mat4.multiply(
+          mat4.create(),
+          mat4.fromRotationTranslation(
+            mat4.create(),
+            device.quaternion.quat,
+            device.position.vec3,
+          ),
+          mat4.fromQuat(mat4.create(), device.gaze!.quaternion.quat),
+        );
+        for (let index = 0; index < 16; index++) {
+          expect(pose!.transform.matrix[index]).toBeCloseTo(expected[index]);
+        }
+
+        const transforms = new Float32Array(16);
+        expect(
+          frame.fillPoses(
+            [stableGaze.targetRaySpace as unknown as MockSpace],
+            referenceSpace,
+            transforms,
+          ),
+        ).toBe(true);
+        for (let index = 0; index < 16; index++) {
+          expect(transforms[index]).toBeCloseTo(expected[index]);
+        }
+      });
+      session.fireFrame(101);
+
+      device.gaze!.connected = false;
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(102);
+      expect(session.inputSources).not.toContain(stableGaze);
+      expect(Array.from(changes[changes.length - 1].removed)).toEqual([
+        stableGaze,
+      ]);
+
+      device.gaze!.connected = true;
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(103);
+      expect(session.inputSources).toContain(stableGaze);
+      expect(Array.from(changes[changes.length - 1].added)).toEqual([
+        stableGaze,
+      ]);
+      expect(
+        override!.capabilities.notes.some((note) =>
+          note.includes('Native hand input requires'),
+        ),
+      ).toBe(false);
+
+      // A hand mode this session cannot publish still leaves gaze attached.
+      device.primaryInputMode = 'hand';
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(104);
+      expect(session.inputSources).toEqual([stableGaze]);
+      expect(
+        override!.capabilities.notes.filter((note) =>
+          note.includes('Native hand input requires'),
+        ),
+      ).toHaveLength(1);
+
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(105);
+      expect(
+        override!.capabilities.notes.filter((note) =>
+          note.includes('Native hand input requires'),
+        ),
+      ).toHaveLength(1);
+    });
+
+    test('releases controller select but preserves squeeze when gaze disconnects', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr', {
+        requiredFeatures: ['gaze-tracking'],
+      });
+      publishInitialInputSources(session, 100);
+      const rightSource = session.inputSources.find(
+        (source) => (source as XRInputSource).handedness === 'right',
+      ) as XRInputSource;
+      const events: string[] = [];
+      for (const type of [
+        'selectstart',
+        'selectend',
+        'squeezestart',
+        'squeezeend',
+      ]) {
+        session.addEventListener(type, () => events.push(type));
+      }
+
+      device.controllers.right!.updateButtonValue('trigger', 1);
+      device.controllers.right!.updateButtonValue('squeeze', 1);
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(105);
+      expect(rightSource.gamepad!.buttons[0].pressed).toBe(true);
+      expect(rightSource.gamepad!.buttons[1].pressed).toBe(true);
+
+      device.gaze!.connected = false;
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(106);
+      expect(events).toEqual(['selectstart', 'squeezestart', 'selectend']);
+      expect(rightSource.gamepad!.buttons[0].pressed).toBe(false);
+      expect(rightSource.gamepad!.buttons[1].pressed).toBe(true);
+
+      device.gaze!.connected = true;
+      device.controllers.right!.updateButtonValue('trigger', 1);
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(107);
+      expect(rightSource.gamepad!.buttons[0].pressed).toBe(true);
+
+      device.controllers.right!.updateButtonValue('squeeze', 0);
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(108);
+      expect(events).toEqual([
+        'selectstart',
+        'squeezestart',
+        'selectend',
+        'selectstart',
+        'squeezeend',
+      ]);
+
+      override.uninstall();
+      expect(rightSource.gamepad!.buttons[0].pressed).toBe(false);
+      expect(session.inputSources).toBe(session.nativeInputSources);
+    });
+
+    test('lets a visible secondary driver release shared select when gaze disconnects', async () => {
+      const device = new XRDevice(metaQuestPro);
+      const nativeXR = new MockXRSystem();
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const primary = await nativeXR.requestSession('immersive-vr', {
+        requiredFeatures: ['gaze-tracking'],
+      });
+      const secondary = await nativeXR.requestSession('immersive-ar', {
+        requiredFeatures: ['gaze-tracking'],
+      });
+      publishInitialInputSources(primary, 100);
+      publishInitialInputSources(secondary, 101);
+      primary.setVisibility('hidden');
+
+      const rightSource = secondary.inputSources.find(
+        (source) => (source as XRInputSource).handedness === 'right',
+      ) as XRInputSource;
+      const events: string[] = [];
+      for (const type of ['selectstart', 'selectend']) {
+        secondary.addEventListener(type, () => events.push(type));
+      }
+
+      device.controllers.right!.updateButtonValue('trigger', 1);
+      secondary.requestAnimationFrame(() => {});
+      secondary.fireFrame(110);
+      expect(events).toEqual(['selectstart']);
+      expect(rightSource.gamepad!.buttons[0].pressed).toBe(true);
+
+      device.gaze!.connected = false;
+      secondary.requestAnimationFrame(() => {});
+      secondary.fireFrame(120);
+      expect(events).toEqual(['selectstart', 'selectend']);
+      expect(rightSource.gamepad!.buttons[0].pressed).toBe(false);
+
+      device.gaze!.connected = true;
+      secondary.requestAnimationFrame(() => {});
+      secondary.fireFrame(130);
+      expect(events).toEqual(['selectstart', 'selectend']);
+      expect(rightSource.gamepad!.buttons[0].pressed).toBe(false);
+    });
+  });
+
   describe('synthetic hands', () => {
     test('exposes hands only with hand tracking and hand mode selected', async () => {
       const device = new XRDevice(metaQuest3);
@@ -1754,7 +2915,7 @@ describe('XRNativeOverride', () => {
       expect(session.inputSources).toHaveLength(0);
       expect(override!.capabilities.handInput).toBe(false);
       expect(override!.capabilities.notes).toContain(
-        'Native hand input requires the "hand-tracking" feature on the browser session; inputSources remain empty while hand mode is selected.',
+        'Native hand input requires the "hand-tracking" feature on the browser session; no synthetic hand input sources are published while hand mode is selected.',
       );
       warning.mockRestore();
     });

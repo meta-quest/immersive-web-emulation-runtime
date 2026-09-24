@@ -4,7 +4,7 @@ outline: deep
 
 # XRDevice Class
 
-The `XRDevice` class is a central component of the Immersive Web Emulation Runtime (IWER), designed to emulate an XR device within WebXR projects. It provides a comprehensive interface for controlling and interacting with the virtual XR environment, including headset positioning, input sources (controllers and hands), and session management.
+The `XRDevice` class is a central component of the Immersive Web Emulation Runtime (IWER), designed to emulate an XR device within WebXR projects. It provides a comprehensive interface for controlling and interacting with the virtual XR environment, including headset positioning, input sources (controllers, hands, and gaze), and session management.
 
 ## Constructor
 
@@ -119,22 +119,39 @@ A collection of emulated XR hands indexed by handedness (`left` or `right`). Thi
 - **Type**: `{ [key in XRHandedness]?: XRHandInput }`
 - **Readonly**
 
+### `gaze`
+
+The device's optional continuous gaze input. It is available when the device
+configuration advertises either `gaze-tracking` or `eye-tracking`. Gaze stores
+an orientation relative to the viewer; its position remains at the viewer
+origin and follows headset movement. It has no gamepad, grip space, hand, or
+selection events.
+
+- **Type**: `XRGazeInput | undefined`
+- **Readonly**
+
 ### `primaryInputMode`
 
-Determines the primary input mode, either `controller` or `hand`. This affects which set of inputs are considered active and can be dynamically changed based on the needs of the XR experience.
+Determines the primary input mode, either `controller` or `hand`. This affects
+which set of primary inputs are active. Gaze is additive and is not a primary
+input mode.
 
 - **Type**: `'controller' | 'hand'`
 
 ### `activeInputs`
 
-A list of currently active inputs (controllers or hands) based on the visibility state and primary input mode. This property dynamically reflects the inputs available at any given time.
+A list of currently active inputs based on visibility and primary input mode.
+It contains the connected controllers or hands plus connected gaze when the
+device configuration supports it.
 
 - **Type**: `XRTrackedInput[]`
 - **Readonly**
 
 ### `inputSources`
 
-A list of current input sources available in the XR session. This includes all active controllers and hands, providing a unified way to access input data.
+A list of the device's current input sources, including connected gaze when
+available. An `XRSession` exposes gaze to an application only when that session
+requested `gaze-tracking` or `eye-tracking`.
 
 - **Type**: `XRInputSource[]`
 - **Readonly**

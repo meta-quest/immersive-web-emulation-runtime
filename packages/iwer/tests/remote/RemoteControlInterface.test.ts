@@ -1866,6 +1866,22 @@ describe('RemoteControlInterface', () => {
       expect(result.orientation.w).toBeCloseTo(1, 5);
       expect(device.gaze!.quaternion.y).toBeCloseTo(-Math.sin(halfAngle), 5);
       expect(device.gaze!.position).toMatchObject({ x: 0, y: 0, z: 0 });
+
+      const headLocked = remote.dispatch('set_transform', {
+        device: 'gaze',
+        orientation: {
+          x: 0,
+          y: Math.sin(halfAngle),
+          z: 0,
+          w: Math.cos(halfAngle),
+        },
+      });
+      remote.update(16.67);
+      await headLocked;
+      expect(device.gaze!.quaternion.x).toBeCloseTo(0, 5);
+      expect(device.gaze!.quaternion.y).toBeCloseTo(0, 5);
+      expect(device.gaze!.quaternion.z).toBeCloseTo(0, 5);
+      expect(device.gaze!.quaternion.w).toBeCloseTo(1, 5);
     });
 
     test('rejects attempts to move the gaze origin', async () => {

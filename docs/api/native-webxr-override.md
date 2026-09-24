@@ -4,9 +4,10 @@ outline: deep
 
 # Native WebXR Override
 
-The native WebXR override lets IWER drive tracking and controller input inside
-an immersive session created by the browser. It keeps the browser's native
-session, frame timing, rendering layers, projection matrices, and compositor.
+The native WebXR override lets IWER drive tracking, controller input, and an
+optional continuous gaze source inside an immersive session created by the
+browser. It keeps the browser's native session, frame timing, rendering layers,
+projection matrices, and compositor.
 
 This mode is separate from desktop emulation. Calling
 `XRDevice.installRuntime()` still installs IWER's complete emulated WebXR
@@ -41,6 +42,22 @@ const nativeOverride = installNativeOverride(device, {
 });
 ```
 
+For a physical-headset preview that keeps native viewer, hand, and controller
+tracking, add only the requested synthetic gaze source:
+
+```typescript
+const nativeOverride = installNativeOverride(gazeCapableDevice, {
+  mode: 'gaze-only',
+  onUnsupported: 'throw',
+});
+```
+
+In `gaze-only` mode, sessions that do not request `gaze-tracking` or
+`eye-tracking` are returned untouched. Sessions that do request gaze retain
+the identity of every native input source and receive their native input
+events normally. The synthetic gaze origin follows the native viewer pose;
+its local orientation remains controllable through the IWER device.
+
 `getNativeOverride()` finds the installed lifecycle handle structurally, without
 an `instanceof` check, so independently bundled IWER copies and hot-module
 replacement can recover and uninstall an override whose original handle was
@@ -61,11 +78,13 @@ An override installed with a custom environment must be recovered by passing
 the same environment to `getNativeOverride(environment)`.
 
 The application's existing `navigator.xr.requestSession('immersive-vr')`
-call still returns the browser's native `XRSession`. Inline sessions pass
-through unchanged.
+call still returns the browser's native `XRSession`. When the browser exposes
+`navigator.xr.offerSession()`, IWER intercepts that path too, so automatic
+re-offers after a page reload or ended session receive the same override.
+Inline sessions pass through unchanged.
 
 Use the `XRDevice` properties or its remote-control interface to update the
-headset and controllers. Call `nativeOverride.uninstall()` to restore all
+headset, controllers, and gaze. Call `nativeOverride.uninstall()` to restore all
 patched browser properties and detach active sessions. A live session receives
 an `inputsourceschange` event that removes the synthetic sources and adds the
 browser's currently exposed native sources, so event-driven framework state
@@ -98,6 +117,7 @@ browser hooks could not be installed.
 | Target-ray, grip, and hand-joint poses | `requestAnimationFrame` cadence    |
 | Controller `Gamepad` values            | Render state and WebXR layers      |
 | Synthetic controller and hand sources  | View projection matrices           |
+| Requested synthetic gaze input         | Native feature descriptors         |
 | `select*` and `squeeze*` events        | Compositing and display submission |
 | Action-recording playback              | Real-world hit tests and anchors   |
 
@@ -105,8 +125,9 @@ Synthetic input sources replace the native session's input sources while the
 override is attached. Like browser-provided sources, the initial synthetic set
 is published on the first native animation frame and announced with an
 `inputsourceschange` event, so frameworks that discover controllers through that
-event receive them normally. Headset pose control is absolute rather than an
-offset from physical tracking.
+event receive them normally. A synthetic gaze source is additive to whichever
+primary input mode is selected and does not emit selection events. Headset pose
+control is absolute rather than an offset from physical tracking.
 
 ## Hand input
 
@@ -133,6 +154,36 @@ Joint radii follow WebXR Hand Input's tracking semantics: a joint whose radius
 is unknown is reported as untracked by both APIs, so `fillJointRadii()` writes
 `NaN` and returns `false` while `getJointPose()` returns `null` for the same
 joint on the same frame.
+
+## Gaze feature negotiation
+
+IWER owns `gaze-tracking` and `eye-tracking` in native-override mode. When an
+immersive session requests either alias, IWER removes that alias from the
+options sent to the browser and attaches one deterministic synthetic gaze
+source after the native session starts. The source has `targetRayMode: "gaze"`,
+the `"eye-gaze"` profile, and no gamepad, grip space, or hand. The caller's
+options object is never mutated; only the forwarded copy is stripped.
+
+The selected device configuration must advertise either gaze alias. An
+unsupported required alias rejects before the native runtime is called; an
+unsupported optional alias is omitted and recorded in `capabilities.notes`. If a
+required synthetic gaze source
+cannot be attached after session creation, IWER ends that session and rejects
+the request. An optional alias degrades instead: the native session survives,
+without the override attached, even under `onUnsupported: 'throw'`, because
+WebXR requires an optional feature never to fail the request. Sessions that do
+not request either alias do not expose a gaze source.
+
+The gaze pose is viewer-relative. Its origin follows the headset, while its
+local orientation can move independently. A local identity orientation is the
+head-locked diagnostic case. The exact requested gaze aliases are added to
+`XRSession.enabledFeatures` when that host property can be patched; otherwise
+the capability notes report the degraded feature-reporting surface.
+
+Gaze accompanies the selected primary input mode rather than replacing it, and
+it stays published even when hand mode cannot publish anything. Action playback
+is the one exception: a recording is authoritative over the whole input set, so
+no gaze source is published while a recording is playing.
 
 ## Action playback
 
@@ -222,10 +273,23 @@ desktop emulation:
 
 - `accept_session` is unavailable because the application must start the
   native session through the browser's normal user-gesture flow.
-- `get_session_status` reports `sessionOffered: false`.
+- `get_session_status` reports `sessionOffered: false` and
+  `runtimeKind: "native"`, and its `enabledFeatures` includes the gaze aliases
+  IWER accepted.
 - `XRDevice.activeSession` and `XRDevice.sessionOffered` reflect only the
   emulated runtime; inspect `nativeOverride.sessions` in native mode.
 - DevUI session controls are not wired to browser-owned native sessions.
+- `look_at({device: "gaze", target})` changes gaze independently of the
+  headset. `set_connected` can disconnect it to test application fallback to
+  ordinary hand/controller far targeting.
+- Gaze transforms expose a headset-derived world position. `set_transform` and
+  `animate_to` accept gaze orientation but reject position, and `look_at` does
+  not support `moveToDistance` for gaze.
+- Controller or hand `select` supplies the commit signal for gaze
+  interactions; the gaze source itself has no select state. If the gaze source
+  disconnects while a commit is held, the override ends that `select` — but
+  leaves any held `squeeze` alone, since squeeze is not part of the
+  gaze-plus-commit contract.
 - Positions supplied to `look_at` and `animate_to` are interpreted directly in
   the native anchor reference space; there is no emulated XR-origin offset.
 - `stereoEnabled` and field-of-view updates do not replace the browser's native
@@ -291,7 +355,7 @@ starts, so inspect `nativeOverride.capabilities` for the authoritative
 runtime result.
 
 ```typescript
-const { phase, poseOverride, inputSources, notes } =
+const { phase, poseOverride, inputSources, enabledFeatures, notes } =
   nativeOverride.capabilities;
 ```
 
@@ -308,7 +372,8 @@ state.
 Alongside the pose and input flags, `capabilities` reports `handInput` and
 `jointPoses`, which turn on once synthetic hands are bound and the joint hooks
 are installed, and `actionPlayback`, `anchors`, and `hitTest`, which turn on the
-first time each path actually runs.
+first time each path actually runs. `enabledFeatures` reports whether requested
+synthetic feature aliases were exposed through the native session property.
 
 If the browser refuses to let `XRFrame.createAnchor` or
 `XRFrame.getHitTestResults` be overridden, `notes` says so explicitly.
@@ -353,6 +418,11 @@ accept the same `xrSystem` and `globalObject` subset.
 - Synthetic hands require the browser session to have enabled the
   `hand-tracking` feature; the override cannot add features to a session the
   application already negotiated.
+- Synthetic gaze requires the selected device configuration to advertise
+  `gaze-tracking` or `eye-tracking` and the session to request one of those
+  aliases. See [Gaze feature negotiation](#gaze-feature-negotiation).
+- Gaze is suppressed for the duration of action playback; recordings define
+  the complete input set.
 - Action playback advances on one visible session only. Other visible sessions
   observe the same recorded state and receive the same events on their own
   frames, but do not independently advance playback.

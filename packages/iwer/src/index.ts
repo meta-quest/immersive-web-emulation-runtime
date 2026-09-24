@@ -119,6 +119,7 @@ export type {
   NativeOverrideCapabilities,
   NativeOverrideEnvironment,
   NativeOverrideHandle,
+  NativeOverrideMode,
   NativeOverrideOptions,
   NativeOverridePhase,
   NativeOverrideSupport,

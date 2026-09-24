@@ -13,6 +13,15 @@ export type NativeOverridePhase =
   | 'attached'
   | 'active';
 
+/**
+ * Scope of a native WebXR override.
+ *
+ * `full` replaces viewer and input tracking for deterministic automation.
+ * `gaze-only` preserves every browser-owned pose, source, and input event and
+ * adds only the synthetic gaze source requested by the application.
+ */
+export type NativeOverrideMode = 'full' | 'gaze-only';
+
 export interface NativeOverrideEnvironment {
   /** Browser-owned XRSystem to inspect or patch. Defaults to navigator.xr. */
   xrSystem?: XRSystem;
@@ -21,6 +30,8 @@ export interface NativeOverrideEnvironment {
 }
 
 export interface NativeOverrideOptions extends NativeOverrideEnvironment {
+  /** Override scope. Defaults to `full`. */
+  mode?: NativeOverrideMode;
   /**
    * Behavior when the native runtime cannot be hooked. Defaults to `warn`.
    * A session requesting optional gaze still degrades to the unmodified
@@ -34,9 +45,13 @@ export interface NativeOverrideCapabilities {
   readonly phase: NativeOverridePhase;
   readonly supported: boolean;
   readonly requestSession: boolean;
+  /** Whether the optional XRSystem.offerSession method is also intercepted. */
+  readonly offerSession: boolean;
   readonly inputSources: boolean;
   readonly inputEvents: boolean;
   readonly brandedInputEvents: boolean;
+  /** Whether synthetic feature aliases are exposed through session.enabledFeatures. */
+  readonly enabledFeatures: boolean;
   readonly viewerSpaceTagging: boolean;
   readonly poseOverride: boolean;
   readonly batchPoses: boolean;
@@ -71,6 +86,8 @@ export interface NativeSessionInfo {
  */
 export interface NativeOverrideHandle {
   readonly installed: boolean;
+  /** Installed override scope, when exposed by this IWER version. */
+  readonly mode?: NativeOverrideMode;
   readonly capabilities: NativeOverrideCapabilities;
   readonly sessions: readonly NativeSessionInfo[];
   uninstall(): void;

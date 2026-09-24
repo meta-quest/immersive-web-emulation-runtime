@@ -12,6 +12,11 @@ import type {
   ActionPlayerEventContext,
 } from '../action/ActionPlayer.js';
 import type { XRDevice, XRGlobalObject } from '../device/XRDevice.js';
+import {
+  isGazeTrackingFeature,
+  supportsGazeTracking,
+  type GazeTrackingFeature,
+} from '../device/XRGazeInput.js';
 import type { XRTrackedInput } from '../device/XRTrackedInput.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
 import { XRHandJoint as IwerHandJoint } from '../input/XRHand.js';
@@ -21,7 +26,6 @@ import {
   P_DEVICE,
   P_GAMEPAD,
   P_JOINT_SPACE,
-  P_SPACE,
 } from '../private.js';
 import type { XRJointSpace as IwerJointSpace } from '../spaces/XRJointSpace.js';
 import { XRSpaceUtils, type XRSpace as IwerSpace } from '../spaces/XRSpace.js';
@@ -31,6 +35,7 @@ import type {
   NativeOverrideCapabilities,
   NativeOverrideEnvironment,
   NativeOverrideHandle,
+  NativeOverrideMode,
   NativeOverrideOptions,
   NativeOverrideSupport,
   NativeSessionInfo,
@@ -101,7 +106,7 @@ type InputEventName =
   | 'squeezestart'
   | 'squeezeend';
 
-type InputBindingKind = 'controller' | 'hand' | 'playback';
+type InputBindingKind = 'controller' | 'hand' | 'gaze' | 'playback';
 
 /**
  * Result of attempting to wrap an optional native XRFrame method.
@@ -140,6 +145,8 @@ interface ControlledSpace {
    * reported to the application as an unresolvable (null) pose.
    */
   origin?: () => IwerSpace | null;
+  /** Optional per-frame tracking gate for an otherwise live IWER space. */
+  available?: () => boolean;
   /** Transform from this space to its origin space. */
   localOffset: mat4;
   /** Present when this space is a hand joint. */
@@ -223,9 +230,11 @@ type ResettableCapabilities = Omit<
 function clearedCapabilities(): ResettableCapabilities {
   return {
     requestSession: false,
+    offerSession: false,
     inputSources: false,
     inputEvents: false,
     brandedInputEvents: false,
+    enabledFeatures: false,
     viewerSpaceTagging: false,
     poseOverride: false,
     batchPoses: false,
@@ -239,13 +248,37 @@ function clearedCapabilities(): ResettableCapabilities {
   };
 }
 
+/** The gaze aliases one session requested, split by how it asked for them. */
+interface NativeGazeFeatureRequest {
+  required: GazeTrackingFeature[];
+  optional: GazeTrackingFeature[];
+  /** The aliases IWER will actually satisfy, deduplicated. */
+  enabled: GazeTrackingFeature[];
+}
+
+interface NativeSessionRequest {
+  /** The options to forward to the browser, with gaze aliases removed. */
+  options: XRSessionInit | undefined;
+  gaze: NativeGazeFeatureRequest;
+}
+
 interface NativeSessionAdapter {
   session: XRSession;
   mode: 'immersive-vr' | 'immersive-ar';
   anchorSpace: XRReferenceSpace;
   handTracking: boolean;
+  /** Native features plus the synthetic aliases IWER satisfies itself. */
+  enabledFeatures: readonly string[];
+  /** The gaze aliases this session requested and IWER accepted. */
+  syntheticGazeFeatures: readonly GazeTrackingFeature[];
   nativeRequestAnimationFrame: XRSession['requestAnimationFrame'];
   nativeRequestReferenceSpace: XRSession['requestReferenceSpace'];
+  /** Reads the browser-owned sources without passing through our facade. */
+  nativeInputSources: () => readonly XRInputSource[];
+  /** Whether the raw source reader observes property replacement as well as mutation. */
+  nativeInputSourcesLive: boolean;
+  /** Last authoritative browser-owned input-source membership. */
+  nativeSources: readonly XRInputSource[];
   patches: PatchRegistry;
   instancePatches: PatchRegistry;
   cleanupListeners: Array<() => void>;
@@ -257,6 +290,14 @@ interface NativeSessionAdapter {
   hitTests: Set<HitTestBinding>;
   baseSpaceCache: Map<XRSpace, mat4 | null>;
   lastFrameTime: number | undefined;
+  /** Browser-owned frame object most recently prepared for this session. */
+  lastPreparedFrame: XRFrame | null;
+  /** Whether native viewer tracking was available for the current frame. */
+  nativeViewerPoseValid: boolean;
+  /** Last physical viewer transform in the adapter's anchor space. */
+  nativeViewerMatrix: mat4;
+  /** Consecutive failures while preparing browser-owned animation frames. */
+  framePreparationFailures: number;
   /**
    * The XRFrame this session currently owns, or null. Non-null only for the
    * duration of an animation frame callback: WebXR forbids using an XRFrame
@@ -308,6 +349,10 @@ const HIT_TEST_ROTATION_TOLERANCE_RAD = Math.PI / 180;
  * are discarded, so backpressure can never manufacture an orphaned start/end.
  */
 const MAX_PENDING_EVENTS = 256;
+/** Persistent frame failures mean the installed override is no longer healthy. */
+const FRAME_PREPARATION_FAILURE_THRESHOLD = 3;
+/** Emit one final bounded diagnostic for a failure that remains persistent. */
+const FRAME_PREPARATION_FINAL_DIAGNOSTIC_COUNT = 60;
 
 const scratchViewerMatrix = mat4.create();
 const scratchTargetMatrix = mat4.create();
@@ -421,6 +466,10 @@ function invalidState(message: string): DOMException {
   return new DOMException(message, 'InvalidStateError');
 }
 
+function notSupported(message: string): DOMException {
+  return new DOMException(message, 'NotSupportedError');
+}
+
 function isImmersiveMode(
   mode: XRSessionMode,
 ): mode is 'immersive-vr' | 'immersive-ar' {
@@ -521,11 +570,12 @@ export function getNativeOverride(
  */
 export class XRNativeOverride implements NativeOverrideHandle {
   readonly device: XRDevice;
+  readonly mode: NativeOverrideMode;
 
   private readonly options: Required<
-    Pick<NativeOverrideOptions, 'onUnsupported'>
+    Pick<NativeOverrideOptions, 'mode' | 'onUnsupported'>
   > &
-    Omit<NativeOverrideOptions, 'onUnsupported'>;
+    Omit<NativeOverrideOptions, 'mode' | 'onUnsupported'>;
   private xrSystem: XRSystem | undefined;
   private readonly globalObject: XRGlobalObject;
   private readonly patches = new PatchRegistry();
@@ -541,6 +591,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
   private patchedJointPoseOwners = new WeakSet<object>();
   private patchedJointRadiiOwners = new WeakSet<object>();
   private patchedReferenceSpaceOwners = new WeakSet<object>();
+  private patchedEnabledFeaturesOwners = new WeakSet<object>();
   private patchedInputSourceOwners = new WeakSet<object>();
   private patchedRafOwners = new WeakSet<object>();
   private patchedRequestReferenceSpaceOwners = new WeakSet<object>();
@@ -558,6 +609,10 @@ export class XRNativeOverride implements NativeOverrideHandle {
     object,
     XRSession['requestReferenceSpace']
   >();
+  private rawInputSourcesGetterByOwner = new WeakMap<
+    object,
+    (this: XRSession) => readonly XRInputSource[]
+  >();
   private rawTransformGetters = new WeakMap<
     object,
     (this: object) => XRRigidTransform
@@ -569,12 +624,12 @@ export class XRNativeOverride implements NativeOverrideHandle {
   private instancePatchedTransformEpochs = new WeakMap<object, number>();
   private readonly warned = new Set<string>();
   private readonly capabilityState: CapabilityState;
+  private readonly unhealthyFrameAdapters = new Set<NativeSessionAdapter>();
 
   private installedState = false;
   private primarySession: NativeSessionAdapter | null = null;
   private previousRuntime: XRRuntimeAdapter | null = null;
   private epoch = 0;
-  private lastEpochTime: number | undefined;
   /** Timestamp of the last frame that advanced shared device/playback state. */
   private lastPrimaryTime: number | undefined;
   private wiredPlayer: ActionPlayer | null = null;
@@ -594,8 +649,10 @@ export class XRNativeOverride implements NativeOverrideHandle {
   private readonly detachedPlaybackFrame = {} as XRFrame;
   constructor(device: XRDevice, options: NativeOverrideOptions = {}) {
     this.device = device;
+    this.mode = options.mode ?? 'full';
     this.options = {
       ...options,
+      mode: this.mode,
       onUnsupported: options.onUnsupported ?? 'warn',
     };
     this.globalObject = options.globalObject ?? globalThis;
@@ -677,55 +734,118 @@ export class XRNativeOverride implements NativeOverrideHandle {
       );
     }
     const override = this;
-    const nativeRequestSession = xr.requestSession as NativeRequestSession;
-    const wrappedRequestSession: NativeRequestSession = async function (
-      this: XRSystem,
-      mode,
-      options,
-    ) {
-      const session = await nativeRequestSession.call(this, mode, options);
-      if (this !== xr || !isImmersiveMode(mode)) {
-        return session;
-      }
-      try {
-        await override.attachSession(session, mode);
-      } catch (error) {
-        override.detachSession(session);
-        if (override.options.onUnsupported === 'throw') {
-          await session.end().catch(() => {});
-          throw error;
+    const wrapSessionMethod = (
+      nativeSessionMethod: NativeRequestSession,
+    ): NativeRequestSession => {
+      const wrappedSessionMethod: NativeRequestSession = async function (
+        this: XRSystem,
+        mode,
+        options,
+      ) {
+        if (this !== xr || !isImmersiveMode(mode)) {
+          return nativeSessionMethod.call(this, mode, options);
         }
-        override.note(
-          `Native session override was skipped: ${override.errorText(error)}`,
-          'session-attach-failed',
+        // The gaze aliases are owned by IWER, so they are answered here rather
+        // than by the browser and never reach the native request or offer.
+        const request = override.prepareSessionRequest(options);
+        const session = await nativeSessionMethod.call(
+          this,
+          mode,
+          request.options,
         );
-      }
-      return session;
+        if (
+          override.options.mode === 'gaze-only' &&
+          request.gaze.enabled.length === 0
+        ) {
+          return session;
+        }
+        try {
+          await override.attachSession(session, mode, request.gaze.enabled);
+        } catch (error) {
+          override.detachSession(session);
+          // A required alias that cannot be satisfied is a failed request, not
+          // a degradation. An accepted optional alias is the opposite: WebXR
+          // requires the session to survive it, which outranks the "throw"
+          // unsupported policy. An alias rejected by the selected profile
+          // never participates and cannot mask an unrelated strict attachment
+          // error.
+          const failsRequest =
+            request.gaze.required.length > 0 ||
+            (request.gaze.enabled.length === 0 &&
+              override.options.onUnsupported === 'throw');
+          if (failsRequest) {
+            await session.end().catch(() => {});
+            if (
+              request.gaze.required.length > 0 &&
+              (!(error instanceof DOMException) ||
+                error.name !== 'NotSupportedError')
+            ) {
+              throw notSupported(override.errorText(error));
+            }
+            throw error;
+          }
+          override.note(
+            `Native session override was skipped: ${override.errorText(error)}`,
+            'session-attach-failed',
+          );
+        }
+        return session;
+      };
+      // The registered symbol makes the guard visible across independently
+      // bundled copies of IWER. Mark each wrapper as well as the host object so
+      // the guard still works when an XRSystem refuses new own properties.
+      Object.defineProperty(wrappedSessionMethod, NATIVE_OVERRIDE_KEY, {
+        value: this,
+      });
+      return wrappedSessionMethod;
     };
-    // The registered symbol makes the guard visible across independently
-    // bundled copies of IWER. Mark the wrapper as well as the host object so
-    // the guard still works when an XRSystem refuses new own properties.
-    Object.defineProperty(wrappedRequestSession, NATIVE_OVERRIDE_KEY, {
-      value: this,
-    });
-    let patched = this.patches.define(xr as object, 'requestSession', {
-      configurable: true,
-      writable: true,
-      value: wrappedRequestSession,
-    });
-    if (!patched) {
-      const found = methodDescriptor(xr as object, 'requestSession');
-      if (found && typeof found.descriptor.value === 'function') {
-        const descriptor = found.descriptor;
-        patched = this.patches.define(found.owner, 'requestSession', {
-          ...descriptor,
-          value: wrappedRequestSession,
-        });
+    const patchSessionMethod = (
+      key: 'requestSession' | 'offerSession',
+      wrappedSessionMethod: NativeRequestSession,
+    ): boolean => {
+      let patched = this.patches.define(xr as object, key, {
+        configurable: true,
+        writable: true,
+        value: wrappedSessionMethod,
+      });
+      if (!patched) {
+        const found = methodDescriptor(xr as object, key);
+        if (found && typeof found.descriptor.value === 'function') {
+          const descriptor = found.descriptor;
+          patched = this.patches.define(found.owner, key, {
+            ...descriptor,
+            value: wrappedSessionMethod,
+          });
+        }
       }
-    }
-    if (!patched) {
+      return patched;
+    };
+
+    const nativeRequestSession = xr.requestSession as NativeRequestSession;
+    if (
+      !patchSessionMethod(
+        'requestSession',
+        wrapSessionMethod(nativeRequestSession),
+      )
+    ) {
       this.unsupported('Unable to patch native XRSystem.requestSession.');
       return;
+    }
+
+    const nativeOfferSession = Reflect.get(xr as object, 'offerSession');
+    if (typeof nativeOfferSession === 'function') {
+      if (
+        patchSessionMethod(
+          'offerSession',
+          wrapSessionMethod(nativeOfferSession as NativeRequestSession),
+        )
+      ) {
+        this.capabilityState.offerSession = true;
+      } else {
+        this.note(
+          'The native XRSystem.offerSession method could not be patched; sessions created through it are not overridden.',
+        );
+      }
     }
 
     this.patches.define(xr as object, NATIVE_OVERRIDE_KEY, {
@@ -743,13 +863,16 @@ export class XRNativeOverride implements NativeOverrideHandle {
         }
         return {
           mode: adapter.mode,
-          enabledFeatures: adapter.session.enabledFeatures ?? [],
+          enabledFeatures: adapter.enabledFeatures,
           visibilityState: adapter.session.visibilityState,
           originOffsetMatrix: null,
           end: () => adapter.session.end(),
         };
       },
-      onActionPlayerCreated: (player) => this.wirePlayer(player),
+      onActionPlayerCreated:
+        this.options.mode === 'full'
+          ? (player) => this.wirePlayer(player)
+          : undefined,
     };
     this.installedState = true;
     this.capabilityState.phase = 'installed';
@@ -771,7 +894,6 @@ export class XRNativeOverride implements NativeOverrideHandle {
       this.previousRuntime = null;
     }
     this.resetPatchTracking();
-    this.lastEpochTime = undefined;
     this.playbackFrame = null;
     this.warned.clear();
     Object.assign(this.capabilityState, {
@@ -781,17 +903,92 @@ export class XRNativeOverride implements NativeOverrideHandle {
     });
   }
 
+  /**
+   * Splits a session request into what the browser is asked for and what IWER
+   * answers itself. The caller's dictionary is never mutated: applications
+   * legitimately reuse (and freeze) one options object across requests.
+   */
+  private prepareSessionRequest(
+    options: XRSessionInit | undefined,
+  ): NativeSessionRequest {
+    const requiredFeatures = Array.from(options?.requiredFeatures ?? []);
+    const optionalFeatures = Array.from(options?.optionalFeatures ?? []);
+    const required = requiredFeatures.filter(isGazeTrackingFeature);
+    const optional = optionalFeatures.filter(isGazeTrackingFeature);
+    const supported = supportsGazeTracking(this.device.supportedFeatures);
+
+    if (optional.length > 0 && !supported) {
+      this.note(
+        'Optional gaze tracking was not enabled because the selected IWER device profile does not advertise gaze support.',
+        'unsupported-optional-gaze',
+      );
+    }
+
+    if (required.length > 0 && !supported) {
+      // Native input sources are suppressed and replaced by the selected IWER
+      // profile. Forwarding this request would therefore expose an enabled
+      // feature with no corresponding gaze source.
+      throw notSupported(
+        `Required gaze tracking is unavailable because the selected IWER device profile "${this.device.name}" does not advertise gaze support. Select a gaze-capable profile such as metaQuestPro.`,
+      );
+    }
+
+    const enabled = supported
+      ? Array.from(new Set([...required, ...optional]))
+      : [];
+    if (!options) {
+      return { options: undefined, gaze: { required, optional, enabled } };
+    }
+
+    const nativeOptions: XRSessionInit = { ...options };
+    if (options.requiredFeatures) {
+      nativeOptions.requiredFeatures = requiredFeatures.filter(
+        (feature) => !isGazeTrackingFeature(feature),
+      );
+    }
+    if (options.optionalFeatures) {
+      nativeOptions.optionalFeatures = optionalFeatures.filter(
+        (feature) => !isGazeTrackingFeature(feature),
+      );
+    }
+    return { options: nativeOptions, gaze: { required, optional, enabled } };
+  }
+
+  /**
+   * A session that asked for a gaze alias must never resolve without its gaze
+   * source, so an override that went away mid-request fails the attach instead
+   * of quietly handing back the unmodified native session.
+   */
+  private failWhenGazeRequested(
+    syntheticGazeFeatures: readonly GazeTrackingFeature[],
+  ): void {
+    if (syntheticGazeFeatures.length > 0) {
+      throw notSupported(
+        'Native override was uninstalled before the session could attach.',
+      );
+    }
+  }
+
   private async attachSession(
     session: XRSession,
     mode: 'immersive-vr' | 'immersive-ar',
+    syntheticGazeFeatures: readonly GazeTrackingFeature[] = [],
   ): Promise<void> {
-    if (!this.installedState || this.sessionsByObject.has(session)) {
+    if (!this.installedState) {
+      this.failWhenGazeRequested(syntheticGazeFeatures);
+      return;
+    }
+    if (this.sessionsByObject.has(session)) {
       return;
     }
     const nativeRequestReferenceSpace =
       this.captureNativeRequestReferenceSpace(session);
     const nativeRequestAnimationFrame =
       this.captureNativeRequestAnimationFrame(session);
+    const nativeInputSources =
+      this.options.mode === 'gaze-only'
+        ? this.captureNativeInputSources(session)
+        : { read: () => [] as readonly XRInputSource[], live: false };
     let anchorSpace: XRReferenceSpace | undefined;
     let anchorType: XRReferenceSpaceType | undefined;
     for (const type of [
@@ -818,20 +1015,40 @@ export class XRNativeOverride implements NativeOverrideHandle {
       );
     }
     if (!this.installedState) {
+      this.failWhenGazeRequested(syntheticGazeFeatures);
       return;
     }
+    // Seed as late as possible: requesting the anchor space is asynchronous,
+    // and native sources may connect while those requests are in flight.
+    const initialNativeSources = nativeInputSources.read();
 
     const adapter: NativeSessionAdapter = {
       session,
       mode,
       anchorSpace,
       handTracking: this.sessionEnablesHandTracking(session),
+      enabledFeatures: Object.freeze(
+        Array.from(
+          new Set([
+            ...Array.from(session.enabledFeatures ?? []),
+            ...syntheticGazeFeatures,
+          ]),
+        ),
+      ),
+      syntheticGazeFeatures: Object.freeze([...syntheticGazeFeatures]),
       nativeRequestAnimationFrame,
       nativeRequestReferenceSpace,
+      nativeInputSources: nativeInputSources.read,
+      nativeInputSourcesLive: nativeInputSources.live,
+      nativeSources: Object.freeze([...initialNativeSources]),
       patches: new PatchRegistry(),
       instancePatches: new PatchRegistry(),
       cleanupListeners: [],
-      sources: Object.freeze([]),
+      sources: Object.freeze(
+        this.options.mode === 'gaze-only'
+          ? Array.from(initialNativeSources)
+          : [],
+      ),
       deviceBindings: [],
       playbackBindings: new Map(),
       bindingByFacade: new Map(),
@@ -839,6 +1056,10 @@ export class XRNativeOverride implements NativeOverrideHandle {
       hitTests: new Set(),
       baseSpaceCache: new Map(),
       lastFrameTime: undefined,
+      lastPreparedFrame: null,
+      nativeViewerPoseValid: this.options.mode === 'full',
+      nativeViewerMatrix: mat4.create(),
+      framePreparationFailures: 0,
       activeFrame: null,
       framesInstrumented: false,
       pendingEvents: [],
@@ -854,42 +1075,70 @@ export class XRNativeOverride implements NativeOverrideHandle {
       adapter,
       localOffset: mat4.create(),
     });
+    const handInputBeforeAttach = this.capabilityState.handInput;
 
     try {
-      this.ensureReferenceSpacePatch(anchorSpace, adapter);
+      if (this.options.mode === 'full') {
+        this.ensureReferenceSpacePatch(anchorSpace, adapter);
+      }
       this.createDeviceBindings(adapter);
+      const enabledFeaturesPatched = this.patchEnabledFeatures(adapter);
       const inputSourcesPatched = this.patchInputSources(adapter);
       const rafPatched = this.patchRequestAnimationFrame(adapter);
       adapter.framesInstrumented = rafPatched;
-      const referenceSpacesPatched = this.patchRequestReferenceSpace(adapter);
-      this.patchRequestHitTestSource(adapter);
+      const referenceSpacesPatched =
+        this.options.mode === 'full'
+          ? this.patchRequestReferenceSpace(adapter)
+          : false;
+      if (this.options.mode === 'full') {
+        this.patchRequestHitTestSource(adapter);
+      }
       this.installSessionListeners(adapter);
 
-      this.capabilityState.inputSources ||= inputSourcesPatched;
-      this.capabilityState.inputEvents ||= inputSourcesPatched && rafPatched;
-      this.capabilityState.viewerSpaceTagging ||= referenceSpacesPatched;
-      if (this.capabilityState.phase === 'installed') {
-        this.capabilityState.phase = 'attached';
-      }
-
       if (!inputSourcesPatched) {
+        // Gaze exists only as a synthetic input source, so a session that
+        // asked for it cannot degrade to native input the way others can.
+        if (syntheticGazeFeatures.length > 0) {
+          throw notSupported(
+            'Unable to expose the synthetic gaze input source.',
+          );
+        }
         this.unsupportedForSession(
           adapter,
           'Unable to override XRSession.inputSources.',
         );
       }
       if (!rafPatched) {
+        if (syntheticGazeFeatures.length > 0) {
+          throw notSupported(
+            'Unable to update the synthetic gaze input on native frames.',
+          );
+        }
         this.unsupportedForSession(
           adapter,
           'Unable to wrap XRSession.requestAnimationFrame.',
         );
       }
-      if (!referenceSpacesPatched) {
+      if (this.options.mode === 'full' && !referenceSpacesPatched) {
         this.note(
           'XRReferenceSpace tagging is unavailable; viewer-relative offset spaces will use native behavior.',
         );
       }
+      if (!enabledFeaturesPatched && syntheticGazeFeatures.length > 0) {
+        throw notSupported(
+          'Unable to expose the synthetic gaze feature through XRSession.enabledFeatures.',
+        );
+      }
+
+      this.capabilityState.inputSources ||= inputSourcesPatched;
+      this.capabilityState.inputEvents ||= inputSourcesPatched && rafPatched;
+      this.capabilityState.enabledFeatures ||= enabledFeaturesPatched;
+      this.capabilityState.viewerSpaceTagging ||= referenceSpacesPatched;
+      if (this.capabilityState.phase === 'installed') {
+        this.capabilityState.phase = 'attached';
+      }
     } catch (error) {
+      this.capabilityState.handInput = handInputBeforeAttach;
       this.detachAdapter(adapter);
       throw error;
     }
@@ -910,61 +1159,66 @@ export class XRNativeOverride implements NativeOverrideHandle {
   // ===========================================================================
 
   private createDeviceBindings(adapter: NativeSessionAdapter): void {
-    for (const controller of Object.values(this.device.controllers)) {
+    if (this.options.mode === 'full') {
+      for (const controller of Object.values(this.device.controllers)) {
+        adapter.deviceBindings.push(
+          this.createInputBinding(
+            adapter,
+            'controller',
+            controller.inputSource,
+            {
+              trackedInput: controller,
+              exposeHand: false,
+            },
+          ),
+        );
+      }
+      if (adapter.handTracking) {
+        for (const hand of Object.values(this.device.hands)) {
+          adapter.deviceBindings.push(
+            this.createInputBinding(adapter, 'hand', hand.inputSource, {
+              trackedInput: hand,
+              exposeHand: true,
+            }),
+          );
+        }
+      }
+    }
+    if (adapter.syntheticGazeFeatures.length > 0) {
+      const gaze = this.device.gaze;
+      if (!gaze) {
+        throw new Error(
+          'The selected device does not provide a synthetic gaze input.',
+        );
+      }
       adapter.deviceBindings.push(
-        this.createInputBinding(adapter, 'controller', controller.inputSource, {
-          trackedInput: controller,
+        this.createInputBinding(adapter, 'gaze', gaze.inputSource, {
+          trackedInput: gaze,
           exposeHand: false,
+          available:
+            this.options.mode === 'gaze-only'
+              ? () => adapter.nativeViewerPoseValid
+              : undefined,
         }),
       );
     }
-    if (adapter.handTracking) {
-      for (const hand of Object.values(this.device.hands)) {
-        adapter.deviceBindings.push(
-          this.createInputBinding(adapter, 'hand', hand.inputSource, {
-            trackedInput: hand,
-            exposeHand: true,
-          }),
-        );
-      }
-    }
-  }
-
-  /**
-   * Returns the stable binding for a recorded playback source, creating it on
-   * first use so the application always observes the same facade objects.
-   */
-  private playbackBinding(
-    adapter: NativeSessionAdapter,
-    source: IwerInputSource,
-  ): InputBinding {
-    const existing = adapter.playbackBindings.get(source);
-    if (existing) {
-      return existing;
-    }
-    const exposeHand = Boolean(source.hand) && adapter.handTracking;
-    if (source.hand && !adapter.handTracking) {
-      this.note(
-        `Recorded hand joints are hidden because the native session does not enable the "${HAND_TRACKING_FEATURE}" feature.`,
-      );
-    }
-    const binding = this.createInputBinding(adapter, 'playback', source, {
-      exposeHand,
-    });
-    adapter.playbackBindings.set(source, binding);
-    return binding;
   }
 
   private createInputBinding(
     adapter: NativeSessionAdapter,
     kind: InputBindingKind,
     iwerSource: IwerInputSource,
-    options: { trackedInput?: XRTrackedInput; exposeHand: boolean },
+    options: {
+      trackedInput?: XRTrackedInput;
+      exposeHand: boolean;
+      available?: () => boolean;
+    },
   ): InputBinding {
     const targetRaySpace = this.createSpaceToken(adapter);
     this.spaces.set(targetRaySpace, {
       adapter,
       origin: () => iwerSource.targetRaySpace,
+      available: options.available,
       localOffset: mat4.create(),
     });
 
@@ -974,6 +1228,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
       this.spaces.set(gripSpace, {
         adapter,
         origin: () => iwerSource.gripSpace ?? null,
+        available: options.available,
         localOffset: mat4.create(),
       });
     }
@@ -993,6 +1248,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
         this.spaces.set(joint.space, {
           adapter,
           origin: () => joint.source,
+          available: options.available,
           localOffset: mat4.create(),
           joint,
         });
@@ -1020,6 +1276,31 @@ export class XRNativeOverride implements NativeOverrideHandle {
     if (joints.length > 0) {
       this.capabilityState.handInput = true;
     }
+    return binding;
+  }
+
+  /**
+   * Returns the stable binding for a recorded playback source, creating it on
+   * first use so the application always observes the same facade objects.
+   */
+  private playbackBinding(
+    adapter: NativeSessionAdapter,
+    source: IwerInputSource,
+  ): InputBinding {
+    const existing = adapter.playbackBindings.get(source);
+    if (existing) {
+      return existing;
+    }
+    const exposeHand = Boolean(source.hand) && adapter.handTracking;
+    if (source.hand && !adapter.handTracking) {
+      this.note(
+        `Recorded hand joints are hidden because the native session does not enable the "${HAND_TRACKING_FEATURE}" feature.`,
+      );
+    }
+    const binding = this.createInputBinding(adapter, 'playback', source, {
+      exposeHand,
+    });
+    adapter.playbackBindings.set(source, binding);
     return binding;
   }
 
@@ -1297,6 +1578,101 @@ export class XRNativeOverride implements NativeOverrideHandle {
       .value as XRSession['requestReferenceSpace'];
     this.rawRequestReferenceSpaceByOwner.set(found.owner, nativeMethod);
     return nativeMethod;
+  }
+
+  /** Capture the browser's input-source getter before it is wrapped. */
+  private captureNativeInputSources(session: XRSession): {
+    read: () => readonly XRInputSource[];
+    live: boolean;
+  } {
+    const found = methodDescriptor(session, 'inputSources');
+    if (!found) {
+      throw new Error('Native XRSession.inputSources is unavailable.');
+    }
+    let nativeGetter = this.rawInputSourcesGetterByOwner.get(found.owner);
+    if (!nativeGetter && found.descriptor.get) {
+      nativeGetter = found.descriptor.get as (
+        this: XRSession,
+      ) => readonly XRInputSource[];
+      this.rawInputSourcesGetterByOwner.set(found.owner, nativeGetter);
+    }
+    if (nativeGetter) {
+      return {
+        read: () => Array.from(nativeGetter!.call(session) ?? []),
+        live: true,
+      };
+    }
+    if ('value' in found.descriptor) {
+      const initialNativeSources = found.descriptor.value as
+        | readonly XRInputSource[]
+        | undefined;
+      return {
+        read: () => {
+          // Before IWER installs its facade, observe a replacement of the own
+          // data property as well as in-place mutations of the initial array.
+          const current = Object.getOwnPropertyDescriptor(
+            session,
+            'inputSources',
+          );
+          const sources =
+            current && 'value' in current
+              ? (current.value as readonly XRInputSource[] | undefined)
+              : initialNativeSources;
+          return Array.from(sources ?? []);
+        },
+        live: false,
+      };
+    }
+    throw new Error('Native XRSession.inputSources cannot be read.');
+  }
+
+  /**
+   * Re-reports the aliases IWER answered itself through the session property
+   * applications actually read. Only patched when there is something to add,
+   * so a session without synthetic features keeps the browser's own array.
+   */
+  private patchEnabledFeatures(adapter: NativeSessionAdapter): boolean {
+    if (adapter.syntheticGazeFeatures.length === 0) {
+      return false;
+    }
+    if (
+      adapter.patches.define(adapter.session, 'enabledFeatures', {
+        configurable: true,
+        enumerable: true,
+        value: adapter.enabledFeatures,
+      })
+    ) {
+      const exposed = Array.from(adapter.session.enabledFeatures ?? []);
+      return adapter.syntheticGazeFeatures.every((feature) =>
+        exposed.includes(feature),
+      );
+    }
+
+    const found = methodDescriptor(adapter.session, 'enabledFeatures');
+    const nativeGetter = found?.descriptor.get;
+    if (!found || !nativeGetter) {
+      return false;
+    }
+    if (!this.patchedEnabledFeaturesOwners.has(found.owner)) {
+      const owner = this;
+      const patched = this.patches.define(found.owner, 'enabledFeatures', {
+        ...found.descriptor,
+        get(this: XRSession) {
+          return (
+            owner.sessionsByObject.get(this)?.enabledFeatures ??
+            nativeGetter.call(this)
+          );
+        },
+      });
+      if (!patched) {
+        return false;
+      }
+      this.patchedEnabledFeaturesOwners.add(found.owner);
+    }
+    const exposed = Array.from(adapter.session.enabledFeatures ?? []);
+    return adapter.syntheticGazeFeatures.every((feature) =>
+      exposed.includes(feature),
+    );
   }
 
   private patchInputSources(adapter: NativeSessionAdapter): boolean {
@@ -1595,21 +1971,74 @@ export class XRNativeOverride implements NativeOverrideHandle {
     this.spaces.set(derived, {
       adapter: info.adapter,
       origin: info.origin,
+      available: info.available,
       localOffset,
     });
   }
 
   private installSessionListeners(adapter: NativeSessionAdapter): void {
     const { session } = adapter;
-    const suppressNativeInput = (event: Event): void => {
-      if (!this.syntheticEvents.has(event)) {
-        event.stopImmediatePropagation();
+    if (this.options.mode === 'full') {
+      const suppressNativeInput = (event: Event): void => {
+        if (!this.syntheticEvents.has(event)) {
+          event.stopImmediatePropagation();
+        }
+      };
+      for (const type of ['inputsourceschange', ...INPUT_EVENT_NAMES]) {
+        session.addEventListener(type, suppressNativeInput, true);
+        adapter.cleanupListeners.push(() =>
+          session.removeEventListener(type, suppressNativeInput, true),
+        );
       }
-    };
-    for (const type of ['inputsourceschange', ...INPUT_EVENT_NAMES]) {
-      session.addEventListener(type, suppressNativeInput, true);
+    } else {
+      // Run before application listeners (the session has not escaped
+      // requestSession yet) so session.inputSources already reflects the
+      // browser's new membership when its native event is observed.
+      const syncNativeSources = (event: Event): void => {
+        if (this.syntheticEvents.has(event)) {
+          return;
+        }
+        try {
+          if (!adapter.nativeInputSourcesLive) {
+            const change = event as XRInputSourcesChangeEvent;
+            if (change.added == null || change.removed == null) {
+              adapter.nativeSources = Object.freeze([
+                ...adapter.nativeInputSources(),
+              ]);
+            } else {
+              const removed = new Set(Array.from(change.removed));
+              const nativeSources = adapter.nativeSources.filter(
+                (source) => !removed.has(source),
+              );
+              for (const source of Array.from(change.added)) {
+                if (!nativeSources.includes(source)) {
+                  nativeSources.push(source);
+                }
+              }
+              adapter.nativeSources = Object.freeze(nativeSources);
+            }
+          }
+        } catch (error) {
+          try {
+            adapter.nativeSources = Object.freeze([
+              ...adapter.nativeInputSources(),
+            ]);
+          } catch (readError) {
+            this.note(
+              `A native input-source change could not be reconciled; preserving the last known set: ${this.errorText(readError ?? error)}`,
+              'gaze-only-native-input-change-failed',
+            );
+          }
+        }
+        this.refreshInputSources(adapter, true);
+      };
+      session.addEventListener('inputsourceschange', syncNativeSources, true);
       adapter.cleanupListeners.push(() =>
-        session.removeEventListener(type, suppressNativeInput, true),
+        session.removeEventListener(
+          'inputsourceschange',
+          syncNativeSources,
+          true,
+        ),
       );
     }
     const onVisibilityChange = (): void => {
@@ -1643,11 +2072,19 @@ export class XRNativeOverride implements NativeOverrideHandle {
     time: DOMHighResTimeStamp,
     frame: XRFrame,
   ): void {
-    if (adapter.ended || adapter.lastFrameTime === time) {
+    if (
+      adapter.ended ||
+      (adapter.lastFrameTime === time && adapter.lastPreparedFrame === frame)
+    ) {
       return;
     }
     adapter.lastFrameTime = time;
+    adapter.lastPreparedFrame = frame;
     adapter.baseSpaceCache.clear();
+
+    if (this.options.mode === 'gaze-only') {
+      this.syncDeviceViewerFromNative(adapter, frame);
+    }
 
     if (adapter === this.sharedStateDriver()) {
       this.advanceSharedState(adapter, time);
@@ -1661,6 +2098,62 @@ export class XRNativeOverride implements NativeOverrideHandle {
     this.refreshInputSources(adapter, true);
     this.dispatchButtonTransitions(adapter, frame);
     this.updateHitTestSources(adapter);
+  }
+
+  /**
+   * Keep the synthetic gaze origin coincident with the physical headset while
+   * leaving the browser-owned viewer pose untouched.
+   */
+  private syncDeviceViewerFromNative(
+    adapter: NativeSessionAdapter,
+    frame: XRFrame,
+  ): void {
+    adapter.nativeViewerPoseValid = false;
+    const found = methodDescriptor(frame, 'getViewerPose');
+    const nativeMethod = found?.descriptor.value as
+      | NativeGetViewerPose
+      | undefined;
+    if (!found || typeof nativeMethod !== 'function') {
+      this.note(
+        'The native XRFrame.getViewerPose implementation is unavailable; synthetic gaze is untracked for this frame.',
+        'gaze-only-viewer-pose-unavailable',
+      );
+      return;
+    }
+    let pose: XRViewerPose | null | undefined;
+    try {
+      pose = nativeMethod.call(frame, adapter.anchorSpace);
+    } catch {
+      return;
+    }
+    if (!pose) {
+      return;
+    }
+    const transform = this.readNativeTransform(pose);
+    if (!transform) {
+      return;
+    }
+    const matrix = matrixFromTransform(transform);
+    mat4.copy(adapter.nativeViewerMatrix, matrix);
+    this.applyDeviceViewerMatrix(matrix);
+    adapter.nativeViewerPoseValid = true;
+  }
+
+  private applyDeviceViewerMatrix(matrix: mat4): void {
+    mat4.getTranslation(scratchPosition, matrix);
+    mat4.getRotation(scratchOrientation, matrix);
+    this.device.position.set(
+      scratchPosition[0],
+      scratchPosition[1],
+      scratchPosition[2],
+    );
+    this.device.quaternion.set(
+      scratchOrientation[0],
+      scratchOrientation[1],
+      scratchOrientation[2],
+      scratchOrientation[3],
+    );
+    this.device[P_DEVICE].updateViews();
   }
 
   /**
@@ -1687,6 +2180,19 @@ export class XRNativeOverride implements NativeOverrideHandle {
     this.lastPrimaryTime = time;
     const delta =
       previousTime === undefined ? 16.67 : Math.max(0, time - previousTime);
+    if (this.options.mode === 'gaze-only') {
+      this.device[P_DEVICE].remote.update(delta);
+      // A queued command may target the synthetic device's viewer. Reassert
+      // the browser-owned pose so gaze-only mode cannot move the real view or
+      // offset the gaze origin away from the physical headset.
+      if (adapter.nativeViewerPoseValid) {
+        this.applyDeviceViewerMatrix(adapter.nativeViewerMatrix);
+      }
+      this.device[P_DEVICE].visibilityState = adapter.session.visibilityState;
+      this.device[P_DEVICE].pendingVisibilityState = null;
+      this.device.gaze?.updateTargetRaySpace();
+      return;
+    }
     this.device[P_DEVICE].remote.update(delta);
     this.device[P_DEVICE].visibilityState = adapter.session.visibilityState;
     this.device[P_DEVICE].pendingVisibilityState = null;
@@ -1728,14 +2234,17 @@ export class XRNativeOverride implements NativeOverrideHandle {
     // activeInputs already applies visibility, the primary input mode, and
     // per-input connectedness, exactly as the emulated frame loop does.
     for (const input of this.device.activeInputs) {
-      mat4.fromRotationTranslation(
-        input.inputSource.targetRaySpace[P_SPACE].offsetMatrix,
-        input.quaternion.quat,
-        input.position.vec3,
-      );
+      // Through the input's own hook rather than the matrix write it wraps:
+      // gaze re-pins its viewer-relative origin there.
+      input.updateTargetRaySpace();
       for (const button of input.inputSource.gamepad?.buttons ?? []) {
         if (button instanceof GamepadButton) {
-          button[P_GAMEPAD].lastFrameValue = button[P_GAMEPAD].value;
+          // An immediate write already moved `value`, so the edge is measured
+          // from the value it replaced instead of from the new one.
+          button[P_GAMEPAD].lastFrameValue =
+            button[P_GAMEPAD].immediateTransitionFrom ??
+            button[P_GAMEPAD].value;
+          button[P_GAMEPAD].immediateTransitionFrom = null;
           if (button[P_GAMEPAD].pendingValue != null) {
             button[P_GAMEPAD].value = button[P_GAMEPAD].pendingValue;
             button[P_GAMEPAD].pendingValue = null;
@@ -1757,29 +2266,53 @@ export class XRNativeOverride implements NativeOverrideHandle {
     if (!this.installedState || adapter.ended) {
       return;
     }
+    const isNewFrame =
+      adapter.lastFrameTime !== time || adapter.lastPreparedFrame !== frame;
+    if (this.options.mode === 'gaze-only' && isNewFrame) {
+      // A preparation failure must not leave the last physical viewer pose
+      // looking valid to a synthetic gaze query in the application callback.
+      adapter.nativeViewerPoseValid = false;
+    }
     try {
-      if (adapter.lastFrameTime !== time) {
+      if (isNewFrame) {
         // Instance-tier fallbacks live for one native frame. Reverting them at
         // the next timestamp keeps exact uninstall semantics without retaining
         // every frame/pose object on browsers that allocate them per frame.
         adapter.instancePatches.revert();
-        if (this.lastEpochTime !== time) {
-          this.lastEpochTime = time;
-          this.epoch += 1;
-        }
+        this.epoch += 1;
       }
       this.frameSessions.set(frame, adapter);
       adapter.activeFrame = frame;
       this.ensureFramePatches(frame);
       this.tick(adapter, time, frame);
+      if (
+        this.unhealthyFrameAdapters.delete(adapter) &&
+        this.unhealthyFrameAdapters.size === 0
+      ) {
+        this.capabilityState.supported = true;
+      }
+      adapter.framePreparationFailures = 0;
     } catch (error) {
+      if (this.options.mode === 'gaze-only') {
+        adapter.nativeViewerPoseValid = false;
+      }
+      adapter.framePreparationFailures += 1;
+      const failureCount = adapter.framePreparationFailures;
+      if (failureCount >= FRAME_PREPARATION_FAILURE_THRESHOLD) {
+        this.unhealthyFrameAdapters.add(adapter);
+        this.capabilityState.supported = false;
+      }
       try {
-        this.note(
-          `Native frame preparation failed; the application frame was preserved: ${this.errorText(
-            error,
-          )}`,
-          'frame-preparation-failed',
-        );
+        if (
+          failureCount === 1 ||
+          failureCount === FRAME_PREPARATION_FAILURE_THRESHOLD ||
+          failureCount === FRAME_PREPARATION_FINAL_DIAGNOSTIC_COUNT
+        ) {
+          this.note(
+            `Native frame preparation failed ${failureCount} consecutive time${failureCount === 1 ? '' : 's'}; the application frame was preserved${failureCount >= FRAME_PREPARATION_FAILURE_THRESHOLD ? ' and the override was marked unsupported' : ''}: ${this.errorText(error)}`,
+            `frame-preparation-failed-${failureCount}`,
+          );
+        }
       } catch {
         // Never let diagnostics prevent the browser-owned application callback.
       }
@@ -1817,6 +2350,9 @@ export class XRNativeOverride implements NativeOverrideHandle {
   }
 
   private currentViewerSpace(): IwerSpace {
+    if (this.options.mode === 'gaze-only') {
+      return this.device[P_DEVICE].viewerSpace;
+    }
     const player = this.activePlayer();
     return player ? player.viewerSpace : this.device[P_DEVICE].viewerSpace;
   }
@@ -1826,7 +2362,10 @@ export class XRNativeOverride implements NativeOverrideHandle {
     dispatchChange: boolean,
   ): void {
     const visible = adapter.session.visibilityState === 'visible';
-    const next = visible ? this.expectedSources(adapter) : [];
+    const next =
+      this.options.mode === 'gaze-only' || visible
+        ? this.expectedSources(adapter)
+        : [];
     if (visible) {
       // A facade with queued events stays published until those events drain,
       // so a recording's edge is never delivered for an unpublished source.
@@ -1882,13 +2421,46 @@ export class XRNativeOverride implements NativeOverrideHandle {
         this.resetButtonBaseline(binding);
       }
     }
+    if (
+      visible &&
+      removed.some(
+        (source) => adapter.bindingByFacade.get(source)?.kind === 'gaze',
+      )
+    ) {
+      this.releaseGazeCommitActions(adapter, next);
+    }
     adapter.sources = Object.freeze([...next]);
     if (dispatchChange) {
-      this.dispatchInputSourcesChange(adapter, added, removed);
+      const announcedAdded =
+        this.options.mode === 'gaze-only'
+          ? added.filter((source) => adapter.bindingByFacade.has(source))
+          : added;
+      const announcedRemoved =
+        this.options.mode === 'gaze-only'
+          ? removed.filter((source) => adapter.bindingByFacade.has(source))
+          : removed;
+      if (announcedAdded.length > 0 || announcedRemoved.length > 0) {
+        this.dispatchInputSourcesChange(
+          adapter,
+          announcedAdded,
+          announcedRemoved,
+        );
+      }
     }
   }
 
   private expectedSources(adapter: NativeSessionAdapter): XRInputSource[] {
+    if (this.options.mode === 'gaze-only') {
+      const nativeSources = this.readNativeInputSources(adapter);
+      const gaze =
+        adapter.session.visibilityState === 'visible'
+          ? this.connectedSources(adapter, 'gaze')
+          : [];
+      return [
+        ...nativeSources,
+        ...gaze.filter((source) => !nativeSources.includes(source)),
+      ];
+    }
     const player = this.activePlayer();
     if (player) {
       try {
@@ -1908,12 +2480,91 @@ export class XRNativeOverride implements NativeOverrideHandle {
       }
     }
     const kind = this.device.primaryInputMode;
+    // Gaze is additive: it accompanies whichever primary input mode is
+    // selected, and survives a mode that cannot publish anything at all.
+    const gaze = this.connectedSources(adapter, 'gaze');
     if (kind === 'hand' && !adapter.handTracking) {
       this.note(
-        `Native hand input requires the "${HAND_TRACKING_FEATURE}" feature on the browser session; inputSources remain empty while hand mode is selected.`,
+        `Native hand input requires the "${HAND_TRACKING_FEATURE}" feature on the browser session; no synthetic hand input sources are published while hand mode is selected.`,
       );
-      return [];
+      return gaze;
     }
+    return [...this.connectedSources(adapter, kind), ...gaze];
+  }
+
+  private readNativeInputSources(
+    adapter: NativeSessionAdapter,
+  ): XRInputSource[] {
+    if (!adapter.nativeInputSourcesLive) {
+      return Array.from(adapter.nativeSources);
+    }
+    try {
+      const sources = Array.from(adapter.nativeInputSources());
+      adapter.nativeSources = Object.freeze([...sources]);
+      return sources;
+    } catch (error) {
+      this.note(
+        `Native input sources could not be read; preserving the last known set: ${this.errorText(error)}`,
+        'gaze-only-native-input-sources-unavailable',
+      );
+      return adapter.sources.filter(
+        (source) => !adapter.bindingByFacade.has(source),
+      );
+    }
+  }
+
+  /**
+   * Ends the select actions that were committed against a gaze target ray.
+   *
+   * Gaze carries the aim and a separate source carries the commit, so a gaze
+   * source that disappears mid-press would otherwise leave the application
+   * holding an interaction it can no longer point. Squeeze is untouched: it is
+   * not part of the gaze-plus-pinch contract and stays with its own source.
+   */
+  private releaseGazeCommitActions(
+    adapter: NativeSessionAdapter,
+    published: readonly XRInputSource[],
+  ): void {
+    // The buttons are shared with every other live session, so only the
+    // current shared-state driver may zero them.
+    const clearsSharedInputState = adapter === this.sharedStateDriver();
+    for (const binding of adapter.deviceBindings) {
+      if (binding.kind === 'gaze' || !published.includes(binding.inputSource)) {
+        continue;
+      }
+      const selectButtons = binding.eventButtons.filter(
+        (button) => button[P_GAMEPAD].eventTrigger === 'select',
+      );
+      if (selectButtons.length === 0) {
+        continue;
+      }
+      if (binding.activeActions.has('select')) {
+        this.emitInputEvent(adapter, 'selectend', binding.inputSource, false);
+        binding.activeActions.delete('select');
+      }
+      binding.pendingActions.delete('select');
+      for (const button of selectButtons) {
+        binding.activeButtons.delete(button);
+        if (clearsSharedInputState) {
+          this.releaseButton(button);
+        }
+        binding.previousButtonValues.set(button, button.value);
+      }
+    }
+  }
+
+  /** Drops a shared device button back to a fully released, edge-free state. */
+  private releaseButton(button: GamepadButton): void {
+    button[P_GAMEPAD].value = 0;
+    button[P_GAMEPAD].pendingValue = 0;
+    button[P_GAMEPAD].lastFrameValue = 0;
+    button[P_GAMEPAD].immediateTransitionFrom = null;
+  }
+
+  private connectedSources(
+    adapter: NativeSessionAdapter,
+    kind: InputBindingKind,
+  ): XRInputSource[] {
     return adapter.deviceBindings
       .filter(
         (binding) => binding.kind === kind && binding.trackedInput!.connected,
@@ -2342,11 +2993,12 @@ export class XRNativeOverride implements NativeOverrideHandle {
     }
     const adapter = this.adapterForFrame(frame);
     const posePatched = this.patchFrameGetPose(frame);
-    const viewerPatched = this.patchFrameGetViewerPose(frame);
     const batchPatched = this.patchFrameFillPoses(frame);
-    const jointPatched = this.patchFrameGetJointPose(frame);
-    const radiiPatched = this.patchFrameFillJointRadii(frame);
-    if (adapter) {
+    const full = this.options.mode === 'full';
+    const viewerPatched = full ? this.patchFrameGetViewerPose(frame) : false;
+    const jointPatched = full ? this.patchFrameGetJointPose(frame) : false;
+    const radiiPatched = full ? this.patchFrameFillJointRadii(frame) : false;
+    if (adapter && full) {
       this.recordAnchorAvailability(
         adapter,
         this.patchFrameCreateAnchor(frame),
@@ -2358,14 +3010,14 @@ export class XRNativeOverride implements NativeOverrideHandle {
     }
     this.capabilityState.poseOverride ||= posePatched;
     this.capabilityState.batchPoses ||= batchPatched;
-    this.capabilityState.jointPoses ||= jointPatched && radiiPatched;
+    this.capabilityState.jointPoses ||= full && jointPatched && radiiPatched;
     if (!posePatched) {
       this.note('Unable to patch native XRFrame.getPose.');
     }
     if (!batchPatched) {
       this.note('Unable to patch native XRFrame.fillPoses.');
     }
-    if (!viewerPatched) {
+    if (full && !viewerPatched) {
       this.note('Unable to patch native XRFrame.getViewerPose.');
     }
     this.instancePatchedFrameEpochs.set(frame, this.epoch);
@@ -2762,6 +3414,12 @@ export class XRNativeOverride implements NativeOverrideHandle {
         'The IWER-controlled space belongs to a different native session.',
       );
     }
+    if (
+      (spaceInfo?.available && !spaceInfo.available()) ||
+      (baseInfo?.available && !baseInfo.available())
+    ) {
+      return null;
+    }
     const matrix = this.effectivePoseMatrix(
       adapter,
       frame,
@@ -2775,6 +3433,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
       );
       return null;
     }
+    this.capabilityState.phase = 'active';
     return this.createPoseFacade(matrix);
   }
 
@@ -3170,6 +3829,9 @@ export class XRNativeOverride implements NativeOverrideHandle {
     info: ControlledSpace,
     output: mat4,
   ): mat4 | null {
+    if (info.available && !info.available()) {
+      return null;
+    }
     if (!info.origin) {
       mat4.identity(output);
     } else {
@@ -3797,7 +4459,14 @@ export class XRNativeOverride implements NativeOverrideHandle {
     if (adapter.ended) {
       return;
     }
-    const removedSources = [...adapter.sources];
+    const removedSources =
+      this.options.mode === 'gaze-only'
+        ? adapter.sources.filter((source) =>
+            adapter.bindingByFacade.has(source),
+          )
+        : [...adapter.sources];
+    const wasFramePreparationUnhealthy =
+      this.unhealthyFrameAdapters.delete(adapter);
     adapter.ended = true;
     for (const cleanup of adapter.cleanupListeners.splice(0)) {
       try {
@@ -3807,6 +4476,19 @@ export class XRNativeOverride implements NativeOverrideHandle {
         // runtime state from being restored.
       }
     }
+    // Release whatever was still held at teardown so a press that was live
+    // when the override went away cannot leak into the next runtime as a
+    // phantom edge. Shared buttons are only zeroed by the current driver.
+    const clearsSharedInputState = adapter === this.sharedStateDriver();
+    for (const binding of adapter.deviceBindings) {
+      for (const button of binding.eventButtons) {
+        if (clearsSharedInputState) {
+          this.releaseButton(button);
+        }
+        binding.previousButtonValues.set(button, button.value);
+      }
+      binding.activeButtons.clear();
+    }
     for (const binding of Array.from(adapter.hitTests)) {
       this.disposeHitTestBinding(binding);
     }
@@ -3814,6 +4496,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
     adapter.patches.revert();
     adapter.baseSpaceCache.clear();
     adapter.activeFrame = null;
+    adapter.lastPreparedFrame = null;
     this.sessionsByObject.delete(adapter.session);
 
     if (announceNativeInputTransition) {
@@ -3823,10 +4506,12 @@ export class XRNativeOverride implements NativeOverrideHandle {
       // browser's real input sources. Session-end cleanup intentionally skips
       // this event because the session itself is no longer usable.
       let addedSources: XRInputSource[] = [];
-      try {
-        addedSources = Array.from(adapter.session.inputSources);
-      } catch {
-        // A hostile native getter must not make teardown fail.
+      if (this.options.mode === 'full') {
+        try {
+          addedSources = Array.from(adapter.session.inputSources);
+        } catch {
+          // A hostile native getter must not make teardown fail.
+        }
       }
       if (addedSources.length > 0 || removedSources.length > 0) {
         try {
@@ -3849,6 +4534,13 @@ export class XRNativeOverride implements NativeOverrideHandle {
     adapter.pendingEvents.length = 0;
     adapter.retainedSources.clear();
     this.liveSessions.delete(adapter);
+    if (
+      wasFramePreparationUnhealthy &&
+      this.unhealthyFrameAdapters.size === 0 &&
+      this.installedState
+    ) {
+      this.capabilityState.supported = true;
+    }
     if (this.primarySession === adapter) {
       this.primarySession = this.liveSessions.values().next().value ?? null;
       this.lastPrimaryTime = undefined;
@@ -3872,6 +4564,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
     this.patchedJointPoseOwners = new WeakSet();
     this.patchedJointRadiiOwners = new WeakSet();
     this.patchedReferenceSpaceOwners = new WeakSet();
+    this.patchedEnabledFeaturesOwners = new WeakSet();
     this.patchedInputSourceOwners = new WeakSet();
     this.patchedRafOwners = new WeakSet();
     this.patchedRequestReferenceSpaceOwners = new WeakSet();
@@ -3883,12 +4576,14 @@ export class XRNativeOverride implements NativeOverrideHandle {
     this.rawGetPoseByFrame = new WeakMap();
     this.rawRafByOwner = new WeakMap();
     this.rawRequestReferenceSpaceByOwner = new WeakMap();
+    this.rawInputSourcesGetterByOwner = new WeakMap();
     this.rawTransformGetters = new WeakMap();
     this.transformReaders = new WeakMap();
     this.transformOverrides = new WeakMap();
     this.patchedTransformOwners = new WeakSet();
     this.instancePatchedFrameEpochs = new WeakMap();
     this.instancePatchedTransformEpochs = new WeakMap();
+    this.unhealthyFrameAdapters.clear();
     this.lastPrimaryTime = undefined;
   }
 
