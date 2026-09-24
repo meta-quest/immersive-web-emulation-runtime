@@ -261,6 +261,9 @@ importers:
       rollup:
         specifier: ^4.60.3
         version: 4.60.3
+      three:
+        specifier: ^0.184.0
+        version: 0.184.0
       ts-jest:
         specifier: ^29.4.9
         version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@25.6.0))(typescript@6.0.3)

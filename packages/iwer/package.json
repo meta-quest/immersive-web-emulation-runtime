@@ -42,6 +42,7 @@
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "rollup": "^4.60.3",
+    "three": "^0.184.0",
     "ts-jest": "^29.4.9",
     "typescript": "^6.0.3"
   },

@@ -12,11 +12,9 @@ import {
   Group,
   Matrix3,
   Matrix4,
-  MeshDepthMaterial,
   Object3D,
   PerspectiveCamera,
   Quaternion,
-  RGBADepthPacking,
   Raycaster,
   Scene,
   Vector3,
@@ -25,6 +23,11 @@ import {
 } from 'three';
 import { NativeMesh, NativePlane, XRDevice } from 'iwer';
 import { SpatialEntity, SpatialEntityType } from './native/entity.js';
+import {
+  createEnvironmentDepthMaterial,
+  perspectiveDepthToMeters,
+  unpackRGBADepthBytes,
+} from './depth-packing.js';
 
 import { Environments } from './registry.js';
 import { Scene as SceneFile } from './generated/protos/openxr_scene.js';
@@ -66,9 +69,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
 
   // Depth sensing
   private depthRenderTarget: WebGLRenderTarget | null = null;
-  private depthMaterial = new MeshDepthMaterial({
-    depthPacking: RGBADepthPacking,
-  });
+  private depthMaterial = createEnvironmentDepthMaterial();
   private depthCamera: Camera;
   private _tempMatrix = new Matrix4();
   private depthReadBuffer: Uint8Array | null = null;
@@ -390,7 +391,6 @@ export class SyntheticEnvironmentModule extends EventTarget {
     );
 
     // Output as float32 (one depth-in-meters value per pixel)
-    const depthRange = depthFar - depthNear;
     const rawValueToMeters = 1.0; // float32 values are already in meters
     const outputBuffer = new ArrayBuffer(width * height * 4); // 4 bytes per float
     const output = new Float32Array(outputBuffer);
@@ -404,24 +404,20 @@ export class SyntheticEnvironmentModule extends EventTarget {
         const srcIdx = srcRow * width + col;
         const dstIdx = row * width + col;
 
-        const r = rgba[srcIdx * 4] / 255;
-        const g = rgba[srcIdx * 4 + 1] / 255;
-        const b = rgba[srcIdx * 4 + 2] / 255;
-        const a = rgba[srcIdx * 4 + 3] / 255;
-
         // Decode depth from RGBA packing — this is gl_FragCoord.z (0..1)
-        const normalizedDepth = r + g / 256 + b / 65536 + a / 16777216;
+        const normalizedDepth = unpackRGBADepthBytes(
+          rgba[srcIdx * 4],
+          rgba[srcIdx * 4 + 1],
+          rgba[srcIdx * 4 + 2],
+          rgba[srcIdx * 4 + 3],
+        );
 
-        // Convert from non-linear gl_FragCoord.z to linear eye-space depth
-        let depthMeters: number;
-        if (normalizedDepth >= 1.0 || normalizedDepth <= 0.0) {
-          depthMeters = depthFar; // no geometry hit → treat as far plane
-        } else {
-          depthMeters =
-            (depthNear * depthFar) / (depthFar - normalizedDepth * depthRange);
-        }
-
-        output[dstIdx] = depthMeters;
+        // Convert from non-linear gl_FragCoord.z to linear eye-space depth.
+        output[dstIdx] = perspectiveDepthToMeters(
+          normalizedDepth,
+          depthNear,
+          depthFar,
+        );
       }
     }
 
