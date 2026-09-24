@@ -18,6 +18,7 @@ function renderHeader({ visibilityMask, visibilityMaskEnabled }) {
     React.createElement(HeaderUI, {
       xrDevice: {
         activeSession: undefined,
+        supportedFeatures: [],
         primaryInputMode: 'controller',
         sem: undefined,
         visibilityMask,

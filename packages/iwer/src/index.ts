@@ -42,6 +42,9 @@ export type { GamepadConfig, Button, Axis } from './gamepad/Gamepad.js';
 export { RemoteControlInterface } from './remote/index.js';
 export type {
   DeviceId,
+  PoseDeviceId,
+  ConnectedInputDeviceId,
+  SelectableDeviceId,
   InputDeviceId,
   ControllerId,
   Action,

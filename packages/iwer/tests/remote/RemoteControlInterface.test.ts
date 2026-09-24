@@ -82,7 +82,12 @@ describe('RemoteControlInterface', () => {
         },
       },
       supportedSessionModes: ['immersive-vr', 'inline'],
-      supportedFeatures: ['local', 'hand-tracking'],
+      supportedFeatures: [
+        'local',
+        'hand-tracking',
+        'gaze-tracking',
+        'eye-tracking',
+      ],
       supportedFrameRates: [60, 72, 90],
       isSystemKeyboardSupported: true,
       internalNominalFrameRate: 60,
@@ -385,6 +390,7 @@ describe('RemoteControlInterface', () => {
         expect(result.sessionMode).toBeNull();
         expect(result.enabledFeatures).toEqual([]);
         expect(result.visibilityState).toBe('visible');
+        expect(result.runtimeKind).toBe('emulated');
       });
 
       test('supports a structural session without internal reference spaces', async () => {
@@ -1573,6 +1579,18 @@ describe('RemoteControlInterface', () => {
         const result = (await promise) as SelectResult;
         expect(result.device).toBe('controller-right');
       });
+
+      test.each(['_select_press', '_select_release'])(
+        'should reject %s when an invalid gaze device reaches the internal queue',
+        (method) => {
+          expect(() =>
+            (remote as any).executeDiscreteAction({
+              method,
+              params: { device: 'gaze' },
+            }),
+          ).toThrow('Unsupported select device: gaze');
+        },
+      );
     });
 
     describe('get_select_value with actual assertions (fix #8)', () => {
@@ -1815,6 +1833,140 @@ describe('RemoteControlInterface', () => {
           remote.dispatch('get_transform', { device: 'totally-invalid' }),
         ).rejects.toThrow('Unknown device');
       });
+    });
+  });
+
+  describe('gaze control', () => {
+    beforeEach(() => {
+      mockActiveSession();
+    });
+
+    test('reports gaze in world space while storing viewer-local orientation', async () => {
+      const halfAngle = Math.PI / 4;
+      device.position.set(1, 2, 3);
+      device.quaternion.set(0, Math.sin(halfAngle), 0, Math.cos(halfAngle));
+      device.gaze!.quaternion.set(0, 0, 0, 1);
+
+      const initial = (await remote.dispatch('get_transform', {
+        device: 'gaze',
+      })) as GetTransformResult;
+      expect(initial.position).toEqual({ x: 1, y: 2, z: 3 });
+      expect(initial.orientation.y).toBeCloseTo(Math.sin(halfAngle), 5);
+
+      const promise = remote.dispatch('set_transform', {
+        device: 'gaze',
+        orientation: { x: 0, y: 0, z: 0, w: 1 },
+      });
+      remote.update(16.67);
+      const result = (await promise) as SetTransformResult;
+
+      expect(result.orientation.x).toBeCloseTo(0, 5);
+      expect(result.orientation.y).toBeCloseTo(0, 5);
+      expect(result.orientation.z).toBeCloseTo(0, 5);
+      expect(result.orientation.w).toBeCloseTo(1, 5);
+      expect(device.gaze!.quaternion.y).toBeCloseTo(-Math.sin(halfAngle), 5);
+      expect(device.gaze!.position).toMatchObject({ x: 0, y: 0, z: 0 });
+    });
+
+    test('rejects attempts to move the gaze origin', async () => {
+      const promise = remote.dispatch('set_transform', {
+        device: 'gaze',
+        position: { x: 1, y: 2, z: 3 },
+      });
+      remote.update(16.67);
+
+      await expect(promise).rejects.toThrow(
+        'Gaze position is derived from the headset',
+      );
+    });
+
+    test('orients gaze toward a world target and rejects moveToDistance', async () => {
+      device.position.set(0, 1.6, 0);
+      device.quaternion.set(0, 0.2, 0, 0.98).normalize();
+
+      const lookPromise = remote.dispatch('look_at', {
+        device: 'gaze',
+        target: { x: 0, y: 1.6, z: -5 },
+      });
+      remote.update(16.67);
+      const result = (await lookPromise) as LookAtResult;
+      expect(result.orientation.x).toBeCloseTo(0, 5);
+      expect(result.orientation.y).toBeCloseTo(0, 5);
+      expect(result.orientation.z).toBeCloseTo(0, 5);
+      expect(result.orientation.w).toBeCloseTo(1, 5);
+
+      const invalidPromise = remote.dispatch('look_at', {
+        device: 'gaze',
+        target: { x: 0, y: 1.6, z: -5 },
+        moveToDistance: 1,
+      });
+      remote.update(16.67);
+      await expect(invalidPromise).rejects.toThrow(
+        'moveToDistance is not supported for gaze',
+      );
+    });
+
+    test('animates world orientation correctly while the headset moves', async () => {
+      const target = {
+        x: 0,
+        y: Math.sin(Math.PI / 4),
+        z: 0,
+        w: Math.cos(Math.PI / 4),
+      };
+      const promise = remote.dispatch('animate_to', {
+        device: 'gaze',
+        orientation: target,
+        duration: 1,
+      });
+
+      remote.update(500);
+      device.quaternion.set(0, Math.sin(Math.PI / 8), 0, Math.cos(Math.PI / 8));
+      remote.update(500);
+      const result = (await promise) as AnimateToResult;
+
+      expect(result.orientation.y).toBeCloseTo(target.y, 5);
+      expect(result.orientation.w).toBeCloseTo(target.w, 5);
+    });
+
+    test('connects gaze and includes it in device snapshots', async () => {
+      const disconnect = remote.dispatch('set_connected', {
+        device: 'gaze',
+        connected: false,
+      });
+      remote.update(16.67);
+      await disconnect;
+
+      const state = (await remote.dispatch(
+        'get_device_state',
+        {},
+      )) as RemoteDeviceState;
+      expect(state.gaze).toMatchObject({ connected: false });
+      expect(state.gaze?.orientation).toBeDefined();
+
+      const restore = remote.dispatch('set_device_state', {
+        state: {
+          gaze: {
+            connected: true,
+            orientation: { x: 0, y: 0, z: 0, w: 1 },
+          },
+        },
+      });
+      remote.update(16.67);
+      const restored = (await restore) as SetDeviceStateResult;
+      expect(restored.state.gaze?.connected).toBe(true);
+      expect(restored.state.gaze?.orientation.x).toBeCloseTo(0, 5);
+      expect(restored.state.gaze?.orientation.y).toBeCloseTo(0, 5);
+      expect(restored.state.gaze?.orientation.z).toBeCloseTo(0, 5);
+      expect(restored.state.gaze?.orientation.w).toBeCloseTo(1, 5);
+    });
+
+    test('does not allow gaze to produce select state', async () => {
+      await expect(
+        remote.dispatch('select', { device: 'gaze' }),
+      ).rejects.toThrow('Unknown input device: gaze');
+      await expect(
+        remote.dispatch('get_select_value', { device: 'gaze' }),
+      ).rejects.toThrow('Unknown input device: gaze');
     });
   });
 });

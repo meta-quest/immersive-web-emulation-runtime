@@ -130,6 +130,10 @@ export class XRController extends XRTrackedInput {
         return;
       }
       // Set both value and pendingValue for immediate effect
+      if (gamepadButton[P_GAMEPAD].immediateTransitionFrom === null) {
+        gamepadButton[P_GAMEPAD].immediateTransitionFrom =
+          gamepadButton[P_GAMEPAD].value;
+      }
       gamepadButton[P_GAMEPAD].value = value;
       gamepadButton[P_GAMEPAD].pendingValue = value;
     } else {

@@ -242,14 +242,31 @@ function settingsHtml(): string {
           `<option value="${id}" ${value('environment') === id ? 'selected' : ''}>${titleCase(id)}</option>`,
       ).join('')}</select>`,
     )}
-		${row(
-      'inputMode',
-      'Input Mode',
-      `<select id="inputMode">
+			${row(
+        'inputMode',
+        'Input Mode',
+        `<select id="inputMode">
 				<option value="controller" ${value('inputMode') === 'controller' ? 'selected' : ''}>Controller</option>
 				<option value="hand" ${value('inputMode') === 'hand' ? 'selected' : ''}>Hand tracking</option>
-			</select>`,
-    )}
+				</select>`,
+      )}
+			${row(
+        'gazeMode',
+        'Gaze Mode',
+        `<select id="gazeMode">
+					<option value="off" ${value('gazeMode') === 'off' ? 'selected' : ''}>Off</option>
+					<option value="cursor" ${value('gazeMode') === 'cursor' ? 'selected' : ''}>Cursor</option>
+					<option value="head-locked" ${value('gazeMode') === 'head-locked' ? 'selected' : ''}>Head-locked</option>
+				</select><div class="muted">Requires a gaze-capable device profile.</div>`,
+      )}
+			${row(
+        'gazeCommitHand',
+        'Gaze Commit Hand',
+        `<select id="gazeCommitHand">
+					<option value="left" ${value('gazeCommitHand') === 'left' ? 'selected' : ''}>Left</option>
+					<option value="right" ${value('gazeCommitHand') === 'right' ? 'selected' : ''}>Right</option>
+				</select>`,
+      )}
 		${row(
       'stereoEnabled',
       'Stereo Rendering',
@@ -311,7 +328,7 @@ function introHtml(): string {
 			<strong>Pin IWE to your toolbar.</strong>
 			<div>Use the toolbar button to enable or disable WebXR emulation for the current site, open page-level controls, and connect AI agents. If you do not see it, open Chrome's Extensions menu and pin Immersive Web Emulator.</div>
 		</div>
-		<p>This panel is for persistent defaults that survive reloads: device, environment, input mode, stereo rendering, IPD, FOV-Y, FOV mask, and saved default pose.</p>
+		<p>This panel is for persistent defaults that survive reloads: device, environment, input mode, gaze mode and commit hand, stereo rendering, IPD, FOV-Y, FOV mask, and saved default pose.</p>
 		<div class="banner" id="movedBanner" role="status" ${showBanner ? '' : 'hidden'}>
 			<strong>Where are the live controls?</strong>
 			<div>The headset, controller, hand, and button-mapping controls are now in the floating overlay on the WebXR page itself. Coming from the old DevTools WebXR tab? Those live controls moved onto the page; this panel now focuses on persistent defaults like device, environment, IPD, and FOV-Y.</div>
@@ -413,6 +430,20 @@ function bind(): void {
       inputMode: (event.target as HTMLSelectElement).value as InputMode,
     });
   });
+  document.getElementById('gazeMode')?.addEventListener('change', (event) => {
+    void writePatch({
+      gazeMode: (event.target as HTMLSelectElement)
+        .value as OriginPrefs['gazeMode'],
+    });
+  });
+  document
+    .getElementById('gazeCommitHand')
+    ?.addEventListener('change', (event) => {
+      void writePatch({
+        gazeCommitHand: (event.target as HTMLSelectElement)
+          .value as OriginPrefs['gazeCommitHand'],
+      });
+    });
   document
     .getElementById('stereoEnabled')
     ?.addEventListener('change', (event) => {

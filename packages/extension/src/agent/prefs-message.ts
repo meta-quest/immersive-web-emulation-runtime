@@ -24,6 +24,7 @@ export interface PrefsRuntimeMessage {
 const HANDEDNESSES = ['left', 'right'] as const;
 const HAND_POSES = ['default', 'pinch', 'point'] as const;
 const TRIGGER_MODES = ['slow', 'normal', 'fast', 'turbo'] as const;
+const GAZE_MODES = ['off', 'cursor', 'head-locked'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -165,6 +166,12 @@ function sanitizePrefsPatch(
   }
   if (patch.inputMode === 'controller' || patch.inputMode === 'hand') {
     out.inputMode = patch.inputMode;
+  }
+  if (GAZE_MODES.includes(patch.gazeMode as never)) {
+    out.gazeMode = patch.gazeMode as OriginPrefs['gazeMode'];
+  }
+  if (patch.gazeCommitHand === 'left' || patch.gazeCommitHand === 'right') {
+    out.gazeCommitHand = patch.gazeCommitHand;
   }
   if (typeof patch.stereoEnabled === 'boolean') {
     out.stereoEnabled = patch.stereoEnabled;

@@ -237,6 +237,22 @@ export class XRHandInput extends XRTrackedInput {
     gamepadButton[P_GAMEPAD].pendingValue = value;
   }
 
+  /** Clear or seed pinch state synchronously for interaction cancellation. */
+  setPinchValueImmediate(value: number) {
+    if (value > 1 || value < 0) {
+      console.warn(`Out-of-range value ${value} provided for pinch`);
+      return;
+    }
+    const gamepadButton =
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap.pinch!;
+    if (gamepadButton[P_GAMEPAD].immediateTransitionFrom === null) {
+      gamepadButton[P_GAMEPAD].immediateTransitionFrom =
+        gamepadButton[P_GAMEPAD].value;
+    }
+    gamepadButton[P_GAMEPAD].value = value;
+    gamepadButton[P_GAMEPAD].pendingValue = value;
+  }
+
   onFrameStart(frame: XRFrame): void {
     super.onFrameStart(frame);
     this.updateHandPose();

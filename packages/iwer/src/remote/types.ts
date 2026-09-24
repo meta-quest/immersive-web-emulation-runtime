@@ -19,12 +19,26 @@ export type DeviceId =
   | 'controller-left'
   | 'controller-right'
   | 'hand-left'
-  | 'hand-right';
+  | 'hand-right'
+  | 'gaze';
 
 /**
- * Device identifiers that support input (not headset)
+ * Device identifiers that expose a pose.
  */
-export type InputDeviceId = Exclude<DeviceId, 'headset'>;
+export type PoseDeviceId = DeviceId;
+
+/** Device identifiers whose connected state can be changed. */
+export type ConnectedInputDeviceId = Exclude<DeviceId, 'headset'>;
+
+/** Device identifiers that can produce select state. Gaze is pose-only. */
+export type SelectableDeviceId =
+  | 'controller-left'
+  | 'controller-right'
+  | 'hand-left'
+  | 'hand-right';
+
+/** @deprecated Use ConnectedInputDeviceId or SelectableDeviceId as appropriate. */
+export type InputDeviceId = ConnectedInputDeviceId;
 
 /**
  * Controller device identifiers
@@ -88,14 +102,14 @@ export type OrientationInput = Quat | Partial<EulerRotation>;
  * Parameters for get_transform tool
  */
 export interface GetTransformParams {
-  device: DeviceId;
+  device: PoseDeviceId;
 }
 
 /**
  * Result of get_transform tool
  */
 export interface GetTransformResult {
-  device: DeviceId;
+  device: PoseDeviceId;
   position: Vec3;
   orientation: Quat;
   euler: EulerRotation;
@@ -105,7 +119,7 @@ export interface GetTransformResult {
  * Parameters for set_transform tool
  */
 export interface SetTransformParams {
-  device: DeviceId;
+  device: PoseDeviceId;
   position?: Vec3;
   orientation?: OrientationInput;
 }
@@ -114,7 +128,7 @@ export interface SetTransformParams {
  * Result of set_transform tool
  */
 export interface SetTransformResult {
-  device: DeviceId;
+  device: PoseDeviceId;
   position: Vec3;
   orientation: Quat;
 }
@@ -123,7 +137,7 @@ export interface SetTransformResult {
  * Parameters for look_at tool
  */
 export interface LookAtParams {
-  device: DeviceId;
+  device: PoseDeviceId;
   target: Vec3;
   moveToDistance?: number;
 }
@@ -132,7 +146,7 @@ export interface LookAtParams {
  * Result of look_at tool
  */
 export interface LookAtResult {
-  device: DeviceId;
+  device: PoseDeviceId;
   position: Vec3;
   orientation: Quat;
 }
@@ -141,7 +155,7 @@ export interface LookAtResult {
  * Parameters for animate_to tool
  */
 export interface AnimateToParams {
-  device: DeviceId;
+  device: PoseDeviceId;
   position?: Vec3;
   orientation?: OrientationInput;
   duration?: number; // seconds, default: 0.5
@@ -151,7 +165,7 @@ export interface AnimateToParams {
  * Result of animate_to tool
  */
 export interface AnimateToResult {
-  device: DeviceId;
+  device: PoseDeviceId;
   position: Vec3;
   orientation: Quat;
   actualDuration: number; // actual time taken in seconds
@@ -176,7 +190,7 @@ export interface SetInputModeResult {
  * Parameters for set_connected tool
  */
 export interface SetConnectedParams {
-  device: InputDeviceId;
+  device: ConnectedInputDeviceId;
   connected: boolean;
 }
 
@@ -184,7 +198,7 @@ export interface SetConnectedParams {
  * Result of set_connected tool
  */
 export interface SetConnectedResult {
-  device: InputDeviceId;
+  device: ConnectedInputDeviceId;
   connected: boolean;
 }
 
@@ -192,14 +206,14 @@ export interface SetConnectedResult {
  * Parameters for get_select_value tool
  */
 export interface GetSelectValueParams {
-  device: InputDeviceId;
+  device: SelectableDeviceId;
 }
 
 /**
  * Result of get_select_value tool
  */
 export interface GetSelectValueResult {
-  device: InputDeviceId;
+  device: SelectableDeviceId;
   value: number;
 }
 
@@ -207,7 +221,7 @@ export interface GetSelectValueResult {
  * Parameters for set_select_value tool
  */
 export interface SetSelectValueParams {
-  device: InputDeviceId;
+  device: SelectableDeviceId;
   value: number;
 }
 
@@ -215,7 +229,7 @@ export interface SetSelectValueParams {
  * Result of set_select_value tool
  */
 export interface SetSelectValueResult {
-  device: InputDeviceId;
+  device: SelectableDeviceId;
   value: number;
 }
 
@@ -223,7 +237,7 @@ export interface SetSelectValueResult {
  * Parameters for select tool
  */
 export interface SelectParams {
-  device: InputDeviceId;
+  device: SelectableDeviceId;
   duration?: number; // seconds, default: 0.3
 }
 
@@ -231,7 +245,7 @@ export interface SelectParams {
  * Result of select tool
  */
 export interface SelectResult {
-  device: InputDeviceId;
+  device: SelectableDeviceId;
   duration: number;
 }
 
@@ -322,6 +336,7 @@ export interface RemoteSessionStatus {
   sessionMode: 'immersive-vr' | 'immersive-ar' | 'inline' | null;
   enabledFeatures: string[];
   visibilityState: 'visible' | 'visible-blurred' | 'hidden';
+  runtimeKind: 'emulated' | 'native';
 }
 
 /**
@@ -358,6 +373,10 @@ export interface RemoteDeviceState {
   hands: {
     left: { connected: boolean; position: Vec3; orientation: Quat };
     right: { connected: boolean; position: Vec3; orientation: Quat };
+  };
+  gaze?: {
+    connected: boolean;
+    orientation: Quat;
   };
   stereoEnabled: boolean;
   fov: number;

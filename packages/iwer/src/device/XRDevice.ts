@@ -133,6 +133,9 @@ export interface DevUI {
   version: string;
   render(time: number): void;
   applyDefaultPose?(defaultPose: unknown): void;
+  setGazeMode?(mode: 'off' | 'cursor' | 'head-locked'): void;
+  setGazeCommitHand?(handedness: 'left' | 'right'): void;
+  onSessionEnd?(): void;
   get devUICanvas(): HTMLCanvasElement;
   get devUIContainer(): HTMLDivElement;
 }
@@ -515,6 +518,7 @@ export class XRDevice {
         canvas.height = window.innerHeight;
       },
       onSessionEnd: () => {
+        this[P_DEVICE].devui?.onSessionEnd?.();
         if (this[P_DEVICE].canvasData) {
           const { canvas, parent, width, height, zIndex } =
             this[P_DEVICE].canvasData;

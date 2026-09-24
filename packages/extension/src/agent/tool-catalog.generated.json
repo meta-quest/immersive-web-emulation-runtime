@@ -22,25 +22,25 @@
     {
       "name": "xr_get_transform",
       "title": "Get device transform",
-      "description": "Get the position, orientation (quaternion), and euler angles of a tracked device.",
+      "description": "Get the position, orientation (quaternion), and euler angles of a tracked device. Gaze reports the headset-derived origin and its world orientation.",
       "readOnly": true
     },
     {
       "name": "xr_set_transform",
       "title": "Set device transform",
-      "description": "Set a device position and/or orientation immediately. Requires an active session.",
+      "description": "Set a device position and/or orientation immediately. Gaze accepts orientation only; move its origin with the headset. Requires an active session.",
       "readOnly": false
     },
     {
       "name": "xr_look_at",
       "title": "Look at a point",
-      "description": "Orient a device toward an XR-origin-relative world point. Optionally move it to a given distance from the target. Requires an active session.",
+      "description": "Orient a device toward an XR-origin-relative world point. Optionally move it to a given distance from the target; gaze does not support moving its origin. Requires an active session.",
       "readOnly": false
     },
     {
       "name": "xr_animate_to",
       "title": "Animate device pose",
-      "description": "Smoothly animate a device to a target position and/or orientation over `duration` seconds (default 0.5). Requires an active, rendering session.",
+      "description": "Smoothly animate a device to a target position and/or orientation over `duration` seconds (default 0.5). Gaze accepts orientation only. Requires an active, rendering session.",
       "readOnly": false
     },
     {
@@ -52,7 +52,7 @@
     {
       "name": "xr_set_connected",
       "title": "Connect/disconnect input",
-      "description": "Connect or disconnect a controller or hand.",
+      "description": "Connect or disconnect a controller, hand, or gaze source.",
       "readOnly": false
     },
     {
@@ -88,7 +88,7 @@
     {
       "name": "xr_get_device_state",
       "title": "Get device state",
-      "description": "Get a full snapshot: headset pose, input mode, controllers, hands, stereo, FOV.",
+      "description": "Get a full snapshot: headset pose, input mode, controllers, hands, gaze, stereo, and FOV.",
       "readOnly": true
     },
     {

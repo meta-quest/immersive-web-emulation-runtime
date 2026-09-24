@@ -24,6 +24,8 @@ export type EnvironmentId =
   | 'office_small'
   | 'none';
 export type InputMode = 'controller' | 'hand';
+export type GazeMode = 'off' | 'cursor' | 'head-locked';
+export type GazeCommitHand = 'left' | 'right';
 export type HandPoseId = 'default' | 'pinch' | 'point';
 export type Handedness = 'left' | 'right';
 export type KeyMapType = Partial<Record<Handedness, Record<string, string>>>;
@@ -43,6 +45,8 @@ export interface OriginPrefs {
   device: DeviceId;
   environment: EnvironmentId;
   inputMode: InputMode;
+  gazeMode: GazeMode;
+  gazeCommitHand: GazeCommitHand;
   stereoEnabled: boolean;
   ipd: number;
   fovy: number;
@@ -137,6 +141,8 @@ export const DEFAULTS: Readonly<OriginPrefs> = Object.freeze({
   device: 'metaQuest3',
   environment: 'living_room',
   inputMode: 'controller',
+  gazeMode: 'off',
+  gazeCommitHand: 'right',
   stereoEnabled: false,
   ipd: 0.063,
   fovy: Math.PI / 2,

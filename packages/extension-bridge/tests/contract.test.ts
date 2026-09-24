@@ -93,5 +93,65 @@ describe('tool catalog', () => {
     expect(schema.safeParse({ device: 'headset', value: 0.5 }).success).toBe(
       false,
     ); // headset not an input device
+    expect(schema.safeParse({ device: 'gaze', value: 0.5 }).success).toBe(
+      false,
+    );
+  });
+
+  it('exposes gaze only on pose and connection commands', () => {
+    for (const toolName of [
+      'xr_get_transform',
+      'xr_set_transform',
+      'xr_look_at',
+      'xr_animate_to',
+    ]) {
+      const schema = z.object(TOOL_BY_MCP_NAME.get(toolName)!.inputShape);
+      const extra =
+        toolName === 'xr_look_at' ? { target: { x: 0, y: 0, z: -1 } } : {};
+      expect(schema.safeParse({ device: 'gaze', ...extra }).success).toBe(true);
+    }
+
+    const connected = z.object(
+      TOOL_BY_MCP_NAME.get('xr_set_connected')!.inputShape,
+    );
+    expect(
+      connected.safeParse({ device: 'gaze', connected: false }).success,
+    ).toBe(true);
+
+    const nonGazeTools: Record<string, Record<string, unknown>> = {
+      xr_get_select_value: {},
+      xr_set_select_value: { value: 0.5 },
+      xr_select: {},
+      xr_get_gamepad_state: {},
+      xr_set_gamepad_state: {},
+      xr_set_hand_pose: { poseId: 'point' },
+    };
+    for (const [toolName, extra] of Object.entries(nonGazeTools)) {
+      const schema = z.object(TOOL_BY_MCP_NAME.get(toolName)!.inputShape);
+      expect(schema.safeParse({ device: 'gaze', ...extra }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  it('accepts gaze state without an independent position', () => {
+    const schema = z.object(
+      TOOL_BY_MCP_NAME.get('xr_set_device_state')!.inputShape,
+    );
+    expect(
+      schema.safeParse({
+        state: {
+          gaze: {
+            connected: true,
+            orientation: { x: 0, y: 0, z: 0, w: 1 },
+          },
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        state: { gaze: { position: { x: 0, y: 0, z: 0 } } },
+      }).success,
+    ).toBe(false);
   });
 });

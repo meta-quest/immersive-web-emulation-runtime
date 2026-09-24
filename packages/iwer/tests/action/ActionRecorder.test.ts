@@ -35,7 +35,7 @@ const testDeviceConfig: XRDeviceConfig = {
   name: 'Test Device',
   controllerConfig: metaQuestTouchPlus,
   supportedSessionModes: ['inline', 'immersive-vr', 'immersive-ar'],
-  supportedFeatures: ['viewer', 'local', 'local-floor'],
+  supportedFeatures: ['viewer', 'local', 'local-floor', 'gaze-tracking'],
   supportedFrameRates: [72, 80, 90, 120],
   isSystemKeyboardSupported: true,
   internalNominalFrameRate: 90,
@@ -279,6 +279,51 @@ describe('ActionRecorder', () => {
         expect(sampled[i][0]).toBeCloseTo(expected[0], 2);
         expect(sampled[i][1]).toBeCloseTo(expected[1], 2);
         expect(sampled[i][2]).toBeCloseTo(expected[2], 2);
+      });
+    });
+
+    it('round-trips a gaze source without hand or gamepad state', async () => {
+      await session.end();
+      session = await system.requestSession('immersive-vr', {
+        requiredFeatures: ['eye-tracking'],
+      });
+      session.updateRenderState({
+        baseLayer: new XRWebGLLayer(session, makeMockGL()),
+      });
+      refSpace = await session.requestReferenceSpace(
+        XRReferenceSpaceType.Local,
+      );
+
+      device.gaze!.quaternion.set(0.1, 0.2, 0.3, 0.9).normalize();
+      const recorder = makeRecorder();
+      driveFrames(1, (frame) => record(recorder, frame));
+
+      const recording = recorder.getRecording();
+      const gazeSchema = recording.schema.find(
+        (entry) => entry[1].targetRayMode === 'gaze',
+      )?.[1];
+      expect(gazeSchema).toMatchObject({
+        handedness: 'none',
+        targetRayMode: 'gaze',
+        profiles: ['eye-gaze'],
+        hasGrip: false,
+        hasHand: false,
+        hasGamepad: false,
+      });
+
+      const player = new ActionPlayer(refSpace, recording, device.ipd);
+      player.play();
+      player.playFrame();
+      const gazeSource = player.inputSources.find(
+        (source) => source.targetRayMode === 'gaze',
+      );
+      expect(gazeSource).toBeDefined();
+      expect(gazeSource).toMatchObject({
+        handedness: 'none',
+        profiles: ['eye-gaze'],
+        gamepad: undefined,
+        gripSpace: undefined,
+        hand: undefined,
       });
     });
   });

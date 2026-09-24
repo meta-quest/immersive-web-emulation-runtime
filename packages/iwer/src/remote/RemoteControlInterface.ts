@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { vec3 } from 'gl-matrix';
+import { quat, vec3 } from 'gl-matrix';
 
 import type {
   XRDevice,
@@ -15,7 +15,8 @@ import type { Vec3, Quat } from '../types/state.js';
 import { P_DEVICE } from '../private.js';
 import type {
   DeviceId,
-  InputDeviceId,
+  ConnectedInputDeviceId,
+  SelectableDeviceId,
   Action,
   DiscreteAction,
   DurationAction,
@@ -190,6 +191,22 @@ function resolveDeviceId(id: string): string {
 
 /** Default duration (seconds) for the high-level `select` action. */
 const DEFAULT_SELECT_DURATION_S = 0.15;
+
+function requireSelectableDeviceId(value: unknown): SelectableDeviceId {
+  switch (value) {
+    case 'controller-left':
+    case 'controller-right':
+    case 'hand-left':
+    case 'hand-right':
+      return value;
+    default:
+      throw new Error(`Unsupported select device: ${String(value)}`);
+  }
+}
+
+const gazeWorldOrientation = quat.create();
+const gazeViewerInverse = quat.create();
+const gazeLocalOrientation = quat.create();
 
 function isFiniteNumber(n: unknown): n is number {
   return typeof n === 'number' && Number.isFinite(n);
@@ -540,6 +557,24 @@ export class RemoteControlInterface {
           orientation: quatToObj(hand.quaternion),
         };
       }
+      case 'gaze': {
+        const gaze = this.device.gaze;
+        if (!gaze) throw new Error('Gaze input not available');
+        quat.multiply(
+          gazeWorldOrientation,
+          this.device.quaternion.quat,
+          gaze.quaternion.quat,
+        );
+        return {
+          position: vec3ToObj(this.device.position),
+          orientation: {
+            x: gazeWorldOrientation[0],
+            y: gazeWorldOrientation[1],
+            z: gazeWorldOrientation[2],
+            w: gazeWorldOrientation[3],
+          },
+        };
+      }
       default:
         throw new Error(`Unknown device: ${deviceId}`);
     }
@@ -555,6 +590,11 @@ export class RemoteControlInterface {
   ): void {
     // Validate both inputs before applying either, so an invalid orientation
     // can't leave a half-applied (position-only) and permanently corrupt pose.
+    if (deviceId === 'gaze' && position) {
+      throw new Error(
+        'Gaze position is derived from the headset. Move the headset transform instead.',
+      );
+    }
     if (position) {
       validatePosition(position);
     }
@@ -614,6 +654,32 @@ export class RemoteControlInterface {
         }
         break;
       }
+      case 'gaze': {
+        const gaze = this.device.gaze;
+        if (!gaze) throw new Error('Gaze input not available');
+        if (orient) {
+          quat.invert(gazeViewerInverse, this.device.quaternion.quat);
+          quat.set(
+            gazeWorldOrientation,
+            orient.x,
+            orient.y,
+            orient.z,
+            orient.w,
+          );
+          quat.multiply(
+            gazeLocalOrientation,
+            gazeViewerInverse,
+            gazeWorldOrientation,
+          );
+          gaze.quaternion.set(
+            gazeLocalOrientation[0],
+            gazeLocalOrientation[1],
+            gazeLocalOrientation[2],
+            gazeLocalOrientation[3],
+          );
+        }
+        break;
+      }
       default:
         throw new Error(`Unknown device: ${deviceId}`);
     }
@@ -650,7 +716,7 @@ export class RemoteControlInterface {
   /**
    * Get the select value for an input device (trigger for controller, pinch for hand)
    */
-  private getDeviceSelectValue(deviceId: InputDeviceId): number {
+  private getDeviceSelectValue(deviceId: SelectableDeviceId): number {
     switch (deviceId) {
       case 'controller-left':
         return this.device.controllers.left?.getButtonValue('trigger') ?? 0;
@@ -668,7 +734,10 @@ export class RemoteControlInterface {
   /**
    * Set the select value for an input device
    */
-  private setDeviceSelectValue(deviceId: InputDeviceId, value: number): void {
+  private setDeviceSelectValue(
+    deviceId: SelectableDeviceId,
+    value: number,
+  ): void {
     switch (deviceId) {
       case 'controller-left':
         this.device.controllers.left?.updateButtonValue('trigger', value);
@@ -691,7 +760,7 @@ export class RemoteControlInterface {
    * Set connected state for an input device
    */
   private setDeviceConnected(
-    deviceId: InputDeviceId,
+    deviceId: ConnectedInputDeviceId,
     connected: boolean,
   ): void {
     switch (deviceId) {
@@ -714,6 +783,12 @@ export class RemoteControlInterface {
         if (this.device.hands.right) {
           this.device.hands.right.connected = connected;
         }
+        break;
+      case 'gaze':
+        if (!this.device.gaze) {
+          throw new Error('Gaze input not available');
+        }
+        this.device.gaze.connected = connected;
         break;
       default:
         throw new Error(`Unknown input device: ${deviceId}`);
@@ -767,7 +842,10 @@ export class RemoteControlInterface {
         );
       case 'set_hand_pose':
         return this.executeSetHandPose(
-          params as unknown as { device: InputDeviceId; poseId: string },
+          params as unknown as {
+            device: 'hand-left' | 'hand-right';
+            poseId: string;
+          },
         );
 
       // Gamepad tools
@@ -790,14 +868,12 @@ export class RemoteControlInterface {
 
       // Internal select sequence actions
       case '_select_press': {
-        const deviceId = (params as unknown as { device: InputDeviceId })
-          .device;
+        const deviceId = requireSelectableDeviceId(params.device);
         this.setDeviceSelectValue(deviceId, 1);
         return undefined;
       }
       case '_select_release': {
-        const deviceId = (params as unknown as { device: InputDeviceId })
-          .device;
+        const deviceId = requireSelectableDeviceId(params.device);
         this.setDeviceSelectValue(deviceId, 0);
         return undefined;
       }
@@ -822,6 +898,7 @@ export class RemoteControlInterface {
       sessionMode: session?.mode ?? null,
       enabledFeatures: session ? Array.from(session.enabledFeatures) : [],
       visibilityState: session?.visibilityState ?? this.device.visibilityState,
+      runtimeKind: runtime.kind,
     };
   }
 
@@ -882,6 +959,11 @@ export class RemoteControlInterface {
 
   private executeLookAt(params: LookAtParams): LookAtResult {
     const { device: deviceId, target, moveToDistance } = params;
+    if (deviceId === 'gaze' && moveToDistance !== undefined) {
+      throw new Error(
+        'Gaze origin is derived from the headset; moveToDistance is not supported for gaze.',
+      );
+    }
     const currentTransform = this.getDeviceTransform(deviceId);
 
     // Transform target from XR-origin-relative to GlobalSpace
@@ -943,6 +1025,10 @@ export class RemoteControlInterface {
       }
     }
 
+    if (this.device.gaze?.connected) {
+      activeDevices.push('gaze');
+    }
+
     return { mode, activeDevices };
   }
 
@@ -969,10 +1055,10 @@ export class RemoteControlInterface {
   }
 
   private executeSetHandPose(params: {
-    device: InputDeviceId;
+    device: 'hand-left' | 'hand-right';
     poseId: string;
   }): {
-    device: InputDeviceId;
+    device: 'hand-left' | 'hand-right';
     poseId: string;
   } {
     const { device: deviceId, poseId } = params;
@@ -1297,6 +1383,14 @@ export class RemoteControlInterface {
           ),
         },
       },
+      ...(this.device.gaze
+        ? {
+            gaze: {
+              connected: this.device.gaze.connected,
+              orientation: this.getDeviceTransform('gaze').orientation,
+            },
+          }
+        : {}),
       stereoEnabled: this.device.stereoEnabled,
       fov: this.device.fovy * (180 / Math.PI), // Convert to degrees
     };
@@ -1333,6 +1427,10 @@ export class RemoteControlInterface {
         this.device.hands.right.position.set(0.15, 1.3, -0.4);
         this.device.hands.right.quaternion.set(0, 0, 0, 1);
         this.device.hands.right.connected = true;
+      }
+      if (this.device.gaze) {
+        this.device.gaze.quaternion.set(0, 0, 0, 1);
+        this.device.gaze.connected = true;
       }
     } else {
       // Apply partial state
@@ -1377,19 +1475,22 @@ export class RemoteControlInterface {
         this.applyInputState('hand-left', state.hands.left);
         this.applyInputState('hand-right', state.hands.right);
       }
+      if (state.gaze) {
+        this.applyInputState('gaze', state.gaze);
+      }
     }
 
     return { state: this.executeGetDeviceState() };
   }
 
   private applyInputState(
-    deviceId: DeviceId,
+    deviceId: ConnectedInputDeviceId,
     state?: { connected?: boolean; position?: Vec3; orientation?: Quat },
   ): void {
     if (!state) return;
 
     if (state.connected !== undefined) {
-      this.setDeviceConnected(deviceId as InputDeviceId, state.connected);
+      this.setDeviceConnected(deviceId, state.connected);
     }
     if (state.position || state.orientation) {
       this.setDeviceTransform(deviceId, state.position, state.orientation);
@@ -1556,6 +1657,11 @@ export class RemoteControlInterface {
     // Handle animate_to specially - it's a duration action
     if (method === 'animate_to') {
       const animateParams = normalizedParams as unknown as AnimateToParams;
+      if (animateParams.device === 'gaze' && animateParams.position) {
+        throw new Error(
+          'Gaze position is derived from the headset. Move the headset transform instead.',
+        );
+      }
       const currentTransform = this.getDeviceTransform(animateParams.device);
       const durationMs = (animateParams.duration ?? 0.5) * 1000;
 

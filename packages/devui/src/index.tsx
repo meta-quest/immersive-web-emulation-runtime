@@ -18,6 +18,11 @@ import { XRDevice } from 'iwer';
 import type { ControlMode } from 'iwer';
 import type { DefaultPose } from './scene.js';
 import { createRoot } from 'react-dom/client';
+import {
+  useGazeSettingsStore,
+  type GazeCommitHand,
+  type GazeMode,
+} from './gaze.js';
 
 export class DevUI {
   private inputLayer: InputLayer;
@@ -41,16 +46,28 @@ export class DevUI {
       mode: 'open',
     });
     this.inputLayer = new InputLayer(xrDevice);
+    useGazeSettingsStore.setState({
+      mode: this.inputLayer.currentGazeMode,
+      commitHand: this.inputLayer.currentGazeCommitHand,
+    });
 
     // Subscribe to control mode changes
     this.unsubscribeControlMode = xrDevice.onControlModeChange(
       (mode: ControlMode) => {
-        this.inputLayer.isInProgrammaticMode = mode === 'programmatic';
         if (mode === 'programmatic') {
+          this.inputLayer.setProgrammaticMode(true);
           this.inputLayer.syncFromDevice();
+          useInputModeStore.getState().setInputMode(xrDevice.primaryInputMode);
+          useGazeSettingsStore
+            .getState()
+            .setMode(this.inputLayer.currentGazeMode);
           this.inputLayer.setInteractionsEnabled(false);
         } else {
+          this.inputLayer.setProgrammaticMode(false);
           this.inputLayer.setInteractionsEnabled(true);
+          useGazeSettingsStore
+            .getState()
+            .setMode(this.inputLayer.currentGazeMode);
         }
       },
     );
@@ -59,6 +76,10 @@ export class DevUI {
     this.unsubscribeStateChange = xrDevice.onStateChange(() => {
       if (this.inputLayer.isInProgrammaticMode) {
         this.inputLayer.syncFromDevice();
+        useInputModeStore.getState().setInputMode(xrDevice.primaryInputMode);
+        useGazeSettingsStore
+          .getState()
+          .setMode(this.inputLayer.currentGazeMode);
       }
     });
 
@@ -99,6 +120,20 @@ export class DevUI {
 
   applyDefaultPose(defaultPose: DefaultPose) {
     this.inputLayer.applyDefaultPose(defaultPose);
+  }
+
+  setGazeMode(mode: GazeMode) {
+    this.inputLayer.setGazeMode(mode);
+    useGazeSettingsStore.getState().setMode(this.inputLayer.currentGazeMode);
+  }
+
+  setGazeCommitHand(handedness: GazeCommitHand) {
+    this.inputLayer.setGazeCommitHand(handedness);
+    useGazeSettingsStore.getState().setCommitHand(handedness);
+  }
+
+  onSessionEnd() {
+    this.inputLayer.onSessionEnd();
   }
 
   dispose() {
@@ -248,6 +283,9 @@ const Overlay: React.FC<OverlayProps> = ({
     </StyleSheetManager>
   );
 };
+
+export type { GazeCommitHand, GazeMode } from './gaze.js';
+export { cursorToViewerDirection } from './gaze.js';
 
 interface OfferSessionProps {
   xrDevice: XRDevice;

@@ -39,6 +39,7 @@ export class GamepadButton {
     value: number;
     lastFrameValue: number;
     pendingValue: number | null;
+    immediateTransitionFrom: number | null;
   };
 
   constructor(
@@ -53,6 +54,7 @@ export class GamepadButton {
       value: 0,
       lastFrameValue: 0,
       pendingValue: null,
+      immediateTransitionFrom: null,
     };
   }
 

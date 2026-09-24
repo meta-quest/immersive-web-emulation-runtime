@@ -162,13 +162,12 @@ try {
     })
     .catch(() => {});
   console.error('[cap] 07-top.png');
-  // Hand panel: toggle input mode to hands, capture the bottom-left panel so we
+  // Hand panel: select hands, capture the bottom-left panel so we
   // can review the Pose stepper / Pinch field column alignment.
+  await page.getByTitle('Select input mode').first().click({ timeout: 3000 });
   await page
-    .getByTitle('Toggle input mode')
-    .first()
-    .click({ timeout: 3000 })
-    .catch(() => {});
+    .getByRole('button', { name: 'Hands', exact: true })
+    .click({ timeout: 3000 });
   await sleep(900);
   await page
     .screenshot({
@@ -177,12 +176,11 @@ try {
     })
     .catch(() => {});
   console.error('[cap] 06c-hand.png');
-  // Toggle back to controllers for the remaining captures.
+  // Select controllers for the remaining captures.
+  await page.getByTitle('Select input mode').first().click({ timeout: 3000 });
   await page
-    .getByTitle('Toggle input mode')
-    .first()
-    .click({ timeout: 3000 })
-    .catch(() => {});
+    .getByRole('button', { name: 'Controllers', exact: true })
+    .click({ timeout: 3000 });
   await sleep(700);
   await page
     .getByTitle('Headset position')

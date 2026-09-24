@@ -29,6 +29,7 @@ import meetingRoom from '@iwer/sem/captures/meeting_room.json';
 import musicRoom from '@iwer/sem/captures/music_room.json';
 import officeLarge from '@iwer/sem/captures/office_large.json';
 import officeSmall from '@iwer/sem/captures/office_small.json';
+import { applyGazePreferences } from './agent/gaze-prefs.js';
 
 const DEVICE_CONFIGS = {
   oculusQuest1,
@@ -116,6 +117,11 @@ export const injectRuntime = async () => {
     keyMap: prefs.keymap ?? DEFAULT_KEYMAP,
   });
   xrDevice.installDevUI(DevUI);
+  applyGazePreferences(
+    xrDevice,
+    prefs.gazeMode ?? DEFAULTS.gazeMode,
+    prefs.gazeCommitHand ?? DEFAULTS.gazeCommitHand,
+  );
   xrDevice.ipd = prefs.ipd ?? DEFAULTS.ipd;
   xrDevice.installSEM(SyntheticEnvironmentModule);
   const environment = environmentJson(prefs.environment);

@@ -19,7 +19,7 @@ interface ControlsProps {
 }
 
 type InputModeStore = {
-  inputMode: string;
+  inputMode: 'controller' | 'hand';
   setInputMode: (mode: 'controller' | 'hand') => void;
 };
 

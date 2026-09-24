@@ -8,6 +8,9 @@
 export { RemoteControlInterface } from './RemoteControlInterface.js';
 export type {
   DeviceId,
+  PoseDeviceId,
+  ConnectedInputDeviceId,
+  SelectableDeviceId,
   InputDeviceId,
   ControllerId,
   Action,

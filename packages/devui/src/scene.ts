@@ -22,11 +22,24 @@ import { TransformHandles, TransformHandlesMode } from '@pmndrs/handle';
 
 import { XRDevice } from 'iwer';
 import { forwardHtmlEvents } from '@pmndrs/pointer-events';
+import {
+  cursorToViewerDirection,
+  type GazeCommitHand,
+  type GazeMode,
+} from './gaze.js';
 
 export const PRIVATE = Symbol('@@iwer/devui/input-scene');
 const FREE_MOVEMENT_SPEED = 2;
 
 type Handedness = 'left' | 'right';
+type GazeCommitSource = {
+  mode: 'controller' | 'hand';
+  handedness: Handedness;
+};
+type PendingGazeCommitRelease = {
+  source: GazeCommitSource;
+  queuedForFrame: boolean;
+};
 
 export interface PoseTransform {
   position: [number, number, number];
@@ -56,6 +69,13 @@ export class InputLayer {
   private quatMouse: Quaternion = new Quaternion();
   private euler: Euler = new Euler();
   private mouseMoveHandler: (event: MouseEvent) => void;
+  private gazePointerDownHandlerBound: (event: PointerEvent) => void;
+  private gazePointerMoveHandlerBound: (event: PointerEvent) => void;
+  private gazePointerUpHandlerBound: (event: PointerEvent) => void;
+  private gazeWheelHandlerBound: (event: WheelEvent) => void;
+  private gazeContextMenuHandlerBound: (event: MouseEvent) => void;
+  private windowBlurHandlerBound: () => void;
+  private documentVisibilityHandlerBound: () => void;
   private pointerLockChangeHandlerBound: () => void;
   private keyDownHandlerBound: (event: KeyboardEvent) => void;
   private keyUpHandlerBound: (event: KeyboardEvent) => void;
@@ -72,6 +92,17 @@ export class InputLayer {
   };
   private forwardHtmlEvents: () => void;
   private lastTime: number = 0;
+  private gazeMode: GazeMode;
+  private preferredConnectedGazeMode: Exclude<GazeMode, 'off'> = 'head-locked';
+  private gazeCommitHand: GazeCommitHand = 'right';
+  private gazePointerId: number | null = null;
+  private gazeCommitActive: GazeCommitSource | undefined;
+  private gazeCommitPendingRelease: PendingGazeCommitRelease | undefined;
+  private gazeHeadsetDragActive = false;
+  private gazeLastPointer = { x: 0, y: 0 };
+  private readonly gazeForward = new Vector3(0, 0, -1);
+  private readonly gazeDirection = new Vector3();
+  private readonly gazeQuaternion = new Quaternion();
 
   /**
    * Whether the device is in programmatic control mode.
@@ -86,6 +117,7 @@ export class InputLayer {
 
   constructor(private xrDevice: XRDevice) {
     this.scene = new Scene();
+    this.gazeMode = xrDevice.gaze?.connected ? 'head-locked' : 'off';
     this.camera = new PerspectiveCamera(
       50,
       window.innerWidth / window.innerHeight,
@@ -185,6 +217,21 @@ export class InputLayer {
 
     this.pointerLockChangeHandlerBound =
       this.pointerLockChangeHandler.bind(this);
+    this.gazePointerDownHandlerBound = this.gazePointerDownHandler.bind(this);
+    this.gazePointerMoveHandlerBound = this.gazePointerMoveHandler.bind(this);
+    this.gazePointerUpHandlerBound = this.gazePointerUpHandler.bind(this);
+    this.gazeWheelHandlerBound = this.gazeWheelHandler.bind(this);
+    this.gazeContextMenuHandlerBound = this.gazeContextMenuHandler.bind(this);
+    this.windowBlurHandlerBound = () => {
+      this.releaseGazeCommit(true);
+      this.gazeHeadsetDragActive = false;
+    };
+    this.documentVisibilityHandlerBound = () => {
+      if (document.visibilityState !== 'visible') {
+        this.releaseGazeCommit(true);
+        this.gazeHeadsetDragActive = false;
+      }
+    };
     this.keyDownHandlerBound = this.keyDownHandler.bind(this);
     this.keyUpHandlerBound = this.keyUpHandler.bind(this);
 
@@ -206,11 +253,45 @@ export class InputLayer {
 
     document.addEventListener('keydown', this.keyDownHandlerBound, false);
     document.addEventListener('keyup', this.keyUpHandlerBound, false);
+    this.renderer.domElement.addEventListener(
+      'pointerdown',
+      this.gazePointerDownHandlerBound,
+    );
+    this.renderer.domElement.addEventListener(
+      'pointermove',
+      this.gazePointerMoveHandlerBound,
+    );
+    this.renderer.domElement.addEventListener(
+      'pointerup',
+      this.gazePointerUpHandlerBound,
+    );
+    this.renderer.domElement.addEventListener(
+      'pointercancel',
+      this.gazePointerUpHandlerBound,
+    );
+    this.renderer.domElement.addEventListener(
+      'wheel',
+      this.gazeWheelHandlerBound,
+      { passive: false },
+    );
+    this.renderer.domElement.addEventListener(
+      'contextmenu',
+      this.gazeContextMenuHandlerBound,
+    );
+    window.addEventListener('blur', this.windowBlurHandlerBound);
+    document.addEventListener(
+      'visibilitychange',
+      this.documentVisibilityHandlerBound,
+    );
   }
 
   lockPointer() {
     // Don't allow pointer lock in programmatic mode or when interactions disabled
-    if (this.isInProgrammaticMode || !this.interactionsEnabled) {
+    if (
+      this.isInProgrammaticMode ||
+      !this.interactionsEnabled ||
+      this.gazeMode === 'cursor'
+    ) {
       return;
     }
     this.renderer.domElement.requestPointerLock =
@@ -237,6 +318,322 @@ export class InputLayer {
     }
   }
 
+  get currentGazeMode(): GazeMode {
+    return this.gazeMode;
+  }
+
+  get currentGazeCommitHand(): GazeCommitHand {
+    return this.gazeCommitHand;
+  }
+
+  private applyGazeModePresentation(mode: GazeMode): void {
+    this.gazeMode = mode;
+    if (mode === 'cursor' && this.isPointerLocked) {
+      document.exitPointerLock?.();
+    }
+
+    const ownsCanvas = mode === 'cursor';
+    this.renderer.domElement.style.cursor = ownsCanvas ? 'crosshair' : '';
+    this.renderer.domElement.style.touchAction = ownsCanvas ? 'none' : '';
+    this.setTransformHandleRoutingSuppressed(ownsCanvas);
+  }
+
+  setGazeMode(mode: GazeMode): void {
+    this.releaseGazeCommit(true);
+    this.gazeHeadsetDragActive = false;
+
+    const gaze = this.xrDevice.gaze;
+    if (!gaze) {
+      this.applyGazeModePresentation('off');
+      return;
+    }
+
+    if (mode !== 'off') {
+      this.preferredConnectedGazeMode = mode;
+    }
+    gaze.connected = mode !== 'off';
+    if (mode === 'head-locked') {
+      gaze.quaternion.set(0, 0, 0, 1);
+    }
+    this.applyGazeModePresentation(mode);
+  }
+
+  setProgrammaticMode(enabled: boolean): void {
+    const wasProgrammatic = this.isInProgrammaticMode;
+    this.isInProgrammaticMode = enabled;
+    if (!wasProgrammatic || enabled) return;
+
+    const gaze = this.xrDevice.gaze;
+    const nextGazeMode: GazeMode = gaze?.connected
+      ? this.preferredConnectedGazeMode
+      : 'off';
+    if (nextGazeMode === this.gazeMode) return;
+
+    this.releaseGazeCommit(true);
+    this.gazeHeadsetDragActive = false;
+    // Programmatic control has ended. Restore the operator's last connected
+    // gaze mode without reconnecting gaze if the remote client disabled it.
+    this.applyGazeModePresentation(nextGazeMode);
+  }
+
+  setGazeCommitHand(handedness: GazeCommitHand): void {
+    if (handedness === this.gazeCommitHand) return;
+    this.releaseGazeCommit(true);
+    this.gazeHeadsetDragActive = false;
+    this.gazeCommitHand = handedness;
+  }
+
+  onSessionEnd(): void {
+    this.releaseGazeCommit(true);
+    this.gazeHeadsetDragActive = false;
+  }
+
+  private setTransformHandleRoutingSuppressed(suppressed: boolean): void {
+    this.transformHandles.forEach((transformHandle) => {
+      if (suppressed && !transformHandle.userData.gazeSuppressed) {
+        transformHandle.userData.modeCleanup?.();
+        transformHandle.userData.modeCleanup = undefined;
+        transformHandle.userData.gazeSuppressed = true;
+      } else if (!suppressed && transformHandle.userData.gazeSuppressed) {
+        transformHandle.userData.gazeSuppressed = false;
+        transformHandle.userData.setMode(transformHandle.userData.mode);
+      }
+    });
+  }
+
+  private gazeInteractionEnabled(): boolean {
+    return (
+      this.gazeMode === 'cursor' &&
+      Boolean(this.xrDevice.gaze?.connected) &&
+      this.xrDevice.visibilityState === 'visible' &&
+      this.interactionsEnabled &&
+      !this.isInProgrammaticMode &&
+      Boolean(this.xrDevice.activeSession)
+    );
+  }
+
+  private updateGazeFromPointer(clientX: number, clientY: number): void {
+    if (!this.gazeInteractionEnabled() || this.gazeCommitActive) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const direction = cursorToViewerDirection(
+      clientX,
+      clientY,
+      rect,
+      this.xrDevice.stereoEnabled,
+      this.xrDevice.fovy,
+    );
+    this.gazeDirection.fromArray(direction);
+    this.gazeQuaternion.setFromUnitVectors(
+      this.gazeForward,
+      this.gazeDirection,
+    );
+    this.xrDevice.gaze!.quaternion.copy(this.gazeQuaternion as any);
+  }
+
+  private beginGazeCommit(): void {
+    if (this.gazeCommitActive || this.gazeCommitPendingRelease) return;
+
+    const mode = this.xrDevice.primaryInputMode;
+    const handedness = this.gazeCommitHand;
+    const input =
+      mode === 'hand'
+        ? this.xrDevice.hands[handedness]
+        : this.xrDevice.controllers[handedness];
+    if (!input?.connected) return;
+
+    this.writeGazeCommitValue({ mode, handedness }, 1, false);
+    this.gazeCommitActive = { mode, handedness };
+  }
+
+  private writeGazeCommitValue(
+    source: GazeCommitSource,
+    value: number,
+    immediate: boolean,
+  ): void {
+    if (source.mode === 'hand') {
+      const hand = this.xrDevice.hands[source.handedness];
+      immediate
+        ? hand?.setPinchValueImmediate(value)
+        : hand?.updatePinchValue(value);
+    } else {
+      const controller = this.xrDevice.controllers[source.handedness];
+      immediate
+        ? controller?.setButtonValueImmediate('trigger', value)
+        : controller?.updateButtonValue('trigger', value);
+    }
+  }
+
+  private releaseGazeCommit(forceImmediate: boolean): void {
+    const active = this.gazeCommitActive;
+    const pendingRelease = this.gazeCommitPendingRelease?.source;
+    const pointerId = this.gazePointerId;
+    this.gazePointerId = null;
+    if (
+      pointerId !== null &&
+      this.renderer.domElement.hasPointerCapture?.(pointerId)
+    ) {
+      this.renderer.domElement.releasePointerCapture?.(pointerId);
+    }
+
+    if (forceImmediate) {
+      this.gazeCommitPendingRelease = undefined;
+      if (pendingRelease) {
+        this.writeGazeCommitValue(pendingRelease, 0, true);
+      }
+      if (active && active !== pendingRelease) {
+        this.writeGazeCommitValue(active, 0, true);
+      }
+      this.gazeCommitActive = undefined;
+      return;
+    }
+    if (!active) return;
+
+    // DevUI renders immediately before XRTrackedInput.onFrameStart. Queue the
+    // release from renderScene so a press and release received between frames
+    // are observed as two edges instead of one pending value overwriting the
+    // other.
+    this.gazeCommitPendingRelease = {
+      source: active,
+      queuedForFrame: false,
+    };
+    this.gazeCommitActive = undefined;
+  }
+
+  private schedulePendingGazeRelease(): void {
+    const pendingRelease = this.gazeCommitPendingRelease;
+    if (!pendingRelease) return;
+    queueMicrotask(() => {
+      if (this.gazeCommitPendingRelease !== pendingRelease) return;
+      if (!pendingRelease.queuedForFrame) {
+        this.writeGazeCommitValue(pendingRelease.source, 0, false);
+        pendingRelease.queuedForFrame = true;
+      } else {
+        // This microtask runs after XRTrackedInput.onFrameStart has consumed
+        // the queued release, so another click can now begin safely.
+        this.gazeCommitPendingRelease = undefined;
+      }
+    });
+  }
+
+  private gazeCommitSourceIsActive(): boolean {
+    const active = this.gazeCommitActive;
+    if (!active || this.xrDevice.primaryInputMode !== active.mode) {
+      return false;
+    }
+    const input =
+      active.mode === 'hand'
+        ? this.xrDevice.hands[active.handedness]
+        : this.xrDevice.controllers[active.handedness];
+    return Boolean(input?.connected);
+  }
+
+  private moveCommitInput(deltaX: number, deltaY: number): void {
+    const active = this.gazeCommitActive;
+    if (!active) return;
+    const handle = this.transformHandles.get(active.handedness);
+    if (!handle) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const depth = Math.max(0.25, Math.abs(handle.position.z));
+    const worldUnitsPerPixel =
+      (2 * Math.tan(this.xrDevice.fovy / 2) * depth) / Math.max(rect.height, 1);
+    handle.position.x += deltaX * worldUnitsPerPixel;
+    handle.position.y -= deltaY * worldUnitsPerPixel;
+    this.syncDeviceTransforms();
+  }
+
+  private moveCommitInputDepth(deltaY: number): void {
+    const active = this.gazeCommitActive;
+    if (!active) return;
+    const handle = this.transformHandles.get(active.handedness);
+    if (!handle) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const depth = Math.max(0.25, Math.abs(handle.position.z));
+    const worldUnitsPerPixel =
+      (2 * Math.tan(this.xrDevice.fovy / 2) * depth) / Math.max(rect.height, 1);
+    handle.position.z -= deltaY * worldUnitsPerPixel * 0.5;
+    this.syncDeviceTransforms();
+  }
+
+  private gazePointerDownHandler(event: PointerEvent): void {
+    if (this.gazePointerId !== null) return;
+    if (!this.gazeInteractionEnabled()) return;
+    if (event.button !== 0 && event.button !== 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.gazePointerId = event.pointerId;
+    this.gazeLastPointer = { x: event.clientX, y: event.clientY };
+    this.renderer.domElement.setPointerCapture?.(event.pointerId);
+
+    if (event.button === 0) {
+      this.updateGazeFromPointer(event.clientX, event.clientY);
+      this.beginGazeCommit();
+    } else {
+      this.gazeHeadsetDragActive = true;
+    }
+  }
+
+  private gazePointerMoveHandler(event: PointerEvent): void {
+    if (this.gazePointerId !== null && this.gazePointerId !== event.pointerId)
+      return;
+    const deltaX = event.clientX - this.gazeLastPointer.x;
+    const deltaY = event.clientY - this.gazeLastPointer.y;
+    this.gazeLastPointer = { x: event.clientX, y: event.clientY };
+    if (!this.gazeInteractionEnabled()) return;
+
+    if (this.gazeCommitActive) {
+      event.preventDefault();
+      this.moveCommitInput(deltaX, deltaY);
+      return;
+    }
+    if (this.gazeHeadsetDragActive) {
+      event.preventDefault();
+      this.playerRig.rotation.y -= deltaX * 0.002;
+      this.cameraRig.rotation.x -= deltaY * 0.002;
+      this.xrDevice.quaternion.copy(
+        this.cameraRig.getWorldQuaternion(this.quatMouse) as any,
+      );
+      return;
+    }
+    this.updateGazeFromPointer(event.clientX, event.clientY);
+  }
+
+  private gazePointerUpHandler(event: PointerEvent): void {
+    if (this.gazePointerId !== event.pointerId) return;
+    if (this.gazeCommitActive) {
+      this.releaseGazeCommit(false);
+    }
+    this.gazeHeadsetDragActive = false;
+    this.gazePointerId = null;
+    if (this.renderer.domElement.hasPointerCapture?.(event.pointerId)) {
+      this.renderer.domElement.releasePointerCapture?.(event.pointerId);
+    }
+  }
+
+  private gazeWheelHandler(event: WheelEvent): void {
+    if (!this.gazeInteractionEnabled() || !this.gazeCommitActive) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.moveCommitInputDepth(event.deltaY);
+  }
+
+  private gazeContextMenuHandler(event: MouseEvent): void {
+    if (this.gazeMode === 'cursor') {
+      event.preventDefault();
+    }
+  }
+
+  private resetInputTransform(handedness: Handedness): void {
+    const transformHandle = this.transformHandles.get(handedness);
+    if (!transformHandle) return;
+    transformHandle.position.fromArray(
+      transformHandle.userData.defaultPosition,
+    );
+    transformHandle.quaternion.fromArray(
+      transformHandle.userData.defaultQuaternion,
+    );
+    this.syncDeviceTransforms();
+  }
+
   keyDownHandler(event: KeyboardEvent) {
     const { keyState } = this;
 
@@ -245,6 +642,27 @@ export class InputLayer {
     }
 
     if (this.isInProgrammaticMode) return;
+
+    if (this.gazeMode === 'cursor' && event.code === 'Space') {
+      const eventTargetsControl = event.composedPath().some((target) => {
+        if (typeof target !== 'object' || target === null) return false;
+        const element = target as {
+          isContentEditable?: boolean;
+          tagName?: unknown;
+        };
+        return (
+          element.isContentEditable === true ||
+          (typeof element.tagName === 'string' &&
+            ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(
+              element.tagName,
+            ))
+        );
+      });
+      if (eventTargetsControl) return;
+      event.preventDefault();
+      this.resetInputTransform(this.gazeCommitHand);
+      return;
+    }
 
     if (keyState.ShiftLeft && keyState.ArrowUp) {
       this.cameraRig.position.y += 0.05;
@@ -380,6 +798,7 @@ export class InputLayer {
    */
   syncFromDevice() {
     const { xrDevice, playerRig, cameraRig, transformHandles } = this;
+    this.syncGazeModeFromDevice();
 
     // Get headset world position and rotation from device
     const headsetPos = xrDevice.position;
@@ -439,18 +858,43 @@ export class InputLayer {
     });
   }
 
+  private syncGazeModeFromDevice(): void {
+    const nextGazeMode: GazeMode = this.xrDevice.gaze?.connected
+      ? 'head-locked'
+      : 'off';
+    if (nextGazeMode === this.gazeMode) return;
+
+    this.releaseGazeCommit(true);
+    this.gazeHeadsetDragActive = false;
+    // Preserve the quaternion supplied by remote control. This path updates
+    // only DevUI state and presentation, never device gaze state.
+    this.applyGazeModePresentation(nextGazeMode);
+  }
+
   /**
    * Enable or disable user interactions (pointer lock, keyboard controls).
    * When disabled, the DevUI still renders but doesn't respond to user input.
    */
   setInteractionsEnabled(enabled: boolean) {
     this.interactionsEnabled = enabled;
+    if (!enabled) {
+      this.releaseGazeCommit(true);
+      this.gazeHeadsetDragActive = false;
+    }
     if (!enabled && this.isPointerLocked) {
       document.exitPointerLock();
     }
   }
 
   renderScene(time: number) {
+    if (
+      this.gazeCommitActive &&
+      (!this.gazeInteractionEnabled() || !this.gazeCommitSourceIsActive())
+    ) {
+      this.releaseGazeCommit(true);
+      this.gazeHeadsetDragActive = false;
+    }
+    this.schedulePendingGazeRelease();
     const xrDeviceFOV = (this.xrDevice.fovy / Math.PI) * 180;
     let cameraMatrixNeedsUpdate = false;
     if (this.camera.fov !== xrDeviceFOV) {
@@ -485,13 +929,20 @@ export class InputLayer {
         this.cameraRig.getWorldPosition(this.combinedCameraPosition);
       }
     }
-    this.forwardHtmlEvents();
+    if (this.gazeMode !== 'cursor') {
+      this.forwardHtmlEvents();
+    }
     this.transformHandles.forEach((transformHandle, handedness) => {
-      const connected = Boolean(
-        this.xrDevice.controllers[handedness]?.connected,
-      );
+      const emulatedInput =
+        this.xrDevice.primaryInputMode === 'controller'
+          ? this.xrDevice.controllers[handedness]
+          : this.xrDevice.hands[handedness];
+      const connected = Boolean(emulatedInput?.connected);
       transformHandle.visible =
-        connected && !this.isPointerLocked && !this.isInProgrammaticMode;
+        connected &&
+        !this.isPointerLocked &&
+        !this.isInProgrammaticMode &&
+        this.gazeMode !== 'cursor';
       if (connected) {
         transformHandle.update(time, this.camera);
       }
@@ -514,6 +965,8 @@ export class InputLayer {
   }
 
   dispose() {
+    this.releaseGazeCommit(true);
+    this.setTransformHandleRoutingSuppressed(false);
     this.renderer.dispose();
     document.removeEventListener(
       'pointerlockchange',
@@ -533,5 +986,34 @@ export class InputLayer {
     document.removeEventListener('mousemove', this.mouseMoveHandler, false);
     document.removeEventListener('keydown', this.keyDownHandlerBound, false);
     document.removeEventListener('keyup', this.keyUpHandlerBound, false);
+    this.renderer.domElement.removeEventListener(
+      'pointerdown',
+      this.gazePointerDownHandlerBound,
+    );
+    this.renderer.domElement.removeEventListener(
+      'pointermove',
+      this.gazePointerMoveHandlerBound,
+    );
+    this.renderer.domElement.removeEventListener(
+      'pointerup',
+      this.gazePointerUpHandlerBound,
+    );
+    this.renderer.domElement.removeEventListener(
+      'pointercancel',
+      this.gazePointerUpHandlerBound,
+    );
+    this.renderer.domElement.removeEventListener(
+      'wheel',
+      this.gazeWheelHandlerBound,
+    );
+    this.renderer.domElement.removeEventListener(
+      'contextmenu',
+      this.gazeContextMenuHandlerBound,
+    );
+    window.removeEventListener('blur', this.windowBlurHandlerBound);
+    document.removeEventListener(
+      'visibilitychange',
+      this.documentVisibilityHandlerBound,
+    );
   }
 }

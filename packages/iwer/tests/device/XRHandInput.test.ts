@@ -161,6 +161,27 @@ describe('XRHandInput', () => {
     expect(xrHandInput.pinchValue).toBe(1);
   });
 
+  test('should synchronously clear both current and pending pinch state', () => {
+    xrHandInput = new XRHandInput(
+      oculusHandConfig,
+      XRHandedness.Left,
+      globalSpace,
+    );
+
+    xrHandInput.updatePinchValue(1);
+    xrHandInput.onFrameStart(mockFrame);
+    (mockFrame.session.dispatchEvent as jest.Mock).mockClear();
+    xrHandInput.setPinchValueImmediate(0);
+
+    expect(xrHandInput.pinchValue).toBe(0);
+    xrHandInput.onFrameStart(mockFrame);
+    expect(xrHandInput.pinchValue).toBe(0);
+    expect(mockFrame.session.dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(
+      (mockFrame.session.dispatchEvent as jest.Mock).mock.calls[0][0].type,
+    ).toBe('selectend');
+  });
+
   test('should warn for out-of-range pinch values and not update', () => {
     xrHandInput = new XRHandInput(
       oculusHandConfig,

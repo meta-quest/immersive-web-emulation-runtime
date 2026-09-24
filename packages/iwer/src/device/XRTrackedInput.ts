@@ -91,7 +91,9 @@ export class XRTrackedInput {
     this[P_TRACKED_INPUT].inputSource.gamepad?.buttons.forEach((button) => {
       if (button instanceof GamepadButton) {
         // apply pending values and record last frame values
-        button[P_GAMEPAD].lastFrameValue = button[P_GAMEPAD].value;
+        button[P_GAMEPAD].lastFrameValue =
+          button[P_GAMEPAD].immediateTransitionFrom ?? button[P_GAMEPAD].value;
+        button[P_GAMEPAD].immediateTransitionFrom = null;
         if (button[P_GAMEPAD].pendingValue != null) {
           button[P_GAMEPAD].value = button[P_GAMEPAD].pendingValue;
           button[P_GAMEPAD].pendingValue = null;

@@ -24,6 +24,8 @@ import {
 import { extractDomain, matchesForDomain } from '../lib/agent/domain.js';
 import { prefsRuntimeMessageFromWindowMessage } from '../lib/agent/prefs-message.js';
 import { MSG, PREFS_CHANNEL } from '../lib/agent/protocol.js';
+import { applyGazePreferences } from '../lib/agent/gaze-prefs.js';
+import { readFile } from 'node:fs/promises';
 
 test('resolves defaults, all-sites prefs, and per-origin overrides', () => {
   let blob = { version: 1 };
@@ -50,6 +52,8 @@ test('resolves defaults, all-sites prefs, and per-origin overrides', () => {
   assert.equal(resolved.environment, 'office_small');
   assert.equal(resolved.keymap.left.trigger, 'KeyT');
   assert.equal(resolved.keymap.right.trigger, 'KeyY');
+  assert.equal(resolved.gazeMode, 'off');
+  assert.equal(resolved.gazeCommitHand, 'right');
 });
 
 test('offers the Meta VR Glasses visibility profile', () => {
@@ -202,6 +206,8 @@ test('DevUI prefs postMessage survives as a runtime write message', () => {
         keymap: { left: { trigger: 'KeyG' } },
         fovy: Math.PI / 2,
         visibilityMaskEnabled: false,
+        gazeMode: 'cursor',
+        gazeCommitHand: 'left',
         unknown: true,
       },
     }),
@@ -211,6 +217,8 @@ test('DevUI prefs postMessage survives as a runtime write message', () => {
       patch: {
         fovy: Math.PI / 2,
         visibilityMaskEnabled: false,
+        gazeMode: 'cursor',
+        gazeCommitHand: 'left',
         keymap: { left: { trigger: 'KeyG' } },
       },
     },
@@ -233,4 +241,47 @@ test('DevUI prefs postMessage survives as a runtime write message', () => {
     }),
     null,
   );
+});
+
+test('gaze preferences are sanitized and persist through layered resolution', () => {
+  const blob = mergePrefs({ version: 1 }, 'origin', 'example.com', {
+    gazeMode: 'head-locked',
+    gazeCommitHand: 'left',
+  });
+  assert.equal(resolveAll(blob, 'example.com').gazeMode, 'head-locked');
+  assert.equal(resolveAll(blob, 'example.com').gazeCommitHand, 'left');
+
+  assert.deepEqual(
+    prefsRuntimeMessageFromWindowMessage({
+      channel: PREFS_CHANNEL,
+      patch: { gazeMode: 'invalid', gazeCommitHand: 'center' },
+    }),
+    null,
+  );
+});
+
+test('gaze preferences are applied to the injected DevUI', () => {
+  const calls = [];
+  const target = {
+    devui: {
+      setGazeMode: (mode) => calls.push(['mode', mode]),
+      setGazeCommitHand: (handedness) => calls.push(['hand', handedness]),
+    },
+  };
+
+  applyGazePreferences(target, 'cursor', 'left');
+
+  assert.deepEqual(calls, [
+    ['hand', 'left'],
+    ['mode', 'cursor'],
+  ]);
+});
+
+test('extension panel exposes persistent gaze mode and commit-hand controls', async () => {
+  const source = await readFile(
+    new URL('../src/agent/panel.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /id="gazeMode"/);
+  assert.match(source, /id="gazeCommitHand"/);
 });

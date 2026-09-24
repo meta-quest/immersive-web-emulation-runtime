@@ -18,21 +18,32 @@ export const CATALOG_VERSION = 1;
 
 // --- Reusable shapes -------------------------------------------------------
 
-const deviceEnum = z
+const poseDeviceEnum = z
   .enum([
     'headset',
     'controller-left',
     'controller-right',
     'hand-left',
     'hand-right',
+    'gaze',
   ])
   .describe(
     'Tracked device id. Aliases like "right"/"left-hand" are also accepted.',
   );
 
-const inputDeviceEnum = z
+const connectedInputDeviceEnum = z
+  .enum([
+    'controller-left',
+    'controller-right',
+    'hand-left',
+    'hand-right',
+    'gaze',
+  ])
+  .describe('A connectable input device (controller, hand, or gaze).');
+
+const selectableDeviceEnum = z
   .enum(['controller-left', 'controller-right', 'hand-left', 'hand-right'])
-  .describe('An input device (controller or hand), not the headset.');
+  .describe('A controller or hand that can produce select state.');
 
 const controllerEnum = z
   .enum(['controller-left', 'controller-right'])
@@ -85,6 +96,13 @@ const deviceStateSchema = z
       .optional(),
     hands: z
       .object({ left: inputState.optional(), right: inputState.optional() })
+      .optional(),
+    gaze: z
+      .object({
+        connected: z.boolean().optional(),
+        orientation: orientation.optional(),
+      })
+      .strict()
       .optional(),
   })
   .partial();
@@ -149,19 +167,19 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'get_transform',
     title: 'Get device transform',
     description:
-      'Get the position, orientation (quaternion), and euler angles of a tracked device.',
+      'Get the position, orientation (quaternion), and euler angles of a tracked device. Gaze reports the headset-derived origin and its world orientation.',
     readOnlyHint: true,
-    inputShape: { device: deviceEnum },
+    inputShape: { device: poseDeviceEnum },
   },
   {
     mcpName: 'xr_set_transform',
     wsMethod: 'set_transform',
     title: 'Set device transform',
     description:
-      'Set a device position and/or orientation immediately. Requires an active session.',
+      'Set a device position and/or orientation immediately. Gaze accepts orientation only; move its origin with the headset. Requires an active session.',
     readOnlyHint: false,
     inputShape: {
-      device: deviceEnum,
+      device: poseDeviceEnum,
       position: vec3.optional(),
       orientation: orientation.optional(),
     },
@@ -171,10 +189,10 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'look_at',
     title: 'Look at a point',
     description:
-      'Orient a device toward an XR-origin-relative world point. Optionally move it to a given distance from the target. Requires an active session.',
+      'Orient a device toward an XR-origin-relative world point. Optionally move it to a given distance from the target; gaze does not support moving its origin. Requires an active session.',
     readOnlyHint: false,
     inputShape: {
-      device: deviceEnum,
+      device: poseDeviceEnum,
       target: vec3,
       moveToDistance: z.number().optional(),
     },
@@ -184,10 +202,10 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'animate_to',
     title: 'Animate device pose',
     description:
-      'Smoothly animate a device to a target position and/or orientation over `duration` seconds (default 0.5). Requires an active, rendering session.',
+      'Smoothly animate a device to a target position and/or orientation over `duration` seconds (default 0.5). Gaze accepts orientation only. Requires an active, rendering session.',
     readOnlyHint: false,
     inputShape: {
-      device: deviceEnum,
+      device: poseDeviceEnum,
       position: vec3.optional(),
       orientation: orientation.optional(),
       duration: z.number().positive().optional(),
@@ -207,9 +225,9 @@ export const TOOLS: readonly ToolDef[] = [
     mcpName: 'xr_set_connected',
     wsMethod: 'set_connected',
     title: 'Connect/disconnect input',
-    description: 'Connect or disconnect a controller or hand.',
+    description: 'Connect or disconnect a controller, hand, or gaze source.',
     readOnlyHint: false,
-    inputShape: { device: inputDeviceEnum, connected: z.boolean() },
+    inputShape: { device: connectedInputDeviceEnum, connected: z.boolean() },
   },
   {
     mcpName: 'xr_get_select_value',
@@ -218,7 +236,7 @@ export const TOOLS: readonly ToolDef[] = [
     description:
       'Get the current select value (controller trigger or hand pinch), 0..1.',
     readOnlyHint: true,
-    inputShape: { device: inputDeviceEnum },
+    inputShape: { device: selectableDeviceEnum },
   },
   {
     mcpName: 'xr_set_select_value',
@@ -227,7 +245,10 @@ export const TOOLS: readonly ToolDef[] = [
     description:
       'Set the select value (trigger/pinch), 0..1. Use xr_select for a full press+release.',
     readOnlyHint: false,
-    inputShape: { device: inputDeviceEnum, value: z.number().min(0).max(1) },
+    inputShape: {
+      device: selectableDeviceEnum,
+      value: z.number().min(0).max(1),
+    },
   },
   {
     mcpName: 'xr_select',
@@ -237,7 +258,7 @@ export const TOOLS: readonly ToolDef[] = [
       'Perform a full select gesture (fires selectstart → select → selectend) over `duration` seconds (default 0.15). Requires an active session.',
     readOnlyHint: false,
     inputShape: {
-      device: inputDeviceEnum,
+      device: selectableDeviceEnum,
       duration: z.number().positive().optional(),
     },
   },
@@ -279,7 +300,7 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'get_device_state',
     title: 'Get device state',
     description:
-      'Get a full snapshot: headset pose, input mode, controllers, hands, stereo, FOV.',
+      'Get a full snapshot: headset pose, input mode, controllers, hands, gaze, stereo, and FOV.',
     readOnlyHint: true,
     inputShape: {},
   },

@@ -102,14 +102,22 @@ export const HeaderButtonsContainer = styled.div`
   align-items: center;
 `;
 
-export const HeaderButton = styled.button`
-  background-color: transparent;
+export const HeaderButton = styled.button<{
+  $active?: boolean;
+  $open?: boolean;
+}>`
+  background-color: ${({ $active, $open }) =>
+    $active
+      ? 'rgba(45, 127, 249, 0.18)'
+      : $open
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'transparent'};
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: ${Colors.textWhite};
+  color: ${({ $active }) => ($active ? Colors.accent : Colors.textWhite)};
   border-radius: 8px;
   height: 28px;
   min-width: 28px;
@@ -124,16 +132,31 @@ export const HeaderButton = styled.button`
     Roboto,
     sans-serif;
 
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+  &:hover:not(:disabled) {
+    background-color: ${({ $active, $open }) =>
+      $active
+        ? 'rgba(45, 127, 249, 0.24)'
+        : $open
+          ? 'rgba(255, 255, 255, 0.14)'
+          : 'rgba(255, 255, 255, 0.06)'};
   }
 
-  &:active {
-    background-color: rgba(255, 255, 255, 0.1);
+  &:active:not(:disabled) {
+    background-color: ${({ $active, $open }) =>
+      $active
+        ? 'rgba(45, 127, 249, 0.32)'
+        : $open
+          ? 'rgba(255, 255, 255, 0.18)'
+          : 'rgba(255, 255, 255, 0.1)'};
   }
 
   &:focus {
     outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${Colors.accent};
+    outline-offset: 1px;
   }
 
   &:disabled {
@@ -383,6 +406,11 @@ export const PanelHeaderButton = styled.button<{ $isRed?: boolean }>`
   &:focus {
     outline: none;
   }
+
+  &:focus-visible {
+    outline: 2px solid ${Colors.accent};
+    outline-offset: 1px;
+  }
 `;
 
 export const ValuesContainer = styled.div`
@@ -404,6 +432,11 @@ export const ValueInput = styled.input.attrs({ type: 'text' })`
   box-sizing: border-box;
   font-size: 10px;
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  &:focus-visible {
+    outline: 2px solid ${Colors.accent};
+    outline-offset: 1px;
+  }
 
   &:read-only {
     background: ${Layout.inset};
