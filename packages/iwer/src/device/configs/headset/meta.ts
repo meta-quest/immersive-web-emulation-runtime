@@ -109,6 +109,8 @@ export const metaQuestPro: XRDeviceConfig = {
     'mesh-detection',
     'hit-test',
     'hand-tracking',
+    'gaze-tracking',
+    'eye-tracking',
   ],
   supportedFrameRates: [72, 80, 90, 120],
   isSystemKeyboardSupported: true,

@@ -152,6 +152,13 @@ export { XRJointPose } from './pose/XRJointPose.js';
 // Input
 export { XRInputSource, XRInputSourceArray } from './input/XRInputSource.js';
 export { XRHand } from './input/XRHand.js';
+export {
+  XRGazeInput,
+  GAZE_TRACKING_FEATURES,
+  isGazeTrackingFeature,
+  supportsGazeTracking,
+} from './device/XRGazeInput.js';
+export type { GazeTrackingFeature } from './device/XRGazeInput.js';
 
 // Layers
 export { XRWebGLLayer, XRLayer } from './layers/XRWebGLLayer.js';

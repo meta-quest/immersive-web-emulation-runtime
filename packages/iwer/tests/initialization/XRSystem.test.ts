@@ -14,6 +14,7 @@ import {
 
 import { XRSystem } from '../../src/initialization/XRSystem';
 import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta';
+import type { WebXRFeature } from '../../src/device/XRDevice';
 
 describe('XRSystem', () => {
   let xrDevice: XRDevice;
@@ -131,5 +132,66 @@ describe('XRSystem', () => {
     expect(session).not.toBeNull();
     expect(session.enabledFeatures).toContain('hand-tracking');
     expect(session.enabledFeatures).not.toContain('anchors');
+  });
+
+  test.each<WebXRFeature>(['gaze-tracking', 'eye-tracking'])(
+    'requestSession enables the exact requested gaze alias when the profile advertises the other alias: %s',
+    async (feature) => {
+      xrDevice = new XRDevice({
+        ...arvrDeviceConfig,
+        supportedFeatures: ['viewer', 'local', 'gaze-tracking'],
+      });
+      xrSystem = new XRSystem(xrDevice);
+
+      const session = await xrSystem.requestSession('immersive-vr', {
+        requiredFeatures: [feature],
+      });
+
+      expect(session.enabledFeatures).toContain(feature);
+      expect(session.enabledFeatures).not.toContain(
+        feature === 'gaze-tracking' ? 'eye-tracking' : 'gaze-tracking',
+      );
+    },
+  );
+
+  test('requestSession preserves both requested gaze aliases without creating separate capabilities', async () => {
+    xrDevice = new XRDevice({
+      ...arvrDeviceConfig,
+      supportedFeatures: ['viewer', 'local', 'eye-tracking'],
+    });
+    xrSystem = new XRSystem(xrDevice);
+
+    const session = await xrSystem.requestSession('immersive-vr', {
+      requiredFeatures: ['gaze-tracking'],
+      optionalFeatures: ['eye-tracking'],
+    });
+
+    expect(session.enabledFeatures).toEqual(
+      expect.arrayContaining(['gaze-tracking', 'eye-tracking']),
+    );
+  });
+
+  test('requestSession rejects required gaze on a profile without gaze capability', async () => {
+    xrDevice = new XRDevice(arvrDeviceConfig);
+    xrSystem = new XRSystem(xrDevice);
+
+    await expect(
+      xrSystem.requestSession('immersive-vr', {
+        requiredFeatures: ['eye-tracking'],
+      }),
+    ).rejects.toThrow(
+      'One or more required features are not supported by the device.',
+    );
+  });
+
+  test('requestSession omits unsupported optional gaze', async () => {
+    xrDevice = new XRDevice(arvrDeviceConfig);
+    xrSystem = new XRSystem(xrDevice);
+
+    const session = await xrSystem.requestSession('immersive-vr', {
+      optionalFeatures: ['gaze-tracking'],
+    });
+
+    expect(session.enabledFeatures).not.toContain('gaze-tracking');
   });
 });

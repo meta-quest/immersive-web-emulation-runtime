@@ -13,6 +13,10 @@ import {
 } from '../session/XRSession.js';
 
 import { P_SYSTEM } from '../private.js';
+import {
+  isGazeTrackingFeature,
+  supportsGazeTracking,
+} from '../device/XRGazeInput.js';
 
 type SessionGrantConfig = {
   resolve: (value: XRSession) => void;
@@ -48,11 +52,13 @@ export class XRSystem extends EventTarget {
         // Handle required and optional features
         const { requiredFeatures = [], optionalFeatures = [] } = options;
         const { supportedFeatures } = this[P_SYSTEM].device;
+        const isFeatureSupported = (feature: WebXRFeature): boolean =>
+          isGazeTrackingFeature(feature)
+            ? supportsGazeTracking(supportedFeatures)
+            : supportedFeatures.includes(feature);
 
         // Check if all required features are supported
-        const allRequiredSupported = requiredFeatures.every((feature) =>
-          supportedFeatures.includes(feature),
-        );
+        const allRequiredSupported = requiredFeatures.every(isFeatureSupported);
         if (!allRequiredSupported) {
           reject(
             new Error(
@@ -63,9 +69,8 @@ export class XRSystem extends EventTarget {
         }
 
         // Filter out unsupported optional features
-        const supportedOptionalFeatures = optionalFeatures.filter((feature) =>
-          supportedFeatures.includes(feature),
-        );
+        const supportedOptionalFeatures =
+          optionalFeatures.filter(isFeatureSupported);
 
         // Combine required and supported optional features into enabled features
         const enabledFeatures: WebXRFeature[] = Array.from(

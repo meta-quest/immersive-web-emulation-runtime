@@ -27,6 +27,7 @@ import { XRViewerPose } from '../../src/pose/XRViewerPose';
 import { XRWebGLLayer } from '../../src/layers/XRWebGLLayer';
 import { mat4 } from 'gl-matrix';
 import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta';
+import { P_DEVICE, P_SESSION } from '../../src/private.js';
 
 // silence console logs
 console.log = () => {};
@@ -71,7 +72,13 @@ describe('XRSession', () => {
       name: 'Test Device',
       controllerConfig: metaQuestTouchPlus,
       supportedSessionModes: ['inline', 'immersive-vr', 'immersive-ar'],
-      supportedFeatures: ['viewer', 'local', 'local-floor'],
+      supportedFeatures: [
+        'viewer',
+        'local',
+        'local-floor',
+        'gaze-tracking',
+        'eye-tracking',
+      ],
       supportedFrameRates: [72, 80, 90, 120],
       isSystemKeyboardSupported: true,
       internalNominalFrameRate: 90,
@@ -149,6 +156,69 @@ describe('XRSession', () => {
     expect(frame1RenderState).toBeDefined();
     expect(frame1InputSources).toBe(frame2InputSources);
     expect(frame1RenderState).toBe(frame2RenderState);
+  });
+
+  test('does not expose gaze unless the session requested a gaze alias', () => {
+    xrSession[P_SESSION].updateActiveInputSources();
+
+    expect(
+      xrSession.inputSources.some((source) => source.targetRayMode === 'gaze'),
+    ).toBe(false);
+  });
+
+  test('exposes exactly one stable gaze source for either or both aliases', async () => {
+    await xrSession.end();
+    xrSession = await xrSystem.requestSession('immersive-vr', {
+      requiredFeatures: ['gaze-tracking'],
+      optionalFeatures: ['eye-tracking'],
+    });
+    xrSession[P_SESSION].updateActiveInputSources();
+
+    const gazeSources = xrSession.inputSources.filter(
+      (source) => source.targetRayMode === 'gaze',
+    );
+    expect(gazeSources).toHaveLength(1);
+    expect(gazeSources[0]).toMatchObject({
+      handedness: 'none',
+      targetRayMode: 'gaze',
+      profiles: ['eye-gaze'],
+      gamepad: undefined,
+      gripSpace: undefined,
+      hand: undefined,
+    });
+
+    const source = gazeSources[0];
+    const changes: Event[] = [];
+    xrSession.addEventListener('inputsourceschange', (event) => {
+      changes.push(event);
+    });
+
+    xrDevice.gaze!.connected = false;
+    xrSession[P_SESSION].updateActiveInputSources();
+    expect(xrSession.inputSources).not.toContain(source);
+
+    xrDevice.gaze!.connected = true;
+    xrSession[P_SESSION].updateActiveInputSources();
+    expect(xrSession.inputSources).toContain(source);
+    expect(changes).toHaveLength(2);
+  });
+
+  test('removes gaze while hidden and restores the same connected source', async () => {
+    await xrSession.end();
+    xrSession = await xrSystem.requestSession('immersive-vr', {
+      requiredFeatures: ['eye-tracking'],
+    });
+    xrSession[P_SESSION].updateActiveInputSources();
+    const gazeSource = xrDevice.gaze!.inputSource;
+    expect(xrSession.inputSources).toContain(gazeSource);
+
+    xrDevice[P_DEVICE].visibilityState = 'hidden';
+    xrSession[P_SESSION].updateActiveInputSources();
+    expect(xrSession.inputSources).not.toContain(gazeSource);
+
+    xrDevice[P_DEVICE].visibilityState = 'visible';
+    xrSession[P_SESSION].updateActiveInputSources();
+    expect(xrSession.inputSources).toContain(gazeSource);
   });
 
   test('XRFrame.predictedDisplayTime return a greater value next frame', async () => {

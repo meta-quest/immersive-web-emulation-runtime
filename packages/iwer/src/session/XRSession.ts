@@ -96,6 +96,7 @@ export class XRSession extends EventTarget {
     hasMeshes: boolean;
     hasDepth: boolean;
     hasHitTest: boolean;
+    hasGazeTracking: boolean;
     // cached immutable copy of device.supportedFrameRates
     supportedFrameRates: Float32Array;
     isSystemKeyboardSupported: boolean;
@@ -189,6 +190,9 @@ export class XRSession extends EventTarget {
       hasMeshes: enabledFeatures.includes('mesh-detection'),
       hasDepth: enabledFeatures.includes('depth-sensing'),
       hasHitTest: enabledFeatures.includes('hit-test'),
+      hasGazeTracking:
+        enabledFeatures.includes('gaze-tracking') ||
+        enabledFeatures.includes('eye-tracking'),
       supportedFrameRates: new Float32Array(device.supportedFrameRates),
       isSystemKeyboardSupported: false,
       ended: false,
@@ -401,9 +405,12 @@ export class XRSession extends EventTarget {
       updateActiveInputSources: () => {
         const handTrackingOn =
           this[P_SESSION].enabledFeatures.includes('hand-tracking');
+        const gazeTrackingOn = this[P_SESSION].hasGazeTracking;
         const prevInputs = this[P_SESSION].activeInputSources;
         const currInputs = this[P_SESSION].device.inputSources.filter(
-          (inputSource) => !inputSource.hand || handTrackingOn,
+          (inputSource) =>
+            (!inputSource.hand || handTrackingOn) &&
+            (inputSource.targetRayMode !== 'gaze' || gazeTrackingOn),
         );
 
         const added = currInputs.filter((item) => !prevInputs.includes(item));

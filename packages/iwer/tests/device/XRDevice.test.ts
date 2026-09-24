@@ -12,6 +12,15 @@ import {
   XRInteractionMode,
 } from '../../src/session/XRSession.js';
 import { Vector3, Quaternion } from '../../src/utils/Math.js';
+import {
+  metaQuest2,
+  metaQuest3,
+  metaQuestPro,
+  oculusQuest1,
+} from '../../src/device/configs/headset/meta.js';
+import { P_DEVICE, P_SPACE } from '../../src/private.js';
+import { XRSpaceUtils } from '../../src/spaces/XRSpace.js';
+import { mat4 } from 'gl-matrix';
 
 describe('XRDevice', () => {
   let mockDeviceConfig: XRDeviceConfig;
@@ -143,6 +152,63 @@ describe('XRDevice', () => {
     expect(device.controllers.right).toBeDefined();
     expect(device.hands.left).toBeDefined();
     expect(device.hands.right).toBeDefined();
+    expect(device.gaze).toBeUndefined();
+  });
+
+  test('creates one additive gaze input for gaze-capable profiles', () => {
+    const device = new XRDevice({
+      ...mockDeviceConfig,
+      supportedFeatures: ['local', 'eye-tracking'],
+    });
+    const gaze = device.gaze;
+
+    expect(gaze).toBeDefined();
+    expect(device.activeInputs).toContain(gaze);
+
+    device.primaryInputMode = 'hand';
+    expect(device.activeInputs).toContain(gaze);
+    expect(device.gaze).toBe(gaze);
+  });
+
+  test('advertises gaze only on the built-in Quest Pro profile', () => {
+    expect(metaQuestPro.supportedFeatures).toEqual(
+      expect.arrayContaining(['gaze-tracking', 'eye-tracking']),
+    );
+    for (const config of [oculusQuest1, metaQuest2, metaQuest3]) {
+      expect(config.supportedFeatures).not.toContain('gaze-tracking');
+      expect(config.supportedFeatures).not.toContain('eye-tracking');
+    }
+  });
+
+  test('recenters viewer-relative gaze without transforming it twice', () => {
+    const device = new XRDevice({
+      ...mockDeviceConfig,
+      supportedFeatures: ['local', 'gaze-tracking'],
+    });
+    const gaze = device.gaze!;
+    gaze.quaternion.set(0.1, -0.2, 0.05, 0.97).normalize();
+    const localOrientation = Array.from(gaze.quaternion.quat);
+
+    device.position.set(2, 1.6, -3);
+    device.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), 0.7);
+    device.recenter();
+    device[P_DEVICE].updateViews();
+    gaze.updateTargetRaySpace();
+
+    expect(Array.from(gaze.quaternion.quat)).toEqual(localOrientation);
+    expect(Array.from(gaze.position.vec3)).toEqual([0, 0, 0]);
+
+    const actual = XRSpaceUtils.calculateGlobalOffsetMatrix(
+      gaze.inputSource.targetRaySpace,
+    );
+    const expected = mat4.multiply(
+      mat4.create(),
+      XRSpaceUtils.calculateGlobalOffsetMatrix(device.viewerSpace),
+      gaze.inputSource.targetRaySpace[P_SPACE].offsetMatrix,
+    );
+    Array.from(expected).forEach((value, index) => {
+      expect(actual[index]).toBeCloseTo(value, 5);
+    });
   });
 
   test('should handle device without controller config', () => {

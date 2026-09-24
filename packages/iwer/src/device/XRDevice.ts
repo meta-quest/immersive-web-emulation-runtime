@@ -57,6 +57,7 @@ import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSessionEvent } from '../events/XRSessionEvent.js';
 import { XRSystem } from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
+import { XRGazeInput, supportsGazeTracking } from './XRGazeInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
 import { NativePlane } from '../planes/XRPlane.js';
@@ -83,6 +84,8 @@ export type WebXRFeature =
   | 'mesh-detection'
   | 'hit-test'
   | 'hand-tracking'
+  | 'gaze-tracking'
+  | 'eye-tracking'
   | 'depth-sensing';
 
 export interface XRDeviceConfig {
@@ -207,7 +210,7 @@ export class XRDevice {
     // device config
     name: string;
     supportedSessionModes: string[];
-    supportedFeatures: string[];
+    supportedFeatures: WebXRFeature[];
     supportedFrameRates: number[];
     isSystemKeyboardSupported: boolean;
     internalNominalFrameRate: number;
@@ -228,6 +231,7 @@ export class XRDevice {
     visibilityMaskCanvas?: HTMLCanvasElement;
     controllers: { [key in XRHandedness]?: XRController };
     hands: { [key in XRHandedness]?: XRHandInput };
+    gaze?: XRGazeInput;
     primaryInputMode: 'controller' | 'hand';
     pendingReferenceSpaceReset: boolean;
     visibilityState: XRVisibilityState;
@@ -326,6 +330,9 @@ export class XRDevice {
         globalSpace,
       ),
     };
+    const gaze = supportsGazeTracking(deviceConfig.supportedFeatures)
+      ? new XRGazeInput(viewerSpace)
+      : undefined;
     const canvasContainer =
       deviceOptions.canvasContainer ?? document.createElement('div');
     canvasContainer.dataset.webxr_runtime = `Immersive Web Emulation Runtime v${VERSION}`;
@@ -381,6 +388,7 @@ export class XRDevice {
       visibilityMaskCanvas,
       controllers,
       hands,
+      gaze,
       primaryInputMode: 'controller',
       pendingReferenceSpaceReset: false,
       visibilityState: 'visible',
@@ -975,6 +983,10 @@ export class XRDevice {
     return this[P_DEVICE].hands;
   }
 
+  get gaze() {
+    return this[P_DEVICE].gaze;
+  }
+
   get primaryInputMode() {
     return this[P_DEVICE].primaryInputMode;
   }
@@ -991,10 +1003,13 @@ export class XRDevice {
     if (this[P_DEVICE].visibilityState !== 'visible') {
       return [];
     }
-    const activeInputs: XRTrackedInput[] =
+    const primaryInputs: XRTrackedInput[] =
       this[P_DEVICE].primaryInputMode === 'controller'
         ? Object.values(this[P_DEVICE].controllers)
         : Object.values(this[P_DEVICE].hands);
+    const activeInputs = this[P_DEVICE].gaze
+      ? [...primaryInputs, this[P_DEVICE].gaze]
+      : primaryInputs;
     return activeInputs.filter((input) => input.connected);
   }
 

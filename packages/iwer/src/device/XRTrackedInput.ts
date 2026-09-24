@@ -69,19 +69,26 @@ export class XRTrackedInput {
 
   set connected(value: boolean) {
     this[P_TRACKED_INPUT].connected = value;
-    this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].connected = value;
+    const gamepad = this[P_TRACKED_INPUT].inputSource.gamepad;
+    if (gamepad) {
+      gamepad[P_GAMEPAD].connected = value;
+    }
   }
 
-  onFrameStart(frame: XRFrame) {
+  updateTargetRaySpace(): void {
     const targetRaySpace = this[P_TRACKED_INPUT].inputSource.targetRaySpace;
     mat4.fromRotationTranslation(
       targetRaySpace[P_SPACE].offsetMatrix,
       this[P_TRACKED_INPUT].quaternion.quat,
       this[P_TRACKED_INPUT].position.vec3,
     );
+  }
+
+  onFrameStart(frame: XRFrame) {
+    this.updateTargetRaySpace();
 
     const session = frame.session;
-    this[P_TRACKED_INPUT].inputSource.gamepad!.buttons.forEach((button) => {
+    this[P_TRACKED_INPUT].inputSource.gamepad?.buttons.forEach((button) => {
       if (button instanceof GamepadButton) {
         // apply pending values and record last frame values
         button[P_GAMEPAD].lastFrameValue = button[P_GAMEPAD].value;
