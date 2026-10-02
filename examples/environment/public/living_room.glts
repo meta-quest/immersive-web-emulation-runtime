@@ -1,0 +1,1574 @@
+// A sunlit living room, IWER's default AR environment.
+//
+// Everything is procedural and offline: canvas textures, an HDR environment
+// map, baked lightmaps (window light + ambient occlusion, computed
+// analytically at load) and one static sun shadow. Meshes tagged with
+// userData.xrPlane / userData.xrMesh become WebXR planes / meshes; invisible
+// box proxies describe furniture volumes.
+//
+// Layout (meters, the viewer starts at the origin facing -Z):
+//   back wall  (-Z)  sofa, wall art, side table with lamp, floor lamp
+//   left wall  (-X)  window with sheers, armchair, fig tree
+//   right wall (+X)  media console and TV, bookshelf
+//   front wall (+Z)  door, console table with mirror, dining nook
+//
+// A robot vacuum drives loops across the open floor: a dynamic part of the
+// "real world". Like on real devices it is not a tracked plane/mesh, but it
+// is visible, hit-testable and in depth. It is added after the bake and merge
+// passes so it stays a separate, movable object.
+import * as THREE from 'three';
+import { onDispose, onFrame, scene } from '@drawcall/glts';
+
+const W = 5.0;
+const D = 5.8;
+const H = 2.7;
+const X0 = -W / 2;
+const X1 = W / 2;
+const Z0 = -3.4;
+const Z1 = Z0 + D;
+const ZC = (Z0 + Z1) / 2;
+
+// Baked lightmap values are irradiance / LIGHTMAP_INTENSITY.
+const LIGHTMAP_INTENSITY = 2.4;
+
+// Window in the left wall.
+const WINDOW_Z = -1.35;
+const WINDOW_WIDTH = 2.1;
+const SILL = 0.55;
+const HEAD = 2.35;
+
+const owned: { dispose(): void }[] = [];
+function own<T extends { dispose(): void }>(value: T): T {
+  owned.push(value);
+  return value;
+}
+onDispose(() => owned.forEach((value) => value.dispose()));
+
+// ------------------------------------------------------------------ noise
+
+function hash(x: number, y: number, seed: number) {
+  let h =
+    Math.imul(x | 0, 374761393) ^
+    Math.imul(y | 0, 668265263) ^
+    Math.imul(seed | 0, 982451653);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+const mod = (a: number, n: number) => ((a % n) + n) % n;
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+
+// Value noise, tileable with integer periods px / py.
+function noise(x: number, y: number, seed: number, px: number, py: number) {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const x0 = mod(ix, px);
+  const x1 = mod(ix + 1, px);
+  const y0 = mod(iy, py);
+  const y1 = mod(iy + 1, py);
+  const a = hash(x0, y0, seed);
+  const b = hash(x1, y0, seed);
+  const c = hash(x0, y1, seed);
+  const d = hash(x1, y1, seed);
+  return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+}
+
+function fbm(
+  x: number,
+  y: number,
+  seed: number,
+  octaves: number,
+  px = 1 << 16,
+  py = 1 << 16,
+) {
+  let sum = 0;
+  let amp = 0.5;
+  let norm = 0;
+  for (let o = 0; o < octaves; o++) {
+    sum += amp * noise(x, y, seed + o * 17, px, py);
+    norm += amp;
+    x *= 2;
+    y *= 2;
+    px *= 2;
+    py *= 2;
+    amp *= 0.5;
+  }
+  return sum / norm;
+}
+
+// --------------------------------------------------------------- textures
+
+type RGBA = [number, number, number, number?];
+
+// Fills `count` canvases in one pass; `pixel` returns one color per canvas.
+// u, v are in [0, 1) with v = 0 at the bottom (texture convention).
+function paint(
+  width: number,
+  height: number,
+  count: number,
+  pixel: (u: number, v: number) => RGBA[],
+) {
+  const canvases = Array.from({ length: count }, () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+  });
+  const images = canvases.map((canvas) =>
+    canvas.getContext('2d')!.createImageData(width, height),
+  );
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const colors = pixel((x + 0.5) / width, 1 - (y + 0.5) / height);
+      const i = (y * width + x) * 4;
+      for (let c = 0; c < count; c++) {
+        const [r, g, b, a = 1] = colors[c];
+        const data = images[c].data;
+        data[i] = clamp01(r) * 255;
+        data[i + 1] = clamp01(g) * 255;
+        data[i + 2] = clamp01(b) * 255;
+        data[i + 3] = clamp01(a) * 255;
+      }
+    }
+  }
+  canvases.forEach((canvas, c) =>
+    canvas.getContext('2d')!.putImageData(images[c], 0, 0),
+  );
+  return canvases;
+}
+
+// A repeating texture; geometry UVs are in meters, so `meters` is the tile.
+function tiled(
+  canvas: HTMLCanvasElement,
+  color: boolean,
+  metersU: number,
+  metersV = metersU,
+) {
+  const tex = own(new THREE.CanvasTexture(canvas));
+  tex.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1 / metersU, 1 / metersV);
+  tex.anisotropy = 8;
+  return tex;
+}
+
+// A texture covering a centered w x h panel (UVs in meters).
+function fitted(canvas: HTMLCanvasElement, w: number, h: number) {
+  const tex = own(new THREE.CanvasTexture(canvas));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.repeat.set(1 / w, 1 / h);
+  tex.offset.set(0.5, 0.5);
+  tex.anisotropy = 8;
+  return tex;
+}
+
+// Engineered oak: a 2 m x 4 m tile of 20 cm planks, 1-2 m long.
+function oakFloor() {
+  const planks = 10;
+  const lengths = [2, 4 / 3, 2, 1, 4 / 3, 2, 1, 4 / 3, 2, 4 / 3]; // meters
+  const shifts = lengths.map((_, i) => hash(i, 3, 7) * 4);
+  const [color, rough, bump] = paint(768, 1536, 3, (u, v) => {
+    const column = Math.floor(u * planks);
+    const across = u * planks - column; // 0..1 across the plank
+    const along = mod(v * 4 + shifts[column], 4); // meters along the column
+    const row = Math.floor(along / lengths[column]);
+    const end = along - row * lengths[column]; // meters into this board
+    const seed = column * 31 + row * 7 + 1;
+    const gap =
+      Math.min(across, 1 - across) * 0.2 < 0.001 ||
+      Math.min(end, lengths[column] - end) < 0.0012;
+    const offset = hash(seed, 1, 2) * 50;
+    const warp = fbm(across * 2 + offset, along * 0.8, seed, 3) * 9;
+    const grain = 0.5 + 0.5 * Math.sin(across * 26 + warp);
+    const fine = fbm(across * 40, along * 2 + offset, seed + 3, 2);
+    const ray = fbm(across * 4 + offset, along * 30, seed + 9, 2);
+    const tone = 0.94 + (hash(seed, 2, 9) - 0.5) * 0.12;
+    const t = tone * (0.9 + 0.07 * grain + 0.06 * fine + 0.03 * ray);
+    const shade = gap ? 0.55 : 1;
+    // Roughness varies per board and slowly along it, not per grain line.
+    const r = gap ? 0.9 : 0.45 + 0.1 * hash(seed, 4, 4) + 0.05 * fbm(across, along * 0.5 + offset, seed + 11, 2);
+    const b = gap ? 0 : 0.7 + 0.12 * grain + 0.05 * fine;
+    return [
+      [0.8 * t * shade, 0.65 * t * shade, 0.48 * t * shade],
+      [r, r, r],
+      [b, b, b],
+    ];
+  });
+  return {
+    map: tiled(color, true, 2, 4),
+    roughnessMap: tiled(rough, false, 2, 4),
+    bumpMap: tiled(bump, false, 2, 4),
+  };
+}
+
+// Fine plaster bump, 1 m tile.
+function plaster() {
+  const [canvas] = paint(256, 256, 1, (u, v) => {
+    const b = 0.45 + 0.4 * fbm(u * 16, v * 16, 3, 4, 16, 16);
+    return [[b, b, b]];
+  });
+  return tiled(canvas, false, 1);
+}
+
+// Woven fabric color + bump, 10 cm tile.
+function fabric(seed: number) {
+  const threads = 48;
+  const [color, bump] = paint(256, 256, 2, (u, v) => {
+    const cell = (Math.floor(u * threads) + Math.floor(v * threads)) % 2;
+    const warp = Math.sin(mod(u * threads, 1) * Math.PI);
+    const weft = Math.sin(mod(v * threads, 1) * Math.PI);
+    const thread = cell ? warp : weft;
+    const slub = fbm(u * 6, v * 48, seed, 3, 6, 48);
+    const t = 0.86 + 0.08 * thread + 0.1 * slub;
+    return [
+      [t, t, t],
+      [thread, thread, thread],
+    ];
+  });
+  return { map: tiled(color, true, 0.1), bumpMap: tiled(bump, false, 0.1) };
+}
+
+// Walnut veneer, 1 m tile, grain along U.
+function walnut() {
+  const [canvas] = paint(512, 512, 1, (u, v) => {
+    const warp = fbm(u * 3, v * 8, 11, 4, 3, 8) * 5;
+    const ring = 0.5 + 0.5 * Math.sin((v * 90 + warp) * Math.PI);
+    const pores = fbm(u * 160, v * 24, 12, 2, 160, 24);
+    const t = 0.8 + 0.12 * ring + 0.1 * pores;
+    return [[0.33 * t, 0.2 * t, 0.12 * t]];
+  });
+  return tiled(canvas, true, 1);
+}
+
+// Wool rug: ivory field, charcoal lattice and border.
+function rugCanvas(w: number, h: number) {
+  const [canvas] = paint(1024, Math.round((1024 * h) / w), 1, (u, v) => {
+    const x = u * w;
+    const y = v * h;
+    const fiber =
+      (fbm(x * 140, y * 140, 21, 2) - 0.5) * 0.14 +
+      (fbm(x * 3, y * 3, 22, 3) - 0.5) * 0.08;
+    const border = Math.min(x, w - x, y, h - y);
+    const band = border > 0.1 && border < 0.13;
+    const dx = Math.abs(mod(x / 0.32, 1) - 0.5);
+    const dy = Math.abs(mod(y / 0.32, 1) - 0.5);
+    const lattice = border > 0.2 && Math.abs(dx + dy - 0.5) < 0.025;
+    if (band || lattice) return [[0.35 * (1 + fiber), 0.31 * (1 + fiber), 0.28 * (1 + fiber)]];
+    const base = 0.9 + fiber;
+    return [[0.9 * base, 0.87 * base, 0.8 * base]];
+  });
+  return canvas;
+}
+
+// Abstract painting with soft overlapping shapes.
+function paintingTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 768;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#e9e2d4';
+  ctx.fillRect(0, 0, 768, 512);
+  ctx.filter = 'blur(1.5px)';
+  const shapes: [string, number, number, number][] = [
+    ['#b9673f', 250, 300, 160],
+    ['#2c4547', 480, 220, 180],
+    ['#d7a24b', 600, 380, 100],
+    ['#8d9b85', 340, 150, 110],
+  ];
+  for (const [fill, x, y, r] of shapes) {
+    ctx.globalAlpha = 0.88;
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 0.85;
+  ctx.strokeStyle = '#1d1d1d';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(90, 420);
+  ctx.bezierCurveTo(260, 130, 520, 520, 690, 100);
+  ctx.stroke();
+  // Canvas weave.
+  const image = ctx.getImageData(0, 0, 768, 512);
+  for (let i = 0; i < image.data.length; i += 4) {
+    const p = i / 4;
+    const weave = ((p % 768) % 3 === 0 ? -6 : 0) + (Math.floor(p / 768) % 3 === 0 ? -6 : 0);
+    image.data[i] += weave;
+    image.data[i + 1] += weave;
+    image.data[i + 2] += weave;
+  }
+  ctx.putImageData(image, 0, 0);
+  const tex = own(new THREE.CanvasTexture(canvas));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Bright, hazy view out of the window: sky, a tree line, a hedge.
+function outsideTexture() {
+  const [canvas] = paint(1024, 512, 1, (u, v) => {
+    const sky: [number, number, number] = [mix(0.97, 0.9, v), mix(0.98, 0.94, v), mix(0.99, 0.98, v)];
+    // A soft band of foliage under a clipped sky, darker towards the bottom.
+    const ridge = 0.33 + 0.05 * fbm(u * 4, 0, 31, 3) + 0.02 * fbm(u * 40, v * 20, 32, 2);
+    const foliage = clamp01((ridge - v) / 0.04);
+    const leaf = fbm(u * 60, v * 40, 33, 4);
+    const t = (0.45 + 0.6 * leaf) * mix(0.7, 1, v / 0.35);
+    const haze = 0.2 * (v / 0.35);
+    const green = [mix(0.42 * t, sky[0], haze), mix(0.52 * t, sky[1], haze), mix(0.36 * t, sky[2], haze)];
+    return [[mix(sky[0], green[0], foliage), mix(sky[1], green[1], foliage), mix(sky[2], green[2], foliage)]];
+  });
+  const tex = own(new THREE.CanvasTexture(canvas));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Fiddle-leaf fig leaf with veins; alpha cut-out.
+function leafTexture() {
+  const [color, bump] = paint(256, 256, 2, (u, v) => {
+    const x = (u - 0.5) * 2;
+    // Violin outline: narrow base, slight waist, broad rounded tip.
+    const waist = 1 - 0.12 * Math.exp(-Math.pow((v - 0.42) / 0.12, 2));
+    const width = 0.96 * Math.pow(Math.sin(Math.PI * Math.pow(Math.min(v, 0.999), 0.5)), 0.6) * (0.5 + 0.5 * v) * waist;
+    const inside = Math.abs(x) < width ? 1 : 0;
+    const midrib = Math.abs(x) < 0.025 ? 1 : 0;
+    const vein = Math.abs(mod(v * 5 - Math.abs(x) * 1.3, 1) - 0.5) < 0.03 ? 1 : 0;
+    const shade = 0.82 + 0.18 * fbm(u * 6, v * 6, 41, 3);
+    const edge = 1 - 0.2 * clamp01((Math.abs(x) / Math.max(width, 0.01) - 0.8) * 5);
+    const light = (midrib ? 1.5 : vein ? 1.18 : 1) * edge;
+    const height = midrib || vein ? 0.35 : 0.6;
+    return [
+      [0.19 * shade * light, 0.31 * shade * light, 0.12 * shade * light, inside],
+      [height, height, height],
+    ];
+  });
+  const map = own(new THREE.CanvasTexture(color));
+  map.colorSpace = THREE.SRGBColorSpace;
+  return { map, bumpMap: own(new THREE.CanvasTexture(bump)) };
+}
+
+// --------------------------------------------------------- baked lighting
+
+// Furniture boxes (world AABBs) that occlude ambient light on room surfaces.
+type Occluder = { min: THREE.Vector3; max: THREE.Vector3; strength: number };
+const occluders: Occluder[] = [];
+const roomPlanes = [
+  { n: new THREE.Vector3(1, 0, 0), d: -X0 },
+  { n: new THREE.Vector3(-1, 0, 0), d: X1 },
+  { n: new THREE.Vector3(0, 1, 0), d: 0 },
+  { n: new THREE.Vector3(0, -1, 0), d: H },
+  { n: new THREE.Vector3(0, 0, 1), d: -Z0 },
+  { n: new THREE.Vector3(0, 0, -1), d: Z1 },
+];
+const windowSamples: THREE.Vector3[] = [];
+for (let i = 0; i < 5; i++) {
+  for (let j = 0; j < 3; j++) {
+    windowSamples.push(
+      new THREE.Vector3(
+        X0,
+        SILL + ((j + 0.5) / 3) * (HEAD - SILL),
+        WINDOW_Z - WINDOW_WIDTH / 2 + ((i + 0.5) / 5) * WINDOW_WIDTH,
+      ),
+    );
+  }
+}
+const windowSampleArea = (WINDOW_WIDTH * (HEAD - SILL)) / windowSamples.length;
+// Where sunlight through the window lands on the floor; the bright patch
+// bounces warm light onto the ceiling and walls.
+const SUN_POSITION = new THREE.Vector3(-8.6, 6.7, 0.25);
+const SUN_TARGET = new THREE.Vector3(-0.6, 0, -1.95);
+const sunDirection = SUN_TARGET.clone().sub(SUN_POSITION).normalize();
+const patchSamples = windowSamples
+  .map((w) => w.clone().addScaledVector(sunDirection, -w.y / sunDirection.y))
+  .filter((f) => f.x > X0 && f.x < X1 && f.z > Z0 && f.z < Z1);
+const patchSampleArea =
+  (WINDOW_WIDTH * (HEAD - SILL) * Math.abs(sunDirection.x)) / -sunDirection.y / windowSamples.length;
+const toSample = new THREE.Vector3();
+const closest = new THREE.Vector3();
+const center = new THREE.Vector3();
+
+// True if the segment a -> b passes through the box (slab test).
+function blocks(a: THREE.Vector3, b: THREE.Vector3, o: Occluder) {
+  let t0 = 0.0001;
+  let t1 = 0.9999;
+  for (const axis of ['x', 'y', 'z'] as const) {
+    const delta = b[axis] - a[axis];
+    if (Math.abs(delta) < 1e-9) {
+      if (a[axis] < o.min[axis] || a[axis] > o.max[axis]) return false;
+      continue;
+    }
+    let near = (o.min[axis] - a[axis]) / delta;
+    let far = (o.max[axis] - a[axis]) / delta;
+    if (near > far) [near, far] = [far, near];
+    t0 = Math.max(t0, near);
+    t1 = Math.min(t1, far);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+const inside = (p: THREE.Vector3, o: Occluder) =>
+  p.x > o.min.x - 0.02 && p.x < o.max.x + 0.02 &&
+  p.y > o.min.y - 0.02 && p.y < o.max.y + 0.02 &&
+  p.z > o.min.z - 0.02 && p.z < o.max.z + 0.02;
+
+// Ambient occlusion from room corners and nearby furniture.
+function occlusion(p: THREE.Vector3, n: THREE.Vector3, active: Occluder[]) {
+  let ao = 1;
+  for (const plane of roomPlanes) {
+    if (Math.abs(plane.n.dot(n)) > 0.5) continue;
+    const distance = Math.max(0, plane.n.dot(p) + plane.d);
+    ao *= (1 - 0.45 * Math.exp(-distance / 0.3)) * (1 - 0.2 * Math.exp(-distance / 0.04));
+  }
+  for (const o of active) {
+    center.addVectors(o.min, o.max).multiplyScalar(0.5);
+    if (n.dot(toSample.subVectors(center, p)) < 0) continue;
+    closest.copy(p).clamp(o.min, o.max);
+    const distance = closest.distanceTo(p);
+    ao *= (1 - o.strength * Math.exp(-distance / 0.25)) * (1 - 0.5 * Math.exp(-distance / 0.04));
+  }
+  return ao;
+}
+
+// Diffuse irradiance (relative units) at p with normal n. Furniture
+// vertices pass `self = true` so the volume containing them is ignored.
+function irradiance(p: THREE.Vector3, n: THREE.Vector3, self = false): [number, number, number] {
+  const active = self ? occluders.filter((o) => !inside(p, o)) : occluders;
+  // Skylight through the window as an area light, shadowed by furniture.
+  let sky = 0;
+  for (const s of windowSamples) {
+    toSample.subVectors(s, p);
+    const d2 = Math.max(toSample.lengthSq(), 0.05);
+    toSample.normalize();
+    const cosP = n.dot(toSample);
+    const cosW = -toSample.x;
+    if (cosP <= 0 || cosW <= 0) continue;
+    if (active.some((o) => blocks(p, s, o))) continue;
+    sky += (cosP * cosW * windowSampleArea) / (Math.PI * d2);
+  }
+  // Bounce from the sun patch on the floor (a Lambertian emitter facing up).
+  let patch = 0;
+  for (const f of patchSamples) {
+    toSample.subVectors(f, p);
+    const d2 = Math.max(toSample.lengthSq(), 0.1);
+    toSample.normalize();
+    const cosP = n.dot(toSample);
+    const cosE = -toSample.y;
+    if (cosP > 0 && cosE > 0) patch += (cosP * cosE * patchSampleArea) / (Math.PI * d2);
+  }
+  const ao = occlusion(p, n, active);
+  // Warm multi-bounce ambient: ~100 units of light enter through the window
+  // and spread over ~116 m2 of surfaces with albedo ~0.6, giving ~1.3
+  // irradiance (dimmer on the ceiling, which only sees bounce light).
+  const bounce = (1.2 / LIGHTMAP_INTENSITY) * ao * (n.y < -0.5 ? 0.7 : 1);
+  const direct = sky * (0.6 + 0.4 * ao) * 1.6;
+  // Floor exitance in the patch: sun (22) x cos(elevation) x albedo (0.45).
+  const warm = ((22 * -sunDirection.y * 0.45) / LIGHTMAP_INTENSITY) * patch * (Math.abs(n.y) < 0.5 && p.y < H / 2 ? 1.25 : 1);
+  return [
+    bounce * 1.0 + direct * 0.93 + warm,
+    bounce * 0.9 + direct * 0.95 + warm * 0.85,
+    bounce * 0.78 + direct * 1.0 + warm * 0.66,
+  ];
+}
+
+// Bakes a half-float lightmap for a flat mesh whose UVs are its local XY in
+// meters over a centered w x h rectangle.
+function bakeLightmap(object: THREE.Object3D, w: number, h: number, texelsPerMeter = 24) {
+  object.updateWorldMatrix(true, false);
+  const width = Math.max(8, Math.round(w * texelsPerMeter));
+  const height = Math.max(8, Math.round(h * texelsPerMeter));
+  const data = new Uint16Array(width * height * 4);
+  const normal = new THREE.Vector3(0, 0, 1).transformDirection(object.matrixWorld);
+  const p = new THREE.Vector3();
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      p.set(((x + 0.5) / width - 0.5) * w, ((y + 0.5) / height - 0.5) * h, 0);
+      p.applyMatrix4(object.matrixWorld);
+      const [r, g, b] = irradiance(p, normal);
+      const i = (y * width + x) * 4;
+      data[i] = THREE.DataUtils.toHalfFloat(r);
+      data[i + 1] = THREE.DataUtils.toHalfFloat(g);
+      data[i + 2] = THREE.DataUtils.toHalfFloat(b);
+      data[i + 3] = THREE.DataUtils.toHalfFloat(1);
+    }
+  }
+  const tex = own(new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.HalfFloatType));
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.repeat.set(1 / w, 1 / h);
+  tex.offset.set(0.5, 0.5);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// ---------------------------------------------------------------- geometry
+
+// Scales BoxGeometry UVs (0..1 per face) to meters so tiled textures keep
+// their real-world size on any box.
+function meterUVs(geometry: THREE.BoxGeometry, w: number, h: number, d: number) {
+  const uv = geometry.getAttribute('uv');
+  const perFace = uv.count / 6;
+  const sizes = [
+    [d, h],
+    [d, h],
+    [w, d],
+    [w, d],
+    [w, h],
+    [w, h],
+  ];
+  for (let i = 0; i < uv.count; i++) {
+    const [su, sv] = sizes[Math.floor(i / perFace)];
+    uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+  }
+  return geometry;
+}
+
+// Box with rounded edges; `puff` bulges the top/bottom faces like a cushion.
+function roundedBox(w: number, h: number, d: number, r: number, puff = 0, segments = 6) {
+  const geometry = own(meterUVs(new THREE.BoxGeometry(w, h, d, segments, segments, segments), w, h, d));
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const p = new THREE.Vector3();
+  const inner = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const hx = w / 2 - r;
+  const hy = h / 2 - r;
+  const hz = d / 2 - r;
+  for (let i = 0; i < position.count; i++) {
+    p.fromBufferAttribute(position, i);
+    inner.set(
+      THREE.MathUtils.clamp(p.x, -hx, hx),
+      THREE.MathUtils.clamp(p.y, -hy, hy),
+      THREE.MathUtils.clamp(p.z, -hz, hz),
+    );
+    n.subVectors(p, inner).normalize();
+    p.copy(inner).addScaledVector(n, r);
+    if (puff) {
+      const fx = Math.max(0, 1 - Math.pow(p.x / (w / 2), 2));
+      const fz = Math.max(0, 1 - Math.pow(p.z / (d / 2), 2));
+      p.y += Math.sign(p.y) * puff * Math.sqrt(fx * fz);
+    }
+    position.setXYZ(i, p.x, p.y, p.z);
+    normal.setXYZ(i, n.x, n.y, n.z);
+  }
+  if (puff) geometry.computeVertexNormals();
+  return geometry;
+}
+
+// Rectangle in the XY plane, UVs in meters, with optional rectangular holes.
+function panel(w: number, h: number, holes: [number, number, number, number][] = []) {
+  const shape = new THREE.Shape();
+  shape.moveTo(-w / 2, -h / 2);
+  shape.lineTo(w / 2, -h / 2);
+  shape.lineTo(w / 2, h / 2);
+  shape.lineTo(-w / 2, h / 2);
+  for (const [x0, y0, x1, y1] of holes) {
+    const hole = new THREE.Path();
+    hole.moveTo(x0, y0);
+    hole.lineTo(x0, y1);
+    hole.lineTo(x1, y1);
+    hole.lineTo(x1, y0);
+    shape.holes.push(hole);
+  }
+  return own(new THREE.ShapeGeometry(shape));
+}
+
+const unitPlane = own(new THREE.PlaneGeometry(1, 1));
+
+// --------------------------------------------------------------- materials
+
+const standard = (params: THREE.MeshStandardMaterialParameters) =>
+  own(new THREE.MeshStandardMaterial(params));
+
+const plasterBump = plaster();
+const oak = oakFloor();
+const walnutMap = walnut();
+const walnutMaterial = standard({ map: walnutMap, roughness: 0.5 });
+const darkWalnut = standard({ map: walnutMap, color: '#8a7a70', roughness: 0.55 });
+const trimMaterial = standard({ color: '#f3f1ec', roughness: 0.5 });
+const blackMetal = standard({ color: '#1a1a1a', roughness: 0.4, metalness: 0.85 });
+const brass = standard({ color: '#c6a062', roughness: 0.28, metalness: 1 });
+const ceramic = standard({ color: '#ebe6dc', roughness: 0.3 });
+const stoneware = standard({ color: '#4a4844', roughness: 0.55 });
+const terracotta = standard({ color: '#a65f40', roughness: 0.85 });
+const soil = standard({ color: '#2a2019', roughness: 1 });
+const sofaMaterial = standard({ color: '#7f868b', roughness: 0.95, ...fabric(51), bumpScale: 0.5 });
+const chairMaterial = standard({ color: '#b2643e', roughness: 0.9, ...fabric(54), bumpScale: 0.5 });
+const pillowOchre = standard({ color: '#c79e68', roughness: 0.95, ...fabric(52), bumpScale: 0.5 });
+const pillowLinen = standard({ color: '#e8e2d5', roughness: 0.95, ...fabric(53), bumpScale: 0.5 });
+const throwMaterial = standard({ color: '#d8cfc0', roughness: 1, ...fabric(55), bumpScale: 1 });
+const screenMaterial = customizeEnvironment(standard({ color: '#050506', roughness: 0.05, metalness: 0.2, envMapIntensity: 0.3 }), { boxProjected: true });
+const glassMaterial = standard({ color: '#e6f0f5', roughness: 0.03, transparent: true, opacity: 0.1 });
+const mirrorMaterial = customizeEnvironment(standard({ color: '#d8dcdc', roughness: 0.15, metalness: 1 }), { boxProjected: true });
+const outsideMaterial = own(new THREE.MeshBasicMaterial({ map: outsideTexture() }));
+outsideMaterial.color.setScalar(4); // overexposed, like a photo of a window
+const curtainMaterial = standard({
+  vertexColors: true,
+  color: '#f5f2ea',
+  roughness: 1,
+  side: THREE.DoubleSide,
+  transparent: true,
+  opacity: 0.82,
+  emissive: '#fff6e6',
+  emissiveIntensity: 0.25, // backlit by the window
+});
+const lampShadeMaterial = standard({
+  color: '#efe4cf',
+  roughness: 1,
+  side: THREE.DoubleSide,
+  emissive: '#ffc985',
+  emissiveIntensity: 1.1,
+});
+const bulbMaterial = own(new THREE.MeshBasicMaterial({ color: '#fff1dc' }));
+bulbMaterial.color.setScalar(5);
+const bookMaterial = standard({ roughness: 0.8 });
+const leafMaterial = standard({
+  ...leafTexture(),
+  bumpScale: 0.6,
+  alphaTest: 0.5,
+  side: THREE.DoubleSide,
+  roughness: 0.45,
+  envMapIntensity: 0.12,
+});
+const potMaterial = standard({ color: '#e4ded3', roughness: 0.85 });
+const hiddenMaterial = own(new THREE.MeshBasicMaterial({ visible: false }));
+
+// Room surfaces get their indirect light from baked lightmaps, so their
+// environment map only contributes reflections.
+function shellMaterial(params: THREE.MeshStandardMaterialParameters) {
+  const material = standard({ envMapIntensity: 0.5, lightMapIntensity: LIGHTMAP_INTENSITY, ...params });
+  material.shadowSide = THREE.DoubleSide;
+  return customizeEnvironment(material, { specularOnly: true });
+}
+
+// ----------------------------------------------------------------- helpers
+
+type Vec3 = [number, number, number];
+
+function mesh(
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+  [x, y, z]: Vec3,
+  parent: THREE.Object3D = scene,
+  { cast = true, receive = true } = {},
+) {
+  const object = new THREE.Mesh(geometry, material);
+  object.position.set(x, y, z);
+  object.castShadow = cast;
+  object.receiveShadow = receive;
+  parent.add(object);
+  return object;
+}
+
+function box([w, h, d]: Vec3, material: THREE.Material, position: Vec3, parent: THREE.Object3D = scene) {
+  return mesh(own(meterUVs(new THREE.BoxGeometry(w, h, d), w, h, d)), material, position, parent);
+}
+
+function group(x: number, y: number, z: number, rotationY = 0) {
+  const object = new THREE.Group();
+  object.position.set(x, y, z);
+  object.rotation.y = rotationY;
+  scene.add(object);
+  return object;
+}
+
+// Invisible furniture volume, reported as an XRMesh and used as an occluder
+// for the baked lighting.
+function volume(label: string, [w, h, d]: Vec3, position: Vec3, parent: THREE.Object3D, strength = 0.7) {
+  const object = mesh(own(new THREE.BoxGeometry(w, h, d)), hiddenMaterial, position, parent, {
+    cast: false,
+    receive: false,
+  });
+  object.userData.xrMesh = label;
+  object.updateWorldMatrix(true, false);
+  const bounds = new THREE.Box3().setFromObject(object);
+  occluders.push({ min: bounds.min, max: bounds.max, strength });
+  return object;
+}
+
+// --------------------------------------------------------------- furniture
+// Furniture is built first so its volumes shape the baked lighting.
+
+// Sofa against the back wall.
+const sofa = group(0, 0, Z0 + 0.52);
+{
+  const width = 2.3;
+  mesh(roundedBox(width, 0.2, 0.92, 0.04), sofaMaterial, [0, 0.19, 0], sofa);
+  mesh(roundedBox(width, 0.52, 0.2, 0.07), sofaMaterial, [0, 0.55, -0.36], sofa);
+  for (const s of [-1, 1]) {
+    mesh(roundedBox(0.2, 0.38, 0.92, 0.07, 0.008), sofaMaterial, [s * (width / 2 - 0.1), 0.45, 0], sofa);
+    for (const z of [-0.36, 0.36]) {
+      mesh(own(new THREE.CylinderGeometry(0.016, 0.011, 0.09, 10)), blackMetal, [s * (width / 2 - 0.08), 0.045, z], sofa, { cast: false });
+    }
+  }
+  const seat = (width - 0.4) / 3;
+  for (let i = 0; i < 3; i++) {
+    const x = -width / 2 + 0.2 + seat * (i + 0.5);
+    const cushion = mesh(roundedBox(seat - 0.008, 0.16, 0.68, 0.06, 0.022, 8), sofaMaterial, [x, 0.37, 0.1], sofa);
+    cushion.rotation.z = (i - 1) * 0.006;
+    const back = mesh(roundedBox(seat - 0.015, 0.46, 0.2, 0.09, 0.025, 8), sofaMaterial, [x, 0.66, -0.2], sofa);
+    back.rotation.set(-0.2, 0, (i - 1) * 0.012);
+  }
+  const ochre = mesh(roundedBox(0.48, 0.48, 0.14, 0.07, 0.045, 8), pillowOchre, [-0.74, 0.67, -0.07], sofa);
+  ochre.rotation.set(-0.3, 0.28, 0.14);
+  const linen = mesh(roundedBox(0.44, 0.44, 0.13, 0.07, 0.04, 8), pillowLinen, [0.78, 0.66, -0.07], sofa);
+  linen.rotation.set(-0.32, -0.32, -0.12);
+  // Throw blanket draped over the right arm.
+  const throwGeometry = own(new THREE.PlaneGeometry(0.5, 1.0, 12, 30));
+  const tp = throwGeometry.getAttribute('position');
+  for (let i = 0; i < tp.count; i++) {
+    const tx = tp.getX(i);
+    const ty = tp.getY(i) + 0.5; // 0..1 along the drape
+    const angle = Math.min(ty / 0.45, 1) * Math.PI * 0.95;
+    const radius = 0.11;
+    const ripple = Math.sin(tx * 30 + ty * 6) * 0.008 + Math.sin(tx * 13) * 0.006;
+    const y = ty < 0.45 ? Math.sin(angle) * radius : radius * Math.sin(Math.PI * 0.95) - (ty - 0.45) * 0.9;
+    const z = ty < 0.45 ? -Math.cos(angle) * radius : radius * 0.98 + (ty - 0.45) * 0.08;
+    tp.setXYZ(i, tx, y, z + ripple);
+  }
+  throwGeometry.computeVertexNormals();
+  const drape = mesh(throwGeometry, throwMaterial, [width / 2 - 0.1, 0.55, 0.05], sofa);
+  drape.rotation.y = Math.PI / 2;
+  (drape.material as THREE.Material).side = THREE.DoubleSide;
+  volume('couch', [width, 0.86, 0.94], [0, 0.43, 0], sofa, 0.85);
+}
+
+// Side table with a lit lamp, left of the sofa.
+const sideTable = group(-1.55, 0, Z0 + 0.35);
+{
+  mesh(own(new THREE.CylinderGeometry(0.23, 0.23, 0.03, 48)), walnutMaterial, [0, 0.55, 0], sideTable);
+  mesh(own(new THREE.CylinderGeometry(0.018, 0.018, 0.54, 12)), blackMetal, [0, 0.27, 0], sideTable);
+  mesh(own(new THREE.CylinderGeometry(0.15, 0.16, 0.015, 32)), blackMetal, [0, 0.008, 0], sideTable);
+  const base = mesh(own(new THREE.SphereGeometry(0.095, 32, 20)), ceramic, [0, 0.66, 0], sideTable);
+  base.scale.y = 1.1;
+  mesh(own(new THREE.CylinderGeometry(0.01, 0.01, 0.2, 8)), brass, [0, 0.82, 0], sideTable);
+  mesh(own(new THREE.CylinderGeometry(0.13, 0.18, 0.25, 48, 1, true)), lampShadeMaterial, [0, 0.98, 0], sideTable, { cast: false });
+  mesh(own(new THREE.SphereGeometry(0.03, 12, 8)), bulbMaterial, [0, 0.93, 0], sideTable, { cast: false, receive: false });
+  const glow = new THREE.PointLight('#ffc27a', 1.4, 3.5, 2);
+  glow.position.set(0, 0.95, 0);
+  sideTable.add(glow);
+  volume('lamp', [0.46, 1.1, 0.46], [0, 0.55, 0], sideTable, 0.5);
+}
+
+// Wall art above the sofa.
+const art = group(0, 1.62, Z0);
+{
+  box([1.22, 0.82, 0.03], blackMetal, [0, 0, 0.015], art);
+  mesh(unitPlane, trimMaterial, [0, 0, 0.0305], art, { cast: false }).scale.set(1.18, 0.78, 1);
+  const canvas = mesh(unitPlane, standard({ map: paintingTexture(), roughness: 0.85 }), [0, 0, 0.031], art, { cast: false });
+  canvas.scale.set(1.02, 0.66, 1);
+  canvas.userData.xrPlane = 'wall art';
+}
+
+// Rug and coffee table.
+const RUG_W = 2.5;
+const RUG_D = 1.8;
+const RUG_Z = Z0 + 1.45;
+const coffee = group(0, 0, Z0 + 1.45);
+{
+  const top = mesh(roundedBox(1.15, 0.035, 0.6, 0.015), walnutMaterial, [0, 0.42, 0], coffee);
+  top.userData.xrPlane = 'table';
+  mesh(roundedBox(1.05, 0.02, 0.5, 0.008), walnutMaterial, [0, 0.12, 0], coffee);
+  for (const x of [-0.54, 0.54]) {
+    for (const z of [-0.26, 0.26]) {
+      mesh(roundedBox(0.032, 0.4, 0.032, 0.008), blackMetal, [x, 0.2, z], coffee);
+    }
+  }
+  const lower = box([0.28, 0.035, 0.21], standard({ color: '#2f3e46', roughness: 0.8 }), [-0.3, 0.454, 0.04], coffee);
+  lower.rotation.y = 0.12;
+  const upper = box([0.24, 0.028, 0.18], standard({ color: '#e2dacb', roughness: 0.8 }), [-0.29, 0.486, 0.045], coffee);
+  upper.rotation.y = -0.06;
+  const bowl = mesh(
+    own(new THREE.SphereGeometry(0.13, 40, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2)),
+    standard({ color: '#3b3a37', roughness: 0.5, side: THREE.DoubleSide }),
+    [0.3, 0.495, -0.03],
+    coffee,
+  );
+  bowl.scale.y = 0.5;
+  mesh(own(new THREE.SphereGeometry(0.035, 16, 12)), standard({ color: '#d39a3a', roughness: 0.6 }), [0.28, 0.465, -0.02], coffee);
+  mesh(own(new THREE.SphereGeometry(0.035, 16, 12)), standard({ color: '#8fa35a', roughness: 0.6 }), [0.33, 0.465, -0.06], coffee);
+  mesh(own(new THREE.CylinderGeometry(0.035, 0.045, 0.15, 32)), ceramic, [0.08, 0.512, 0.17], coffee);
+  volume('table', [1.15, 0.44, 0.6], [0, 0.22, 0], coffee, 0.45);
+}
+
+// Armchair angled towards the coffee table, by the window.
+const chair = group(-1.75, 0, -1.25, 1.0);
+{
+  mesh(roundedBox(0.78, 0.28, 0.8, 0.06, 0.008), chairMaterial, [0, 0.29, 0], chair);
+  mesh(roundedBox(0.66, 0.12, 0.62, 0.05, 0.022, 8), chairMaterial, [0, 0.48, 0.06], chair);
+  mesh(roundedBox(0.78, 0.5, 0.14, 0.06, 0.008), chairMaterial, [0, 0.65, -0.33], chair).rotation.x = -0.14;
+  for (const s of [-1, 1]) {
+    mesh(roundedBox(0.1, 0.22, 0.74, 0.045), chairMaterial, [s * 0.36, 0.55, 0.02], chair);
+    for (const z of [-0.32, 0.32]) {
+      mesh(roundedBox(0.035, 0.16, 0.035, 0.012), walnutMaterial, [s * 0.32, 0.08, z], chair).rotation.z = s * 0.12;
+    }
+  }
+  volume('couch', [0.8, 0.9, 0.82], [0, 0.45, 0], chair, 0.6);
+}
+
+// Fiddle-leaf fig in the front-left corner: a bare trunk, a few short
+// branches, and large near-horizontal leaves clustered towards the top.
+const plant = group(X0 + 0.38, 0, 0.35);
+{
+  mesh(own(new THREE.CylinderGeometry(0.19, 0.155, 0.38, 48)), potMaterial, [0, 0.19, 0], plant);
+  mesh(own(new THREE.TorusGeometry(0.185, 0.012, 10, 48)), potMaterial, [0, 0.38, 0], plant).rotation.x = Math.PI / 2;
+  mesh(own(new THREE.CylinderGeometry(0.178, 0.178, 0.01, 32)), soil, [0, 0.355, 0], plant);
+  const bark = standard({ color: '#5b4835', roughness: 0.9 });
+  mesh(own(new THREE.CylinderGeometry(0.014, 0.026, 1.5, 8).translate(0, 0.75, 0)), bark, [0, 0.36, 0], plant);
+
+  // Leaf geometry: +Y along the leaf, cupped along the midrib.
+  const leafGeometry = own(new THREE.PlaneGeometry(0.28, 0.38, 4, 6));
+  const lp = leafGeometry.getAttribute('position');
+  for (let i = 0; i < lp.count; i++) {
+    const x = lp.getX(i);
+    const y = lp.getY(i) + 0.19;
+    lp.setXYZ(i, x, y + 0.04, Math.abs(x) * 0.3 - Math.pow(y / 0.38, 2) * 0.05);
+  }
+  leafGeometry.computeVertexNormals();
+
+  // Branches: [height on trunk, yaw, length].
+  const branches: [number, number, number][] = [
+    [1.05, 0.6, 0.42],
+    [1.25, 2.6, 0.38],
+    [1.45, 4.4, 0.34],
+    [1.62, 1.6, 0.26],
+  ];
+  const twig = own(new THREE.CylinderGeometry(0.007, 0.011, 1, 6).translate(0, 0.5, 0));
+  const anchors: { at: THREE.Vector3; yaw: number }[] = [];
+  for (const [height, yaw, length] of branches) {
+    const start = new THREE.Vector3(0, height, 0);
+    const direction = new THREE.Vector3(Math.sin(yaw) * 0.75, 0.66, Math.cos(yaw) * 0.75).normalize();
+    const branch = mesh(twig, bark, [start.x, start.y, start.z], plant);
+    branch.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+    branch.scale.set(1, length, 1);
+    for (let k = 1; k <= 4; k++) {
+      anchors.push({ at: start.clone().addScaledVector(direction, (length * k) / 4), yaw });
+    }
+  }
+  for (let k = 0; k < 12; k++) {
+    anchors.push({ at: new THREE.Vector3(0.02, 1.0 + k * 0.075, 0.01), yaw: k * 2.39996 });
+  }
+
+  const count = anchors.length * 2;
+  const leaves = new THREE.InstancedMesh(leafGeometry, leafMaterial, count);
+  leaves.castShadow = leaves.receiveShadow = true;
+  const matrix = new THREE.Matrix4();
+  const rotation = new THREE.Quaternion();
+  const euler = new THREE.Euler();
+  const color = new THREE.Color();
+  let index = 0;
+  for (const [a, { at, yaw }] of anchors.entries()) {
+    for (const side of [-1, 1]) {
+      const leafYaw = yaw + side * (0.5 + hash(a, side + 2, 3) * 0.6);
+      // Near horizontal, drooping a little more the further out it is.
+      // About a third of the leaves droop below horizontal.
+      const droop = hash(a, side + 2, 8) < 0.3;
+      const pitch = droop ? -1.65 - hash(a, side + 2, 1) * 0.3 : -0.85 - hash(a, side + 2, 1) * 0.55;
+      euler.set(pitch, leafYaw, (hash(a, side + 2, 5) - 0.5) * 0.88, 'YXZ');
+      rotation.setFromEuler(euler);
+      const s = 0.6 + hash(a, side + 2, 2) * 0.6;
+      matrix.compose(at, rotation, new THREE.Vector3(s, s, s));
+      leaves.setMatrixAt(index, matrix);
+      // Window side (-X) leaves are lighter and yellower; inner ones darker.
+      const toWindow = Math.max(0, -Math.sin(leafYaw));
+      const lit = 0.6 + 0.3 * hash(a, side + 2, 6) + 0.25 * toWindow;
+      color.setRGB(lit * (1 + 0.12 * toWindow), lit, lit * 0.85);
+      leaves.setColorAt(index, color);
+      index++;
+    }
+  }
+  plant.add(leaves);
+  volume('plant', [0.75, 1.95, 0.75], [0, 0.97, 0], plant, 0.4);
+}
+
+// Media console and wall-mounted TV on the right wall.
+const media = group(X1 - 0.22, 0, -1.4, -Math.PI / 2);
+{
+  mesh(roundedBox(1.9, 0.44, 0.42, 0.01), walnutMaterial, [0, 0.3, 0], media);
+  const slat = own(new THREE.BoxGeometry(0.02, 0.36, 0.012));
+  const slats = new THREE.InstancedMesh(slat, darkWalnut, 62);
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < 62; i++) {
+    slats.setMatrixAt(i, m.makeTranslation(-0.915 + 0.03 * i, 0.3, 0.214));
+  }
+  slats.receiveShadow = true;
+  media.add(slats);
+  for (const x of [-0.88, 0.88]) {
+    for (const z of [-0.16, 0.16]) {
+      mesh(own(new THREE.CylinderGeometry(0.014, 0.01, 0.08, 8)), blackMetal, [x, 0.04, z], media);
+    }
+  }
+  mesh(own(new THREE.CylinderGeometry(0.05, 0.065, 0.26, 32)), stoneware, [-0.72, 0.65, 0.02], media);
+  mesh(own(new THREE.CylinderGeometry(0.004, 0.004, 0.3, 4)), standard({ color: '#6b5a40' }), [-0.72, 0.9, 0.02], media).rotation.z = 0.15;
+  const speaker = box([0.12, 0.19, 0.12], standard({ color: '#2a2a2a', roughness: 0.7 }), [0.74, 0.615, 0], media);
+  speaker.rotation.y = 0.25;
+  box([0.3, 0.04, 0.22], standard({ color: '#7a3b2e', roughness: 0.8 }), [0.3, 0.54, 0.02], media);
+  volume('shelf', [1.9, 0.52, 0.42], [0, 0.26, 0], media, 0.75);
+}
+const tv = group(X1 - 0.03, 1.3, -1.4, -Math.PI / 2);
+{
+  box([1.46, 0.84, 0.028], standard({ color: '#0a0a0a', roughness: 0.35, metalness: 0.5 }), [0, 0, 0], tv);
+  const screen = mesh(unitPlane, screenMaterial, [0, 0, 0.0145], tv, { cast: false });
+  screen.scale.set(1.43, 0.81, 1);
+  screen.userData.xrPlane = 'screen';
+  volume('screen', [1.46, 0.84, 0.04], [0, 0, 0], tv, 0.3);
+}
+
+// Bookshelf on the right wall, towards the front.
+const shelf = group(X1 - 0.18, 0, 0.7, -Math.PI / 2);
+{
+  const width = 0.9;
+  const height = 1.9;
+  for (const x of [-width / 2, width / 2]) mesh(roundedBox(0.025, height, 0.34, 0.004, 0, 8), walnutMaterial, [x, height / 2, 0], shelf);
+  box([width, height, 0.012], darkWalnut, [0, height / 2, -0.164], shelf);
+  const levels = [0.05, 0.43, 0.81, 1.19, 1.57, 1.89];
+  for (const y of levels) mesh(roundedBox(width, 0.025, 0.34, 0.004, 0, 2), walnutMaterial, [0, y, 0], shelf);
+  const palette = ['#2f3e46', '#b08d57', '#e3dccf', '#7a3b2e', '#55624a', '#cbb79a', '#3c3c3c', '#8c4f3b'];
+  const books = new THREE.InstancedMesh(own(new THREE.BoxGeometry(1, 1, 1)), bookMaterial, 120);
+  books.castShadow = books.receiveShadow = true;
+  const matrix = new THREE.Matrix4();
+  const rotation = new THREE.Quaternion();
+  const color = new THREE.Color();
+  let count = 0;
+  for (let level = 0; level < 5; level++) {
+    let x = -width / 2 + 0.02;
+    const y = levels[level] + 0.0125;
+    const end = level % 2 ? 0.12 : width / 2 - 0.02;
+    while (x < end - 0.03 && count < 120) {
+      const thickness = 0.018 + hash(count, 5, 5) * 0.03;
+      const height = 0.19 + hash(count, 6, 6) * 0.11;
+      const depth = 0.17 + hash(count, 7, 7) * 0.07;
+      rotation.setFromAxisAngle(new THREE.Vector3(0, 0, 1), x + thickness > end - 0.05 ? -0.18 : 0);
+      matrix.compose(new THREE.Vector3(x + thickness / 2, y + height / 2, 0.03), rotation, new THREE.Vector3(thickness, height, depth));
+      books.setMatrixAt(count, matrix);
+      color.set(palette[Math.floor(hash(count, 8, 8) * palette.length)]);
+      books.setColorAt(count, color.multiplyScalar(0.8 + hash(count, 9, 9) * 0.3));
+      x += thickness + 0.0015;
+      count++;
+    }
+  }
+  books.count = count;
+  shelf.add(books);
+  mesh(own(new THREE.SphereGeometry(0.07, 32, 20)), ceramic, [0.28, levels[1] + 0.08, 0], shelf);
+  mesh(own(new THREE.CylinderGeometry(0.05, 0.035, 0.18, 24)), terracotta, [0.26, levels[3] + 0.1, 0], shelf);
+  box([0.24, 0.3, 0.02], blackMetal, [0.05, levels[4] + 0.16, -0.12], shelf).rotation.x = -0.08;
+  volume('shelf', [width, height, 0.34], [0, height / 2, 0], shelf, 0.7);
+}
+
+// Front wall: door, console table with mirror, basket.
+const door = group(1.45, 0, Z1, Math.PI);
+{
+  // A dark backing shows as a 3 mm gap around the slab.
+  box([0.86, 2.065, 0.01], standard({ color: '#3a3836', roughness: 1 }), [0, 1.0325, 0.005], door);
+  const slab = mesh(roundedBox(0.854, 2.056, 0.04, 0.004, 0, 2), trimMaterial, [0, 1.028, 0.022], door);
+  slab.userData.xrPlane = 'door';
+  for (const [w, h, x, y] of [
+    [0.07, 2.13, -0.465, 1.065],
+    [0.07, 2.13, 0.465, 1.065],
+    [1.0, 0.07, 0, 2.095],
+  ] as const) {
+    box([w, h, 0.022], trimMaterial, [x, y, 0.011], door);
+  }
+  box([0.025, 0.12, 0.012], brass, [0.36, 1.0, 0.05], door);
+  mesh(own(new THREE.CylinderGeometry(0.012, 0.012, 0.12, 12)), brass, [0.32, 1.02, 0.07], door).rotation.z = Math.PI / 2;
+}
+const entry = group(-0.7, 0, Z1, Math.PI);
+{
+  mesh(roundedBox(1.1, 0.03, 0.32, 0.008), walnutMaterial, [0, 0.8, 0.17], entry);
+  for (const x of [-0.52, 0.52]) {
+    for (const z of [0.04, 0.3]) mesh(roundedBox(0.025, 0.79, 0.025, 0.006), blackMetal, [x, 0.395, z], entry);
+  }
+  const mirror = mesh(own(new THREE.CircleGeometry(0.36, 64)), mirrorMaterial, [0, 1.45, 0.012], entry, { cast: false });
+  mirror.rotation.y = -0.09; // turned slightly towards the bright window side
+  mirror.userData.xrPlane = 'wall art';
+  mesh(own(new THREE.TorusGeometry(0.37, 0.012, 12, 96)), brass, [0, 1.45, 0.014], entry);
+  mesh(own(new THREE.CylinderGeometry(0.06, 0.09, 0.3, 32)), ceramic, [-0.32, 0.965, 0.17], entry);
+  mesh(own(new THREE.CylinderGeometry(0.17, 0.14, 0.3, 32, 1, true)), standard({ color: '#b8996b', roughness: 1, side: THREE.DoubleSide }), [0.25, 0.15, 0.25], entry);
+  volume('table', [1.1, 0.82, 0.34], [0, 0.41, 0.17], entry, 0.45);
+}
+
+// Dining nook behind the viewer: round oak table with two chairs.
+const dining = group(-0.95, 0, 1.35);
+{
+  const oakTop = standard({ map: oak.map, roughness: 0.5 });
+  const chairOak = standard({ map: oak.map, color: '#d9c0a5', roughness: 0.55 });
+  const top = mesh(own(new THREE.CylinderGeometry(0.45, 0.45, 0.03, 64)), oakTop, [0, 0.74, 0], dining);
+  top.userData.xrPlane = 'table';
+  mesh(own(new THREE.CylinderGeometry(0.04, 0.05, 0.71, 24)), blackMetal, [0, 0.365, 0], dining);
+  mesh(own(new THREE.CylinderGeometry(0.24, 0.26, 0.02, 48)), blackMetal, [0, 0.01, 0], dining);
+  mesh(own(new THREE.CylinderGeometry(0.06, 0.04, 0.2, 32)), stoneware, [0.08, 0.855, -0.05], dining);
+  volume('table', [0.9, 0.76, 0.9], [0, 0.38, 0], dining, 0.45);
+  for (const [angle, seed] of [
+    [0.4, 1],
+    [Math.PI + 0.25, 2],
+  ]) {
+    const chair = new THREE.Group();
+    chair.position.set(Math.sin(angle) * 0.62, 0, Math.cos(angle) * 0.62);
+    chair.rotation.y = angle + Math.PI + (seed - 1.5) * 0.15;
+    dining.add(chair);
+    mesh(roundedBox(0.44, 0.03, 0.42, 0.012), chairOak, [0, 0.45, 0], chair);
+    const back = mesh(roundedBox(0.42, 0.16, 0.025, 0.01), chairOak, [0, 0.76, -0.2], chair);
+    back.rotation.x = 0.1;
+    for (const x of [-0.19, 0.19]) {
+      for (const z of [-0.18, 0.18]) {
+        const height = z < 0 ? 0.84 : 0.44;
+        mesh(roundedBox(0.025, height, 0.025, 0.008), chairOak, [x, height / 2, z], chair);
+      }
+    }
+    chair.updateWorldMatrix(true, false);
+    volume('other', [0.44, 0.85, 0.42], [0, 0.425, 0], chair, 0.4);
+  }
+}
+// Doormat inside the door.
+box([0.75, 0.008, 0.45], standard({ color: '#6e5a44', roughness: 1, ...fabric(56), bumpScale: 1.5 }), [1.45, 0.004, Z1 - 0.4]);
+
+// Floor lamp (switched off) at the right end of the sofa.
+const floorLamp = group(1.55, 0, Z0 + 0.3);
+{
+  mesh(own(new THREE.CylinderGeometry(0.14, 0.15, 0.02, 40)), blackMetal, [0, 0.01, 0], floorLamp);
+  mesh(own(new THREE.CylinderGeometry(0.009, 0.009, 1.45, 10)), blackMetal, [0, 0.74, 0], floorLamp);
+  const linen = standard({ color: '#d8d0c2', roughness: 0.9, side: THREE.DoubleSide });
+  mesh(own(new THREE.CylinderGeometry(0.2, 0.2, 0.3, 48, 1, true)), linen, [0, 1.55, 0], floorLamp);
+  const diffuser = mesh(own(new THREE.CircleGeometry(0.19, 40)), standard({ color: '#cfc7b8', roughness: 1 }), [0, 1.67, 0], floorLamp, { cast: false });
+  diffuser.rotation.x = Math.PI / 2;
+  volume('lamp', [0.4, 1.72, 0.4], [0, 0.86, 0], floorLamp, 0.4);
+}
+
+// Large botanical print on the left wall by the dining nook.
+const print = group(X0, 1.5, 1.35, Math.PI / 2);
+{
+  const canvas = document.createElement('canvas');
+  canvas.width = 400;
+  canvas.height = 600;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#efe9de';
+  ctx.fillRect(0, 0, 400, 600);
+  ctx.strokeStyle = '#3d4a3a';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  // A stem with alternating leaf outlines.
+  ctx.beginPath();
+  ctx.moveTo(200, 560);
+  ctx.bezierCurveTo(190, 420, 230, 260, 205, 60);
+  ctx.stroke();
+  for (let i = 0; i < 7; i++) {
+    const y = 500 - i * 62;
+    const side = i % 2 ? 1 : -1;
+    const x = 200 + Math.sin(i) * 8;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + side * 90, y - 70, x + side * 120, y - 20);
+    ctx.quadraticCurveTo(x + side * 70, y + 10, x, y);
+    ctx.stroke();
+  }
+  const tex = own(new THREE.CanvasTexture(canvas));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  box([0.64, 0.94, 0.025], walnutMaterial, [0, 0, 0.0125], print);
+  mesh(unitPlane, trimMaterial, [0, 0, 0.0255], print, { cast: false }).scale.set(0.6, 0.9, 1);
+  const art = mesh(unitPlane, standard({ map: tex, roughness: 0.9 }), [0, 0, 0.026], print, { cast: false });
+  art.scale.set(0.44, 0.66, 1);
+  art.userData.xrPlane = 'wall art';
+}
+
+// Light switch by the door and a few sockets.
+{
+  const plate = standard({ color: '#f4f2ee', roughness: 0.4 });
+  const switchPlate = box([0.085, 0.085, 0.01], plate, [0.85, 1.1, Z1 - 0.005], scene);
+  switchPlate.rotation.y = Math.PI;
+  box([0.025, 0.035, 0.006], plate, [0.85, 1.1, Z1 - 0.012], scene);
+  for (const [x, z, rotation] of [
+    [-1.15, Z0 + 0.005, 0],
+    [X1 - 0.005, -0.45, -Math.PI / 2],
+    [X0 + 0.005, 1.4, Math.PI / 2],
+  ] as const) {
+    const socket = box([0.085, 0.085, 0.01], plate, [x, 0.3, z], scene);
+    socket.rotation.y = rotation;
+  }
+}
+
+// ------------------------------------------------------------------- shell
+
+function shell(geometry: THREE.BufferGeometry, material: THREE.MeshStandardMaterial, position: Vec3, rotation: [number, number], label: string, w: number, h: number) {
+  const object = mesh(geometry, material, position, scene, { cast: label !== 'floor' });
+  object.rotation.set(rotation[0], rotation[1], 0);
+  object.userData.xrPlane = label;
+  material.lightMap = bakeLightmap(object, w, h);
+  return object;
+}
+
+const wallParams = { color: '#eeeae3', roughness: 0.9, bumpMap: plasterBump, bumpScale: 0.12 };
+shell(panel(W, D), customizeEnvironment(shellMaterial({ ...oak, bumpScale: 0.15, roughness: 1, envMapIntensity: 0.5 }), { boxProjected: true, specularOnly: true }), [0, 0, ZC], [-Math.PI / 2, 0], 'floor', W, D);
+shell(panel(W, D), shellMaterial({ color: '#f7f4ef', roughness: 0.95 }), [0, H, ZC], [Math.PI / 2, 0], 'ceiling', W, D);
+const windowLocalX = -(WINDOW_Z - ZC);
+// Walls overlap the floor, ceiling and each other slightly so no seam
+// shows a hairline.
+const SEAM = 0.004;
+shell(
+  panel(D + SEAM, H + SEAM, [[windowLocalX - WINDOW_WIDTH / 2, SILL - H / 2, windowLocalX + WINDOW_WIDTH / 2, HEAD - H / 2]]),
+  shellMaterial(wallParams),
+  [X0, H / 2, ZC],
+  [0, Math.PI / 2],
+  'wall',
+  D + SEAM,
+  H + SEAM,
+);
+shell(panel(D + SEAM, H + SEAM), shellMaterial(wallParams), [X1, H / 2, ZC], [0, -Math.PI / 2], 'wall', D + SEAM, H + SEAM);
+shell(panel(W + SEAM, H + SEAM), shellMaterial(wallParams), [0, H / 2, Z0], [0, 0], 'wall', W + SEAM, H + SEAM);
+shell(panel(W + SEAM, H + SEAM), shellMaterial(wallParams), [0, H / 2, Z1], [0, Math.PI], 'wall', W + SEAM, H + SEAM);
+
+// Shadow-only shell: thick boxes around the room (with the window opening),
+// reaching 3 cm into it, so no sunlight leaks in where the thin wall and
+// ceiling planes meet. They write neither color nor depth and ignore
+// hit-test rays.
+{
+  const caster = own(new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
+  // Front faces must cast too, so points just inside a slab are shadowed.
+  caster.shadowSide = THREE.DoubleSide;
+  const slab = (min: Vec3, max: Vec3) => {
+    const size: Vec3 = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+    const object = box(size, caster, [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2]);
+    object.receiveShadow = false;
+    object.userData.shadowOnly = true;
+  };
+  const t = 0.2;
+  const inset = 0.03;
+  const zw0 = WINDOW_Z - WINDOW_WIDTH / 2;
+  const zw1 = WINDOW_Z + WINDOW_WIDTH / 2;
+  slab([X0 - 0.4, H - inset, Z0 - 0.4], [X1 + 0.4, H + t, Z1 + 0.4]);
+  slab([X1 - inset, -0.1, Z0 - 0.4], [X1 + t, H + t, Z1 + 0.4]);
+  slab([X0 - 0.4, -0.1, Z0 - t], [X1 + 0.4, H + t, Z0 + inset]);
+  slab([X0 - 0.4, -0.1, Z1 - inset], [X1 + 0.4, H + t, Z1 + t]);
+  // Left wall, outside the window reveal, around the opening.
+  const x0 = X0 - 0.2 - t;
+  const x1 = X0 - 0.2;
+  slab([x0, -0.1, Z0 - 0.4], [x1, SILL, Z1 + 0.4]);
+  slab([x0, HEAD, Z0 - 0.4], [x1, H + t, Z1 + 0.4]);
+  slab([x0, SILL, Z0 - 0.4], [x1, HEAD, zw0]);
+  slab([x0, SILL, zw1], [x1, HEAD, Z1 + 0.4]);
+}
+
+// Rug, lit like the floor beneath it.
+{
+  const rug = mesh(panel(RUG_W, RUG_D), shellMaterial({ map: fitted(rugCanvas(RUG_W, RUG_D), RUG_W, RUG_D), roughness: 1 }), [0, 0.006, RUG_Z], scene, { cast: false });
+  rug.rotation.x = -Math.PI / 2;
+  (rug.material as THREE.MeshStandardMaterial).lightMap = bakeLightmap(rug, RUG_W, RUG_D);
+}
+
+// Baseboards.
+for (const [x, z, length, rotation] of [
+  [X0, ZC, D, Math.PI / 2],
+  [X1, ZC, D, -Math.PI / 2],
+  [0, Z0, W, 0],
+  [0, Z1, W, Math.PI],
+] as const) {
+  box([length, 0.09, 0.014], trimMaterial, [0, 0.045, 0.007], group(x, 0, z, rotation));
+}
+
+// Window: reveal, frame, glass, the view outside, sheers.
+const win = group(X0, 0, WINDOW_Z, Math.PI / 2);
+{
+  const reveal = 0.16;
+  const revealMaterial = shellMaterial({ ...wallParams, lightMapIntensity: 0 });
+  revealMaterial.envMapIntensity = 0.6;
+  box([0.02, HEAD - SILL, reveal], revealMaterial, [-WINDOW_WIDTH / 2 - 0.01, (SILL + HEAD) / 2, -reveal / 2], win);
+  box([0.02, HEAD - SILL, reveal], revealMaterial, [WINDOW_WIDTH / 2 + 0.01, (SILL + HEAD) / 2, -reveal / 2], win);
+  box([WINDOW_WIDTH, 0.02, reveal], revealMaterial, [0, HEAD + 0.01, -reveal / 2], win);
+  box([WINDOW_WIDTH + 0.12, 0.03, reveal + 0.06], trimMaterial, [0, SILL - 0.015, -reveal / 2 + 0.03], win);
+  const frameZ = -reveal + 0.04;
+  box([WINDOW_WIDTH, 0.05, 0.06], trimMaterial, [0, SILL + 0.025, frameZ], win);
+  box([WINDOW_WIDTH, 0.05, 0.06], trimMaterial, [0, HEAD - 0.025, frameZ], win);
+  box([0.05, HEAD - SILL, 0.06], trimMaterial, [-WINDOW_WIDTH / 2 + 0.025, (SILL + HEAD) / 2, frameZ], win);
+  box([0.05, HEAD - SILL, 0.06], trimMaterial, [WINDOW_WIDTH / 2 - 0.025, (SILL + HEAD) / 2, frameZ], win);
+  box([0.06, HEAD - SILL, 0.06], trimMaterial, [0, (SILL + HEAD) / 2, frameZ], win);
+  const glass = mesh(unitPlane, glassMaterial, [0, (SILL + HEAD) / 2, frameZ], win, { cast: false, receive: false });
+  glass.scale.set(WINDOW_WIDTH, HEAD - SILL, 1);
+  glass.userData.xrPlane = 'window';
+  const view = mesh(unitPlane, outsideMaterial, [0, 1.3, -4], win, { cast: false, receive: false });
+  view.scale.set(12, 6, 1);
+  // Brass rod and gathered sheers.
+  mesh(own(new THREE.CylinderGeometry(0.012, 0.012, WINDOW_WIDTH + 1, 12)), brass, [0, HEAD + 0.15, 0.1], win).rotation.z = Math.PI / 2;
+  for (const [x, seed] of [
+    [-WINDOW_WIDTH / 2 - 0.22, 1],
+    [WINDOW_WIDTH / 2 + 0.22, 4],
+  ]) {
+    const height = HEAD + 0.13;
+    const geometry = own(new THREE.PlaneGeometry(0.62, height, 72, 12));
+    const position = geometry.getAttribute('position');
+    const colors = new Float32Array(position.count * 3);
+    for (let i = 0; i < position.count; i++) {
+      const px = position.getX(i);
+      const py = position.getY(i) / height + 0.5; // 0 bottom .. 1 top
+      // ~11 cm folds with a slowly varying period; valleys are shaded.
+      const phase = (px / 0.11) * Math.PI * 2 + Math.sin(px * 9 + seed) * 1.2;
+      const fold = Math.sin(phase);
+      position.setZ(i, fold * 0.03 * (0.8 + 0.2 * py));
+      colors.fill(0.85 + 0.15 * (fold * 0.5 + 0.5), i * 3, i * 3 + 3);
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+    mesh(geometry, curtainMaterial, [x, height / 2 + 0.02, 0.1], win, { cast: false });
+  }
+}
+
+// Recessed downlights (off during the day): trim ring and lens.
+const ringGeometry = own(new THREE.RingGeometry(0.045, 0.062, 32));
+const lensGeometry = own(new THREE.CircleGeometry(0.045, 32));
+const lensMaterial = standard({ color: '#dcd7ce', roughness: 0.3 });
+for (const [x, z] of [
+  [-1.1, -2.2],
+  [1.1, -2.2],
+  [-1.1, 0.6],
+  [1.1, 0.6],
+]) {
+  mesh(ringGeometry, trimMaterial, [x, H - 0.002, z], scene, { cast: false }).rotation.x = Math.PI / 2;
+  mesh(lensGeometry, lensMaterial, [x, H - 0.004, z], scene, { cast: false }).rotation.x = Math.PI / 2;
+}
+
+// Bake ambient occlusion into furniture as vertex colors (and instance
+// colors): darker near the floor and next to other furniture. Directional
+// light comes from the environment probe, so it is not baked here.
+{
+  const p = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const normalMatrix = new THREE.Matrix3();
+  const shade = (y: number) => {
+    const ao = occlusion(p, n, occluders.filter((o) => !inside(p, o)));
+    const floor = n.y > 0.7 ? 1 : 1 - 0.35 * Math.exp(-y / 0.15);
+    return THREE.MathUtils.clamp(0.55 + 0.45 * ao, 0.55, 1) * floor;
+  };
+  const skip = (material: THREE.Material) => {
+    const m = material as THREE.MeshStandardMaterial;
+    return !m.isMeshStandardMaterial || m === trimMaterial || m.transparent || !m.visible || m.lightMap || m.emissive.getHex() !== 0;
+  };
+  const seen = new Set<THREE.BufferGeometry>();
+  const shaded = new Set<THREE.Material>();
+  scene.updateMatrixWorld(true);
+  scene.traverse((object) => {
+    const target = object as THREE.Mesh;
+    if (!target.isMesh || skip(target.material as THREE.Material)) return;
+    shaded.add(target.material as THREE.Material);
+    const instanced = object as THREE.InstancedMesh;
+    if (instanced.isInstancedMesh) {
+      const matrix = new THREE.Matrix4();
+      const color = new THREE.Color();
+      for (let i = 0; i < instanced.count; i++) {
+        instanced.getMatrixAt(i, matrix);
+        p.setFromMatrixPosition(matrix.premultiply(instanced.matrixWorld));
+        n.set(0, 1, 0);
+        const f = shade(p.y);
+        if (instanced.instanceColor) instanced.getColorAt(i, color);
+        else color.setRGB(1, 1, 1);
+        instanced.setColorAt(i, color.multiplyScalar(f));
+      }
+      return;
+    }
+    if (seen.has(target.geometry)) target.geometry = own(target.geometry.clone());
+    seen.add(target.geometry);
+    const position = target.geometry.getAttribute('position');
+    const normal = target.geometry.getAttribute('normal');
+    const colors = new Float32Array(position.count * 3);
+    normalMatrix.getNormalMatrix(target.matrixWorld);
+    for (let i = 0; i < position.count; i++) {
+      p.fromBufferAttribute(position, i).applyMatrix4(target.matrixWorld);
+      n.fromBufferAttribute(normal, i).applyMatrix3(normalMatrix).normalize();
+      colors.fill(shade(p.y), i * 3, i * 3 + 3);
+    }
+    target.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  });
+  shaded.forEach((material) => (material.vertexColors = true));
+  // Shared materials on meshes without a color attribute get plain white.
+  scene.traverse((object) => {
+    const target = object as THREE.Mesh;
+    if (!target.isMesh || !(target.material as THREE.Material).vertexColors) return;
+    if (target.geometry.getAttribute('color')) return;
+    const count = target.geometry.getAttribute('position').count;
+    target.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3));
+  });
+}
+
+// Merge static meshes that share a material into one draw call each.
+// Labelled meshes stay separate so they remain WebXR planes / meshes.
+{
+  scene.updateMatrixWorld(true);
+  const buckets = new Map<string, THREE.Mesh[]>();
+  scene.traverse((object) => {
+    const target = object as THREE.Mesh;
+    if (!target.isMesh || (target as THREE.InstancedMesh).isInstancedMesh) return;
+    const material = target.material as THREE.Material;
+    if (!material.visible || material.transparent) return;
+    if (target.userData.xrPlane || target.userData.xrMesh) return;
+    const attributes = Object.keys(target.geometry.attributes).sort().join();
+    const key = `${material.uuid}:${target.castShadow}:${target.receiveShadow}:${attributes}`;
+    buckets.set(key, [...(buckets.get(key) ?? []), target]);
+  });
+  const normalMatrix = new THREE.Matrix3();
+  for (const meshes of buckets.values()) {
+    if (meshes.length < 2) continue;
+    const names = Object.keys(meshes[0].geometry.attributes);
+    const vertexCount = meshes.reduce((sum, m) => sum + m.geometry.getAttribute('position').count, 0);
+    const arrays = Object.fromEntries(
+      names.map((name) => [name, new Float32Array(vertexCount * meshes[0].geometry.getAttribute(name).itemSize)]),
+    );
+    const indices: number[] = [];
+    let base = 0;
+    for (const m of meshes) {
+      const geometry = m.geometry.clone();
+      geometry.applyMatrix4(m.matrixWorld);
+      normalMatrix.getNormalMatrix(m.matrixWorld);
+      for (const name of names) {
+        const attribute = geometry.getAttribute(name);
+        arrays[name].set(attribute.array as Float32Array, base * attribute.itemSize);
+      }
+      const index = geometry.getIndex();
+      const count = geometry.getAttribute('position').count;
+      if (index) for (let i = 0; i < index.count; i++) indices.push(index.getX(i) + base);
+      else for (let i = 0; i < count; i++) indices.push(i + base);
+      base += count;
+      geometry.dispose();
+      m.removeFromParent();
+    }
+    const merged = own(new THREE.BufferGeometry());
+    for (const name of names) {
+      merged.setAttribute(name, new THREE.BufferAttribute(arrays[name], meshes[0].geometry.getAttribute(name).itemSize));
+    }
+    merged.setIndex(indices);
+    const combined = new THREE.Mesh(merged, meshes[0].material);
+    if (meshes[0].userData.shadowOnly) combined.raycast = () => {};
+    combined.castShadow = meshes[0].castShadow;
+    combined.receiveShadow = meshes[0].receiveShadow;
+    scene.add(combined);
+  }
+}
+
+// Environment probe: an HDR equirect painted by ray casting the room from
+// its center and shading each hit with the same baked irradiance, so
+// reflections show the actual room, window and sun patch.
+const PROBE = new THREE.Vector3(0, 1.3, ZC);
+function roomEnvironment() {
+  const width = 96;
+  const height = 48;
+  const data = new Float32Array(width * height * 4);
+  const d = new THREE.Vector3();
+  const hit = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const toWindow = new THREE.Vector3();
+  const room = { min: new THREE.Vector3(X0, 0, Z0), max: new THREE.Vector3(X1, H, Z1), strength: 0 };
+  const exit = (o: Occluder) => {
+    let t = Infinity;
+    for (const axis of ['x', 'y', 'z'] as const) {
+      if (Math.abs(d[axis]) < 1e-6) continue;
+      const bound = d[axis] > 0 ? o.max[axis] : o.min[axis];
+      t = Math.min(t, (bound - PROBE[axis]) / d[axis]);
+    }
+    return t;
+  };
+  const entry = (o: Occluder) => {
+    let near = -Infinity;
+    let far = Infinity;
+    for (const axis of ['x', 'y', 'z'] as const) {
+      if (Math.abs(d[axis]) < 1e-6) {
+        if (PROBE[axis] < o.min[axis] || PROBE[axis] > o.max[axis]) return Infinity;
+        continue;
+      }
+      const a = (o.min[axis] - PROBE[axis]) / d[axis];
+      const b = (o.max[axis] - PROBE[axis]) / d[axis];
+      near = Math.max(near, Math.min(a, b));
+      far = Math.min(far, Math.max(a, b));
+    }
+    return near > 0 && near <= far ? near : Infinity;
+  };
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const phi = ((x + 0.5) / width - 0.5) * Math.PI * 2;
+      const theta = ((y + 0.5) / height - 0.5) * Math.PI;
+      d.set(Math.cos(theta) * Math.cos(phi), Math.sin(theta), Math.cos(theta) * Math.sin(phi));
+      let t = exit(room);
+      let albedo = [0, 0, 0];
+      let furniture: Occluder | undefined;
+      for (const o of occluders) {
+        const te = entry(o);
+        if (te < t) {
+          t = te;
+          furniture = o;
+        }
+      }
+      hit.copy(PROBE).addScaledVector(d, t);
+      // Inward normal of the face that was hit.
+      const box = furniture ?? room;
+      const sign = furniture ? 1 : -1;
+      if (Math.abs(hit.x - box.min.x) < 1e-3) n.set(-sign, 0, 0);
+      else if (Math.abs(hit.x - box.max.x) < 1e-3) n.set(sign, 0, 0);
+      else if (Math.abs(hit.y - box.min.y) < 1e-3) n.set(0, -sign, 0);
+      else if (Math.abs(hit.y - box.max.y) < 1e-3) n.set(0, sign, 0);
+      else if (Math.abs(hit.z - box.min.z) < 1e-3) n.set(0, 0, -sign);
+      else n.set(0, 0, sign);
+      let rgb: number[];
+      const inWindow =
+        !furniture && n.x > 0.5 && hit.y > SILL && hit.y < HEAD && Math.abs(hit.z - WINDOW_Z) < WINDOW_WIDTH / 2;
+      if (inWindow) {
+        rgb = [3.2, 3.4, 3.6];
+      } else {
+        if (furniture) albedo = [0.3, 0.28, 0.26];
+        else if (n.y > 0.5) albedo = [0.4, 0.27, 0.15];
+        else if (n.y < -0.5) albedo = [0.9, 0.87, 0.83];
+        else albedo = [0.82, 0.77, 0.69];
+        const e = irradiance(hit, n);
+        rgb = albedo.map((a, i) => (a * e[i] * LIGHTMAP_INTENSITY) / Math.PI);
+        // Sunlit floor: trace back towards the sun through the window.
+        if (!furniture && n.y > 0.5) {
+          toWindow.copy(hit).addScaledVector(sunDirection, (X0 - hit.x) / sunDirection.x);
+          if (toWindow.y > SILL && toWindow.y < HEAD && Math.abs(toWindow.z - WINDOW_Z) < WINDOW_WIDTH / 2) {
+            const sun = (22 * -sunDirection.y * 0.45) / Math.PI;
+            rgb = [rgb[0] + sun, rgb[1] + sun * 0.86, rgb[2] + sun * 0.67];
+          }
+        }
+      }
+      data.set([rgb[0], rgb[1], rgb[2], 1], (y * width + x) * 4);
+    }
+  }
+  const tex = own(new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType));
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Environment shader tweaks:
+// - boxProjected: the probe is parallax-corrected against the room box, so
+//   the window reflects where it actually is.
+// - specularOnly: lightmapped surfaces already have their diffuse light, so
+//   they only take reflections from the probe.
+function customizeEnvironment(
+  material: THREE.MeshStandardMaterial,
+  { boxProjected = false, specularOnly = false },
+) {
+  let chunk = THREE.ShaderChunk.envmap_physical_pars_fragment;
+  if (boxProjected) {
+    chunk = chunk.replace(
+      'reflectVec = transformDirectionByInverseViewMatrix( reflectVec, viewMatrix );',
+      `reflectVec = transformDirectionByInverseViewMatrix( reflectVec, viewMatrix );
+      vec3 boxHit = mix( boxMin, boxMax, step( 0.0, reflectVec ) );
+      vec3 boxT = ( boxHit - vBoxWorldPosition ) / reflectVec;
+      float boxDistance = min( min( boxT.x, boxT.y ), boxT.z );
+      reflectVec = normalize( vBoxWorldPosition + reflectVec * boxDistance - probePosition );`,
+    );
+  }
+  if (specularOnly) {
+    chunk = chunk.replace('return PI * envMapColor.rgb * envMapIntensity;', 'return vec3( 0.0 );');
+  }
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.boxMin = { value: new THREE.Vector3(X0, 0, Z0) };
+    shader.uniforms.boxMax = { value: new THREE.Vector3(X1, H, Z1) };
+    shader.uniforms.probePosition = { value: PROBE };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vBoxWorldPosition;')
+      .replace(
+        '#include <worldpos_vertex>',
+        '#include <worldpos_vertex>\nvBoxWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nvarying vec3 vBoxWorldPosition;\nuniform vec3 boxMin;\nuniform vec3 boxMax;\nuniform vec3 probePosition;',
+      )
+      .replace('#include <envmap_physical_pars_fragment>', chunk);
+  };
+  material.customProgramCacheKey = () => `environment:${boxProjected}:${specularOnly}`;
+  return material;
+}
+
+// ---------------------------------------------------------------- lighting
+
+scene.background = new THREE.Color('#e6e1d8');
+scene.environment = roomEnvironment();
+scene.environmentIntensity = 1.2;
+
+// Afternoon sun through the window: a static shadow, rendered once.
+const sun = new THREE.DirectionalLight('#ffdcaa', 22);
+// Aimed so the window's light patch lands on the rug and the armchair.
+sun.target.position.copy(SUN_TARGET);
+sun.position.copy(SUN_POSITION);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+// Fit the shadow frustum tightly around the room (outside it would be lit).
+{
+  const view = new THREE.Matrix4().lookAt(SUN_POSITION, SUN_TARGET, new THREE.Vector3(0, 1, 0));
+  view.setPosition(SUN_POSITION).invert();
+  const bounds = new THREE.Box3();
+  for (const x of [X0 - 0.3, X1]) {
+    for (const y of [0, H]) {
+      for (const z of [Z0, Z1]) bounds.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(view));
+    }
+  }
+  Object.assign(sun.shadow.camera, {
+    left: bounds.min.x - 0.05,
+    right: bounds.max.x + 0.05,
+    bottom: bounds.min.y - 0.05,
+    top: bounds.max.y + 0.05,
+    near: -bounds.max.z - 0.5,
+    far: -bounds.min.z + 0.5,
+  });
+}
+sun.shadow.bias = -0.0002;
+sun.shadow.normalBias = 0.02;
+sun.shadow.radius = 0.8;
+sun.shadow.autoUpdate = false;
+sun.shadow.needsUpdate = true;
+scene.add(sun, sun.target);
+
+scene.rendering.shadows = true;
+scene.rendering.toneMapping = THREE.AgXToneMapping;
+scene.rendering.toneMappingExposure = 0.95;
+
+// ------------------------------------------------------------ robot vacuum
+
+const robot = new THREE.Group();
+robot.name = 'robot';
+scene.add(robot);
+{
+  mesh(
+    own(new THREE.CylinderGeometry(0.17, 0.17, 0.075, 48)),
+    standard({ color: '#232325', roughness: 0.25, metalness: 0.1 }),
+    [0, 0.045, 0],
+    robot,
+  );
+  mesh(own(new THREE.TorusGeometry(0.17, 0.012, 8, 48)), standard({ color: '#4a4a4c', roughness: 0.6 }), [0, 0.03, 0], robot).rotation.x = Math.PI / 2;
+  mesh(own(new THREE.CylinderGeometry(0.045, 0.045, 0.025, 32)), standard({ color: '#3a3a3c', roughness: 0.4 }), [0, 0.095, 0.06], robot);
+  mesh(own(new THREE.CircleGeometry(0.008, 12)), bulbMaterial, [0.05, 0.0835, -0.1], robot, { cast: false }).rotation.x = -Math.PI / 2;
+  // Soft contact shadow that travels with it.
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  const gradient = ctx.createRadialGradient(32, 32, 24, 32, 32, 32);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 64, 64);
+  const shadow = mesh(
+    own(new THREE.PlaneGeometry(0.4, 0.4)),
+    own(new THREE.MeshBasicMaterial({ color: 'black', alphaMap: own(new THREE.CanvasTexture(canvas)), transparent: true, opacity: 0.45, depthWrite: false })),
+    [0, 0.008, 0],
+    robot,
+    { cast: false, receive: false },
+  );
+  shadow.rotation.x = -Math.PI / 2;
+}
+// An elliptical loop through the open floor between the sofa area and the
+// dining nook.
+let robotTime = 0;
+function placeRobot() {
+  const angle = robotTime * 0.35;
+  robot.position.set(0.35 + Math.cos(angle) * 1.1, 0, 0.15 + Math.sin(angle) * 0.45);
+  // Face along the path (the robot's front is -Z).
+  robot.rotation.y = Math.atan2(Math.sin(angle) * 1.1, -Math.cos(angle) * 0.45);
+}
+placeRobot();
+onFrame((delta) => {
+  robotTime += delta;
+  placeRobot();
+});
+

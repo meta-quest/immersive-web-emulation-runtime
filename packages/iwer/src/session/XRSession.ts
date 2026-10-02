@@ -484,8 +484,14 @@ export class XRSession extends EventTarget {
               plane.semanticLabel,
             );
             this[P_SESSION].trackedPlanes.set(plane, xrPlane);
+          } else {
+            // Pose is not a plane attribute, so moving planes update their
+            // space without bumping lastChangedTime.
+            XRSpaceUtils.updateOffsetMatrix(
+              xrPlane.planeSpace,
+              plane.transform.matrix,
+            );
           }
-          xrPlane[P_PLANE].lastChangedTime = frame.predictedDisplayTime;
           xrPlane[P_PLANE].frame = frame;
           frame[P_FRAME].detectedPlanes.add(xrPlane);
         });
@@ -517,8 +523,12 @@ export class XRSession extends EventTarget {
               mesh.semanticLabel,
             );
             this[P_SESSION].trackedMeshes.set(mesh, xrMesh);
+          } else {
+            XRSpaceUtils.updateOffsetMatrix(
+              xrMesh.meshSpace,
+              mesh.transform.matrix,
+            );
           }
-          xrMesh[P_MESH].lastChangedTime = frame.predictedDisplayTime;
           xrMesh[P_MESH].frame = frame;
           frame[P_FRAME].detectedMeshes.add(xrMesh);
         });

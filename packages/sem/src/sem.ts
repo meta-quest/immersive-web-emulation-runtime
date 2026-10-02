@@ -10,8 +10,12 @@ import {
   Color,
   GridHelper,
   Group,
+  LoadingManager,
+  MathUtils,
   Matrix3,
   Matrix4,
+  Mesh,
+  NoToneMapping,
   Object3D,
   PerspectiveCamera,
   Quaternion,
@@ -21,6 +25,7 @@ import {
   WebGLRenderer,
   WebGLRenderTarget,
 } from 'three';
+import type { ToneMapping } from 'three';
 import { NativeMesh, NativePlane, XRDevice } from 'iwer';
 import { SpatialEntity, SpatialEntityType } from './native/entity.js';
 import {
@@ -29,12 +34,24 @@ import {
   unpackRGBADepthBytes,
 } from './depth-packing.js';
 
-import { Environments } from './registry.js';
+import { EnvironmentObject, SceneEnvironment } from './scene-environment.js';
+import { Environments, captureIds } from './registry.js';
 import { Scene as SceneFile } from './generated/protos/openxr_scene.js';
 import { VERSION } from './version.js';
 import { mat4 } from 'gl-matrix';
 
 const forwardVector = new Vector3(0, 0, -1);
+const defaultBackground = new Color(0x3e3e3e);
+// Cap the per-frame delta so animations/physics don't jump after the tab was
+// hidden.
+const maxDeltaSeconds = 0.1;
+
+// Root presentation profile of a GLTS scene (`scene.rendering`).
+type RenderingProfile = {
+  shadows?: boolean;
+  toneMapping?: ToneMapping;
+  toneMappingExposure?: number;
+};
 // Scratch Color reused to read back the renderer's clear color before depth
 // passes. getClearColor() copies into this and the value is consumed (restored
 // via setClearColor) within the same call, so it never escapes to callers.
@@ -56,6 +73,13 @@ export class SyntheticEnvironmentModule extends EventTarget {
   private planes = new Group();
   private boxes = new Group();
   private meshes = new Group();
+  private grid = new GridHelper(50, 50);
+  private sceneEnvironment: SceneEnvironment | null = null;
+  private lastRenderTime: number | null = null;
+  private addedEnvironments = new Map<string, string | URL>();
+  // Bumped whenever the environment changes, so a slow load that finishes
+  // after a newer one is dropped.
+  private loadId = 0;
   private tempPosition = new Vector3();
   private tempQuaternion = new Quaternion();
   private tempDirection = new Vector3();
@@ -77,7 +101,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
   constructor(private xrDevice: XRDevice) {
     super();
     this.scene = new Scene();
-    this.scene.background = new Color(0x3e3e3e);
+    this.scene.background = defaultBackground;
     this.camera = new PerspectiveCamera(
       50,
       window.innerWidth / window.innerHeight,
@@ -86,8 +110,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
     );
     this.camera.position.set(0, 1.6, 5);
 
-    const gridHelper = new GridHelper(50, 50);
-    this.scene.add(gridHelper);
+    this.scene.add(this.grid);
 
     this.scene.add(this.planes, this.boxes, this.meshes);
     this.planes.renderOrder = 1;
@@ -108,6 +131,8 @@ export class SyntheticEnvironmentModule extends EventTarget {
     this.hitTestMarker.rotateX(Math.PI / 2);
 
     this.depthCamera = new Camera();
+    // Sprites in a scene environment need a camera to be raycast.
+    this.raycaster.camera = this.camera;
   }
 
   get environmentCanvas() {
@@ -138,7 +163,26 @@ export class SyntheticEnvironmentModule extends EventTarget {
     this.meshes.visible = visible;
   }
 
-  render() {
+  render(time: number) {
+    const environment = this.sceneEnvironment;
+    if (environment) {
+      // Clamped: time can also jump backwards, e.g. across XR sessions.
+      const delta = MathUtils.clamp(
+        (time - (this.lastRenderTime ?? time)) / 1000,
+        0,
+        maxDeltaSeconds,
+      );
+      environment.update(delta, this.trackedPlanes, this.trackedMeshes);
+      const root = environment.root as Partial<Scene> & {
+        rendering?: RenderingProfile;
+      };
+      this.scene.background = root.background ?? defaultBackground;
+      this.scene.environment = root.environment ?? null;
+      this.scene.fog = root.fog ?? null;
+      this.applyRendering(root.rendering);
+    }
+    this.lastRenderTime = time;
+
     this.camera.position.copy(this.xrDevice.position);
     this.camera.quaternion.copy(this.xrDevice.quaternion);
     const xrDeviceFOV = (this.xrDevice.fovy / Math.PI) * 180;
@@ -170,12 +214,65 @@ export class SyntheticEnvironmentModule extends EventTarget {
   }
 
   deleteAll() {
+    this.loadId++;
     [...this.objectMap.values()].forEach((object) => {
       object.removeFromParent();
     });
     this.objectMap.clear();
     this.trackedMeshes.clear();
     this.trackedPlanes.clear();
+    this.sceneEnvironment?.dispose();
+    this.sceneEnvironment = null;
+    this.grid.visible = true;
+    this.scene.background = defaultBackground;
+    this.scene.environment = null;
+    this.scene.fog = null;
+    this.applyRendering(undefined);
+  }
+
+  private applyRendering(rendering?: RenderingProfile) {
+    this.renderer.shadowMap.enabled = rendering?.shadows ?? false;
+    this.renderer.toneMapping = rendering?.toneMapping ?? NoToneMapping;
+    this.renderer.toneMappingExposure = rendering?.toneMappingExposure ?? 1;
+  }
+
+  /** Environment ids: the built-in captures plus added ones. */
+  get environments(): string[] {
+    return [...captureIds, ...this.addedEnvironments.keys()];
+  }
+
+  /**
+   * Adds a `.glts` environment under `id` (listed in the DevUI environment
+   * menu); load it with {@link loadDefaultEnvironment}. See
+   * scene-environment.ts for how its objects become planes and meshes.
+   */
+  addEnvironment(id: string, url: string | URL) {
+    if (captureIds.includes(id)) {
+      throw new Error(`Environment ${id} is a built-in capture`);
+    }
+    this.addedEnvironments.set(id, url);
+  }
+
+  private loadSceneEnvironment(object: EnvironmentObject) {
+    this.deleteAll();
+    const environment = new SceneEnvironment(object);
+    this.sceneEnvironment = environment;
+    this.grid.visible = false;
+    // The scene is the environment's "mesh", toggled like a capture's global
+    // mesh; reported planes and meshes are overlays toggled with the planes
+    // and bounding boxes.
+    this.meshes.add(object);
+    this.planes.add(environment.planeOverlays);
+    this.boxes.add(environment.meshOverlays);
+    // Report planes and meshes right away, not only once AR renders.
+    environment.update(0, this.trackedPlanes, this.trackedMeshes);
+    this.dispatchEvent(
+      new CustomEvent('environmentchange', {
+        detail: {
+          entityCount: this.trackedPlanes.size + this.trackedMeshes.size,
+        },
+      }),
+    );
   }
 
   loadEnvironment(json: SceneFile) {
@@ -218,47 +315,22 @@ export class SyntheticEnvironmentModule extends EventTarget {
     );
   }
 
-  loadDefaultEnvironment(envId: string): Promise<void> {
-    if (typeof __IS_UMD__ !== 'undefined' && __IS_UMD__) {
-      // Use fetch for UMD builds to load JSON from CDN
-      const url = `https://www.unpkg.com/@iwer/sem@${VERSION}/captures/${envId}.json`;
-      return fetch(url)
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(
-              `Network response was not ok: ${response.statusText}`,
-            );
-          }
-          return response.json();
-        })
-        .then((envJson) => {
-          this.loadEnvironment(envJson as SceneFile);
-        })
-        .catch((error) => {
-          // Preserve the existing log for backward compatibility, but also
-          // reject so callers awaiting the promise can handle the failure.
-          console.error(`Error loading environment ${envId} from CDN`, error);
-          throw error;
-        });
-    } else {
-      // Use dynamic import for ES builds
-      const importEnv = Environments[envId];
-      if (!importEnv) {
-        const error = new Error(
-          `Requested environment ${envId} does not exist`,
-        );
-        console.error(error.message);
-        return Promise.reject(error);
+  async loadDefaultEnvironment(envId: string): Promise<void> {
+    // Taken before loading, so a slower earlier load can't replace this one.
+    const id = ++this.loadId;
+    try {
+      const url = this.addedEnvironments.get(envId);
+      if (url) {
+        const scene = await loadGLTS(url);
+        if (id === this.loadId) this.loadSceneEnvironment(scene);
+        else scene.dispose?.();
+        return;
       }
-      return importEnv()
-        .then((module) => {
-          const envJson = module.default;
-          this.loadEnvironment(envJson as SceneFile);
-        })
-        .catch((error) => {
-          console.error(`Error loading environment ${envId} locally`, error);
-          throw error;
-        });
+      const json = await loadCapture(envId);
+      if (id === this.loadId) this.loadEnvironment(json);
+    } catch (error) {
+      console.error(`Error loading environment ${envId}`, error);
+      throw error;
     }
   }
 
@@ -286,7 +358,11 @@ export class SyntheticEnvironmentModule extends EventTarget {
       targets.push(this.planes);
     }
     // intersectObjects keeps results distance-sorted across all targets.
-    const intersections = this.raycaster.intersectObjects(targets, true);
+    // Only meshes are hit-testable (a scene environment may contain lines,
+    // points or sprites).
+    const intersections = this.raycaster
+      .intersectObjects(targets, true)
+      .filter((intersection) => (intersection.object as Mesh).isMesh);
     const results = intersections.map((intersection) => {
       const point = intersection.point;
       this.hitTestTarget.position.copy(point);
@@ -322,7 +398,7 @@ export class SyntheticEnvironmentModule extends EventTarget {
     height: number;
     rawValueToMeters: number;
   } | null {
-    if (this.trackedMeshes.size === 0) {
+    if (this.trackedMeshes.size === 0 && !this.sceneEnvironment) {
       return null;
     }
 
@@ -356,7 +432,9 @@ export class SyntheticEnvironmentModule extends EventTarget {
     const prevMeshesVisible = this.meshes.visible;
     const prevBoxesVisible = this.boxes.visible;
     this.meshes.visible = true;
-    this.boxes.visible = true;
+    // A scene environment's real geometry is in `meshes`; its boxes are only
+    // coarse overlays of the reported meshes.
+    this.boxes.visible = !this.sceneEnvironment;
 
     // Render with depth material into the render target
     const prevOverrideMaterial = this.scene.overrideMaterial;
@@ -427,5 +505,32 @@ export class SyntheticEnvironmentModule extends EventTarget {
       height,
       rawValueToMeters,
     };
+  }
+}
+
+async function loadGLTS(url: string | URL): Promise<EnvironmentObject> {
+  if (typeof __IS_UMD__ !== 'undefined' && __IS_UMD__) {
+    throw new Error('GLTS environments need the ES module build of @iwer/sem');
+  } else {
+    const { GLTSLoader } = await import('@drawcall/glts');
+    return new GLTSLoader(new LoadingManager()).loadAsync(url);
+  }
+}
+
+async function loadCapture(envId: string): Promise<SceneFile> {
+  if (typeof __IS_UMD__ !== 'undefined' && __IS_UMD__) {
+    // UMD builds fetch the capture JSON from the CDN.
+    const url = `https://www.unpkg.com/@iwer/sem@${VERSION}/captures/${envId}.json`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Network response was not ok: ${response.statusText}`);
+    }
+    return response.json();
+  } else {
+    const importEnv = Environments[envId];
+    if (!importEnv) {
+      throw new Error(`Requested environment ${envId} does not exist`);
+    }
+    return (await importEnv()).default;
   }
 }

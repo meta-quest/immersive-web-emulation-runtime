@@ -24,7 +24,10 @@ const imports = files
   })
   .join('\n');
 
-const content = `export const Environments: { [envId: string]: () => Promise<any> } = {\n${imports}\n};\n`;
+const ids = files
+  .map((file) => `  '${path.basename(file, '.json')}',`)
+  .join('\n');
+const content = `export const Environments: { [envId: string]: () => Promise<any> } = {\n${imports}\n};\n\n// Listed separately so the UMD build can name captures without bundling them.\nexport const captureIds = [\n${ids}\n];\n`;
 
 // Write the content to registry.ts
 fs.writeFileSync(outputFilePath, content, 'utf8');

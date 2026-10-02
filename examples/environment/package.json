@@ -1,0 +1,21 @@
+{
+  "name": "iwer-environment-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "ci-build": "pnpm install --ignore-workspace --no-frozen-lockfile --no-lockfile && pnpm run build",
+    "dev": "vite",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@iwer/devui": "link:../../packages/devui",
+    "@iwer/sem": "link:../../packages/sem",
+    "iwer": "link:../../packages/iwer",
+    "three": "0.184.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.59.1",
+    "vite": "^8.0.10"
+  }
+}

@@ -12,7 +12,7 @@
     "test:all": "pnpm --filter iwer run test && pnpm --filter @iwer/devui run test && pnpm --filter @iwer/extension-bridge run test && pnpm --filter @iwer/extension run test && pnpm test:e2e",
     "test:e2e": "pnpm --filter @iwer/e2e exec playwright install chromium && pnpm --filter @iwer/e2e run test",
     "typecheck": "pnpm --filter @iwer/e2e run typecheck && pnpm --filter @iwer/extension run typecheck:bridge",
-    "examples:build": "pnpm build:all && pnpm --dir examples/basic run ci-build && pnpm --dir examples/devui-demo run ci-build",
+    "examples:build": "pnpm build:all && pnpm --dir examples/basic run ci-build && pnpm --dir examples/devui-demo run ci-build && pnpm --dir examples/environment run ci-build",
     "verify": "pnpm build:all && pnpm typecheck && pnpm test:all && pnpm lint && pnpm format:check && pnpm changeset:status && pnpm docs:build && pnpm build:tgz && pnpm examples:build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

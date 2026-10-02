@@ -30,6 +30,7 @@
   "homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime#readme",
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",
+    "@drawcall/glts": "^0.11.0",
     "gl-matrix": "^3.4.4",
     "three": "^0.184.0",
     "ts-proto": "^2.11.7"
