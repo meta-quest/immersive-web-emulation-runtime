@@ -6,9 +6,11 @@
  */
 
 import {
+  BoxGeometry,
   Euler,
   FrontSide,
   Group,
+  MathUtils,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
@@ -61,6 +63,8 @@ export class InputLayer {
   private camera: PerspectiveCamera;
   private playerRig: Group;
   private cameraRig: Group;
+  private spectatorCamera: PerspectiveCamera;
+  private headsetMarker: Mesh;
   private isPointerLocked: boolean = false;
   private vec3: Vector3 = new Vector3();
   private quat: Quaternion = new Quaternion();
@@ -134,6 +138,18 @@ export class InputLayer {
     this.cameraRig.add(this.camera);
     this.camera.position.x -= xrDevice.ipd / 2;
 
+    this.spectatorCamera = new PerspectiveCamera(
+      50,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      40,
+    );
+    this.headsetMarker = new Mesh(
+      new BoxGeometry(0.18, 0.1, 0.12),
+      new MeshBasicMaterial({ color: 0x2d7ff9, wireframe: true }),
+    );
+    this.cameraRig.add(this.headsetMarker);
+
     const spaceOriginIndicator = new Mesh(
       new RingGeometry(0.25, 0.27, 32),
       new MeshBasicMaterial({
@@ -198,6 +214,19 @@ export class InputLayer {
       const movementY =
         // @ts-ignore
         event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+      if (this.spectating) {
+        const { quaternion } = this.xrDevice.spectator;
+        this.quat.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+        this.euler.setFromQuaternion(this.quat, 'YXZ');
+        this.euler.y -= movementX * 0.002;
+        this.euler.x = MathUtils.clamp(
+          this.euler.x - movementY * 0.002,
+          -Math.PI / 2,
+          Math.PI / 2,
+        );
+        quaternion.copy(this.quat.setFromEuler(this.euler) as any);
+        return;
+      }
       this.playerRig.rotation.y -= movementX * 0.002;
       this.cameraRig.rotation.x -= movementY * 0.002;
 
@@ -211,7 +240,7 @@ export class InputLayer {
     this.headsetDefaultQuaternion = this.cameraRig.quaternion.clone();
     this.forwardHtmlEvents = forwardHtmlEvents(
       this.renderer.domElement,
-      () => this.camera,
+      () => this.activeCamera,
       this.scene,
     ).update;
 
@@ -388,6 +417,24 @@ export class InputLayer {
     this.gazeHeadsetDragActive = false;
   }
 
+  private get spectating(): boolean {
+    return this.xrDevice.spectator.enabled;
+  }
+
+  /** Place the spectator behind the headset's current pose. */
+  resetSpectator(): void {
+    // placeBehind takes IWER math types, so read the rig pose via the device
+    this.syncDeviceTransforms();
+    this.xrDevice.spectator.placeBehind(
+      this.xrDevice.position,
+      this.xrDevice.quaternion,
+    );
+  }
+
+  private get activeCamera(): PerspectiveCamera {
+    return this.spectating ? this.spectatorCamera : this.camera;
+  }
+
   private setTransformHandleRoutingSuppressed(suppressed: boolean): void {
     this.transformHandles.forEach((transformHandle) => {
       if (suppressed && !transformHandle.userData.gazeSuppressed) {
@@ -404,6 +451,7 @@ export class InputLayer {
   private gazeInteractionEnabled(): boolean {
     return (
       this.gazeMode === 'cursor' &&
+      !this.spectating &&
       Boolean(this.xrDevice.gaze?.connected) &&
       this.xrDevice.visibilityState === 'visible' &&
       this.interactionsEnabled &&
@@ -664,12 +712,15 @@ export class InputLayer {
       return;
     }
 
+    const position = this.spectating
+      ? this.xrDevice.spectator.position
+      : this.cameraRig.position;
     if (keyState.ShiftLeft && keyState.ArrowUp) {
-      this.cameraRig.position.y += 0.05;
+      position.y += 0.05;
     }
 
     if (keyState.ShiftLeft && keyState.ArrowDown) {
-      this.cameraRig.position.y -= 0.05;
+      position.y -= 0.05;
     }
   }
 
@@ -689,11 +740,17 @@ export class InputLayer {
       (keyState.KeyS ? 1 : 0) - (keyState.KeyW ? 1 : 0),
     );
     if (vec3.lengthSq() > 0 && keyState.ShiftLeft) {
-      vec3
-        .normalize()
-        .multiplyScalar(FREE_MOVEMENT_SPEED * delta)
-        .applyQuaternion(playerRig.quaternion);
-      playerRig.position.add(vec3);
+      vec3.normalize().multiplyScalar(FREE_MOVEMENT_SPEED * delta);
+      if (this.spectating) {
+        const { position, quaternion } = this.xrDevice.spectator;
+        this.quat.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+        this.euler.setFromQuaternion(this.quat, 'YXZ');
+        // move along the spectator's heading, keeping its height
+        vec3.applyEuler(this.euler.set(0, this.euler.y, 0));
+        position.set(position.x + vec3.x, position.y, position.z + vec3.z);
+      } else {
+        playerRig.position.add(vec3.applyQuaternion(playerRig.quaternion));
+      }
     }
   }
 
@@ -701,6 +758,8 @@ export class InputLayer {
     const { playerRig, cameraRig, transformHandles } = this;
     cameraRig.position.copy(this.headsetDefaultPosition);
     cameraRig.quaternion.copy(this.headsetDefaultQuaternion);
+    // renderScene positions the rigs from this when the pointer is unlocked
+    this.combinedCameraPosition.copy(this.headsetDefaultPosition);
     playerRig.position.set(0, 0, 0);
     playerRig.quaternion.set(0, 0, 0, 1);
     transformHandles.forEach((transformHandle) => {
@@ -766,11 +825,6 @@ export class InputLayer {
       transformHandle.userData.defaultQuaternion = this.quat.toArray();
     });
     this.resetDeviceTransforms();
-    // Keep the combined camera position in sync with the restored headset pose,
-    // otherwise the next non-pointer-locked render frame overwrites cameraRig.y
-    // (and playerRig x/z) with the stale construction-time camera position,
-    // reverting the saved headset height.
-    this.combinedCameraPosition.copy(this.headsetDefaultPosition);
   }
 
   syncDeviceTransforms() {
@@ -901,6 +955,15 @@ export class InputLayer {
       this.camera.fov = xrDeviceFOV;
       cameraMatrixNeedsUpdate = true;
     }
+    const { spectator } = this.xrDevice;
+    const spectatorFOV = (spectator.fovy / Math.PI) * 180;
+    if (this.spectatorCamera.fov !== spectatorFOV) {
+      this.spectatorCamera.fov = spectatorFOV;
+      cameraMatrixNeedsUpdate = true;
+    }
+    this.spectatorCamera.position.copy(spectator.position as any);
+    this.spectatorCamera.quaternion.copy(spectator.quaternion as any);
+    this.headsetMarker.visible = this.spectating;
     const iwerCanvasDimension = this.xrDevice.canvasDimensions;
     if (iwerCanvasDimension) {
       const canvas = this.renderer.domElement;
@@ -910,6 +973,7 @@ export class InputLayer {
       if (resizeNeeded) {
         this.camera.aspect =
           iwerCanvasDimension.width / iwerCanvasDimension.height;
+        this.spectatorCamera.aspect = this.camera.aspect;
         this.renderer.setSize(
           iwerCanvasDimension.width,
           iwerCanvasDimension.height,
@@ -919,6 +983,7 @@ export class InputLayer {
     }
     if (cameraMatrixNeedsUpdate) {
       this.camera.updateProjectionMatrix();
+      this.spectatorCamera.updateProjectionMatrix();
     }
     if (!this.isInProgrammaticMode) {
       if (!this.isPointerLocked) {
@@ -940,6 +1005,7 @@ export class InputLayer {
       const connected = Boolean(emulatedInput?.connected);
       transformHandle.visible =
         connected &&
+        !this.spectating &&
         !this.isPointerLocked &&
         !this.isInProgrammaticMode &&
         this.gazeMode !== 'cursor';
@@ -956,7 +1022,7 @@ export class InputLayer {
       this.syncDeviceTransforms();
     }
 
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.activeCamera);
     this.lastTime = time;
   }
 

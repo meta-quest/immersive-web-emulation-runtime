@@ -206,6 +206,7 @@ test('DevUI prefs postMessage survives as a runtime write message', () => {
         keymap: { left: { trigger: 'KeyG' } },
         fovy: Math.PI / 2,
         visibilityMaskEnabled: false,
+        spectatorEnabled: true,
         gazeMode: 'cursor',
         gazeCommitHand: 'left',
         unknown: true,
@@ -217,6 +218,7 @@ test('DevUI prefs postMessage survives as a runtime write message', () => {
       patch: {
         fovy: Math.PI / 2,
         visibilityMaskEnabled: false,
+        spectatorEnabled: true,
         gazeMode: 'cursor',
         gazeCommitHand: 'left',
         keymap: { left: { trigger: 'KeyG' } },

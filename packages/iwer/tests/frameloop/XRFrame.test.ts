@@ -50,6 +50,7 @@ describe('XRFrame', () => {
               emulated: false,
             },
           } as any,
+          spectator: { enabled: false },
           viewSpaces: {
             [XREye.Left]: {
               [P_SPACE]: {

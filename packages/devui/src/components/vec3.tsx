@@ -135,3 +135,23 @@ export const Vector3Input = ({
     </Row>
   );
 };
+
+/** Vertical field of view in degrees, backed by a `fovy` in radians. */
+export const FovInput = ({ object }: { object: { fovy: number } }) => (
+  <Row>
+    <RowLabel>FOV</RowLabel>
+    <ValuesContainer>
+      <Field>
+        <ValueInput
+          defaultValue={Math.round((object.fovy / Math.PI) * 180)}
+          onChange={(event) => {
+            const degrees = parseFloat(event.target.value);
+            if (degrees > 0 && degrees < 180)
+              object.fovy = (degrees / 180) * Math.PI;
+          }}
+        />
+        <InputSuffix>°</InputSuffix>
+      </Field>
+    </ValuesContainer>
+  </Row>
+);

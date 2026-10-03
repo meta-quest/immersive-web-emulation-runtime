@@ -185,6 +185,9 @@ function sanitizePrefsPatch(
   if (typeof patch.visibilityMaskEnabled === 'boolean') {
     out.visibilityMaskEnabled = patch.visibilityMaskEnabled;
   }
+  if (typeof patch.spectatorEnabled === 'boolean') {
+    out.spectatorEnabled = patch.spectatorEnabled;
+  }
   const keymap = sanitizeKeymap(patch.keymap);
   if (keymap) out.keymap = keymap;
   const handPoses = sanitizeHandPoses(patch.handPoses);

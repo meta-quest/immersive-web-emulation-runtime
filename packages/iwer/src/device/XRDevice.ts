@@ -58,6 +58,7 @@ import { XRSessionEvent } from '../events/XRSessionEvent.js';
 import { XRSystem } from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
 import { XRGazeInput, supportsGazeTracking } from './XRGazeInput.js';
+import { XRSpectator } from './XRSpectator.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
 import { NativePlane } from '../planes/XRPlane.js';
@@ -235,6 +236,7 @@ export class XRDevice {
     controllers: { [key in XRHandedness]?: XRController };
     hands: { [key in XRHandedness]?: XRHandInput };
     gaze?: XRGazeInput;
+    spectator: XRSpectator;
     primaryInputMode: 'controller' | 'hand';
     pendingReferenceSpaceReset: boolean;
     visibilityState: XRVisibilityState;
@@ -256,6 +258,7 @@ export class XRDevice {
     globalSpace: GlobalSpace;
     viewerSpace: XRReferenceSpace;
     viewSpaces: { [key in XREye]: XRSpace };
+    spectatorSpace: XRSpace;
 
     canvasData?: {
       canvas: HTMLCanvasElement;
@@ -392,6 +395,7 @@ export class XRDevice {
       controllers,
       hands,
       gaze,
+      spectator: new XRSpectator(),
       primaryInputMode: 'controller',
       pendingReferenceSpaceReset: false,
       visibilityState: 'visible',
@@ -408,12 +412,14 @@ export class XRDevice {
       globalSpace,
       viewerSpace,
       viewSpaces,
+      spectatorSpace: new XRSpace(globalSpace),
       canvasContainer,
 
       getViewport: (layer: XRWebGLLayer, view: XRView) => {
         const canvas = layer.context.canvas;
         const { width, height } = canvas;
         const stereoEnabled = this[P_DEVICE].stereoEnabled;
+        const spectating = this[P_DEVICE].spectator.enabled;
         const eye = view.eye;
         let x: number;
         let y: number;
@@ -429,19 +435,19 @@ export class XRDevice {
           case XREye.Left:
             x = 0;
             y = 0;
-            vpWidth = stereoEnabled ? width / 2 : width;
+            vpWidth = spectating ? 0 : stereoEnabled ? width / 2 : width;
             vpHeight = height;
             break;
           case XREye.Right:
             x = width / 2;
             y = 0;
-            // zero-width right viewport in mono is deliberate
-            vpWidth = stereoEnabled ? width / 2 : 0;
+            // zero-width right viewport in mono or while spectating is deliberate
+            vpWidth = stereoEnabled && !spectating ? width / 2 : 0;
             vpHeight = height;
             break;
         }
-        // cache per (eye, width, height, stereoEnabled): return the cached
-        // instance unless one of those changed
+        // cache per (eye, width, height, stereoEnabled, spectator.enabled):
+        // return the cached instance unless one of those changed
         const cached = this[P_DEVICE].viewportCache[eye];
         if (
           cached &&
@@ -476,6 +482,13 @@ export class XRDevice {
         mat4.fromTranslation(
           this[P_DEVICE].viewSpaces[XREye.Right][P_SPACE].offsetMatrix,
           rightViewOffsetScratch,
+        );
+
+        // update spectatorSpace
+        mat4.fromRotationTranslation(
+          this[P_DEVICE].spectatorSpace[P_SPACE].offsetMatrix,
+          this[P_DEVICE].spectator.quaternion.quat,
+          this[P_DEVICE].spectator.position.vec3,
         );
       },
       onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => {
@@ -649,6 +662,10 @@ export class XRDevice {
     };
     this[P_DEVICE].remote = new RemoteControlInterface(this);
 
+    this[P_DEVICE].spectator.placeBehind(
+      this[P_DEVICE].position,
+      this[P_DEVICE].quaternion,
+    );
     this[P_DEVICE].updateViews();
     globalThis;
   }
@@ -677,6 +694,8 @@ export class XRDevice {
     const context = maskCanvas.getContext('2d');
     if (!context) return;
     context.clearRect(0, 0, width, height);
+    // the mask models the headset optics, not the spectator
+    if (this[P_DEVICE].spectator.enabled) return;
     context.fillStyle = '#000';
 
     const eyes = this[P_DEVICE].stereoEnabled
@@ -987,6 +1006,10 @@ export class XRDevice {
     return this[P_DEVICE].hands;
   }
 
+  get spectator(): XRSpectator {
+    return this[P_DEVICE].spectator;
+  }
+
   get gaze() {
     return this[P_DEVICE].gaze;
   }
@@ -1092,6 +1115,11 @@ export class XRDevice {
       activeInput.quaternion.multiply(deltaQuat);
       activeInput.position.applyQuaternion(deltaQuat);
     });
+
+    // rotate around world up so the spectator keeps its pitch
+    const { spectator } = this[P_DEVICE];
+    spectator.position.add(deltaVec).applyQuaternion(deltaQuat);
+    spectator.quaternion.copy(deltaQuat.clone().multiply(spectator.quaternion));
 
     this[P_DEVICE].pendingReferenceSpaceReset = true;
   }

@@ -308,4 +308,12 @@ The ability to "recenter" the user's viewpoint, effectively resetting their posi
 xrDevice.recenter();
 ```
 
+### Spectator View
+
+IWER can show a third-person debug camera instead of the headset view; the app renders it as one more `XRView`.
+
+```javascript
+xrDevice.spectator.enabled = true;
+```
+
 By incorporating these platform features into your testing process, you can significantly enhance the resilience and user experience of your WebXR projects, ensuring they are prepared for a wide range of real-world user interactions and system behaviors.
