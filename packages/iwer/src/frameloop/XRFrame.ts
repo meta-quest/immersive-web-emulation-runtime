@@ -43,6 +43,8 @@ const scratchOrientation = quat.create();
 // Hoisted eye lists so getViewerPose doesn't allocate a fresh array per frame.
 const INLINE_EYES = [XREye.None];
 const STEREO_EYES = [XREye.Left, XREye.Right];
+// like WebXR secondary views, the spectator follows the primary views
+const SPECTATOR_EYES = [XREye.Left, XREye.Right, XREye.None];
 
 const getOffsetMatrix = (
   offsetMatrix: mat4,
@@ -141,12 +143,19 @@ export class XRFrame {
     const session = this[P_FRAME].session;
     const device = session[P_SESSION].device;
     const pose = this.getPose(device.viewerSpace, referenceSpace);
-    const eyes =
-      session[P_SESSION].mode === 'inline' ? INLINE_EYES : STEREO_EYES;
+    const immersive = session[P_SESSION].mode !== 'inline';
+    const eyes = immersive
+      ? device.spectator.enabled
+        ? SPECTATOR_EYES
+        : STEREO_EYES
+      : INLINE_EYES;
 
     const views: XRView[] = [];
     eyes.forEach((eye) => {
-      const viewSpace = device.viewSpaces[eye];
+      const viewSpace =
+        immersive && eye === XREye.None
+          ? device[P_DEVICE].spectatorSpace
+          : device.viewSpaces[eye];
       const viewPose = this.getPose(viewSpace, referenceSpace);
       const projectionMatrix = session[P_SESSION].getProjectionMatrix(eye);
       const view = new XRView(

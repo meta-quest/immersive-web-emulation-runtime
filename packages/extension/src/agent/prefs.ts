@@ -51,6 +51,7 @@ export interface OriginPrefs {
   ipd: number;
   fovy: number;
   visibilityMaskEnabled: boolean;
+  spectatorEnabled: boolean;
   keymap: KeyMapType;
   handPoses: Record<Handedness, HandPoseId>;
   defaultPose: DefaultPose | null;
@@ -147,6 +148,7 @@ export const DEFAULTS: Readonly<OriginPrefs> = Object.freeze({
   ipd: 0.063,
   fovy: Math.PI / 2,
   visibilityMaskEnabled: true,
+  spectatorEnabled: false,
   keymap: DEFAULT_KEYMAP,
   handPoses: Object.freeze({ left: 'default', right: 'default' }),
   defaultPose: null,

@@ -319,6 +319,13 @@ export class XRSession extends EventTarget {
             this[P_SESSION].projectionMatrices[XREye.Right],
             this[P_SESSION].projectionMatrices[XREye.Left],
           );
+          mat4.perspective(
+            this[P_SESSION].projectionMatrices[XREye.None],
+            this[P_SESSION].device.spectator.fovy,
+            width / height,
+            depthNear,
+            depthFar,
+          );
         } else {
           const aspect = width / height;
           mat4.perspective(

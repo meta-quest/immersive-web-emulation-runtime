@@ -20,12 +20,12 @@ import {
 import { Icon } from './icon.js';
 import { InputLayer } from '../scene.js';
 import React from 'react';
-import { Vector3Input } from './vec3.js';
+import { FovInput, Vector3Input } from './vec3.js';
 import { XRDevice, supportsGazeTracking } from 'iwer';
 import { create } from 'zustand';
 import { emitPrefsPatch, getEnvironmentLoader } from '../prefs.js';
 import { styled } from 'styled-components';
-import { useInputModeStore } from './controls.js';
+import { useInputModeStore, useSpectatorEnabled } from './controls.js';
 import {
   useGazeSettingsStore,
   type GazeCommitHand,
@@ -470,6 +470,7 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
     (state) => state.setCommitHand,
   );
   const gazeStatus = useGazeStatus(xrDevice);
+  const spectating = useSpectatorEnabled(xrDevice);
   const controlsRegionRef = React.useRef<HTMLDivElement>(null);
   const inputTriggerRef = React.useRef<HTMLButtonElement>(null);
   const gazeTriggerRef = React.useRef<HTMLButtonElement>(null);
@@ -681,7 +682,10 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
         <HeaderButtonsContainer>
           <HeaderButton
             title="Reset device transforms"
-            onClick={() => inputLayer.resetDeviceTransforms()}
+            onClick={() => {
+              inputLayer.resetDeviceTransforms();
+              inputLayer.resetSpectator();
+            }}
           >
             <Icon name="rotate-ccw" size={16} />
           </HeaderButton>
@@ -748,7 +752,7 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
           </HeaderButton>
           <HeaderButton
             ref={headsetTriggerRef}
-            title="Headset position"
+            title="View properties"
             aria-expanded={headsetOpen}
             aria-controls={headsetOpen ? 'iwer-headset-settings' : undefined}
             $open={headsetOpen}
@@ -761,6 +765,21 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
             }}
           >
             <Icon name="glasses" size={16} />
+          </HeaderButton>
+          <HeaderButton
+            aria-label="Spectator view"
+            aria-pressed={spectating}
+            title={(spectating ? 'Disable' : 'Enable') + ' spectator view'}
+            onClick={() => {
+              xrDevice.spectator.enabled = !xrDevice.spectator.enabled;
+              emitPrefsPatch({ spectatorEnabled: xrDevice.spectator.enabled });
+            }}
+          >
+            <Icon
+              name="video"
+              size={16}
+              color={spectating ? Colors.accent : Colors.textGrey}
+            />
           </HeaderButton>
           <HeaderButton
             aria-label="Field-of-view mask"
@@ -1083,7 +1102,7 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
             ref={headsetPopoverRef}
             id="iwer-headset-settings"
             role="group"
-            aria-label="Headset position"
+            aria-label="View properties"
             $left={headsetPopoverLeft}
           >
             <PopoverHeader
@@ -1095,13 +1114,17 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
               }}
             >
               <Icon name="glasses" size={15} />
-              {xrDevice.name}
+              View properties
             </PopoverHeader>
             <SectionBreak />
+            <SectionLabel>Headset · {xrDevice.name}</SectionLabel>
             <Vector3Input
               vector={inputLayer.combinedCameraPosition}
               label="Pos"
             />
+            <SectionLabel>Spectator</SectionLabel>
+            <Vector3Input vector={xrDevice.spectator.position} label="Pos" />
+            <FovInput object={xrDevice.spectator} />
           </Popover>
         )}
         {envDropDownOpen && (

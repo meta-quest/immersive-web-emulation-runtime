@@ -91,6 +91,21 @@ visibility-mask data.
 
 - **Type**: `boolean`
 
+### `spectator`
+
+A third-person debug camera. While `enabled` is `true`, the app renders it as one more `XRView` after the primary views (eye `'none'`) and IWER shows it instead of the headset view: the eye views get zero-width viewports and the spectator gets the whole canvas. In AR the emulated environment is drawn from the spectator. It is a debug feature: `'secondary-views'` is not added to the session's features, apps that only render `views[0]` and `views[1]` show a blank screen while it is on, WebXR Layers and the native WebXR override are not supported, and depth sensing does not cover the spectator view.
+
+```javascript
+xrDevice.spectator.enabled = true;
+xrDevice.spectator.position.set(0, 2, 2);
+xrDevice.spectator.fovy = Math.PI / 3; // radians
+xrDevice.spectator.placeBehind(xrDevice.position, xrDevice.quaternion);
+```
+
+- **Type**: `XRSpectator` (`enabled: boolean`, `fovy: number`,
+  `position: Vector3`, `quaternion: Quaternion`, `placeBehind()`)
+- **Readonly** (the object; its fields are writable)
+
 ### `position`
 
 The current position of the emulated device in the 3D space. This vector represents where the device is located within the virtual environment.

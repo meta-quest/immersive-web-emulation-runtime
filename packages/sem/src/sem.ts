@@ -139,12 +139,15 @@ export class SyntheticEnvironmentModule extends EventTarget {
   }
 
   render() {
-    this.camera.position.copy(this.xrDevice.position);
-    this.camera.quaternion.copy(this.xrDevice.quaternion);
-    const xrDeviceFOV = (this.xrDevice.fovy / Math.PI) * 180;
+    // show the environment from the view IWER presents
+    const { spectator } = this.xrDevice;
+    const pov = spectator.enabled ? spectator : this.xrDevice;
+    this.camera.position.copy(pov.position);
+    this.camera.quaternion.copy(pov.quaternion);
+    const fov = (pov.fovy / Math.PI) * 180;
     let cameraMatrixNeedsUpdate = false;
-    if (this.camera.fov !== xrDeviceFOV) {
-      this.camera.fov = xrDeviceFOV;
+    if (this.camera.fov !== fov) {
+      this.camera.fov = fov;
       cameraMatrixNeedsUpdate = true;
     }
     const iwerCanvasDimension = this.xrDevice.canvasDimensions;

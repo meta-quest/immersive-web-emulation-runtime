@@ -23,6 +23,7 @@ function renderHeader({ visibilityMask, visibilityMaskEnabled }) {
         sem: undefined,
         visibilityMask,
         visibilityMaskEnabled,
+        spectator: { enabled: false },
       },
       inputLayer: {},
     }),

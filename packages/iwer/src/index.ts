@@ -23,6 +23,7 @@ export type {
   XRVisibilityMaskBounds,
 } from './device/XRVisibilityMask.js';
 export { calculateVisibilityMaskBounds } from './device/XRVisibilityMask.js';
+export type { XRSpectator } from './device/XRSpectator.js';
 
 // Controller Configs
 export {

@@ -33,7 +33,8 @@ const prepare = async () => {
   if (!nativeVRSupport) {
     xrdevice = new XRDevice(metaQuest3);
     xrdevice.ipd = 0;
-    xrdevice.installRuntime({ polyfillLayers: true });
+    // desktop Chrome exposes navigator.xr without a headset, so replace it
+    xrdevice.installRuntime({ polyfillLayers: true, forceInstall: true });
     xrdevice.installDevUI(DevUI);
   }
   Array.from(document.getElementsByClassName('native')).forEach((el) => {

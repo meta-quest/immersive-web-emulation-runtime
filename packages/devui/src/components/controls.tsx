@@ -31,12 +31,27 @@ export const useInputModeStore = create<InputModeStore>((set) => ({
     })),
 }));
 
+/** Polls the device every frame so code-driven changes show up too. */
+export function useSpectatorEnabled(xrDevice: XRDevice): boolean {
+  const [enabled, setEnabled] = React.useState(xrDevice.spectator.enabled);
+  React.useEffect(() => {
+    let id = requestAnimationFrame(function sync() {
+      setEnabled(xrDevice.spectator.enabled);
+      id = requestAnimationFrame(sync);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [xrDevice]);
+  return enabled;
+}
+
 export const ControlsUI: React.FC<ControlsProps> = ({
   xrDevice,
   inputLayer,
   pointerLocked,
 }) => {
   const inputMode = useInputModeStore((state) => state.inputMode);
+  const spectating = useSpectatorEnabled(xrDevice);
+  if (spectating) return null;
   return (
     <>
       {inputMode === 'controller'

@@ -110,6 +110,8 @@ export const injectRuntime = async () => {
       prefs.visibilityMaskEnabled ?? DEFAULTS.visibilityMaskEnabled,
   });
   xrDevice.primaryInputMode = prefs.inputMode ?? DEFAULTS.inputMode;
+  xrDevice.spectator.enabled =
+    prefs.spectatorEnabled ?? DEFAULTS.spectatorEnabled;
   // forceInstall: the extension must override native WebXR — modern Chrome
   // ships navigator.xr, and IWER >=2.3 otherwise skips the override.
   xrDevice.installRuntime({ forceInstall: true });
