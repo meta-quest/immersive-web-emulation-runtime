@@ -13,6 +13,6 @@
     "@playwright/test": "^1.59.1",
     "@types/webxr": "^0.5.24",
     "iwer": "workspace:*",
-    "vite": "^8.0.10"
+    "vite": "^8.0.16"
   }
 }
