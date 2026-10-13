@@ -29,7 +29,7 @@ import { mat4 } from 'gl-matrix';
 import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta';
 import { P_DEVICE, P_FRAME, P_SESSION, P_SPACE } from '../../src/private.js';
 import { NativeMesh } from '../../src/meshes/XRMesh';
-import { NativePlane } from '../../src/planes/XRPlane';
+import { NativePlane, XRPlaneOrientation } from '../../src/planes/XRPlane';
 import { XRRigidTransform } from '../../src/primitives/XRRigidTransform';
 import { XRSemanticLabels } from '../../src/labels/labels';
 
@@ -471,6 +471,44 @@ describe('XRSession', () => {
     expect(xrMesh.meshSpace[P_SPACE].offsetMatrix[12]).toBe(3);
     expect(xrPlane.lastChangedTime).toBe(planeChanged);
     expect(xrMesh.lastChangedTime).toBe(meshChanged);
+  });
+
+  test('a plane that turns updates its orientation and lastChangedTime', () => {
+    const turned = (x: number) =>
+      new XRRigidTransform(
+        { x: 0, y: 0, z: 0, w: 1 },
+        { x, y: 0, z: 0, w: Math.sqrt(1 - x * x) },
+      );
+    const plane = new NativePlane(
+      turned(0),
+      [new DOMPointReadOnly(0, 0, 0), new DOMPointReadOnly(1, 0, 0)],
+      XRSemanticLabels.Table,
+    );
+    xrDevice[P_DEVICE].sem = {
+      trackedPlanes: new Set([plane]),
+      trackedMeshes: new Set(),
+    } as any;
+    const update = (time: number) =>
+      xrSession[P_SESSION].updateTrackedPlanes({
+        predictedDisplayTime: time,
+        [P_FRAME]: { detectedPlanes: new Set(), detectedMeshes: new Set() },
+      } as unknown as XRFrame);
+
+    update(1);
+    const xrPlane = xrSession[P_SESSION].trackedPlanes.get(plane)!;
+    expect(xrPlane.orientation).toBe(XRPlaneOrientation.Horizontal);
+
+    // Tilted 30 degrees: still horizontal, so unchanged.
+    plane.transform = turned(Math.sin(Math.PI / 12));
+    update(2);
+    expect(xrPlane.orientation).toBe(XRPlaneOrientation.Horizontal);
+    expect(xrPlane.lastChangedTime).toBe(1);
+
+    // Tipped onto its side: vertical.
+    plane.transform = turned(Math.SQRT1_2);
+    update(3);
+    expect(xrPlane.orientation).toBe(XRPlaneOrientation.Vertical);
+    expect(xrPlane.lastChangedTime).toBe(3);
   });
 
   test('XRSession.interactionMode returns the correct value', async () => {

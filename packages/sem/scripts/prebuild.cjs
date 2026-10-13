@@ -16,18 +16,21 @@ const files = fs
   .readdirSync(jsonDirectory)
   .filter((file) => file.endsWith('.json'));
 
-// Generate the content for registry.ts
+// Generate the content for registry.ts. Paths are relative to the published
+// lib/src/registry.js (and build/*/index.js), both two levels below the
+// package root, so they reach the single captures/ folder that ships.
 const imports = files
   .map((file) => {
     const envId = path.basename(file, '.json');
-    return `  ${envId}: () => import('../captures/${file}'),`;
+    return `  ${envId}: () => import('../../captures/${file}'),`;
   })
   .join('\n');
-
 const ids = files
   .map((file) => `  '${path.basename(file, '.json')}',`)
   .join('\n');
-const content = `export const Environments: { [envId: string]: () => Promise<any> } = {\n${imports}\n};\n\n// Listed separately so the UMD build can name captures without bundling them.\nexport const captureIds = [\n${ids}\n];\n`;
+const content = `// Bundlers resolve these lazy imports (lib/); the prebuilt bundles fetch the
+// files by URL instead of embedding a copy (see loaders.bundle.ts).
+export const Environments: { [envId: string]: () => Promise<any> } = {\n${imports}\n};\n\n// Listed separately so the UMD build can name captures without bundling them.\nexport const captureIds = [\n${ids}\n];\n`;
 
 // Write the content to registry.ts
 fs.writeFileSync(outputFilePath, content, 'utf8');

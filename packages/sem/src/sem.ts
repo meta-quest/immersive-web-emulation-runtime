@@ -41,7 +41,8 @@ import {
   SceneEnvironment,
   isSurface,
 } from './scene-environment.js';
-import { Environments, captureIds } from './registry.js';
+import { captureIds } from './registry.js';
+import { loadCaptureFile } from './loaders.js';
 import { Scene as SceneFile } from './generated/protos/openxr_scene.js';
 import { VERSION } from './version.js';
 import { mat4 } from 'gl-matrix';
@@ -623,19 +624,8 @@ async function loadGLTS(
 }
 
 async function loadCapture(envId: string): Promise<SceneFile> {
-  if (typeof __IS_UMD__ !== 'undefined' && __IS_UMD__) {
-    // UMD builds fetch the capture JSON from the CDN.
-    const url = `https://www.unpkg.com/@iwer/sem@${VERSION}/captures/${envId}.json`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Network response was not ok: ${response.statusText}`);
-    }
-    return response.json();
-  } else {
-    const importEnv = Environments[envId];
-    if (!importEnv) {
-      throw new Error(`Requested environment ${envId} does not exist`);
-    }
-    return (await importEnv()).default;
+  if (!captureIds.includes(envId)) {
+    throw new Error(`Requested environment ${envId} does not exist`);
   }
+  return loadCaptureFile(envId);
 }

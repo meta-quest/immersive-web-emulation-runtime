@@ -3,7 +3,10 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "./lib",
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    // Captures are imported lazily from the package's captures/ folder at
+    // runtime; resolving them here would copy every capture into lib/.
+    "resolveJsonModule": false
   },
   "include": ["src/**/*"],
   "exclude": [

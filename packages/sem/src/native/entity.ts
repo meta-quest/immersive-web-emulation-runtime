@@ -1,4 +1,4 @@
-import { Mesh, MeshMatcapMaterial } from 'three';
+import { Mesh, MeshMatcapMaterial, Quaternion } from 'three';
 import {
   NativeMesh,
   NativePlane,
@@ -63,6 +63,8 @@ const WebXRSemanticLabelMap: Record<SemanticLabelMETA, XRSemanticLabels> = {
   [SemanticLabelMETA.OPENING]: XRSemanticLabels.Other,
   [SemanticLabelMETA.UNRECOGNIZED]: XRSemanticLabels.Other,
 };
+
+const halfTurnX = new Quaternion(1, 0, 0, 0);
 
 export class SpatialEntity extends Mesh {
   public name = 'generic spatial entity';
@@ -162,15 +164,26 @@ export class SpatialEntity extends Mesh {
         const { offset, extent } = this.getComponent(
           SpatialEntityComponentType.Bounded2D,
         ) as Bounded2DComponent;
+        // Captured plane poses have local -Y facing into the room, but WebXR
+        // plane space +Y is the plane normal. Report the pose turned half a
+        // turn about X, with the polygon mirrored (and reversed to keep its
+        // winding) so its footprint is unchanged.
+        const flipped = this.quaternion.clone().multiply(halfTurnX);
+        const planeTransform = new XRRigidTransform(
+          { x: this.position.x, y: this.position.y, z: this.position.z, w: 1 },
+          { x: flipped.x, y: flipped.y, z: flipped.z, w: flipped.w },
+        );
+        const [x0, x1] = [offset.x, offset.x + extent.x];
+        const [z0, z1] = [-offset.y, -(offset.y + extent.y)];
         const polygon: DOMPointReadOnly[] = [
-          new DOMPointReadOnly(offset.x, 0, offset.y),
-          new DOMPointReadOnly(offset.x + extent.x, 0, offset.y),
-          new DOMPointReadOnly(offset.x + extent.x, 0, offset.y + extent.y),
-          new DOMPointReadOnly(offset.x, 0, offset.y + extent.y),
-          new DOMPointReadOnly(offset.x, 0, offset.y),
+          new DOMPointReadOnly(x0, 0, z0),
+          new DOMPointReadOnly(x0, 0, z1),
+          new DOMPointReadOnly(x1, 0, z1),
+          new DOMPointReadOnly(x1, 0, z0),
+          new DOMPointReadOnly(x0, 0, z0),
         ];
         this._nativeEntity = new NativePlane(
-          xrRigidTransform,
+          planeTransform,
           polygon,
           semanticLabel,
         );
@@ -181,11 +194,17 @@ export class SpatialEntity extends Mesh {
         const vertices = this.geometry.getAttribute('position')
           .array as Float32Array;
         const indices = new Uint32Array(this.geometry.index!.array);
+        // Quest only exposes a triangle mesh for the room's global mesh; one
+        // capture (office_large) labels it UNRECOGNIZED.
+        const label =
+          this.entityType === SpatialEntityType.Mesh
+            ? XRSemanticLabels.GlobalMesh
+            : semanticLabel;
         this._nativeEntity = new NativeMesh(
           xrRigidTransform,
           vertices,
           indices,
-          semanticLabel,
+          label,
         );
       }
     }

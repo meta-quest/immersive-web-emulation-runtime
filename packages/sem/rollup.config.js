@@ -1,4 +1,5 @@
 import commonjs from '@rollup/plugin-commonjs';
+import { dirname, join } from 'path';
 import json from '@rollup/plugin-json';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
 import replace from '@rollup/plugin-replace';
@@ -9,9 +10,22 @@ const globals = {
   iwer: 'IWER',
 };
 
+// The prebuilt ES bundles fetch built-in files by URL (src/loaders.bundle.ts)
+// instead of the lazy imports that lib/ leaves to the app's bundler. The UMD
+// build keeps lib's loaders, which fetch from the CDN under __IS_UMD__.
+const bundleLoaders = {
+  name: 'bundle-loaders',
+  resolveId(source, importer) {
+    return source === './loaders.js' && importer
+      ? join(dirname(importer), 'loaders.bundle.js')
+      : null;
+  },
+};
+
 const basePlugins = [peerDepsExternal(), resolve(), commonjs(), json()];
 
 const esPlugins = [
+  bundleLoaders,
   ...basePlugins,
   replace({
     __IS_UMD__: 'false', // Set to false for ES builds

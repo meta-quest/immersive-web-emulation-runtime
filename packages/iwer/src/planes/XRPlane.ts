@@ -33,11 +33,30 @@ export const XREntityOrientation: Partial<
   [XRSemanticLabels.Table]: XRPlaneOrientation.Horizontal,
   [XRSemanticLabels.Shelf]: XRPlaneOrientation.Horizontal,
   [XRSemanticLabels.Bed]: XRPlaneOrientation.Horizontal,
-  [XRSemanticLabels.Screen]: XRPlaneOrientation.Horizontal,
+  [XRSemanticLabels.Screen]: XRPlaneOrientation.Vertical,
   [XRSemanticLabels.Lamp]: XRPlaneOrientation.Horizontal,
   [XRSemanticLabels.Plant]: XRPlaneOrientation.Horizontal,
   [XRSemanticLabels.WallArt]: XRPlaneOrientation.Vertical,
 };
+
+/**
+ * A plane is horizontal when its normal (plane space +Y) is within 45 degrees
+ * of vertical, otherwise vertical. Falls back to the semantic label when the
+ * native plane has no transform.
+ */
+export function planeOrientation(
+  nativePlane: NativePlane,
+  semanticLabel?: XRSemanticLabels,
+): XRPlaneOrientation | undefined {
+  const q = nativePlane.transform?.orientation;
+  if (q) {
+    const normalY = 1 - 2 * (q.x * q.x + q.z * q.z);
+    return Math.abs(normalY) >= Math.SQRT1_2
+      ? XRPlaneOrientation.Horizontal
+      : XRPlaneOrientation.Vertical;
+  }
+  return semanticLabel ? XREntityOrientation[semanticLabel] : undefined;
+}
 
 export class XRPlane {
   [P_PLANE]: {
@@ -63,9 +82,7 @@ export class XRPlane {
       polygon,
       lastChangedTime: performance.now(),
       semanticLabel,
-      orientation: semanticLabel
-        ? XREntityOrientation[semanticLabel]
-        : undefined,
+      orientation: planeOrientation(nativePlane, semanticLabel),
     };
   }
 

@@ -6,7 +6,7 @@
  */
 
 import { NativeMesh, XRMesh } from '../meshes/XRMesh.js';
-import { NativePlane, XRPlane } from '../planes/XRPlane.js';
+import { NativePlane, XRPlane, planeOrientation } from '../planes/XRPlane.js';
 import {
   P_ANCHOR,
   P_DEVICE,
@@ -487,11 +487,17 @@ export class XRSession extends EventTarget {
             this[P_SESSION].trackedPlanes.set(plane, xrPlane);
           } else {
             // Pose is not a plane attribute, so moving planes update their
-            // space without bumping lastChangedTime.
+            // space without bumping lastChangedTime, unless they turn between
+            // horizontal and vertical.
             XRSpaceUtils.updateOffsetMatrix(
               xrPlane.planeSpace,
               plane.transform.matrix,
             );
+            const orientation = planeOrientation(plane, plane.semanticLabel);
+            if (orientation !== xrPlane[P_PLANE].orientation) {
+              xrPlane[P_PLANE].orientation = orientation;
+              xrPlane[P_PLANE].lastChangedTime = frame.predictedDisplayTime;
+            }
           }
           xrPlane[P_PLANE].frame = frame;
           frame[P_FRAME].detectedPlanes.add(xrPlane);
