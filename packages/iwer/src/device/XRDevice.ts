@@ -150,7 +150,12 @@ export interface SyntheticEnvironmentModule {
   // package, which depends on `iwer`; importing it here would create a
   // circular dependency. The SEM implementation casts this to its schema.
   loadEnvironment(json: unknown): void;
-  loadDefaultEnvironment(envId: string): void;
+  loadDefaultEnvironment(envId: string): Promise<void>;
+  // Optional, so older or custom modules without GLTS support still fit.
+  /** Adds a `.glts` environment that loadDefaultEnvironment(id) can load. */
+  addEnvironment?(id: string, url: string | URL): void;
+  /** Ids of the built-in and added environments. */
+  readonly environments?: string[];
   planesVisible: boolean;
   boundingBoxesVisible: boolean;
   meshesVisible: boolean;

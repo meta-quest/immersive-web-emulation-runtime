@@ -74,6 +74,26 @@ fetch(url)
   });
 ```
 
+## GLTS Environments
+
+Any [GLTS](https://github.com/drawcall-ai/glts) `.glts` file (a procedural three.js scene) can be an environment. Add it under an id; it is listed in the DevUI environment menu next to the built-in captures and loads like them:
+
+```javascript
+xrDevice.sem.addEnvironment('my_room', '/my_room.glts');
+await xrDevice.sem.loadDefaultEnvironment('my_room');
+```
+
+The scene is rendered as passthrough and used for hit-test and depth sensing; its `onFrame` callbacks run every AR frame, so it can be dynamic. Meshes opt into plane and mesh detection with a WebXR semantic label in `userData`:
+
+```ts
+floor.userData.xrPlane = 'floor'; // XRPlane, normal = thinnest bounding-box axis
+table.userData.xrMesh = 'table'; // XRMesh from the geometry
+```
+
+Moving labelled objects moves their plane/mesh. Like a scanned room on Quest, the environment also reports a 'global mesh' XRMesh: the scene's static geometry, merged once when it loads. Tag objects that move, or parts outside the room (such as the view behind a window), with `userData.xrGlobalMesh = false`. Hit tests hit visible geometry only, so invisible proxies (for example a box tagged as a table's volume) are detected but not hit. The scene's `background`, `environment`, `fog` and `scene.rendering` (`shadows`, `toneMapping`, `toneMappingExposure`) apply. The DevUI toggles work as for captures: mesh shows/hides the scene; plane and bounding box show overlays of the reported planes and meshes. GLTS environments need the ES module build. See [`examples/environment`](../../examples/environment).
+
+Installing `@drawcall/glts` needs Node 22.18+ (its Babel 8 dependencies); on older Node versions npm and pnpm only warn, while Yarn 1 fails unless run with `--ignore-engines`. The prebuilt `build/es` bundle can be loaded directly from a CDN with an import map for `iwer`, `three` and `@drawcall/glts`.
+
 ## License
 
 `@iwer/sem` is licensed under the MIT License. For more details, see the [LICENSE](https://github.com/meta-quest/immersive-web-emulation-runtime/blob/main/LICENSE) file in this repository.

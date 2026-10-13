@@ -388,13 +388,13 @@ function usePopoverFocus(
   }, [open, popoverRef]);
 }
 
-const envNames = [
+// Environments of SEM versions that do not list their own.
+const legacyEnvironments = [
   'meeting_room',
   'living_room',
   'music_room',
   'office_large',
   'office_small',
-  'none',
 ];
 
 type HeaderStateStore = {
@@ -1112,7 +1112,10 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
             aria-label="Emulated environment"
             $left={environmentPopoverLeft}
           >
-            {envNames.map((name) => (
+            {[
+              ...(xrDevice.sem?.environments ?? legacyEnvironments),
+              'none',
+            ].map((name) => (
               <HeaderButton
                 key={name}
                 style={{
@@ -1131,8 +1134,14 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
                       xrDevice.sem as unknown as { deleteAll(): void }
                     ).deleteAll();
                   } else {
-                    // @ts-ignore
-                    xrDevice.sem!.loadDefaultEnvironment(name);
+                    xrDevice
+                      .sem!.loadDefaultEnvironment(name)
+                      ?.catch((error) =>
+                        console.error(
+                          `Could not load environment ${name}`,
+                          error,
+                        ),
+                      );
                   }
                   emitPrefsPatch({ environment: name });
                   setEnvDropDownOpen(false);

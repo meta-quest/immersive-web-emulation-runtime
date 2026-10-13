@@ -31,7 +31,8 @@ export default [
   // UMD builds
   {
     input: 'lib/src/index.js',
-    external: ['iwer'],
+    // GLTS is loaded lazily, only for .glts environments.
+    external: ['iwer', '@drawcall/glts'],
     plugins: umdPlugins,
     output: [
       {
@@ -52,7 +53,8 @@ export default [
   // ES module builds
   {
     input: 'lib/src/index.js',
-    external: ['iwer'],
+    // GLTS is loaded lazily, only for .glts environments.
+    external: ['iwer', '@drawcall/glts'],
     plugins: esPlugins,
     output: [
       {

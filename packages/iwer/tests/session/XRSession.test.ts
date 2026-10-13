@@ -27,7 +27,11 @@ import { XRViewerPose } from '../../src/pose/XRViewerPose';
 import { XRWebGLLayer } from '../../src/layers/XRWebGLLayer';
 import { mat4 } from 'gl-matrix';
 import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta';
-import { P_DEVICE, P_SESSION } from '../../src/private.js';
+import { P_DEVICE, P_FRAME, P_SESSION, P_SPACE } from '../../src/private.js';
+import { NativeMesh } from '../../src/meshes/XRMesh';
+import { NativePlane } from '../../src/planes/XRPlane';
+import { XRRigidTransform } from '../../src/primitives/XRRigidTransform';
+import { XRSemanticLabels } from '../../src/labels/labels';
 
 // silence console logs
 console.log = () => {};
@@ -417,6 +421,56 @@ describe('XRSession', () => {
     expect(xrSession.environmentBlendMode).toBe(
       XREnvironmentBlendMode.AlphaBlend,
     );
+  });
+
+  test('moving planes and meshes update their space but not lastChangedTime', () => {
+    const at = (x: number) =>
+      new XRRigidTransform({ x, y: 0, z: 0, w: 1 }, { x: 0, y: 0, z: 0, w: 1 });
+    const plane = new NativePlane(
+      at(0),
+      [new DOMPointReadOnly(0, 0, 0), new DOMPointReadOnly(1, 0, 0)],
+      XRSemanticLabels.Table,
+    );
+    const mesh = new NativeMesh(
+      at(0),
+      new Float32Array(9),
+      new Uint32Array([0, 1, 2]),
+      XRSemanticLabels.Other,
+    );
+    // A minimal SEM: the session only reads the tracked sets here.
+    xrDevice[P_DEVICE].sem = {
+      trackedPlanes: new Set([plane]),
+      trackedMeshes: new Set([mesh]),
+    } as any;
+    const frame = (time: number) =>
+      ({
+        predictedDisplayTime: time,
+        [P_FRAME]: { detectedPlanes: new Set(), detectedMeshes: new Set() },
+      }) as unknown as XRFrame;
+    const update = (time: number) => {
+      xrSession[P_SESSION].updateTrackedPlanes(frame(time));
+      xrSession[P_SESSION].updateTrackedMeshes(frame(time));
+    };
+
+    update(1);
+    const xrPlane = xrSession[P_SESSION].trackedPlanes.get(plane)!;
+    const xrMesh = xrSession[P_SESSION].trackedMeshes.get(mesh)!;
+    // Set from the frame that first reports them.
+    expect(xrPlane.lastChangedTime).toBe(1);
+    expect(xrMesh.lastChangedTime).toBe(1);
+    const planeChanged = xrPlane.lastChangedTime;
+    const meshChanged = xrMesh.lastChangedTime;
+
+    plane.transform = at(2);
+    mesh.transform = at(3);
+    update(2);
+
+    expect(xrSession[P_SESSION].trackedPlanes.get(plane)).toBe(xrPlane);
+    expect(xrSession[P_SESSION].trackedMeshes.get(mesh)).toBe(xrMesh);
+    expect(xrPlane.planeSpace[P_SPACE].offsetMatrix[12]).toBe(2);
+    expect(xrMesh.meshSpace[P_SPACE].offsetMatrix[12]).toBe(3);
+    expect(xrPlane.lastChangedTime).toBe(planeChanged);
+    expect(xrMesh.lastChangedTime).toBe(meshChanged);
   });
 
   test('XRSession.interactionMode returns the correct value', async () => {
