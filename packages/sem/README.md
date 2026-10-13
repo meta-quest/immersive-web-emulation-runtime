@@ -74,6 +74,18 @@ fetch(url)
   });
 ```
 
+## Built-in Rooms
+
+SEM ships eight procedural GLTS rooms, each within Quest's 10 x 10 m room-scan limit and reported like a scanned room (planes, volumes and a 'global mesh'): `sunlit_living_room`, `home_office`, `conference_room`, `open_office`, `kitchen`, `bedroom`, `music_studio` and `open_studio`. They are listed first in `sem.environments` and load like the captures:
+
+```javascript
+await xrDevice.sem.loadDefaultEnvironment('kitchen');
+xrDevice.sem.environmentInfo('kitchen'); // { kind: 'room' }
+xrDevice.sem.environmentInfo('office_small'); // { kind: 'legacy-scan' }
+```
+
+The older room captures (`living_room`, `meeting_room`, `music_room`, `office_large`, `office_small`) remain available as legacy scans; the DevUI menu lists them under "Legacy scans". Rooms are loaded lazily (each is its own chunk) and need the ES module build. See [`rooms/README.md`](rooms/README.md) to build or add rooms.
+
 ## GLTS Environments
 
 Any [GLTS](https://github.com/drawcall-ai/glts) `.glts` file (a procedural three.js scene) can be an environment. Add it under an id; it is listed in the DevUI environment menu next to the built-in captures and loads like them:

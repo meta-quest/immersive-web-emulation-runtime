@@ -992,7 +992,6 @@ const entry = group(-0.7, 0, Z1, Math.PI);
     for (const z of [0.04, 0.3]) mesh(roundedBox(0.025, 0.79, 0.025, 0.006), blackMetal, [x, 0.395, z], entry);
   }
   const mirror = mesh(own(new THREE.CircleGeometry(0.36, 64)), mirrorMaterial, [0, 1.45, 0.012], entry, { cast: false });
-  mirror.rotation.y = -0.09; // turned slightly towards the bright window side
   mirror.userData.xrPlane = 'wall art';
   mesh(own(new THREE.TorusGeometry(0.37, 0.012, 12, 96)), brass, [0, 1.45, 0.014], entry);
   mesh(own(new THREE.CylinderGeometry(0.06, 0.09, 0.3, 32)), ceramic, [-0.32, 0.965, 0.17], entry);

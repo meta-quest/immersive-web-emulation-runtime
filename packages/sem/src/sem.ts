@@ -41,8 +41,8 @@ import {
   SceneEnvironment,
   isSurface,
 } from './scene-environment.js';
-import { captureIds } from './registry.js';
-import { loadCaptureFile } from './loaders.js';
+import { captureIds, roomIds } from './registry.js';
+import { loadCaptureFile, loadRoomSource } from './loaders.js';
 import { Scene as SceneFile } from './generated/protos/openxr_scene.js';
 import { VERSION } from './version.js';
 import { mat4 } from 'gl-matrix';
@@ -52,6 +52,12 @@ const defaultBackground = new Color(0x3e3e3e);
 // Cap the per-frame delta so animations/physics don't jump after the tab was
 // hidden.
 const maxDeltaSeconds = 0.1;
+
+/**
+ * What an environment id is: a built-in GLTS 'room', an environment 'added'
+ * with addEnvironment, or a 'legacy-scan' (a built-in room capture).
+ */
+export type EnvironmentInfo = { kind: 'room' | 'added' | 'legacy-scan' };
 
 // Root presentation profile of a GLTS scene (`scene.rendering`).
 type RenderingProfile = {
@@ -265,9 +271,30 @@ export class SyntheticEnvironmentModule extends EventTarget {
     this.renderer.toneMappingExposure = rendering?.toneMappingExposure ?? 1;
   }
 
-  /** Environment ids: the built-in captures plus added ones. */
+  /**
+   * Environment ids: the built-in GLTS rooms, added environments, then the
+   * built-in captures (legacy scans). The UMD build cannot load GLTS, so it
+   * lists only captures and added environments.
+   */
   get environments(): string[] {
-    return [...captureIds, ...this.addedEnvironments.keys()];
+    const added = [...this.addedEnvironments.keys()];
+    if (typeof __IS_UMD__ !== 'undefined' && __IS_UMD__) {
+      return [...captureIds, ...added];
+    }
+    return [...roomIds, ...added, ...captureIds];
+  }
+
+  /** What an environment id is, or undefined if it is unknown. */
+  environmentInfo(id: string): EnvironmentInfo | undefined {
+    if (this.addedEnvironments.has(id)) return { kind: 'added' };
+    if (captureIds.includes(id)) return { kind: 'legacy-scan' };
+    if (
+      roomIds.includes(id) &&
+      !(typeof __IS_UMD__ !== 'undefined' && __IS_UMD__)
+    ) {
+      return { kind: 'room' };
+    }
+    return undefined;
   }
 
   /**
@@ -284,8 +311,8 @@ export class SyntheticEnvironmentModule extends EventTarget {
     if (id === 'none') {
       throw new Error(`Environment id ${id} is reserved`);
     }
-    if (captureIds.includes(id)) {
-      throw new Error(`Environment ${id} is a built-in capture`);
+    if (captureIds.includes(id) || roomIds.includes(id)) {
+      throw new Error(`Environment ${id} is a built-in environment`);
     }
     this.addedEnvironments.set(id, url);
   }
@@ -367,8 +394,10 @@ export class SyntheticEnvironmentModule extends EventTarget {
     const id = ++this.loadId;
     try {
       const url = this.addedEnvironments.get(envId);
-      if (url) {
-        const { root, dispose } = await loadGLTS(url);
+      if (url || roomIds.includes(envId)) {
+        const { root, dispose } = url
+          ? await loadGLTS(url)
+          : await loadRoom(envId);
         if (id === this.loadId) this.loadSceneEnvironment(root, dispose);
         else dispose();
         return;
@@ -620,6 +649,21 @@ async function loadGLTS(
       loader.dispose();
       throw error;
     }
+  }
+}
+
+// Built-in rooms ship as modules whose default export is the GLTS source;
+// it is loaded from a blob URL (the rooms import only 'three' and GLTS).
+async function loadRoom(
+  roomId: string,
+): Promise<{ root: EnvironmentObject; dispose: () => void }> {
+  const url = URL.createObjectURL(
+    new Blob([await loadRoomSource(roomId)], { type: 'text/plain' }),
+  );
+  try {
+    return await loadGLTS(url);
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 

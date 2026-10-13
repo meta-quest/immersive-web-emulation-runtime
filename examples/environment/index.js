@@ -3,15 +3,20 @@ import { XRDevice, metaQuest3 } from 'iwer';
 import { DevUI } from '@iwer/devui';
 import { SyntheticEnvironmentModule } from '@iwer/sem';
 
-// Emulate a Quest 3 and use living_room.glts as the real world behind the app.
+// Emulate a Quest 3 and use one of SEM's GLTS rooms as the real world behind
+// the app.
 const xrDevice = new XRDevice(metaQuest3);
 xrDevice.installRuntime({ forceInstall: true });
 xrDevice.installDevUI(DevUI);
 window.xrDevice = xrDevice; // for tests and console tinkering
 xrDevice.installSEM(SyntheticEnvironmentModule);
-// The added environment also appears in the DevUI environment menu.
-xrDevice.sem.addEnvironment('sunlit_living_room', './living_room.glts');
-await xrDevice.sem.loadDefaultEnvironment('sunlit_living_room');
+// SEM's built-in GLTS rooms (and the legacy scans) are listed in the DevUI
+// environment menu. ?room=<id> picks the starting room.
+const room =
+  new URLSearchParams(location.search).get('room') ?? 'sunlit_living_room';
+const loadStart = performance.now();
+await xrDevice.sem.loadDefaultEnvironment(room);
+window.environmentLoadMs = performance.now() - loadStart;
 
 // A plain three.js AR app that draws what WebXR reports.
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });

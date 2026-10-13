@@ -19,3 +19,6 @@ packages/sem/src/registry.ts
 playwright-report
 test-results
 .husky/_
+packages/sem/rooms/*.js
+packages/sem/rooms/.typecheck
+examples/**/tools/.check

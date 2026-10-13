@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const state = (page) => page.evaluate(() => window.xrState);
 
-test('living_room.glts provides planes, meshes, hit-test and motion in AR', async ({
+test('the sunlit living room provides planes, meshes, hit-test and motion in AR', async ({
   page,
 }) => {
   const errors = [];

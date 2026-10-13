@@ -9,13 +9,17 @@
   "files": [
     "build",
     "lib",
-    "captures"
+    "captures",
+    "rooms/*.js",
+    "rooms/README.md"
   ],
   "scripts": {
-    "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts && node scripts/prebuild.cjs",
+    "prebuild": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts && node rooms/build.mjs && node scripts/prebuild.cjs",
     "clean": "node -e \"const{rmSync}=require('fs');rmSync('lib',{recursive:true,force:true});rmSync('build',{recursive:true,force:true})\"",
     "build": "pnpm run clean && tsc && rollup -c",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "typecheck:rooms": "node rooms/build.mjs --check",
+    "check:pack": "node scripts/check-pack.cjs"
   },
   "repository": {
     "type": "git",

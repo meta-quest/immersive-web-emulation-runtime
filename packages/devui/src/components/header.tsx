@@ -397,6 +397,32 @@ const legacyEnvironments = [
   'office_small',
 ];
 
+// Built-in rooms and added environments first, then the built-in captures
+// under a "Legacy scans" heading when both kinds are listed.
+function environmentGroups(xrDevice: XRDevice) {
+  const sem = xrDevice.sem;
+  const ids = sem?.environments ?? legacyEnvironments;
+  const legacy = ids.filter(
+    (id) => sem?.environmentInfo?.(id)?.kind === 'legacy-scan',
+  );
+  const current = ids.filter((id) => !legacy.includes(id));
+  if (!current.length || !legacy.length) {
+    return [{ label: undefined, ids }];
+  }
+  return [
+    { label: undefined, ids: current },
+    { label: 'Legacy scans', ids: legacy },
+  ];
+}
+
+const EnvironmentGroupLabel = styled.div`
+  color: ${Colors.textGrey};
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 8px 10px 2px;
+`;
+
 type HeaderStateStore = {
   infoPanelOpen: boolean;
   envDropDownOpen: boolean;
@@ -665,6 +691,42 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
   };
 
   const semColor = (on: boolean) => (on ? Colors.accent : Colors.textGrey);
+
+  const environmentButton = (name: string) => (
+    <HeaderButton
+      key={name}
+      style={{
+        fontSize: '12px',
+        width: '100%',
+        justifyContent: 'start',
+        borderRadius: '8px',
+        padding: '6px 10px',
+      }}
+      onClick={(event) => {
+        const loadEnvironment = getEnvironmentLoader();
+        if (loadEnvironment) {
+          loadEnvironment(name);
+        } else if (name === 'none') {
+          (xrDevice.sem as unknown as { deleteAll(): void }).deleteAll();
+        } else {
+          xrDevice
+            .sem!.loadDefaultEnvironment(name)
+            ?.catch((error) =>
+              console.error(`Could not load environment ${name}`, error),
+            );
+        }
+        emitPrefsPatch({ environment: name });
+        setEnvDropDownOpen(false);
+        if (event.detail === 0) {
+          window.requestAnimationFrame(() =>
+            environmentTriggerRef.current?.focus(),
+          );
+        }
+      }}
+    >
+      {underscoreToTitleCase(name)}
+    </HeaderButton>
+  );
 
   return (
     <div
@@ -1112,49 +1174,23 @@ export const HeaderUI: React.FC<HeaderUIProps> = ({ xrDevice, inputLayer }) => {
             aria-label="Emulated environment"
             $left={environmentPopoverLeft}
           >
-            {[
-              ...(xrDevice.sem?.environments ?? legacyEnvironments),
-              'none',
-            ].map((name) => (
-              <HeaderButton
-                key={name}
-                style={{
-                  fontSize: '12px',
-                  width: '100%',
-                  justifyContent: 'start',
-                  borderRadius: '8px',
-                  padding: '6px 10px',
-                }}
-                onClick={(event) => {
-                  const loadEnvironment = getEnvironmentLoader();
-                  if (loadEnvironment) {
-                    loadEnvironment(name);
-                  } else if (name === 'none') {
-                    (
-                      xrDevice.sem as unknown as { deleteAll(): void }
-                    ).deleteAll();
-                  } else {
-                    xrDevice
-                      .sem!.loadDefaultEnvironment(name)
-                      ?.catch((error) =>
-                        console.error(
-                          `Could not load environment ${name}`,
-                          error,
-                        ),
-                      );
-                  }
-                  emitPrefsPatch({ environment: name });
-                  setEnvDropDownOpen(false);
-                  if (event.detail === 0) {
-                    window.requestAnimationFrame(() =>
-                      environmentTriggerRef.current?.focus(),
-                    );
-                  }
-                }}
-              >
-                {underscoreToTitleCase(name)}
-              </HeaderButton>
-            ))}
+            {environmentGroups(xrDevice).map(({ label, ids }) => {
+              const buttons = ids.map(environmentButton);
+              if (!label) {
+                return <React.Fragment key="current">{buttons}</React.Fragment>;
+              }
+              const labelId =
+                'iwer-environment-group-' + label.replace(/\W+/g, '-');
+              return (
+                <div key={label} role="group" aria-labelledby={labelId}>
+                  <EnvironmentGroupLabel id={labelId}>
+                    {label}
+                  </EnvironmentGroupLabel>
+                  {buttons}
+                </div>
+              );
+            })}
+            {environmentButton('none')}
           </Popover>
         )}
       </div>

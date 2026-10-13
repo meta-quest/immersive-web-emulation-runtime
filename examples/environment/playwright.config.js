@@ -12,5 +12,11 @@ export default defineConfig({
       args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'],
     },
   },
-  webServer: { command: 'pnpm vite --port 5180', port: 5180 },
+  // Reuses a running `npx vite --port 5180` (which the tools need too); make
+  // sure it serves this checkout.
+  webServer: {
+    command: 'pnpm vite --port 5180',
+    port: 5180,
+    reuseExistingServer: true,
+  },
 });

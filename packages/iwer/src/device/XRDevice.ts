@@ -156,6 +156,10 @@ export interface SyntheticEnvironmentModule {
   addEnvironment?(id: string, url: string | URL): void;
   /** Ids of the built-in and added environments. */
   readonly environments?: string[];
+  /** Whether an environment is a built-in room, added, or a legacy scan. */
+  environmentInfo?(
+    id: string,
+  ): { kind: 'room' | 'added' | 'legacy-scan' } | undefined;
   planesVisible: boolean;
   boundingBoxesVisible: boolean;
   meshesVisible: boolean;

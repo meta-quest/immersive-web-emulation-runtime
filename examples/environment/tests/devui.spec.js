@@ -62,7 +62,7 @@ test('DevUI visibility toggles affect the scene environment', async ({
   expect(errors).toEqual([]);
 });
 
-test('the added environment is in the DevUI menu with the captures', async ({
+test('the DevUI menu lists the built-in rooms, then the legacy scans', async ({
   page,
 }) => {
   const errors = [];
@@ -73,8 +73,29 @@ test('the added environment is in the DevUI menu with the captures', async ({
   const living = await counts(page);
   const menu = page.getByRole('button', { name: /environment/i }).first();
 
-  // Load a built-in capture through the DevUI environment menu.
+  // Rooms come first; the captures follow in a "Legacy scans" group, and
+  // "None" comes last, outside the groups.
   await menu.click();
+  const buttons = await page
+    .locator('#iwer-environment-menu')
+    .getByRole('button')
+    .allTextContents();
+  expect(buttons.indexOf('Home Office')).toBeGreaterThanOrEqual(0);
+  expect(buttons.indexOf('Home Office')).toBeLessThan(
+    buttons.indexOf('Office Small'),
+  );
+  expect(buttons.at(-1)).toBe('None');
+  const legacy = page.getByRole('group', { name: 'Legacy scans' });
+  await expect(legacy.getByRole('button')).toHaveText([
+    'Living Room',
+    'Meeting Room',
+    'Music Room',
+    'Office Large',
+    'Office Small',
+  ]);
+
+  // Load a legacy scan through the DevUI environment menu.
+
   await page.getByRole('button', { name: 'Office Small' }).click();
   await expect
     .poll(async () => (await counts(page)).planes)
@@ -95,7 +116,7 @@ test('the added environment is in the DevUI menu with the captures', async ({
   }));
   expect(office).toEqual({ toneMapping: 0, shadows: false, scene: null });
 
-  // And back to the added environment, listed in the same menu.
+  // And back to a built-in room, listed in the same menu.
   await menu.click();
   await page.getByRole('button', { name: 'Sunlit Living Room' }).click();
   await expect.poll(async () => counts(page)).toEqual(living);
