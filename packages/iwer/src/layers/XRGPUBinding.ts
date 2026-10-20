@@ -410,10 +410,13 @@ export class XRGPUBinding {
     }
     let texture = depthTextures.get(frame);
     if (!texture) {
+      // 'unsigned-short' depth is 16-bit millimeters, 'float32' is meters.
+      const unsignedShort =
+        session[P_SESSION].depthSensingDataFormat === 'unsigned-short';
       texture = device.createTexture({
         label: 'XRGPUDepthInformation',
         size: [viewDepth.width, viewDepth.height, VIEW_COUNT],
-        format: 'r32float',
+        format: unsignedShort ? 'r16uint' : 'r32float',
         usage: TEXTURE_BINDING | COPY_DST,
         dimension: '2d',
         mipLevelCount: 1,
@@ -424,7 +427,10 @@ export class XRGPUBinding {
         device.queue.writeTexture(
           { texture, origin: [0, 0, arrayLayer(eye)] },
           data,
-          { bytesPerRow: width * 4, rowsPerImage: height },
+          {
+            bytesPerRow: width * (unsignedShort ? 2 : 4),
+            rowsPerImage: height,
+          },
           [width, height, 1],
         );
       }

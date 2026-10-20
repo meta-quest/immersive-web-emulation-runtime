@@ -93,7 +93,7 @@ Limitations:
 
 - A session shows a single projection layer. The `'layers'` feature and quad, cylinder, equirect and cube layers are not emulated.
 - Space warp isn't emulated, so `deltaPose` is `null`.
-- WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`. For depth sensing, use `XRFrame.getDepthInformation()` for CPU-optimized depth or `XRGPUBinding.getDepthInformation()` for GPU-optimized depth, an `r32float` texture of linear depth with one array layer per view.
+- WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`. For depth sensing, use `XRFrame.getDepthInformation()` for CPU-optimized depth or `XRGPUBinding.getDepthInformation()` for GPU-optimized depth, a texture of linear depth with one array layer per view: `r32float` meters, or `r16uint` millimeters for `'unsigned-short'`. The session uses the first usage and data format in `depthSensing` that it supports.
 - The WebXR Layers polyfill (`installRuntime({ polyfillLayers: true })`) only supports WebGL, so leave it off for WebGPU apps.
 
 ## Understanding IWER's Global Reference Space

@@ -13,6 +13,7 @@ import {
 } from '../session/XRSession.js';
 
 import { P_DEVICE, P_SYSTEM } from '../private.js';
+import { findWebGPUDepthConfiguration } from '../depth/XRDepthInformation.js';
 import {
   isGazeTrackingFeature,
   supportsGazeTracking,
@@ -129,10 +130,19 @@ export class XRSystem extends EventTarget {
         // Handle required and optional features
         const { requiredFeatures = [], optionalFeatures = [] } = options;
         const { supportedFeatures } = this[P_SYSTEM].device;
+        const webgpuSession =
+          requestsWebGPU(mode, options) && webgpuAvailable === true;
         const isFeatureSupported = (feature: WebXRFeature): boolean => {
           if (feature === 'webgpu') {
             // A host browser capability rather than part of the device profile.
             return mode !== 'inline' && webgpuAvailable === true;
+          }
+          if (
+            feature === 'depth-sensing' &&
+            webgpuSession &&
+            !findWebGPUDepthConfiguration(options.depthSensing)
+          ) {
+            return false;
           }
           return isGazeTrackingFeature(feature)
             ? supportsGazeTracking(supportedFeatures)

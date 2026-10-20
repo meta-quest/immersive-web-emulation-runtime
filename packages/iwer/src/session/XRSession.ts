@@ -25,6 +25,8 @@ import {
   XRDepthDataFormat,
   XRDepthStateInit,
   XRDepthUsage,
+  findWebGPUDepthConfiguration,
+  toMillimeterDepth,
 } from '../depth/XRDepthInformation.js';
 import { XRWebGLDepthInformation } from '../depth/XRWebGLBinding.js';
 import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
@@ -193,6 +195,11 @@ export class XRSession extends EventTarget {
     _depthSensing?: XRDepthStateInit,
   ) {
     super();
+    // WebGPU sessions negotiate their depth configuration from the app's
+    // preferences.
+    const webgpuDepth = enabledFeatures.includes('webgpu')
+      ? findWebGPUDepthConfiguration(_depthSensing)
+      : null;
     this[P_SESSION] = {
       device,
       mode,
@@ -597,9 +604,10 @@ export class XRSession extends EventTarget {
           frame[P_FRAME].detectedMeshes.add(xrMesh);
         });
       },
-      depthSensingUsage: (_depthSensing?.usagePreference?.[0] ??
+      depthSensingUsage: (webgpuDepth?.usage ??
+        _depthSensing?.usagePreference?.[0] ??
         'cpu-optimized') as XRDepthUsage,
-      depthSensingDataFormat: 'float32' as XRDepthDataFormat,
+      depthSensingDataFormat: webgpuDepth?.dataFormat ?? 'float32',
       depthTexture: null,
       depthTextureWidth: 0,
       depthTextureHeight: 0,
@@ -654,12 +662,17 @@ export class XRSession extends EventTarget {
             depthFar,
           );
           if (result) {
+            // SEM renders float32 meters; the 16-bit formats take millimeters.
+            const depth =
+              this[P_SESSION].depthSensingDataFormat === 'float32'
+                ? result
+                : toMillimeterDepth(result);
             if (
               this[P_SESSION].hasWebGPU &&
               this[P_SESSION].depthSensingUsage === 'gpu-optimized'
             ) {
               // XRGPUBinding uploads it on the app's device when asked.
-              frame[P_FRAME].webgpuDepthDataMap.set(eye, result);
+              frame[P_FRAME].webgpuDepthDataMap.set(eye, depth);
             } else if (isGpuOptimized) {
               // Provide GPU depth data (inverse depth in texture)
               const gl = baseLayer.context as WebGL2RenderingContext;
@@ -778,11 +791,11 @@ export class XRSession extends EventTarget {
             } else {
               // Provide CPU depth data.
               const cpuDepthInfo = new XRCPUDepthInformation(
-                result.data,
-                result.width,
-                result.height,
+                depth.data,
+                depth.width,
+                depth.height,
                 new XRRigidTransform(),
-                result.rawValueToMeters,
+                depth.rawValueToMeters,
                 this[P_SESSION].depthSensingDataFormat,
               );
               frame[P_FRAME].depthDataMap.set(eye, cpuDepthInfo);

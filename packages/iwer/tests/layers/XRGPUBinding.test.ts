@@ -18,7 +18,10 @@ import {
   XRGPUSubImage,
   XRSubImage,
 } from '../../src/layers/XRGPUBinding.js';
-import type { XRDepthUsage } from '../../src/depth/XRDepthInformation.js';
+import type {
+  XRDepthDataFormat,
+  XRDepthUsage,
+} from '../../src/depth/XRDepthInformation.js';
 import {
   XRCompositionLayer,
   XRProjectionLayer,
@@ -1075,10 +1078,13 @@ describe('XRGPUBinding', () => {
       }),
     );
 
-    const startSession = async (usagePreference: XRDepthUsage[]) => {
+    const startSession = async (
+      usagePreference: XRDepthUsage[],
+      dataFormatPreference: XRDepthDataFormat[] = ['float32'],
+    ) => {
       session = await xrSystem.requestSession('immersive-vr', {
         requiredFeatures: ['webgpu', 'depth-sensing'],
-        depthSensing: { usagePreference, dataFormatPreference: ['float32'] },
+        depthSensing: { usagePreference, dataFormatPreference },
       });
       binding = new XRGPUBinding(session, gpu.device);
       session.updateRenderState({
@@ -1208,6 +1214,93 @@ describe('XRGPUBinding', () => {
         depth = binding.getDepthInformation(views(frame)[0]);
       });
       expect(depth).toBeNull();
+    });
+
+    test('provides unsigned-short GPU depth as an r16uint texture of millimeters', async () => {
+      await startSession(['gpu-optimized'], ['unsigned-short']);
+      expect([session.depthUsage, session.depthDataFormat]).toEqual([
+        'gpu-optimized',
+        'unsigned-short',
+      ]);
+      const { createTexture, queue } = gpu.device;
+      createTexture.mockClear();
+      let depth: XRGPUDepthInformation | null = null;
+      runFrame(session, (frame) => {
+        depth = binding.getDepthInformation(views(frame)[1]);
+      });
+      expect(createTexture.mock.calls[0][0]).toMatchObject({
+        size: [300, 200, 2],
+        format: 'r16uint',
+      });
+      expect(depth!.rawValueToMeters).toBe(0.001);
+      const [destination, data, layout] = queue.writeTexture.mock.calls[1];
+      expect(destination.origin).toEqual([0, 0, 1]);
+      expect(layout).toEqual({ bytesPerRow: 600, rowsPerImage: 200 });
+      expect(new Uint16Array(data)[0]).toBe(3000);
+    });
+
+    test.each(['unsigned-short', 'luminance-alpha'] as XRDepthDataFormat[])(
+      'provides %s CPU depth in millimeters',
+      async (dataFormat) => {
+        await startSession(['cpu-optimized'], [dataFormat]);
+        expect(session.depthDataFormat).toBe(dataFormat);
+        const depths: ReturnType<XRFrame['getDepthInformation']>[] = [];
+        runFrame(session, (frame) => {
+          for (const view of views(frame)) {
+            depths.push(frame.getDepthInformation(view));
+          }
+        });
+        expect(depths.map((depth) => depth!.rawValueToMeters)).toEqual([
+          0.001, 0.001,
+        ]);
+        expect(
+          depths.map((depth) => depth!.getDepthInMeters(0.5, 0.5)),
+        ).toEqual([2, 3]);
+      },
+    );
+
+    test('negotiates usage before data format, without GPU luminance-alpha', async () => {
+      const configuration = () => [session.depthUsage, session.depthDataFormat];
+      await startSession(
+        ['gpu-optimized', 'cpu-optimized'],
+        ['luminance-alpha'],
+      );
+      expect(configuration()).toEqual(['cpu-optimized', 'luminance-alpha']);
+      await session.end();
+      await startSession(
+        ['gpu-optimized', 'cpu-optimized'],
+        ['luminance-alpha', 'float32'],
+      );
+      expect(configuration()).toEqual(['gpu-optimized', 'float32']);
+      await session.end();
+      await startSession(
+        ['gpu-optimized'],
+        ['luminance-alpha', 'unsigned-short', 'float32'],
+      );
+      expect(configuration()).toEqual(['gpu-optimized', 'unsigned-short']);
+      await session.end();
+      await startSession([], []);
+      expect(configuration()).toEqual(['cpu-optimized', 'float32']);
+    });
+
+    test('does not grant depth sensing without a supported configuration', async () => {
+      const depthSensing = {
+        usagePreference: ['gpu-optimized'] as XRDepthUsage[],
+        dataFormatPreference: ['luminance-alpha'] as XRDepthDataFormat[],
+      };
+      await expect(
+        xrSystem.requestSession('immersive-vr', {
+          requiredFeatures: ['webgpu', 'depth-sensing'],
+          depthSensing,
+        }),
+      ).rejects.toThrow();
+      const optional = await xrSystem.requestSession('immersive-vr', {
+        requiredFeatures: ['webgpu'],
+        optionalFeatures: ['depth-sensing'],
+        depthSensing,
+      });
+      expect(optional.enabledFeatures).toContain('webgpu');
+      expect(optional.enabledFeatures).not.toContain('depth-sensing');
     });
 
     test('getDepthInformation requires gpu-optimized usage, an active frame and a live device', async () => {
