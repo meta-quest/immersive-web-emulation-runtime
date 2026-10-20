@@ -17,6 +17,7 @@ import {
 } from '../private.js';
 import { XREye, type XRView } from '../views/XRView.js';
 import { XRProjectionLayer } from './XRProjectionLayer.js';
+import { clearArrayLayers } from './XRGPUPresenter.js';
 import { XRViewport } from '../views/XRViewport.js';
 import type { XRSession } from '../session/XRSession.js';
 
@@ -242,6 +243,15 @@ export class XRGPUBinding {
     const depthStencilTexture = depthStencilFormat
       ? createTexture(depthStencilFormat, 'XRProjectionLayer depth/stencil')
       : null;
+    if (depthStencilTexture) {
+      // New textures are zero-filled, but the layer's depth must start at 1.0
+      // like after the per-frame clears. Submitted before any app GPU work.
+      const encoder = device.createCommandEncoder({
+        label: 'IWER layer initial clear',
+      });
+      clearArrayLayers(encoder, colorTexture, depthStencilTexture);
+      device.queue.submit([encoder.finish()]);
+    }
     return new XRProjectionLayer(
       session,
       device,

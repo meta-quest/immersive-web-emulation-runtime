@@ -109,6 +109,12 @@ const createMockGPUDevice = () => {
   };
 };
 
+const createMockCanvasContext = () => ({
+  configure: jest.fn(),
+  unconfigure: jest.fn(),
+  getCurrentTexture: jest.fn(() => ({ createView: jest.fn(() => ({})) })),
+});
+
 const invalidState = expect.objectContaining({ name: 'InvalidStateError' });
 const notSupported = expect.objectContaining({ name: 'NotSupportedError' });
 
@@ -125,6 +131,7 @@ describe('XRGPUBinding', () => {
   let xrDevice: XRDevice;
   let xrSystem: XRSystem;
   let gpu: ReturnType<typeof createMockGPUDevice>;
+  let canvasContext: ReturnType<typeof createMockCanvasContext>;
 
   const requestWebGPUSession = () =>
     xrSystem.requestSession('immersive-vr', { requiredFeatures: ['webgpu'] });
@@ -147,6 +154,11 @@ describe('XRGPUBinding', () => {
       configurable: true,
     });
     gpu = createMockGPUDevice();
+    canvasContext = createMockCanvasContext();
+    jest
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockImplementation(((type: string) =>
+        type === 'webgpu' ? canvasContext : null) as any);
     xrDevice = new XRDevice(deviceConfig);
     xrSystem = new XRSystem(xrDevice);
   });
@@ -521,6 +533,24 @@ describe('XRGPUBinding', () => {
         expect(layer.opacity).toBe(0);
       });
 
+      test('clears depth to 1.0 when a layer with depth is created', () => {
+        binding.createProjectionLayer({ colorFormat: 'rgba8unorm' });
+        expect(gpu.device.queue.submit).not.toHaveBeenCalled();
+
+        binding.createProjectionLayer({
+          colorFormat: 'rgba8unorm',
+          depthStencilFormat: 'depth24plus',
+        });
+        expect(gpu.device.queue.submit).toHaveBeenCalledTimes(1);
+        expect(gpu.renderPasses).toHaveLength(2);
+        gpu.renderPasses.forEach((pass) => {
+          expect(pass.descriptor.depthStencilAttachment).toMatchObject({
+            depthClearValue: 1,
+            depthLoadOp: 'clear',
+          });
+        });
+      });
+
       test('rejects usages and formats the device cannot create', () => {
         const STORAGE_BINDING = 0x08;
         const create = (init: object) => () =>
@@ -801,6 +831,177 @@ describe('XRGPUBinding', () => {
           (far * near) / (near - far),
           5,
         );
+      });
+    });
+
+    describe('presentation', () => {
+      let layer: XRProjectionLayer;
+
+      const useLayer = (depthStencilFormat?: GPUTextureFormat) => {
+        layer = binding.createProjectionLayer({
+          colorFormat: 'bgra8unorm',
+          depthStencilFormat,
+        });
+        session.updateRenderState({ layers: [layer] });
+      };
+
+      beforeEach(() => useLayer());
+
+      test('mounts a WebGPU canvas configured for the layer device', () => {
+        runFrame(session);
+        const canvas = xrDevice.appCanvas!;
+        expect(canvas).toBeInstanceOf(HTMLCanvasElement);
+        expect(canvas.parentElement).toBe(xrDevice.canvasContainer);
+        expect(xrDevice.canvasContainer.parentElement).toBe(document.body);
+        expect([canvas.width, canvas.height]).toEqual([1200, 800]);
+        expect(canvasContext.configure).toHaveBeenCalledWith({
+          device: gpu.device,
+          format: 'bgra8unorm',
+          alphaMode: 'premultiplied',
+        });
+      });
+
+      test('composites every frame with one submit and a cached pipeline', () => {
+        runFrame(session);
+        expect(gpu.device.queue.submit).toHaveBeenCalledTimes(1);
+        runFrame(session);
+        expect(gpu.device.queue.submit).toHaveBeenCalledTimes(2);
+        expect(gpu.device.createRenderPipeline).toHaveBeenCalledTimes(1);
+        expect(gpu.device.createBindGroup).toHaveBeenCalledTimes(1);
+      });
+
+      test('draws the left view over the whole canvas in mono', () => {
+        runFrame(session);
+        const [composite] = gpu.renderPasses;
+        expect(composite.descriptor.colorAttachments[0]).toMatchObject({
+          loadOp: 'clear',
+          storeOp: 'store',
+        });
+        expect(composite.setViewport.mock.calls).toEqual([
+          [0, 0, 1200, 800, 0, 1],
+        ]);
+        expect(composite.draw.mock.calls).toEqual([[3, 1, 0, 0]]);
+      });
+
+      test('draws each view into its half of the canvas in stereo', () => {
+        xrDevice.stereoEnabled = true;
+        runFrame(session);
+        const [composite] = gpu.renderPasses;
+        expect(composite.setViewport.mock.calls).toEqual([
+          [0, 0, 600, 800, 0, 1],
+          [600, 0, 600, 800, 0, 1],
+        ]);
+        expect(composite.draw.mock.calls).toEqual([
+          [3, 1, 0, 0],
+          [3, 1, 0, 1],
+        ]);
+      });
+
+      test('clears every array layer after compositing', () => {
+        runFrame(session);
+        const clears = gpu.renderPasses.slice(1);
+        expect(clears).toHaveLength(2);
+        clears.forEach((pass, index) => {
+          expect(pass.descriptor.colorAttachments[0]).toMatchObject({
+            loadOp: 'clear',
+            storeOp: 'store',
+            clearValue: [0, 0, 0, 0],
+            view: {
+              viewDescriptor: {
+                dimension: '2d',
+                baseArrayLayer: index,
+                arrayLayerCount: 1,
+              },
+            },
+          });
+          expect(pass.descriptor.depthStencilAttachment).toBeUndefined();
+        });
+      });
+
+      test.each<[GPUTextureFormat, boolean, boolean]>([
+        ['depth24plus', true, false],
+        ['depth24plus-stencil8', true, true],
+        ['stencil8', false, true],
+      ])('clears only the aspects of %s', (format, hasDepth, hasStencil) => {
+        useLayer(format);
+        const before = gpu.renderPasses.length;
+        runFrame(session);
+        const clears = gpu.renderPasses.slice(before + 1);
+        expect(clears).toHaveLength(2);
+        clears.forEach((pass) => {
+          const attachment = pass.descriptor.depthStencilAttachment;
+          expect(attachment.depthClearValue).toBe(hasDepth ? 1 : undefined);
+          expect(attachment.depthLoadOp).toBe(hasDepth ? 'clear' : undefined);
+          expect(attachment.stencilClearValue).toBe(hasStencil ? 0 : undefined);
+          expect(attachment.stencilLoadOp).toBe(
+            hasStencil ? 'clear' : undefined,
+          );
+        });
+      });
+
+      test('shows the left view in both eyes when forceMonoPresentation is set', () => {
+        xrDevice.stereoEnabled = true;
+        layer.forceMonoPresentation = true;
+        const before = gpu.renderPasses.length;
+        runFrame(session);
+        expect(gpu.renderPasses[before].draw.mock.calls).toEqual([
+          [3, 1, 0, 0],
+          [3, 1, 0, 0],
+        ]);
+      });
+
+      test('hides the canvas while no usable layer is set', () => {
+        runFrame(session);
+        const canvas = xrDevice.appCanvas!;
+        expect(canvas.style.visibility).toBe('');
+
+        layer.destroy();
+        runFrame(session);
+        expect(canvas.style.visibility).toBe('hidden');
+
+        session.updateRenderState({ layers: [] });
+        runFrame(session);
+        expect(canvas.style.visibility).toBe('hidden');
+
+        useLayer();
+        runFrame(session);
+        expect(canvas.style.visibility).toBe('');
+      });
+
+      test('keeps the frame loop running when compositing fails', () => {
+        const error = new Error('compositing failed');
+        gpu.device.createCommandEncoder.mockImplementation(() => {
+          throw error;
+        });
+        const consoleError = jest
+          .spyOn(console, 'error')
+          .mockImplementation(() => {});
+        const callback = jest.fn();
+        runFrame(session, callback);
+        runFrame(session, callback);
+        expect(callback).toHaveBeenCalledTimes(2);
+        expect(consoleError).toHaveBeenCalledWith(error);
+      });
+
+      test('skips presentation when the session ends during the frame', () => {
+        const consoleError = jest.spyOn(console, 'error');
+        runFrame(session, () => {
+          session.end();
+        });
+        expect(gpu.device.queue.submit).not.toHaveBeenCalled();
+        expect(consoleError).not.toHaveBeenCalled();
+      });
+
+      test('removes the canvas, unconfigures the context and destroys the layer on end', async () => {
+        runFrame(session);
+        const canvas = xrDevice.appCanvas!;
+        await session.end();
+        expect(canvas.isConnected).toBe(false);
+        expect(xrDevice.canvasContainer.isConnected).toBe(false);
+        expect(xrDevice.appCanvas).toBeUndefined();
+        expect(canvasContext.unconfigure).toHaveBeenCalled();
+        const colorTexture = gpu.device.createTexture.mock.results[0].value;
+        expect(colorTexture.destroy).toHaveBeenCalled();
       });
     });
   });

@@ -291,6 +291,7 @@ export class XRDevice {
     viewportCache: { [key in XREye]?: XRViewport };
     getRecommendedViewResolution: () => { width: number; height: number };
     updateViews: () => void;
+    mountCanvas: (canvas: HTMLCanvasElement) => void;
     onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => void;
     onSessionEnd: () => void;
     onFrameStart: (frame: XRFrame) => void;
@@ -508,11 +509,8 @@ export class XRDevice {
           rightViewOffsetScratch,
         );
       },
-      onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => {
-        if (!baseLayer) return;
-
+      mountCanvas: (canvas: HTMLCanvasElement) => {
         // backup canvas data
-        const canvas = baseLayer.context.canvas as HTMLCanvasElement;
         if (canvas.parentElement !== this[P_DEVICE].canvasContainer) {
           const devui = this[P_DEVICE].devui;
           if (devui) {
@@ -546,6 +544,12 @@ export class XRDevice {
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+      },
+      onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => {
+        if (!baseLayer) return;
+        this[P_DEVICE].mountCanvas(
+          baseLayer.context.canvas as HTMLCanvasElement,
+        );
       },
       onSessionEnd: () => {
         this[P_DEVICE].devui?.onSessionEnd?.();

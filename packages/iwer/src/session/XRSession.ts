@@ -54,6 +54,7 @@ import { XREye } from '../views/XRView.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSourceEventHandler } from '../events/XRInputSourceEvent.js';
+import { XRGPUPresenter } from '../layers/XRGPUPresenter.js';
 import type { XRProjectionLayer } from '../layers/XRProjectionLayer.js';
 import { mat4 } from 'gl-matrix';
 
@@ -125,6 +126,7 @@ export class XRSession extends EventTarget {
     // WebGPU sessions render into a projection layer instead of a baseLayer
     getProjectionLayer: () => XRProjectionLayer | null;
     projectionLayers: Set<XRProjectionLayer>;
+    gpuPresenter: XRGPUPresenter | null;
     // framerate
     nominalFrameRate: number;
     // reference spaces
@@ -198,6 +200,7 @@ export class XRSession extends EventTarget {
         (this[P_SESSION].renderState.layers?.[0] ??
           null) as XRProjectionLayer | null,
       projectionLayers: new Set(),
+      gpuPresenter: null,
       enabledFeatures: enabledFeatures,
       hasAnchors: enabledFeatures.includes('anchors'),
       hasPlanes: enabledFeatures.includes('plane-detection'),
@@ -251,10 +254,22 @@ export class XRSession extends EventTarget {
           this[P_SESSION].device[P_DEVICE].onBaseLayerSet(
             this[P_SESSION].renderState.baseLayer,
           );
+          if (this[P_SESSION].getProjectionLayer()) {
+            if (!this[P_SESSION].gpuPresenter) {
+              this[P_SESSION].gpuPresenter = new XRGPUPresenter(
+                this[P_SESSION].device,
+              );
+            }
+            this[P_SESSION].gpuPresenter.attach();
+          }
         }
 
         const baseLayer = this[P_SESSION].renderState.baseLayer;
         const projectionLayer = this[P_SESSION].getProjectionLayer();
+        this[P_SESSION].gpuPresenter?.setVisible(
+          projectionLayer !== null &&
+            !projectionLayer[P_COMPOSITION_LAYER].destroyed,
+        );
         if (baseLayer === null && projectionLayer === null) {
           return;
         }
@@ -415,6 +430,10 @@ export class XRSession extends EventTarget {
           }
         }
         this[P_SESSION].currentFrameCallbacks = null;
+
+        if (projectionLayer && !this[P_SESSION].ended) {
+          this[P_SESSION].gpuPresenter?.present(projectionLayer);
+        }
 
         // - Set frame’s active boolean to false.
         frame[P_FRAME].active = false;
@@ -1078,7 +1097,9 @@ export class XRSession extends EventTarget {
           depthContext?.deleteTexture(this[P_SESSION].depthTexture);
           this[P_SESSION].depthTexture = null;
         }
-        // Release every WebGPU projection layer's textures.
+        // Stop presenting and release every WebGPU projection layer's textures.
+        this[P_SESSION].gpuPresenter?.detach();
+        this[P_SESSION].gpuPresenter = null;
         for (const layer of [...this[P_SESSION].projectionLayers]) {
           layer.destroy();
         }
