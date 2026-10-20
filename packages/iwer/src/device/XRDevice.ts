@@ -86,7 +86,8 @@ export type WebXRFeature =
   | 'hand-tracking'
   | 'gaze-tracking'
   | 'eye-tracking'
-  | 'depth-sensing';
+  | 'depth-sensing'
+  | 'webgpu';
 
 export interface XRDeviceConfig {
   name: string;
@@ -260,6 +261,8 @@ export class XRDevice {
       object,
       { existed: boolean; descriptor: PropertyDescriptor | undefined }
     > | null;
+    // WebGPU layers aren't offered alongside the WebGL-only layers polyfill.
+    polyfillLayers: boolean;
 
     matrix: mat4;
     globalSpace: GlobalSpace;
@@ -412,6 +415,7 @@ export class XRDevice {
       previousUserAgentDescriptor: null,
       previousGlobals: null,
       previousMakeXRCompatible: null,
+      polyfillLayers: false,
 
       matrix: mat4.create(),
       globalSpace,
@@ -830,6 +834,7 @@ export class XRDevice {
     } else {
       setGlobal('XRMediaBinding', undefined);
     }
+    this[P_DEVICE].polyfillLayers = Boolean(polyfillLayers);
     setGlobal('XRWebGLBinding', XRWebGLBinding);
   }
 
@@ -853,6 +858,7 @@ export class XRDevice {
         }
       });
     }
+    this[P_DEVICE].polyfillLayers = false;
 
     // Restore navigator.xr.
     const navXrDescriptor = this[P_DEVICE].previousNavigatorXRDescriptor;
