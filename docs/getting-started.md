@@ -70,6 +70,29 @@ Ensure this initialization occurs before any rendering or WebXR logic within you
 > [!NOTE]
 > If you're integrating IWER into a production build, it's crucial to first check for native WebXR support. In environments where native WebXR is available, you may prefer not to inject IWER's runtime to avoid overriding the native implementation. This is particularly relevant for platforms like the Meta Quest Browser, which already supports WebXR natively.
 
+## WebGPU Applications
+
+IWER emulates the [WebXR/WebGPU binding](https://immersive-web.github.io/webxr-webgpu-binding/), so WebGPU apps such as three.js `WebGPURenderer` can enter XR in browsers that support WebGPU but don't provide `XRGPUBinding`. Immersive sessions can request the `'webgpu'` feature when the browser can provide a WebGPU adapter. The app renders into a projection layer, and IWER draws the layer to a canvas over the page, with the two views side by side when stereo rendering is on:
+
+```javascript
+const session = await navigator.xr.requestSession('immersive-vr', {
+  requiredFeatures: ['webgpu'],
+});
+const binding = new XRGPUBinding(session, gpuDevice);
+const layer = binding.createProjectionLayer({
+  colorFormat: binding.getPreferredColorFormat(),
+});
+session.updateRenderState({ layers: [layer] });
+```
+
+Limitations:
+
+- A session shows a single projection layer. The `'layers'` feature and quad, cylinder, equirect and cube layers are not emulated.
+- The layer's `opacity` and `blendTextureSourceAlpha` are stored but not applied when IWER draws it, and `fixedFoveation` and `deltaPose` stay `null`.
+- WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`, and depth sensing returns no data in them.
+- The WebXR Layers polyfill (`installRuntime({ polyfillLayers: true })`) only supports WebGL, so leave it off for WebGPU apps.
+- IWER's type declarations use the standard WebGPU types, which ship with TypeScript 6. On TypeScript 5, install `@webgpu/types` and add it to `compilerOptions.types`, or enable `skipLibCheck`.
+
 ## Understanding IWER's Global Reference Space
 
 IWER creates a simple but effective space to simulate how you move and interact in XR. Think of it as the stage where all your virtual actions happen. This stage, or "global reference space," is like the room you're in, with the starting point right under where the headset would be on the ground.
