@@ -24,11 +24,17 @@ import { XRViewport } from '../views/XRViewport.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import type { XRFrame } from '../frameloop/XRFrame.js';
 import type { XRSession } from '../session/XRSession.js';
+import type {
+  WebGPUDevice,
+  WebGPUTexture,
+  WebGPUTextureFormat,
+  WebGPUTextureViewDescriptor,
+} from '../types/webgpu.js';
 
 export interface XRGPUProjectionLayerInit {
-  colorFormat: GPUTextureFormat;
-  depthStencilFormat?: GPUTextureFormat;
-  textureUsage?: GPUTextureUsageFlags;
+  colorFormat: WebGPUTextureFormat;
+  depthStencilFormat?: WebGPUTextureFormat;
+  textureUsage?: number;
   scaleFactor?: number;
 }
 
@@ -39,12 +45,12 @@ const TEXTURE_BINDING = 0x04;
 const RENDER_ATTACHMENT = 0x10;
 const KNOWN_TEXTURE_USAGE = 0x1f;
 
-const COLOR_FORMATS: GPUTextureFormat[] = [
+const COLOR_FORMATS: WebGPUTextureFormat[] = [
   'rgba8unorm',
   'bgra8unorm',
   'rgba16float',
 ];
-const DEPTH_STENCIL_FORMATS: GPUTextureFormat[] = [
+const DEPTH_STENCIL_FORMATS: WebGPUTextureFormat[] = [
   'stencil8',
   'depth16unorm',
   'depth24plus',
@@ -61,7 +67,7 @@ const VIEW_COUNT = 2;
 // Array layer of an eye's view in the layer and depth textures.
 const arrayLayer = (eye: XREye) => (eye === XREye.Right ? 1 : 0);
 
-const lostDevices = new WeakSet<GPUDevice>();
+const lostDevices = new WeakSet<WebGPUDevice>();
 
 export class XRSubImage {
   [P_SUB_IMAGE]: {
@@ -79,34 +85,34 @@ export class XRSubImage {
 
 export class XRGPUSubImage extends XRSubImage {
   [P_GPU_SUB_IMAGE]: {
-    colorTexture: GPUTexture;
-    depthStencilTexture: GPUTexture | null;
+    colorTexture: WebGPUTexture;
+    depthStencilTexture: WebGPUTexture | null;
     viewIndex: number;
   };
 
   constructor(
     viewport: XRViewport,
-    colorTexture: GPUTexture,
-    depthStencilTexture: GPUTexture | null,
+    colorTexture: WebGPUTexture,
+    depthStencilTexture: WebGPUTexture | null,
     viewIndex: number,
   ) {
     super(viewport);
     this[P_GPU_SUB_IMAGE] = { colorTexture, depthStencilTexture, viewIndex };
   }
 
-  get colorTexture(): GPUTexture {
+  get colorTexture(): WebGPUTexture {
     return this[P_GPU_SUB_IMAGE].colorTexture;
   }
 
-  get depthStencilTexture(): GPUTexture | null {
+  get depthStencilTexture(): WebGPUTexture | null {
     return this[P_GPU_SUB_IMAGE].depthStencilTexture;
   }
 
-  get motionVectorTexture(): GPUTexture | null {
+  get motionVectorTexture(): WebGPUTexture | null {
     return null;
   }
 
-  getViewDescriptor(): GPUTextureViewDescriptor {
+  getViewDescriptor(): WebGPUTextureViewDescriptor {
     return {
       dimension: '2d',
       mipLevelCount: 1,
@@ -118,7 +124,7 @@ export class XRGPUSubImage extends XRSubImage {
 
 export class XRGPUDepthInformation {
   [P_DEPTH_INFO]: {
-    texture: GPUTexture;
+    texture: WebGPUTexture;
     width: number;
     height: number;
     normDepthBufferFromNormView: XRRigidTransform;
@@ -127,7 +133,7 @@ export class XRGPUDepthInformation {
   };
 
   constructor(
-    texture: GPUTexture,
+    texture: WebGPUTexture,
     width: number,
     height: number,
     rawValueToMeters: number,
@@ -143,7 +149,7 @@ export class XRGPUDepthInformation {
     };
   }
 
-  get texture(): GPUTexture {
+  get texture(): WebGPUTexture {
     return this[P_DEPTH_INFO].texture;
   }
 
@@ -163,7 +169,7 @@ export class XRGPUDepthInformation {
     return this[P_DEPTH_INFO].rawValueToMeters;
   }
 
-  getViewDescriptor(): GPUTextureViewDescriptor {
+  getViewDescriptor(): WebGPUTextureViewDescriptor {
     return {
       dimension: '2d',
       baseMipLevel: 0,
@@ -177,11 +183,11 @@ export class XRGPUDepthInformation {
 export class XRGPUBinding {
   [P_GPU_BINDING]: {
     session: XRSession;
-    device: GPUDevice;
-    depthTextures: WeakMap<XRFrame, GPUTexture>;
+    device: WebGPUDevice;
+    depthTextures: WeakMap<XRFrame, WebGPUTexture>;
   };
 
-  constructor(session: XRSession, device: GPUDevice) {
+  constructor(session: XRSession, device: WebGPUDevice) {
     if (session[P_SESSION].ended) {
       throw new DOMException(
         'XRSession has already ended.',
@@ -209,7 +215,7 @@ export class XRGPUBinding {
     return false;
   }
 
-  getPreferredColorFormat(): GPUTextureFormat {
+  getPreferredColorFormat(): WebGPUTextureFormat {
     return navigator.gpu.getPreferredCanvasFormat();
   }
 
@@ -296,7 +302,7 @@ export class XRGPUBinding {
 
     // IWER composites from and clears these textures itself, so they always
     // need RENDER_ATTACHMENT and TEXTURE_BINDING.
-    const createTexture = (format: GPUTextureFormat, label: string) =>
+    const createTexture = (format: WebGPUTextureFormat, label: string) =>
       device.createTexture({
         label,
         size: [width, height, VIEW_COUNT],

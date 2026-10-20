@@ -13,6 +13,7 @@ import {
 import { XRLayer } from './XRWebGLLayer.js';
 import type { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import type { XRSession } from '../session/XRSession.js';
+import type { WebGPUDevice, WebGPUTexture } from '../types/webgpu.js';
 
 export type XRLayerLayout =
   | 'default'
@@ -107,16 +108,16 @@ export class XRCompositionLayer extends XRLayer {
  */
 export class XRProjectionLayer extends XRCompositionLayer {
   [P_PROJECTION_LAYER]: {
-    device: GPUDevice;
-    colorTexture: GPUTexture;
-    depthStencilTexture: GPUTexture | null;
+    device: WebGPUDevice;
+    colorTexture: WebGPUTexture;
+    depthStencilTexture: WebGPUTexture | null;
   };
 
   constructor(
     session: XRSession,
-    device: GPUDevice,
-    colorTexture: GPUTexture,
-    depthStencilTexture: GPUTexture | null,
+    device: WebGPUDevice,
+    colorTexture: WebGPUTexture,
+    depthStencilTexture: WebGPUTexture | null,
   ) {
     super(session);
     this[P_PROJECTION_LAYER] = {

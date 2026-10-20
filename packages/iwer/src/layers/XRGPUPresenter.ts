@@ -12,6 +12,7 @@ import {
 } from '../private.js';
 import type { XRDevice } from '../device/XRDevice.js';
 import type { XRProjectionLayer } from './XRProjectionLayer.js';
+import type { WebGPUCommandEncoder, WebGPUTexture } from '../types/webgpu.js';
 
 // Draws one view of the layer's texture array across the current viewport;
 // the instance index selects the array layer.
@@ -131,9 +132,9 @@ const getBindGroup = (
 
 // Clears color to 0, depth to 1 and stencil to 0, as the next frame expects.
 export const clearArrayLayers = (
-  encoder: GPUCommandEncoder,
-  colorTexture: GPUTexture,
-  depthStencilTexture: GPUTexture | null,
+  encoder: WebGPUCommandEncoder,
+  colorTexture: WebGPUTexture,
+  depthStencilTexture: WebGPUTexture | null,
 ) => {
   for (let i = 0; i < colorTexture.depthOrArrayLayers; i++) {
     const viewDescriptor: GPUTextureViewDescriptor = {

@@ -33,6 +33,7 @@ import { XRReferenceSpace } from '../spaces/XRReferenceSpace.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSession } from '../session/XRSession.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
+import type { WebGPUTexture } from '../types/webgpu.js';
 
 const spaceGlobalMatrix = mat4.create();
 const baseSpaceGlobalMatrix = mat4.create();
@@ -75,7 +76,7 @@ export class XRFrame {
     // GPU-optimized depth of WebGPU sessions, uploaded by XRGPUBinding on
     // request into textures that are destroyed when the frame ends.
     webgpuDepthDataMap: Map<XREye, DepthSensingData>;
-    webgpuDepthTextures: GPUTexture[];
+    webgpuDepthTextures: WebGPUTexture[];
   };
 
   constructor(

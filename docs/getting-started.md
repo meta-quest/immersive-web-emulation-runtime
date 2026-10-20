@@ -85,13 +85,14 @@ const layer = binding.createProjectionLayer({
 session.updateRenderState({ layers: [layer] });
 ```
 
+IWER's WebGPU types are the standard ones on TypeScript 6. On TypeScript 5, add `@webgpu/types` to get them; without it, WebGPU values are typed loosely.
+
 Limitations:
 
 - A session shows a single projection layer. The `'layers'` feature and quad, cylinder, equirect and cube layers are not emulated.
 - Fixed foveation and space warp aren't emulated, so `fixedFoveation` and `deltaPose` are `null`.
 - WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`. For depth sensing, use `XRFrame.getDepthInformation()` for CPU-optimized depth or `XRGPUBinding.getDepthInformation()` for GPU-optimized depth, an `r32float` texture of linear depth with one array layer per view.
 - The WebXR Layers polyfill (`installRuntime({ polyfillLayers: true })`) only supports WebGL, so leave it off for WebGPU apps.
-- IWER's type declarations use the standard WebGPU types, which ship with TypeScript 6. On TypeScript 5, install `@webgpu/types` and add it to `compilerOptions.types`, or enable `skipLibCheck`.
 
 ## Understanding IWER's Global Reference Space
 
