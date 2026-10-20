@@ -88,7 +88,7 @@ session.updateRenderState({ layers: [layer] });
 Limitations:
 
 - A session shows a single projection layer. The `'layers'` feature and quad, cylinder, equirect and cube layers are not emulated.
-- The layer's `opacity` and `blendTextureSourceAlpha` are stored but not applied when IWER draws it, and `fixedFoveation` and `deltaPose` stay `null`.
+- Fixed foveation and space warp aren't emulated, so `fixedFoveation` and `deltaPose` are `null`.
 - WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`, and depth sensing returns no data in them.
 - The WebXR Layers polyfill (`installRuntime({ polyfillLayers: true })`) only supports WebGL, so leave it off for WebGPU apps.
 - IWER's type declarations use the standard WebGPU types, which ship with TypeScript 6. On TypeScript 5, install `@webgpu/types` and add it to `compilerOptions.types`, or enable `skipLibCheck`.

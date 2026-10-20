@@ -35,18 +35,34 @@ fn vertexMain(
   return output;
 }
 
+struct LayerParams {
+  opacity: f32,
+  blendSourceAlpha: f32,
+};
+
 @group(0) @binding(0) var layerSampler: sampler;
 @group(0) @binding(1) var layerTexture: texture_2d_array<f32>;
+@group(0) @binding(2) var<uniform> params: LayerParams;
 
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-  return textureSample(layerTexture, layerSampler, input.uv, input.layer);
+  var color = textureSample(layerTexture, layerSampler, input.uv, input.layer);
+  if (params.blendSourceAlpha == 0.0) {
+    color.a = 1.0;
+  }
+  // Premultiplied, so opacity scales every channel.
+  return color * params.opacity;
 }
 `;
+
+// GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+const PARAMS_BUFFER_USAGE = 0x48;
+const paramsData = new Float32Array(4);
 
 type Compositor = {
   pipeline: GPURenderPipeline;
   sampler: GPUSampler;
+  params: GPUBuffer;
   bindGroups: WeakMap<GPUTexture, GPUBindGroup>;
 };
 
@@ -78,6 +94,11 @@ const getCompositor = (
         magFilter: 'linear',
         minFilter: 'linear',
       }),
+      params: device.createBuffer({
+        label: 'IWER layer compositor params',
+        size: paramsData.byteLength,
+        usage: PARAMS_BUFFER_USAGE,
+      }),
       bindGroups: new WeakMap(),
     };
     formatCompositors.set(format, compositor);
@@ -100,6 +121,7 @@ const getBindGroup = (
           binding: 1,
           resource: texture.createView({ dimension: '2d-array' }),
         },
+        { binding: 2, resource: { buffer: compositor.params } },
       ],
     });
     compositor.bindGroups.set(texture, bindGroup);
@@ -204,6 +226,10 @@ export class XRGPUPresenter {
       }
 
       const compositor = getCompositor(device, this.format);
+      const { opacity, blendTextureSourceAlpha } = layer[P_COMPOSITION_LAYER];
+      paramsData[0] = opacity;
+      paramsData[1] = blendTextureSourceAlpha ? 1 : 0;
+      device.queue.writeBuffer(compositor.params, 0, paramsData);
       const encoder = device.createCommandEncoder({
         label: 'IWER layer compositor',
       });

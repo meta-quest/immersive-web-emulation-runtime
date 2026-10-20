@@ -84,6 +84,7 @@ const createMockGPUDevice = () => {
       getBindGroupLayout: jest.fn(() => ({})),
     })),
     createSampler: jest.fn(() => ({})),
+    createBuffer: jest.fn((descriptor: any) => ({ ...descriptor })),
     createBindGroup: jest.fn(() => ({})),
     createCommandEncoder: jest.fn(() => ({
       beginRenderPass: jest.fn((descriptor: any) => {
@@ -100,7 +101,7 @@ const createMockGPUDevice = () => {
       }),
       finish: jest.fn(() => ({})),
     })),
-    queue: { submit: jest.fn() },
+    queue: { submit: jest.fn(), writeBuffer: jest.fn() },
   };
   return {
     device: device as any,
@@ -867,6 +868,7 @@ describe('XRGPUBinding', () => {
         runFrame(session);
         expect(gpu.device.queue.submit).toHaveBeenCalledTimes(2);
         expect(gpu.device.createRenderPipeline).toHaveBeenCalledTimes(1);
+        expect(gpu.device.createBuffer).toHaveBeenCalledTimes(1);
         expect(gpu.device.createBindGroup).toHaveBeenCalledTimes(1);
       });
 
@@ -948,6 +950,27 @@ describe('XRGPUBinding', () => {
           [3, 1, 0, 0],
           [3, 1, 0, 0],
         ]);
+      });
+
+      test('applies the layer opacity and blendTextureSourceAlpha', () => {
+        const { writeBuffer, submit } = gpu.device.queue;
+        const params = () => [...writeBuffer.mock.lastCall[2]];
+        runFrame(session);
+        expect(params()).toEqual([1, 1, 0, 0]);
+        const buffer = gpu.device.createBuffer.mock.results[0].value;
+        expect(writeBuffer.mock.lastCall[0]).toBe(buffer);
+        expect(
+          gpu.device.createBindGroup.mock.calls[0][0].entries,
+        ).toContainEqual({ binding: 2, resource: { buffer } });
+        // Written before the submit that draws with it.
+        expect(writeBuffer.mock.invocationCallOrder[0]).toBeLessThan(
+          submit.mock.invocationCallOrder[0],
+        );
+
+        layer.opacity = 0.25;
+        layer.blendTextureSourceAlpha = false;
+        runFrame(session);
+        expect(params()).toEqual([0.25, 0, 0, 0]);
       });
 
       test('hides the canvas while no usable layer is set', () => {
