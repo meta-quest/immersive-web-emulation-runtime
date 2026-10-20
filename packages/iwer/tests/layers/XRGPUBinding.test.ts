@@ -512,7 +512,7 @@ describe('XRGPUBinding', () => {
           needsRedraw: true,
           mipLevels: 1,
           ignoreDepthValues: true,
-          fixedFoveation: null,
+          fixedFoveation: 0,
           deltaPose: null,
           blendTextureSourceAlpha: true,
           forceMonoPresentation: false,
@@ -527,7 +527,7 @@ describe('XRGPUBinding', () => {
         layer.blendTextureSourceAlpha = false;
         layer.forceMonoPresentation = true;
         expect(layer).toMatchObject({
-          fixedFoveation: null,
+          fixedFoveation: 0.5,
           deltaPose: null,
           opacity: 0.25,
           quality: 'text-optimized',
@@ -539,6 +539,13 @@ describe('XRGPUBinding', () => {
         expect(layer.opacity).toBe(1);
         layer.opacity = -1;
         expect(layer.opacity).toBe(0);
+        layer.fixedFoveation = 2;
+        expect(layer.fixedFoveation).toBe(1);
+        layer.fixedFoveation = -1;
+        expect(layer.fixedFoveation).toBe(0);
+        layer.fixedFoveation = null;
+        expect(layer.fixedFoveation).toBe(0);
+        expect(() => (layer.fixedFoveation = NaN)).toThrow(TypeError);
       });
 
       test('clears depth to 1.0 when a layer with depth is created', () => {
@@ -978,6 +985,17 @@ describe('XRGPUBinding', () => {
         layer.blendTextureSourceAlpha = false;
         runFrame(session);
         expect(params()).toEqual([0.25, 0, 0, 0]);
+      });
+
+      test('applies fixedFoveation from the frame after it changes', () => {
+        const { writeBuffer } = gpu.device.queue;
+        const foveation = () => writeBuffer.mock.lastCall[2][2];
+        runFrame(session, () => {
+          layer.fixedFoveation = 0.75;
+        });
+        expect(foveation()).toBe(0);
+        runFrame(session);
+        expect(foveation()).toBe(0.75);
       });
 
       test('hides the canvas while no usable layer is set', () => {

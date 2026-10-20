@@ -278,6 +278,10 @@ export class XRSession extends EventTarget {
         if (baseLayer === null && projectionLayer === null) {
           return;
         }
+        if (projectionLayer) {
+          const projection = projectionLayer[P_PROJECTION_LAYER];
+          projection.frameFixedFoveation = projection.fixedFoveation;
+        }
         const context = baseLayer?.context;
 
         /**

@@ -39,15 +39,37 @@ fn vertexMain(
 struct LayerParams {
   opacity: f32,
   blendSourceAlpha: f32,
+  fixedFoveation: f32,
 };
 
 @group(0) @binding(0) var layerSampler: sampler;
 @group(0) @binding(1) var layerTexture: texture_2d_array<f32>;
 @group(0) @binding(2) var<uniform> params: LayerParams;
 
+// Like fixed foveated rendering, resolution drops to 1/2 and then 1/4 in
+// rings away from the centre of the view; higher levels start them closer.
+fn foveate(uv: vec2f) -> vec2f {
+  if (params.fixedFoveation <= 0.0) {
+    return uv;
+  }
+  let inner = mix(1.0, 0.5, params.fixedFoveation);
+  let ring = clamp(floor((length(uv * 2.0 - 1.0) - inner) / 0.35) + 1.0, 0.0, 2.0);
+  if (ring == 0.0) {
+    return uv;
+  }
+  let blocks = vec2f(textureDimensions(layerTexture)) / exp2(ring);
+  return (floor(uv * blocks) + 0.5) / blocks;
+}
+
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-  var color = textureSample(layerTexture, layerSampler, input.uv, input.layer);
+  var color = textureSampleLevel(
+    layerTexture,
+    layerSampler,
+    foveate(input.uv),
+    input.layer,
+    0.0,
+  );
   if (params.blendSourceAlpha == 0.0) {
     color.a = 1.0;
   }
@@ -230,6 +252,7 @@ export class XRGPUPresenter {
       const { opacity, blendTextureSourceAlpha } = layer[P_COMPOSITION_LAYER];
       paramsData[0] = opacity;
       paramsData[1] = blendTextureSourceAlpha ? 1 : 0;
+      paramsData[2] = layer[P_PROJECTION_LAYER].frameFixedFoveation;
       device.queue.writeBuffer(compositor.params, 0, paramsData);
       const encoder = device.createCommandEncoder({
         label: 'IWER layer compositor',

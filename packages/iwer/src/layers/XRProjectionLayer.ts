@@ -111,6 +111,9 @@ export class XRProjectionLayer extends XRCompositionLayer {
     device: WebGPUDevice;
     colorTexture: WebGPUTexture;
     depthStencilTexture: WebGPUTexture | null;
+    fixedFoveation: number;
+    // Latched when each frame starts, so a change applies from the next frame.
+    frameFixedFoveation: number;
   };
 
   constructor(
@@ -124,6 +127,8 @@ export class XRProjectionLayer extends XRCompositionLayer {
       device,
       colorTexture,
       depthStencilTexture,
+      fixedFoveation: 0,
+      frameFixedFoveation: 0,
     };
     // Tracked so the session can release every layer's textures when it ends.
     session[P_SESSION].projectionLayers.add(this);
@@ -145,14 +150,25 @@ export class XRProjectionLayer extends XRCompositionLayer {
     return true;
   }
 
-  // Foveation and space warp aren't emulated, so these stay null and setting
-  // them has no effect, as the spec describes for unsupporting devices.
+  // 0 is no foveation and 1 the most. IWER lowers the resolution away from
+  // the centre of each view when it draws the layer.
   get fixedFoveation(): number | null {
-    return null;
+    return this[P_PROJECTION_LAYER].fixedFoveation;
   }
 
-  set fixedFoveation(_value: number | null) {}
+  set fixedFoveation(value: number | null) {
+    if (value === null) {
+      return;
+    }
+    const level = Number(value);
+    if (!Number.isFinite(level)) {
+      throw new TypeError('fixedFoveation must be a finite number.');
+    }
+    this[P_PROJECTION_LAYER].fixedFoveation = Math.min(1, Math.max(0, level));
+  }
 
+  // Space warp isn't emulated, so deltaPose stays null and setting it has no
+  // effect, as the spec describes for unsupporting devices.
   get deltaPose(): XRRigidTransform | null {
     return null;
   }
