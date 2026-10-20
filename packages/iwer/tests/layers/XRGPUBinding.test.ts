@@ -14,9 +14,11 @@ import {
 } from '../../src/session/XRSession.js';
 import {
   XRGPUBinding,
+  XRGPUDepthInformation,
   XRGPUSubImage,
   XRSubImage,
 } from '../../src/layers/XRGPUBinding.js';
+import type { XRDepthUsage } from '../../src/depth/XRDepthInformation.js';
 import {
   XRCompositionLayer,
   XRProjectionLayer,
@@ -40,6 +42,7 @@ import {
 
 const RENDER_ATTACHMENT = 0x10;
 const TEXTURE_BINDING = 0x04;
+const COPY_DST = 0x02;
 const COPY_SRC = 0x01;
 
 const deviceConfig: XRDeviceConfig = {
@@ -101,7 +104,11 @@ const createMockGPUDevice = () => {
       }),
       finish: jest.fn(() => ({})),
     })),
-    queue: { submit: jest.fn(), writeBuffer: jest.fn() },
+    queue: {
+      submit: jest.fn(),
+      writeBuffer: jest.fn(),
+      writeTexture: jest.fn(),
+    },
   };
   return {
     device: device as any,
@@ -1031,6 +1038,10 @@ describe('XRGPUBinding', () => {
 
   describe('depth sensing in a WebGPU session', () => {
     let session: XRSession;
+    let binding: XRGPUBinding;
+    let refSpace: XRReferenceSpace;
+    let semCalls = 0;
+    // The left view sees 2 m and the right view 3 m, so views can't mix up.
     const computeDepthBuffer = jest.fn(
       (
         _view: unknown,
@@ -1038,14 +1049,31 @@ describe('XRGPUBinding', () => {
         width: number,
         height: number,
       ) => ({
-        data: new Float32Array(width * height).fill(2).buffer,
+        data: new Float32Array(width * height).fill(2 + (semCalls++ % 2))
+          .buffer,
         width,
         height,
         rawValueToMeters: 1,
       }),
     );
 
-    beforeEach(async () => {
+    const startSession = async (usagePreference: XRDepthUsage[]) => {
+      session = await xrSystem.requestSession('immersive-vr', {
+        requiredFeatures: ['webgpu', 'depth-sensing'],
+        depthSensing: { usagePreference, dataFormatPreference: ['float32'] },
+      });
+      binding = new XRGPUBinding(session, gpu.device);
+      session.updateRenderState({
+        layers: [binding.createProjectionLayer({ colorFormat: 'bgra8unorm' })],
+      });
+      refSpace = await session.requestReferenceSpace(
+        XRReferenceSpaceType.Local,
+      );
+    };
+    const views = (frame: XRFrame) => frame.getViewerPose(refSpace)!.views;
+
+    beforeEach(() => {
+      semCalls = 0;
       computeDepthBuffer.mockClear();
       xrDevice = new XRDevice({
         ...deviceConfig,
@@ -1057,43 +1085,176 @@ describe('XRGPUBinding', () => {
         environmentCanvas: document.createElement('canvas'),
         computeDepthBuffer,
       } as any;
-      session = await xrSystem.requestSession('immersive-vr', {
-        requiredFeatures: ['webgpu', 'depth-sensing'],
-        depthSensing: {
-          usagePreference: ['gpu-optimized', 'cpu-optimized'],
-          dataFormatPreference: ['float32'],
-        },
-      });
-      const binding = new XRGPUBinding(session, gpu.device);
-      session.updateRenderState({
-        layers: [binding.createProjectionLayer({ colorFormat: 'bgra8unorm' })],
-      });
     });
 
     test('provides CPU-optimized depth sized from the window', async () => {
+      await startSession(['cpu-optimized']);
       expect(session.depthUsage).toBe('cpu-optimized');
-      const refSpace = await session.requestReferenceSpace(
-        XRReferenceSpaceType.Local,
-      );
       const depths: ReturnType<XRFrame['getDepthInformation']>[] = [];
       runFrame(session, (frame) => {
-        for (const view of frame.getViewerPose(refSpace)!.views) {
+        for (const view of views(frame)) {
           depths.push(frame.getDepthInformation(view));
         }
       });
-      expect(depths.length).toBeGreaterThan(0);
-      for (const depth of depths) {
-        expect([depth!.width, depth!.height]).toEqual([300, 200]);
-        expect(depth!.getDepthInMeters(0.5, 0.5)).toBe(2);
-      }
+      expect(depths.map((depth) => [depth!.width, depth!.height])).toEqual([
+        [300, 200],
+        [300, 200],
+      ]);
+      expect(depths.map((depth) => depth!.getDepthInMeters(0.5, 0.5))).toEqual([
+        2, 3,
+      ]);
     });
 
-    test('gives SEM a projection with the [-1, 1] depth range it renders with', () => {
+    test('gives SEM a projection with the [-1, 1] depth range it renders with', async () => {
+      await startSession(['cpu-optimized']);
       runFrame(session);
       const projection = computeDepthBuffer.mock.calls[0][1] as Float32Array;
       const { depthNear: near, depthFar: far } = session.renderState;
       expect(projection[10]).toBeCloseTo((far + near) / (near - far), 5);
       expect(projection[14]).toBeCloseTo((2 * far * near) / (near - far), 5);
+    });
+
+    test('provides GPU-optimized depth as an r32float texture on the binding device', async () => {
+      await startSession(['gpu-optimized', 'cpu-optimized']);
+      expect(session.depthUsage).toBe('gpu-optimized');
+      const { createTexture, queue } = gpu.device;
+      createTexture.mockClear();
+      const depths: XRGPUDepthInformation[] = [];
+      runFrame(session, (frame) => {
+        for (const view of views(frame)) {
+          depths.push(binding.getDepthInformation(view)!);
+        }
+      });
+
+      // One texture for the frame, with an array layer per view.
+      expect(createTexture).toHaveBeenCalledTimes(1);
+      expect(createTexture.mock.calls[0][0]).toMatchObject({
+        size: [300, 200, 2],
+        format: 'r32float',
+        usage: TEXTURE_BINDING | COPY_DST,
+        dimension: '2d',
+        mipLevelCount: 1,
+        sampleCount: 1,
+      });
+      const texture = createTexture.mock.results[0].value;
+      expect(depths.map((depth) => depth.texture)).toEqual([texture, texture]);
+      expect(depths.map((depth) => depth.getViewDescriptor())).toEqual(
+        [0, 1].map((baseArrayLayer) => ({
+          dimension: '2d',
+          baseMipLevel: 0,
+          mipLevelCount: 1,
+          baseArrayLayer,
+          arrayLayerCount: 1,
+        })),
+      );
+      for (const depth of depths) {
+        expect([depth.width, depth.height, depth.rawValueToMeters]).toEqual([
+          300, 200, 1,
+        ]);
+      }
+
+      // SEM's linear depth is uploaded unchanged, rows from the top.
+      const semResults = computeDepthBuffer.mock.results;
+      expect(queue.writeTexture).toHaveBeenCalledTimes(2);
+      queue.writeTexture.mock.calls.forEach(
+        ([destination, data, layout, size]: any[], layer: number) => {
+          expect(destination).toEqual({ texture, origin: [0, 0, layer] });
+          expect(data).toBe(semResults[layer].value.data);
+          expect(layout).toEqual({ bytesPerRow: 1200, rowsPerImage: 200 });
+          expect(size).toEqual([300, 200, 1]);
+        },
+      );
+      // Only valid during its frame.
+      expect(texture.destroy).toHaveBeenCalledTimes(1);
+    });
+
+    test('creates a new depth texture each frame', async () => {
+      await startSession(['gpu-optimized']);
+      const textures: GPUTexture[] = [];
+      for (let i = 0; i < 2; i++) {
+        runFrame(session, (frame) => {
+          textures.push(binding.getDepthInformation(views(frame)[0])!.texture);
+        });
+      }
+      expect(textures[0]).not.toBe(textures[1]);
+      expect(textures[0].destroy).toHaveBeenCalled();
+    });
+
+    test('returns null when there is no depth data', async () => {
+      await startSession(['gpu-optimized']);
+      computeDepthBuffer
+        .mockImplementationOnce(() => null as any)
+        .mockImplementationOnce(() => null as any);
+      let depth: XRGPUDepthInformation | null | undefined;
+      runFrame(session, (frame) => {
+        depth = binding.getDepthInformation(views(frame)[0]);
+      });
+      expect(depth).toBeNull();
+    });
+
+    test('getDepthInformation requires gpu-optimized usage, an active frame and a live device', async () => {
+      const errors: unknown[] = [];
+      const attempt = (action: () => void) => {
+        try {
+          action();
+        } catch (error) {
+          errors.push(error);
+        }
+      };
+      await startSession(['cpu-optimized']);
+      runFrame(session, (frame) => {
+        attempt(() => binding.getDepthInformation(views(frame)[0]));
+      });
+      await session.end();
+
+      await startSession(['gpu-optimized']);
+      let view: XRView | undefined;
+      runFrame(session, (frame) => {
+        view = views(frame)[0];
+      });
+      attempt(() => binding.getDepthInformation(view!));
+      gpu.lose();
+      await Promise.resolve();
+      runFrame(session, (frame) => {
+        attempt(() => binding.getDepthInformation(views(frame)[0]));
+      });
+
+      expect(errors).toHaveLength(3);
+      for (const error of errors) {
+        expect(error).toMatchObject({ name: 'InvalidStateError' });
+      }
+      expect((errors as Error[]).map(({ message }) => message)).toEqual([
+        expect.stringContaining('gpu-optimized'),
+        expect.stringContaining('XRFrame callback'),
+        expect.stringContaining('lost'),
+      ]);
+    });
+
+    test('getDepthInformation throws NotSupportedError without depth sensing', async () => {
+      const plain = await xrSystem.requestSession('immersive-vr', {
+        requiredFeatures: ['webgpu'],
+      });
+      const plainBinding = new XRGPUBinding(plain, gpu.device);
+      plain.updateRenderState({
+        layers: [
+          plainBinding.createProjectionLayer({ colorFormat: 'bgra8unorm' }),
+        ],
+      });
+      const plainSpace = await plain.requestReferenceSpace(
+        XRReferenceSpaceType.Local,
+      );
+      const errors: unknown[] = [];
+      runFrame(plain, (frame) => {
+        try {
+          plainBinding.getDepthInformation(
+            frame.getViewerPose(plainSpace)!.views[0],
+          );
+        } catch (error) {
+          errors.push(error);
+        }
+      });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({ name: 'NotSupportedError' });
     });
   });
 });

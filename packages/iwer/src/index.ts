@@ -172,6 +172,7 @@ export {
 } from './layers/XRProjectionLayer.js';
 export {
   XRGPUBinding,
+  XRGPUDepthInformation,
   XRGPUSubImage,
   XRSubImage,
   type XRGPUProjectionLayerInit,

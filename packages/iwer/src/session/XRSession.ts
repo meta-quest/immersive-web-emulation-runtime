@@ -440,6 +440,12 @@ export class XRSession extends EventTarget {
           this[P_SESSION].gpuPresenter?.present(projectionLayer);
         }
 
+        // WebGPU depth textures are only valid during their frame.
+        for (const texture of frame[P_FRAME].webgpuDepthTextures) {
+          texture.destroy();
+        }
+        frame[P_FRAME].webgpuDepthTextures.length = 0;
+
         // - Set frame’s active boolean to false.
         frame[P_FRAME].active = false;
         this[P_SESSION].activeFrame = null;
@@ -587,11 +593,8 @@ export class XRSession extends EventTarget {
           frame[P_FRAME].detectedMeshes.add(xrMesh);
         });
       },
-      // WebGPU sessions can't use XRWebGLBinding, so depth is CPU-optimized.
-      depthSensingUsage: (enabledFeatures.includes('webgpu')
-        ? 'cpu-optimized'
-        : (_depthSensing?.usagePreference?.[0] ??
-          'cpu-optimized')) as XRDepthUsage,
+      depthSensingUsage: (_depthSensing?.usagePreference?.[0] ??
+        'cpu-optimized') as XRDepthUsage,
       depthSensingDataFormat: 'float32' as XRDepthDataFormat,
       depthTexture: null,
       depthTextureWidth: 0,
@@ -647,7 +650,13 @@ export class XRSession extends EventTarget {
             depthFar,
           );
           if (result) {
-            if (isGpuOptimized) {
+            if (
+              this[P_SESSION].hasWebGPU &&
+              this[P_SESSION].depthSensingUsage === 'gpu-optimized'
+            ) {
+              // XRGPUBinding uploads it on the app's device when asked.
+              frame[P_FRAME].webgpuDepthDataMap.set(eye, result);
+            } else if (isGpuOptimized) {
               // Provide GPU depth data (inverse depth in texture)
               const gl = baseLayer.context as WebGL2RenderingContext;
               const { width: dw, height: dh } = result;

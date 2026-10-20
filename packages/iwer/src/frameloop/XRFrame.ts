@@ -14,7 +14,10 @@ import {
   P_VIEW,
 } from '../private.js';
 import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
-import { XRCPUDepthInformation } from '../depth/XRDepthInformation.js';
+import {
+  type DepthSensingData,
+  XRCPUDepthInformation,
+} from '../depth/XRDepthInformation.js';
 import { XRWebGLDepthInformation } from '../depth/XRWebGLBinding.js';
 import { XREye, XRView } from '../views/XRView.js';
 import { XRHitTestResult, XRHitTestSource } from '../hittest/XRHitTest.js';
@@ -69,6 +72,10 @@ export class XRFrame {
     hitTestResultsMap: Map<XRHitTestSource, XRHitTestResult[]>;
     depthDataMap: Map<XREye, XRCPUDepthInformation>;
     gpuDepthDataMap: Map<XREye, XRWebGLDepthInformation>;
+    // GPU-optimized depth of WebGPU sessions, uploaded by XRGPUBinding on
+    // request into textures that are destroyed when the frame ends.
+    webgpuDepthDataMap: Map<XREye, DepthSensingData>;
+    webgpuDepthTextures: GPUTexture[];
   };
 
   constructor(
@@ -91,6 +98,8 @@ export class XRFrame {
       hitTestResultsMap: new Map(),
       depthDataMap: new Map(),
       gpuDepthDataMap: new Map(),
+      webgpuDepthDataMap: new Map(),
+      webgpuDepthTextures: [],
     };
   }
 

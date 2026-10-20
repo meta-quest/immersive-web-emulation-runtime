@@ -7,7 +7,9 @@
 
 import {
   P_COMPOSITION_LAYER,
+  P_DEPTH_INFO,
   P_DEVICE,
+  P_FRAME,
   P_GPU_BINDING,
   P_GPU_SUB_IMAGE,
   P_PROJECTION_LAYER,
@@ -19,6 +21,8 @@ import { XREye, type XRView } from '../views/XRView.js';
 import { XRProjectionLayer } from './XRProjectionLayer.js';
 import { clearArrayLayers } from './XRGPUPresenter.js';
 import { XRViewport } from '../views/XRViewport.js';
+import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
+import type { XRFrame } from '../frameloop/XRFrame.js';
 import type { XRSession } from '../session/XRSession.js';
 
 export interface XRGPUProjectionLayerInit {
@@ -29,6 +33,7 @@ export interface XRGPUProjectionLayerInit {
 }
 
 // GPUTextureUsage flags, inlined so this module loads without WebGPU globals.
+const COPY_DST = 0x02;
 const STORAGE_BINDING = 0x08;
 const TEXTURE_BINDING = 0x04;
 const RENDER_ATTACHMENT = 0x10;
@@ -52,6 +57,9 @@ const MIN_SCALE_FACTOR = 0.2;
 
 // Immersive sessions always report a left and a right view.
 const VIEW_COUNT = 2;
+
+// Array layer of an eye's view in the layer and depth textures.
+const arrayLayer = (eye: XREye) => (eye === XREye.Right ? 1 : 0);
 
 const lostDevices = new WeakSet<GPUDevice>();
 
@@ -108,10 +116,69 @@ export class XRGPUSubImage extends XRSubImage {
   }
 }
 
+export class XRGPUDepthInformation {
+  [P_DEPTH_INFO]: {
+    texture: GPUTexture;
+    width: number;
+    height: number;
+    normDepthBufferFromNormView: XRRigidTransform;
+    rawValueToMeters: number;
+    arrayLayer: number;
+  };
+
+  constructor(
+    texture: GPUTexture,
+    width: number,
+    height: number,
+    rawValueToMeters: number,
+    arrayLayer: number,
+  ) {
+    this[P_DEPTH_INFO] = {
+      texture,
+      width,
+      height,
+      normDepthBufferFromNormView: new XRRigidTransform(),
+      rawValueToMeters,
+      arrayLayer,
+    };
+  }
+
+  get texture(): GPUTexture {
+    return this[P_DEPTH_INFO].texture;
+  }
+
+  get width(): number {
+    return this[P_DEPTH_INFO].width;
+  }
+
+  get height(): number {
+    return this[P_DEPTH_INFO].height;
+  }
+
+  get normDepthBufferFromNormView(): XRRigidTransform {
+    return this[P_DEPTH_INFO].normDepthBufferFromNormView;
+  }
+
+  get rawValueToMeters(): number {
+    return this[P_DEPTH_INFO].rawValueToMeters;
+  }
+
+  getViewDescriptor(): GPUTextureViewDescriptor {
+    return {
+      dimension: '2d',
+      baseMipLevel: 0,
+      mipLevelCount: 1,
+      baseArrayLayer: this[P_DEPTH_INFO].arrayLayer,
+      arrayLayerCount: 1,
+    };
+  }
+}
+
 export class XRGPUBinding {
   [P_GPU_BINDING]: {
     session: XRSession;
     device: GPUDevice;
+    depthTextures: WeakMap<XRFrame, GPUTexture>;
   };
 
   constructor(session: XRSession, device: GPUDevice) {
@@ -131,7 +198,7 @@ export class XRGPUBinding {
       throw new DOMException('GPUDevice is lost.', 'InvalidStateError');
     }
     device.lost?.then(() => lostDevices.add(device));
-    this[P_GPU_BINDING] = { session, device };
+    this[P_GPU_BINDING] = { session, device, depthTextures: new WeakMap() };
   }
 
   get nativeProjectionScaleFactor(): number {
@@ -295,7 +362,75 @@ export class XRGPUBinding {
       new XRViewport(0, 0, colorTexture.width, colorTexture.height),
       colorTexture,
       depthStencilTexture,
-      view[P_VIEW].eye === XREye.Right ? 1 : 0,
+      arrayLayer(view[P_VIEW].eye),
+    );
+  }
+
+  getDepthInformation(view: XRView): XRGPUDepthInformation | null {
+    const { session, device, depthTextures } = this[P_GPU_BINDING];
+    if (view[P_VIEW].session !== session) {
+      throw new DOMException(
+        "View's session differs from the binding's session.",
+        'InvalidStateError',
+      );
+    }
+    if (!session[P_SESSION].enabledFeatures.includes('depth-sensing')) {
+      throw new DOMException(
+        'depth-sensing feature is not enabled on this session.',
+        'NotSupportedError',
+      );
+    }
+    if (session[P_SESSION].depthSensingUsage !== 'gpu-optimized') {
+      throw new DOMException(
+        'getDepthInformation on XRGPUBinding requires gpu-optimized depth sensing usage.',
+        'InvalidStateError',
+      );
+    }
+    if (lostDevices.has(device)) {
+      throw new DOMException('GPUDevice is lost.', 'InvalidStateError');
+    }
+    const frame = session[P_SESSION].activeFrame;
+    if (!frame?.[P_FRAME].active || !frame[P_FRAME].animationFrame) {
+      throw new DOMException(
+        'getDepthInformation must be called during an XRFrame callback.',
+        'InvalidStateError',
+      );
+    }
+
+    const depthData = frame[P_FRAME].webgpuDepthDataMap;
+    const viewDepth = depthData.get(view[P_VIEW].eye);
+    if (!viewDepth) {
+      return null;
+    }
+    let texture = depthTextures.get(frame);
+    if (!texture) {
+      texture = device.createTexture({
+        label: 'XRGPUDepthInformation',
+        size: [viewDepth.width, viewDepth.height, VIEW_COUNT],
+        format: 'r32float',
+        usage: TEXTURE_BINDING | COPY_DST,
+        dimension: '2d',
+        mipLevelCount: 1,
+        sampleCount: 1,
+      });
+      // Linear depth, rows from the top like normalized view coordinates.
+      for (const [eye, { data, width, height }] of depthData) {
+        device.queue.writeTexture(
+          { texture, origin: [0, 0, arrayLayer(eye)] },
+          data,
+          { bytesPerRow: width * 4, rowsPerImage: height },
+          [width, height, 1],
+        );
+      }
+      depthTextures.set(frame, texture);
+      frame[P_FRAME].webgpuDepthTextures.push(texture);
+    }
+    return new XRGPUDepthInformation(
+      texture,
+      viewDepth.width,
+      viewDepth.height,
+      viewDepth.rawValueToMeters,
+      arrayLayer(view[P_VIEW].eye),
     );
   }
 }
