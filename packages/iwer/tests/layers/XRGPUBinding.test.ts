@@ -1028,4 +1028,72 @@ describe('XRGPUBinding', () => {
       });
     });
   });
+
+  describe('depth sensing in a WebGPU session', () => {
+    let session: XRSession;
+    const computeDepthBuffer = jest.fn(
+      (
+        _view: unknown,
+        _projection: unknown,
+        width: number,
+        height: number,
+      ) => ({
+        data: new Float32Array(width * height).fill(2).buffer,
+        width,
+        height,
+        rawValueToMeters: 1,
+      }),
+    );
+
+    beforeEach(async () => {
+      computeDepthBuffer.mockClear();
+      xrDevice = new XRDevice({
+        ...deviceConfig,
+        supportedFeatures: [...deviceConfig.supportedFeatures, 'depth-sensing'],
+      });
+      xrSystem = new XRSystem(xrDevice);
+      // A minimal SEM: depth sensing only asks it for depth buffers.
+      xrDevice[P_DEVICE].sem = {
+        environmentCanvas: document.createElement('canvas'),
+        computeDepthBuffer,
+      } as any;
+      session = await xrSystem.requestSession('immersive-vr', {
+        requiredFeatures: ['webgpu', 'depth-sensing'],
+        depthSensing: {
+          usagePreference: ['gpu-optimized', 'cpu-optimized'],
+          dataFormatPreference: ['float32'],
+        },
+      });
+      const binding = new XRGPUBinding(session, gpu.device);
+      session.updateRenderState({
+        layers: [binding.createProjectionLayer({ colorFormat: 'bgra8unorm' })],
+      });
+    });
+
+    test('provides CPU-optimized depth sized from the window', async () => {
+      expect(session.depthUsage).toBe('cpu-optimized');
+      const refSpace = await session.requestReferenceSpace(
+        XRReferenceSpaceType.Local,
+      );
+      const depths: ReturnType<XRFrame['getDepthInformation']>[] = [];
+      runFrame(session, (frame) => {
+        for (const view of frame.getViewerPose(refSpace)!.views) {
+          depths.push(frame.getDepthInformation(view));
+        }
+      });
+      expect(depths.length).toBeGreaterThan(0);
+      for (const depth of depths) {
+        expect([depth!.width, depth!.height]).toEqual([300, 200]);
+        expect(depth!.getDepthInMeters(0.5, 0.5)).toBe(2);
+      }
+    });
+
+    test('gives SEM a projection with the [-1, 1] depth range it renders with', () => {
+      runFrame(session);
+      const projection = computeDepthBuffer.mock.calls[0][1] as Float32Array;
+      const { depthNear: near, depthFar: far } = session.renderState;
+      expect(projection[10]).toBeCloseTo((far + near) / (near - far), 5);
+      expect(projection[14]).toBeCloseTo((2 * far * near) / (near - far), 5);
+    });
+  });
 });

@@ -68,6 +68,11 @@ export type XRSessionInit = {
   depthSensing?: XRDepthStateInit;
 };
 
+// Maps clip-space z from WebGPU's [0, 1] depth range to WebGL's [-1, 1].
+const WEBGPU_TO_WEBGL_DEPTH = mat4.create();
+WEBGPU_TO_WEBGL_DEPTH[10] = 2;
+WEBGPU_TO_WEBGL_DEPTH[14] = -1;
+
 export enum XREnvironmentBlendMode {
   Opaque = 'opaque',
   AlphaBlend = 'alpha-blend',
@@ -582,8 +587,11 @@ export class XRSession extends EventTarget {
           frame[P_FRAME].detectedMeshes.add(xrMesh);
         });
       },
-      depthSensingUsage: (_depthSensing?.usagePreference?.[0] ??
-        'cpu-optimized') as XRDepthUsage,
+      // WebGPU sessions can't use XRWebGLBinding, so depth is CPU-optimized.
+      depthSensingUsage: (enabledFeatures.includes('webgpu')
+        ? 'cpu-optimized'
+        : (_depthSensing?.usagePreference?.[0] ??
+          'cpu-optimized')) as XRDepthUsage,
       depthSensingDataFormat: 'float32' as XRDepthDataFormat,
       depthTexture: null,
       depthTextureWidth: 0,
@@ -597,8 +605,11 @@ export class XRSession extends EventTarget {
 
         const { depthNear, depthFar } = this[P_SESSION].renderState;
         const baseLayer = this[P_SESSION].renderState.baseLayer;
-        if (!baseLayer) return;
-        const canvas = baseLayer.context.canvas;
+        // WebGPU sessions have no baseLayer; their views fill the window.
+        const canvas = baseLayer?.context.canvas ?? {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        };
         const depthWidth = Math.max(1, Math.floor(canvas.width / 4));
         const depthHeight = Math.max(1, Math.floor(canvas.height / 4));
 
@@ -608,10 +619,19 @@ export class XRSession extends EventTarget {
             : [XREye.Left, XREye.Right];
 
         const isGpuOptimized =
+          baseLayer !== null &&
           this[P_SESSION].depthSensingUsage === 'gpu-optimized';
 
         for (const eye of eyes) {
-          const projectionMatrix = this[P_SESSION].getProjectionMatrix(eye);
+          let projectionMatrix = this[P_SESSION].getProjectionMatrix(eye);
+          if (this[P_SESSION].hasWebGPU) {
+            // SEM renders depth with WebGL, which uses a [-1, 1] depth range.
+            projectionMatrix = mat4.multiply(
+              mat4.create(),
+              WEBGPU_TO_WEBGL_DEPTH,
+              projectionMatrix,
+            );
+          }
           const viewSpace = this[P_SESSION].device.viewSpaces[eye];
           const viewGlobalMatrix =
             XRSpaceUtils.calculateGlobalOffsetMatrix(viewSpace);
