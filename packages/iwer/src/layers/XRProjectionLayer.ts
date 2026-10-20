@@ -1,0 +1,170 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import {
+  P_COMPOSITION_LAYER,
+  P_PROJECTION_LAYER,
+  P_SESSION,
+} from '../private.js';
+import { XRLayer } from './XRWebGLLayer.js';
+import type { XRRigidTransform } from '../primitives/XRRigidTransform.js';
+import type { XRSession } from '../session/XRSession.js';
+
+export type XRLayerLayout =
+  | 'default'
+  | 'mono'
+  | 'stereo'
+  | 'stereo-left-right'
+  | 'stereo-top-bottom';
+
+export type XRLayerQuality =
+  | 'default'
+  | 'text-optimized'
+  | 'graphics-optimized';
+
+export class XRCompositionLayer extends XRLayer {
+  [P_COMPOSITION_LAYER]: {
+    session: XRSession;
+    destroyed: boolean;
+    blendTextureSourceAlpha: boolean;
+    forceMonoPresentation: boolean;
+    opacity: number;
+    quality: XRLayerQuality;
+  };
+
+  constructor(session: XRSession) {
+    super();
+    this[P_COMPOSITION_LAYER] = {
+      session,
+      destroyed: false,
+      blendTextureSourceAlpha: true,
+      forceMonoPresentation: false,
+      opacity: 1.0,
+      quality: 'default',
+    };
+  }
+
+  get layout(): XRLayerLayout {
+    return 'default';
+  }
+
+  get isStatic(): boolean {
+    return false;
+  }
+
+  get needsRedraw(): boolean {
+    return true;
+  }
+
+  get mipLevels(): number {
+    return 1;
+  }
+
+  get blendTextureSourceAlpha(): boolean {
+    return this[P_COMPOSITION_LAYER].blendTextureSourceAlpha;
+  }
+
+  set blendTextureSourceAlpha(value: boolean) {
+    this[P_COMPOSITION_LAYER].blendTextureSourceAlpha = value;
+  }
+
+  get forceMonoPresentation(): boolean {
+    return this[P_COMPOSITION_LAYER].forceMonoPresentation;
+  }
+
+  set forceMonoPresentation(value: boolean) {
+    this[P_COMPOSITION_LAYER].forceMonoPresentation = value;
+  }
+
+  get opacity(): number {
+    return this[P_COMPOSITION_LAYER].opacity;
+  }
+
+  set opacity(value: number) {
+    this[P_COMPOSITION_LAYER].opacity = Math.min(1, Math.max(0, value));
+  }
+
+  get quality(): XRLayerQuality {
+    return this[P_COMPOSITION_LAYER].quality;
+  }
+
+  set quality(value: XRLayerQuality) {
+    this[P_COMPOSITION_LAYER].quality = value;
+  }
+
+  destroy(): void {
+    this[P_COMPOSITION_LAYER].destroyed = true;
+  }
+}
+
+/**
+ * A projection layer backed by a WebGPU texture array with one array layer per
+ * view, created by XRGPUBinding.createProjectionLayer.
+ */
+export class XRProjectionLayer extends XRCompositionLayer {
+  [P_PROJECTION_LAYER]: {
+    device: GPUDevice;
+    colorTexture: GPUTexture;
+    depthStencilTexture: GPUTexture | null;
+  };
+
+  constructor(
+    session: XRSession,
+    device: GPUDevice,
+    colorTexture: GPUTexture,
+    depthStencilTexture: GPUTexture | null,
+  ) {
+    super(session);
+    this[P_PROJECTION_LAYER] = {
+      device,
+      colorTexture,
+      depthStencilTexture,
+    };
+    // Tracked so the session can release every layer's textures when it ends.
+    session[P_SESSION].projectionLayers.add(this);
+  }
+
+  get textureWidth(): number {
+    return this[P_PROJECTION_LAYER].colorTexture.width;
+  }
+
+  get textureHeight(): number {
+    return this[P_PROJECTION_LAYER].colorTexture.height;
+  }
+
+  get textureArrayLength(): number {
+    return this[P_PROJECTION_LAYER].colorTexture.depthOrArrayLayers;
+  }
+
+  get ignoreDepthValues(): boolean {
+    return true;
+  }
+
+  // Foveation and space warp aren't emulated, so these stay null and setting
+  // them has no effect, as the spec describes for unsupporting devices.
+  get fixedFoveation(): number | null {
+    return null;
+  }
+
+  set fixedFoveation(_value: number | null) {}
+
+  get deltaPose(): XRRigidTransform | null {
+    return null;
+  }
+
+  set deltaPose(_value: XRRigidTransform | null) {}
+
+  destroy(): void {
+    if (this[P_COMPOSITION_LAYER].destroyed) {
+      return;
+    }
+    super.destroy();
+    this[P_PROJECTION_LAYER].colorTexture.destroy();
+    this[P_PROJECTION_LAYER].depthStencilTexture?.destroy();
+    this[P_COMPOSITION_LAYER].session[P_SESSION].projectionLayers.delete(this);
+  }
+}

@@ -48,6 +48,13 @@ export class XRWebGLLayer extends XRLayer {
       throw new DOMException('Session has ended', 'InvalidStateError');
     }
 
+    if (session[P_SESSION].hasWebGPU) {
+      throw new DOMException(
+        'XRWebGLLayer cannot be used with a WebGPU session',
+        'InvalidStateError',
+      );
+    }
+
     // TO-DO: Check that the context attribute has xrCompatible set to true
     // may require polyfilling the context and perhaps canvas.getContext
 

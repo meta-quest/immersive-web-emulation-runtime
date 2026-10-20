@@ -54,6 +54,12 @@ export class XRWebGLBinding {
   private _session: XRSession;
 
   constructor(session: XRSession, _context: WebGL2RenderingContext) {
+    if (session[P_SESSION].hasWebGPU) {
+      throw new DOMException(
+        'XRWebGLBinding cannot be used with a WebGPU session',
+        'InvalidStateError',
+      );
+    }
     this._session = session;
   }
 

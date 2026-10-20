@@ -134,6 +134,25 @@ describe('XRSession', () => {
     expect(pose!.transform.matrix).toEqual(mat4.create());
   });
 
+  test('XRView.projectionMatrix keeps a [-1, 1] depth range for WebGL sessions', async () => {
+    refSpace = await xrSession.requestReferenceSpace(
+      XRReferenceSpaceType.Viewer,
+    );
+    let projectionMatrix: Float32Array | undefined;
+    const onFrame = (_time: number, frame: XRFrame) => {
+      projectionMatrix =
+        frame.getViewerPose(refSpace)!.views[0].projectionMatrix;
+      xrSession.end();
+    };
+    xrSession.requestAnimationFrame(onFrame);
+    jest.runAllTimers();
+    const { depthNear: near, depthFar: far } = xrSession.renderState;
+    expect(projectionMatrix![14]).toBeCloseTo(
+      (2 * far * near) / (near - far),
+      5,
+    );
+  });
+
   test('XRSession.renderState and XRSession.inputSources return the same object next frame', async () => {
     let frame1RenderState: XRRenderState | undefined = undefined;
     let frame2RenderState: XRRenderState | undefined = undefined;

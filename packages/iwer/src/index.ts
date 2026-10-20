@@ -166,6 +166,16 @@ export type { GazeTrackingFeature } from './device/XRGazeInput.js';
 
 // Layers
 export { XRWebGLLayer, XRLayer } from './layers/XRWebGLLayer.js';
+export {
+  XRCompositionLayer,
+  XRProjectionLayer,
+} from './layers/XRProjectionLayer.js';
+export {
+  XRGPUBinding,
+  XRGPUSubImage,
+  XRSubImage,
+  type XRGPUProjectionLayerInit,
+} from './layers/XRGPUBinding.js';
 
 // Planes
 export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';

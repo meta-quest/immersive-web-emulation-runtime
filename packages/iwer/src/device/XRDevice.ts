@@ -33,6 +33,15 @@ import {
 } from '../input/XRInputSource.js';
 import { XRLayer, XRWebGLLayer } from '../layers/XRWebGLLayer.js';
 import {
+  XRCompositionLayer,
+  XRProjectionLayer,
+} from '../layers/XRProjectionLayer.js';
+import {
+  XRGPUBinding,
+  XRGPUSubImage,
+  XRSubImage,
+} from '../layers/XRGPUBinding.js';
+import {
   XRReferenceSpace,
   XRReferenceSpaceType,
 } from '../spaces/XRReferenceSpace.js';
@@ -280,6 +289,7 @@ export class XRDevice {
 
     getViewport: (layer: XRWebGLLayer, view: XRView) => XRViewport;
     viewportCache: { [key in XREye]?: XRViewport };
+    getRecommendedViewResolution: () => { width: number; height: number };
     updateViews: () => void;
     onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => void;
     onSessionEnd: () => void;
@@ -470,6 +480,13 @@ export class XRDevice {
         return viewport;
       },
       viewportCache: {},
+      // The app canvas is sized to the window during a session.
+      getRecommendedViewResolution: () => ({
+        width: this[P_DEVICE].stereoEnabled
+          ? Math.floor(window.innerWidth / 2)
+          : window.innerWidth,
+        height: window.innerHeight,
+      }),
       updateViews: () => {
         // update viewerSpace
         const viewerSpace = this[P_DEVICE].viewerSpace;
@@ -833,6 +850,11 @@ export class XRDevice {
       new WebXRLayerPolyfill();
     } else {
       setGlobal('XRMediaBinding', undefined);
+      setGlobal('XRSubImage', XRSubImage);
+      setGlobal('XRCompositionLayer', XRCompositionLayer);
+      setGlobal('XRProjectionLayer', XRProjectionLayer);
+      setGlobal('XRGPUBinding', XRGPUBinding);
+      setGlobal('XRGPUSubImage', XRGPUSubImage);
     }
     this[P_DEVICE].polyfillLayers = Boolean(polyfillLayers);
     setGlobal('XRWebGLBinding', XRWebGLBinding);

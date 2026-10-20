@@ -12,6 +12,15 @@ import {
 } from '../../src/session/XRSession.js';
 import { GamepadMappingType } from '../../src/gamepad/Gamepad.js';
 import { XRSystem } from '../../src/initialization/XRSystem.js';
+import {
+  XRGPUBinding,
+  XRGPUSubImage,
+  XRSubImage,
+} from '../../src/layers/XRGPUBinding.js';
+import {
+  XRCompositionLayer,
+  XRProjectionLayer,
+} from '../../src/layers/XRProjectionLayer.js';
 
 // installRuntime references `WebGL2RenderingContext.prototype` (and optionally
 // `WebGLRenderingContext.prototype`) directly to patch makeXRCompatible. jsdom
@@ -88,6 +97,11 @@ const XR_GLOBAL_NAMES = [
   'XRReferenceSpaceEvent',
   'XRMediaBinding',
   'XRWebGLBinding',
+  'XRGPUBinding',
+  'XRGPUSubImage',
+  'XRSubImage',
+  'XRCompositionLayer',
+  'XRProjectionLayer',
 ];
 
 describe('XRDevice runtime install/uninstall', () => {
@@ -185,6 +199,28 @@ describe('XRDevice runtime install/uninstall', () => {
     expect(g.XRSession).toBeDefined();
     expect(g.XRFrame).toBeDefined();
     expect(g.XRWebGLLayer).toBeDefined();
+  });
+
+  test('installRuntime installs the WebGPU binding globals and uninstallRuntime removes them', () => {
+    const device = new XRDevice(makeDeviceConfig());
+
+    device.installRuntime();
+
+    expect(g.XRGPUBinding).toBe(XRGPUBinding);
+    expect(g.XRGPUSubImage).toBe(XRGPUSubImage);
+    expect(g.XRSubImage).toBe(XRSubImage);
+    expect(g.XRCompositionLayer).toBe(XRCompositionLayer);
+    expect(g.XRProjectionLayer).toBe(XRProjectionLayer);
+
+    device.uninstallRuntime();
+
+    [
+      'XRGPUBinding',
+      'XRGPUSubImage',
+      'XRSubImage',
+      'XRCompositionLayer',
+      'XRProjectionLayer',
+    ].forEach((name) => expect(name in g).toBe(false));
   });
 
   test('uninstallRuntime removes navigator.xr when there was no prior runtime', () => {

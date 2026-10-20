@@ -6,7 +6,7 @@
  */
 
 import { P_RENDER_STATE } from '../private.js';
-import { XRWebGLLayer } from '../layers/XRWebGLLayer.js';
+import { XRLayer, XRWebGLLayer } from '../layers/XRWebGLLayer.js';
 
 export class XRRenderState {
   [P_RENDER_STATE]: {
@@ -14,7 +14,12 @@ export class XRRenderState {
     depthFar: number;
     inlineVerticalFieldOfView: number | null;
     baseLayer: XRWebGLLayer | null;
+    layers: readonly XRLayer[] | undefined;
   };
+
+  // Defined only on render states of WebGPU sessions, so `'layers' in
+  // renderState` stays false for WebGL sessions as before.
+  declare readonly layers?: readonly XRLayer[];
 
   constructor(init: Partial<XRRenderStateInit> = {}, oldState?: XRRenderState) {
     this[P_RENDER_STATE] = {
@@ -27,7 +32,17 @@ export class XRRenderState {
         oldState?.inlineVerticalFieldOfView ??
         null,
       baseLayer: init.baseLayer ?? oldState?.baseLayer ?? null,
+      // Only WebGPU sessions have layers; frozen like the IDL FrozenArray.
+      layers: init.layers
+        ? Object.freeze([...init.layers])
+        : oldState?.[P_RENDER_STATE].layers,
     };
+    if (this[P_RENDER_STATE].layers !== undefined) {
+      Object.defineProperty(this, 'layers', {
+        get: () => this[P_RENDER_STATE].layers,
+        enumerable: true,
+      });
+    }
   }
 
   get depthNear(): number {
@@ -53,4 +68,5 @@ export interface XRRenderStateInit {
   depthFar?: number;
   inlineVerticalFieldOfView?: number;
   baseLayer?: XRWebGLLayer;
+  layers?: readonly XRLayer[];
 }
