@@ -15,11 +15,22 @@ export type Easing = 'linear' | 'minimum-jerk';
 export const EASINGS: readonly Easing[] = ['linear', 'minimum-jerk'];
 
 /**
+ * Easings run_sequence also uses internally: `reach` is minimum-jerk skewed
+ * so the hand speeds up quickly and slows down for longer (peak speed at 40%
+ * of the time), as a reach to a target does. Not a remote `easing` value.
+ */
+export type PathEasing = Easing | 'reach';
+
+// t^REACH_SKEW maps 0.4 to 0.5, moving the speed peak earlier.
+const REACH_SKEW = Math.log(0.5) / Math.log(0.4);
+
+/**
  * Maps linear progress (0 to 1) through an easing. `minimum-jerk` is the
  * smooth start-and-stop profile of a human reach (10t³ − 15t⁴ + 6t⁵).
  */
-export const ease = (easing: Easing, t: number): number => {
-  const c = Math.min(1, Math.max(0, t));
+export const ease = (easing: PathEasing, t: number): number => {
+  let c = Math.min(1, Math.max(0, t));
+  if (easing === 'reach') c = Math.pow(c, REACH_SKEW);
   const eased = easing === 'linear' ? c : c * c * c * (10 + c * (-15 + 6 * c));
   return Math.min(1, Math.max(0, eased));
 };

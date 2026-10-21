@@ -88,6 +88,16 @@ export interface TickAction extends BaseAction {
    */
   tick: (deltaMs: number) => number;
   result: () => unknown;
+  /**
+   * When set, an interruption (cancel_sequence, forceRelease, the watchdog,
+   * session end) after the action started resolves it with this instead of
+   * rejecting it.
+   */
+  abort?: (reason: string) => unknown;
+  /** Roughly how long the action runs, in milliseconds (time budgets). */
+  estimateMs?: number;
+  /** Milliseconds the action has run so far. */
+  elapsedMs?: number;
 }
 
 /** @deprecated Timed actions are {@link TickAction}s. */
@@ -324,6 +334,186 @@ export interface GetHandStateResult {
   anchors: Record<'wrist' | 'grip' | 'grasp' | 'index-tip' | 'thumb-tip', Vec3>;
   axes: { fingers: Vec3; palm: Vec3; thumb: Vec3 };
   joints?: Record<string, { position: Vec3; radius: number }>;
+}
+
+// =============================================================================
+// run_sequence
+// =============================================================================
+
+/**
+ * A step position: `{x, y, z}` (optionally with the surface `normal`) or
+ * `[x, y, z]` in the XR origin, or relative to the body: `relativeTo: 'head'`
+ * is the standing head, `'body'` the floor under it; both turn with the body's
+ * yaw (x right, y up, z back), never with head pitch or roll.
+ */
+export type SequencePosition =
+  | { x: number; y: number; z: number; normal?: DirectionInput }
+  | [number, number, number]
+  | { relativeTo: 'head' | 'body'; x: number; y: number; z: number };
+
+/** Which face of a target to use; the default is the face toward the body. */
+export type TargetFace = 'front' | 'back' | 'top' | 'bottom' | 'left' | 'right';
+
+/** A target name (or id), optionally with the face to use. */
+export type SequenceTarget = string | { name: string; face?: TargetFace };
+
+/**
+ * Why a step wants a target, passed to the resolver: `press` wants the face
+ * to press, `grasp` the part to pinch, `place` the surface to set a held
+ * object down on (an up-facing normal), `touch` anything else.
+ */
+export type TargetIntent = 'press' | 'grasp' | 'place' | 'touch';
+
+/** What a target resolver returns, all XR-origin, in metres. */
+export interface ResolvedTarget {
+  /** The surface point the anchor should touch. */
+  position: Vec3;
+  /** Outward unit normal of that surface. Presses need it. */
+  normal?: Vec3;
+  /** The target's axis-aligned size. */
+  size?: Vec3;
+  /** The target's axis-aligned bounds (lets a held object be set down on its base). */
+  box?: { min: Vec3; max: Vec3 };
+  name?: string;
+}
+
+/**
+ * Turns the target names in run_sequence steps into points in the scene.
+ * The page registers one with `remote.setTargetResolver()`: an app framework
+ * knows its objects, IWER does not.
+ */
+export interface TargetResolver {
+  resolve(
+    target: SequenceTarget,
+    context: {
+      device: 'hand-left' | 'hand-right';
+      anchor: HandAnchor;
+      intent: TargetIntent;
+      /** The acting shoulder (XR-origin): "the face toward the body". */
+      from: Vec3;
+    },
+  ): ResolvedTarget | null;
+  /** Targets by name, with their box centre and size (XR-origin). */
+  list?(): { name: string; position: Vec3; size?: Vec3 }[];
+}
+
+/**
+ * A step property animated over the step, or over a window of it: `start`
+ * and `end` are fractions of the step's reach (default 0 and 1).
+ */
+export type TimedInput<T> =
+  | T
+  | { value: T; start?: number; end?: number; easing?: Easing };
+
+/** One step of a run_sequence. A step with only a `duration` holds. */
+export interface SequenceStep {
+  label?: string;
+  /** Seconds for the reach, or `'auto'` (the default for moves). */
+  duration?: number | 'auto';
+  position?: SequencePosition;
+  target?: SequenceTarget;
+  /**
+   * Added to the step's placement (or the current pin target without one);
+   * `{ normal }` moves along the placement's normal.
+   */
+  offset?: Vec3 | { normal: number };
+  /** Come straight in along `normal` (default: the surface normal) for the last `distance` metres. */
+  approach?: { distance: number; normal?: DirectionInput };
+  /** Lift straight off along `normal` (default: the last surface normal) first. */
+  depart?: { distance: number; normal?: DirectionInput };
+  /** Press the placement with the index fingertip (metres, seconds, metres). */
+  press?: { depth?: number; hold?: number; retract?: number };
+  anchor?: HandAnchor;
+  orientation?: PlacementOrientationInput;
+  poseId?: TimedInput<string>;
+  fingers?: SetHandPoseParams['fingers'];
+  /** Pinch 0-1, timed, or `{ value, at: 'arrival' }` to close as the hand arrives. */
+  pinch?: TimedInput<number> | { value: number; at: 'arrival' };
+  /**
+   * Move the body first: to `position` (its height is ignored), or to a
+   * comfortable standing point for `stepTo`; `facing` turns it.
+   */
+  body?: {
+    position?: SequencePosition;
+    stepTo?: SequenceTarget;
+    facing?: DirectionInput;
+  };
+}
+
+/**
+ * Parameters for run_sequence: one hand's steps, run in order, with the head
+ * and body following.
+ */
+export interface RunSequenceParams {
+  device: 'hand-left' | 'hand-right';
+  steps: SequenceStep[];
+  /** The other hand: rest it by the hip (default unless it is pinching) or keep it. */
+  idleHand?: 'keep' | 'rest';
+  /** `auto` (default) leans for low targets and steps closer when out of reach. */
+  body?: 'auto' | 'fixed';
+  /** `follow` (default) turns the head toward each target before the hand gets there. */
+  gaze?: 'follow' | 'fixed';
+  /** Validate and return the plan without moving anything. */
+  dryRun?: boolean;
+}
+
+/** What run_sequence resolves with (times in seconds of sequence time). */
+export interface SequenceResult {
+  completed: boolean;
+  cancelled: boolean;
+  /** Why the sequence stopped early: an error, `deadline`, `cancelled`, `released`, `session-ended` or `stalled`. */
+  reason?: string;
+  /** The step that failed. */
+  failedStep?: number;
+  steps: {
+    label: string;
+    start: number;
+    end: number;
+    /** `performance.now()` at the step's start and end. */
+    startPerf: number;
+    endPerf: number;
+  }[];
+  /** Select events the app saw, from the hand's own button edges. */
+  events: { t: number; type: string }[];
+  /** Each press and how long (real time, ms) the fingertip was within 2 cm of it. */
+  presses: { label: string; contactMs: number | null }[];
+  warnings: string[];
+  pinchValue: number;
+  /** The hand afterwards, as get_hand_state reports it. */
+  final?: GetHandStateResult;
+}
+
+/** What a run_sequence dry run returns. */
+export interface SequencePlan {
+  device: 'hand-left' | 'hand-right';
+  segments: {
+    step: number;
+    label: string;
+    kind: 'move' | 'hold' | 'press' | 'press-hold' | 'retract';
+    /** Seconds, including any walk. */
+    duration: number;
+    /** Where the anchor ends up (XR-origin). */
+    target?: Vec3;
+    /** How far the body walks first, in metres. */
+    walk?: number;
+  }[];
+  /** Seconds for the whole sequence. */
+  duration: number;
+  warnings: string[];
+}
+
+/** Result of cancel_sequence. */
+export interface CancelSequenceResult {
+  cancelled: boolean;
+  /** The cancelled sequence's partial result. */
+  sequence?: SequenceResult;
+}
+
+/** Result of list_targets. */
+export interface ListTargetsResult {
+  /** False when the page has registered no target resolver. */
+  resolver: boolean;
+  targets: { name: string; position: Vec3; size?: Vec3 }[];
 }
 
 /**

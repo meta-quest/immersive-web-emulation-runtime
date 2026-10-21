@@ -47,6 +47,7 @@ const channelKey = (channel: Channel) => `${channel.device}:${channel.kind}`;
 export class ChannelRun {
   private states: ChannelState[];
   private elapsed = 0;
+  private stoppedEarly = false;
   /** When the last channel ends, in milliseconds from the start of the run. */
   readonly endMs: number;
 
@@ -76,6 +77,14 @@ export class ChannelRun {
   }
 
   /**
+   * True when a channel was stopped before it finished (by `stop()`, by the
+   * engine, or by a later run taking its slot).
+   */
+  get interrupted(): boolean {
+    return this.stoppedEarly;
+  }
+
+  /**
    * Advances every channel by `deltaMs`. Returns the time left over once all
    * of them have finished (for whatever runs next), or -1 while any is still
    * running. A channel replaced by a later run stops where it is.
@@ -87,6 +96,7 @@ export class ChannelRun {
       const { channel } = state;
       if (!this.engine.owns(this, channel)) {
         state.done = true;
+        this.stoppedEarly = true;
         continue;
       }
       const startMs = channel.delayMs ?? 0;
@@ -113,6 +123,7 @@ export class ChannelRun {
     for (const state of this.states) {
       if (!state.done) {
         state.done = true;
+        this.stoppedEarly = true;
         this.engine.release(this, state.channel);
       }
     }

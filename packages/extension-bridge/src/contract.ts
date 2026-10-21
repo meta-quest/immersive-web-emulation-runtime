@@ -14,7 +14,7 @@
 import { z, type ZodRawShape } from 'zod';
 
 /** Bumped when the catalog shape changes; surfaced in the version handshake. */
-export const CATALOG_VERSION = 3;
+export const CATALOG_VERSION = 4;
 
 // --- Reusable shapes -------------------------------------------------------
 
@@ -253,6 +253,138 @@ const deviceStateSchema = z
   .partial()
   .strict();
 
+// --- run_sequence ------------------------------------------------------------
+
+const fraction = z.number().min(0).max(1);
+const timedWindow = {
+  start: fraction.optional(),
+  end: fraction.optional(),
+  easing: easing.optional(),
+};
+
+const sequenceTarget = z
+  .union([
+    z.string(),
+    z
+      .object({
+        name: z.string(),
+        face: z
+          .enum(['front', 'back', 'top', 'bottom', 'left', 'right'])
+          .optional(),
+      })
+      .strict(),
+  ])
+  .describe(
+    'A target name from xr_list_targets, or {name, face}; resolved again when the step starts.',
+  );
+
+const sequencePosition = z
+  .union([
+    z.tuple([z.number(), z.number(), z.number()]),
+    z
+      .object({
+        x: z.number(),
+        y: z.number(),
+        z: z.number(),
+        normal: direction.optional(),
+      })
+      .strict(),
+    z
+      .object({
+        relativeTo: z.enum(['head', 'body']),
+        x: z.number(),
+        y: z.number(),
+        z: z.number(),
+      })
+      .strict(),
+  ])
+  .describe(
+    'XR-origin metres (optionally with the surface normal), or {relativeTo:"head"|"body", x right, y up, z back} turning with the body, never with head pitch; "body" measures y from the floor.',
+  );
+
+const standOff = z
+  .object({ distance: z.number().min(0), normal: direction.optional() })
+  .strict();
+
+const sequenceStep = z
+  .object({
+    label: z.string().optional(),
+    duration: z
+      .union([z.number().min(0), z.literal('auto')])
+      .optional()
+      .describe(
+        'Seconds for the reach, or "auto" (the default for moves): scaled to distance, turn and pose change.',
+      ),
+    target: sequenceTarget.optional(),
+    position: sequencePosition.optional(),
+    offset: z
+      .union([vec3.strict(), z.object({ normal: z.number() }).strict()])
+      .optional()
+      .describe(
+        'Added to the target or position; {normal:d} moves d metres along the surface normal. Setting a held object down: its clearance above the surface.',
+      ),
+    approach: standOff
+      .optional()
+      .describe(
+        'Come straight in along the surface normal (straight down while holding) for the last `distance` metres.',
+      ),
+    depart: standOff
+      .optional()
+      .describe(
+        'Lift straight off first, along the last surface normal (straight up while holding).',
+      ),
+    press: z
+      .object({
+        depth: z.number().min(0).max(0.015).optional(),
+        hold: z.number().min(0).max(0.2).optional(),
+        retract: z.number().min(0.05).optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'Press the target with the index fingertip: reach, go `depth` m (default 0.008) past the surface, hold `hold` s, pull back `retract` m. Implies anchor index-tip and pose point. Use this for buttons, not a pinch.',
+      ),
+    anchor: handAnchor.optional(),
+    orientation: placementOrientation.optional(),
+    poseId: z
+      .union([
+        z.string(),
+        z.object({ value: z.string(), ...timedWindow }).strict(),
+      ])
+      .optional()
+      .describe(
+        'Pose to fade to during the step; {value, start, end} as fractions of the reach. Never "pinch": poses do not select.',
+      ),
+    fingers: fingerPoses.optional(),
+    pinch: z
+      .union([
+        fraction,
+        z.object({ value: fraction, ...timedWindow }).strict(),
+        z.object({ value: fraction, at: z.literal('arrival') }).strict(),
+      ])
+      .optional()
+      .describe(
+        'Pinch 0..1 (selects at 0.9, lets go at 0.7). {value:1, at:"arrival"} opens to a grip and closes as the hand arrives; on a target it implies anchor grasp.',
+      ),
+    body: z
+      .object({
+        position: sequencePosition.optional(),
+        stepTo: sequenceTarget.optional(),
+        facing: direction.optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'Move the body first: to position, or a step closer to stepTo; facing turns it. The hand goes along.',
+      ),
+  })
+  .strict();
+
+const RUN_SEQUENCE_DESCRIPTION =
+  "Run a whole hand interaction in one call with natural motion: one smooth arc per move, the head turning to each target first, the body leaning or stepping closer when needed, the other hand resting by the hip. Steps run in order and each step's properties animate together. Positions are XR-origin metres; -Z is forward, +Y up. Resolves when done with the select events the app saw, step times, press contact times, warnings and the final hand state. " +
+  'Rules: press buttons with `press`, not a pinch. To pick something up, target it with `pinch:{value:1,at:"arrival"}` (the grasp point, between thumb and index, goes on the target). While holding, targeting a surface sets the object down on it; let go with pinch 0. The anchor carries over to later steps. A thumbs up is poseId "thumbs-up" with orientation {fingers:"forward",thumb:"up"} at a head-relative position. Get names from xr_list_targets and check a plan with dryRun:true first. ' +
+  'Example: {"device":"hand-right","steps":[{"label":"reach","target":"button","press":{}},{"label":"grab","target":"piece","approach":{"distance":0.06},"pinch":{"value":1,"at":"arrival"}},{"label":"carry","target":"tray","depart":{"distance":0.08},"approach":{"distance":0.06}},{"label":"release","pinch":0,"duration":0.15},{"label":"thumbs up","position":{"relativeTo":"head","x":0.12,"y":-0.35,"z":-0.35},"anchor":"wrist","orientation":{"fingers":"forward","thumb":"up"},"poseId":"thumbs-up"},{"label":"hold","duration":1}]}';
+
 // --- Tool definition -------------------------------------------------------
 
 export interface ToolDef {
@@ -361,7 +493,7 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'animate_to',
     title: 'Animate device pose',
     description:
-      'Animate a device to a target position and/or orientation (XR-origin) over `duration` seconds (default 0.5), from where it is when the animation starts. Gaze accepts orientation only. Hands take `anchor` and hand directions as in xr_set_transform. easing "minimum-jerk" moves like a person (default "linear"). Requires an active, rendering session.',
+      'Animate a device to a target position and/or orientation (XR-origin) over `duration` seconds (default 0.5), from where it is when the animation starts. Gaze accepts orientation only. Hands take `anchor` and hand directions as in xr_set_transform. easing "minimum-jerk" moves like a person (default "linear"). For multi-step hand interactions (press, grab, carry, gestures) prefer xr_run_sequence. Requires an active, rendering session.',
     readOnlyHint: false,
     strictInput: true,
     inputShape: {
@@ -508,6 +640,62 @@ export const TOOLS: readonly ToolDef[] = [
       device: handEnum,
       joints: z.enum(['key', 'all']).optional(),
     },
+  },
+  {
+    mcpName: 'xr_run_sequence',
+    wsMethod: 'run_sequence',
+    title: 'Run a hand sequence',
+    description: RUN_SEQUENCE_DESCRIPTION,
+    readOnlyHint: false,
+    strictInput: true,
+    inputShape: {
+      device: handEnum,
+      steps: z.array(sequenceStep).min(1),
+      idleHand: z
+        .enum(['keep', 'rest'])
+        .optional()
+        .describe(
+          'The other hand: rest it by the hip (the default unless it is pinching) or keep it where it is.',
+        ),
+      body: z
+        .enum(['auto', 'fixed'])
+        .optional()
+        .describe(
+          'auto (default): lean for low targets and step closer to ones out of reach. fixed: out of reach is an error.',
+        ),
+      gaze: z
+        .enum(['follow', 'fixed'])
+        .optional()
+        .describe(
+          'follow (default): the head turns to each target before the hand gets there.',
+        ),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe(
+          'Validate and return the planned steps, walks, durations and warnings without moving anything.',
+        ),
+    },
+  },
+  {
+    mcpName: 'xr_cancel_sequence',
+    wsMethod: 'cancel_sequence',
+    title: 'Cancel a hand sequence',
+    description:
+      'Stop the running xr_run_sequence where it is; that call returns with cancelled: true and the steps done. The pinch is left as it is (no select events).',
+    readOnlyHint: false,
+    strictInput: true,
+    inputShape: {},
+  },
+  {
+    mcpName: 'xr_list_targets',
+    wsMethod: 'list_targets',
+    title: 'List sequence targets',
+    description:
+      "List the named targets xr_run_sequence steps can use, from the page's target resolver: name, box centre and size (XR-origin). resolver:false means the page has none; use positions.",
+    readOnlyHint: true,
+    strictInput: true,
+    inputShape: {},
   },
   // --- World (SEM) ---
   {

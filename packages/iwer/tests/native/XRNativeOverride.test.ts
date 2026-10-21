@@ -12,6 +12,7 @@ import {
   type CompressedRecording,
 } from '../../src/action/ActionPlayer.js';
 import type { InputSchema } from '../../src/action/ActionRecorder.js';
+import type { SequenceResult } from '../../src/remote/types.js';
 import {
   metaQuest3,
   metaQuestPro,
@@ -2951,6 +2952,52 @@ describe('XRNativeOverride', () => {
         'Native hand input requires the "hand-tracking" feature on the browser session; no synthetic hand input sources are published while hand mode is selected.',
       );
       warning.mockRestore();
+    });
+
+    test('run_sequence drives a native hand and reports the select events the session saw', async () => {
+      const device = new XRDevice(metaQuest3);
+      const nativeXR = new MockXRSystem(HAND_FEATURES);
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr');
+      device.primaryInputMode = 'hand';
+      const events: string[] = [];
+      for (const type of ['selectstart', 'select', 'selectend']) {
+        session.addEventListener(type, () => events.push(type));
+      }
+      let time = 10;
+      const frame = () => {
+        session.requestAnimationFrame(() => {});
+        session.fireFrame(time);
+        time += 16;
+      };
+      frame();
+      let result: SequenceResult | undefined;
+      void device.remote
+        .runSequence({
+          device: 'hand-right',
+          idleHand: 'keep',
+          steps: [
+            { position: [0.2, 1.2, -0.4], anchor: 'grasp', duration: 0.2 },
+            { pinch: 1, duration: 0.15 },
+            { duration: 0.1 },
+            { pinch: 0, duration: 0.15 },
+          ],
+        })
+        .then((value) => (result = value as SequenceResult));
+      for (let i = 0; i < 200 && !result; i++) {
+        frame();
+        for (let j = 0; j < 5; j++) await Promise.resolve();
+      }
+      expect(result?.completed).toBe(true);
+      expect(events).toEqual(['selectstart', 'select', 'selectend']);
+      expect(result!.events.map((event) => event.type)).toEqual(events);
+      expect(result!.final!.anchors.grasp.x).toBeCloseTo(0.2, 3);
+      // Letting go lifts the hand 3.5 cm off what it held.
+      expect(result!.final!.anchors.grasp.y).toBeCloseTo(1.235, 3);
     });
 
     test('publishes stable XRHand-shaped facades over every joint', async () => {

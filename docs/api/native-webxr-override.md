@@ -294,6 +294,9 @@ desktop emulation:
   `get_transform`, `get_device_state` and `get_hand_state`) are interpreted
   directly in the native anchor reference space; there is no emulated
   XR-origin offset. Hands placed by an `anchor` stay pinned in native mode too.
+- `run_sequence` works in native mode: it moves the headset and hands through
+  the same device state, and the select events in its result come from the
+  hand's own button edges, as the native session reports them.
 - `stereoEnabled` and field-of-view updates do not replace the browser's native
   projection matrices.
 - `XRDevice.updateVisibilityState()` cannot force native session visibility;

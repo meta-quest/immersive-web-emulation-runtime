@@ -36,6 +36,12 @@ import {
 } from './hand-motion.js';
 import { XRHandJoint } from '../input/XRHand.js';
 import { Channel, ChannelEngine, ChannelRun } from './channels.js';
+import {
+  SEQUENCE_BUDGET_S,
+  SequenceHost,
+  SequenceRunner,
+  planSequence,
+} from './sequence.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
 import { cancelButton } from '../gamepad/button-edges.js';
 import type {
@@ -78,6 +84,12 @@ import type {
   GetHandStateParams,
   GetHandStateResult,
   OrientationInput,
+  RunSequenceParams,
+  SequencePlan,
+  SequenceResult,
+  TargetResolver,
+  CancelSequenceResult,
+  ListTargetsResult,
 } from './types.js';
 import {
   vec3ToObj,
@@ -339,6 +351,12 @@ export class RemoteControlInterface {
   private watchdog: ReturnType<typeof setTimeout> | null = null;
   /** Per-device channels (transform, pose, pinch) that timed commands run. */
   private channels = new ChannelEngine();
+  private targetResolver: TargetResolver | null = null;
+  // The body's facing and standing head position between sequences (null
+  // until a sequence completes; cleared when the headset is placed).
+  private sequenceBody: { forward: vec3; standing: vec3 } | null = null;
+  /** A run_sequence gives up this long after dispatch, under the 30 s bridge timeout. */
+  readonly SEQUENCE_DEADLINE_MS = 28000;
 
   constructor(device: XRDevice) {
     this.device = device;
@@ -406,7 +424,10 @@ export class RemoteControlInterface {
   private enqueueTick(
     method: string,
     params: Record<string, unknown>,
-    spec: Pick<TickAction, 'start' | 'tick' | 'result'>,
+    spec: Pick<
+      TickAction,
+      'start' | 'tick' | 'result' | 'abort' | 'estimateMs'
+    >,
   ): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const action: TickAction = {
@@ -436,9 +457,11 @@ export class RemoteControlInterface {
     params: Record<string, unknown>,
     build: () => Channel[],
     result: (elapsedMs: number) => unknown,
+    estimateMs: number,
   ): Promise<unknown> {
     let run!: ChannelRun;
     return this.enqueueTick(method, params, {
+      estimateMs,
       start: () => {
         run = this.channels.run(build());
       },
@@ -455,6 +478,41 @@ export class RemoteControlInterface {
   }
 
   /**
+   * Settles every queued action after an interruption: a started action that
+   * can report partial progress (a sequence) resolves with it, the rest
+   * reject with `message(method)`.
+   */
+  private interruptQueue(
+    reason: string,
+    message: (method: string) => string,
+  ): void {
+    const pending = this.commandQueue;
+    this.commandQueue = [];
+    this.armWatchdog();
+    for (const action of pending) {
+      if (action.type === 'tick' && action.started && action.abort) {
+        action.resolve(action.abort(reason));
+      } else {
+        action.reject(new Error(message(action.method)));
+      }
+    }
+  }
+
+  /** Roughly how long the queued commands still run, in milliseconds. */
+  private queuedMs(): number {
+    let total = 0;
+    for (const action of this.commandQueue) {
+      if (action.type === 'tick') {
+        total += Math.max(
+          0,
+          (action.estimateMs ?? 0) - (action.elapsedMs ?? 0),
+        );
+      }
+    }
+    return total;
+  }
+
+  /**
    * (Re)arm the queue watchdog. Called on every enqueue and every frame, so it
    * only fires when frames stop arriving while actions are waiting.
    */
@@ -468,21 +526,17 @@ export class RemoteControlInterface {
     }
     this.watchdog = setTimeout(() => {
       this.watchdog = null;
-      const stalled = this.commandQueue;
-      this.commandQueue = [];
       // Nothing can finish what was held; end it without completing it.
       this.cancelHeldInputs();
       this.releaseHands();
+      this.interruptQueue(
+        'stalled',
+        (method) =>
+          `RemoteControlInterface: action '${method}' timed out after ` +
+          `${this.ACTION_TIMEOUT_MS}ms with no frame processing the queue ` +
+          `(is the XR render loop running?).`,
+      );
       this.startReleaseTimer();
-      for (const action of stalled) {
-        action.reject(
-          new Error(
-            `RemoteControlInterface: action '${action.method}' timed out after ` +
-              `${this.ACTION_TIMEOUT_MS}ms with no frame processing the queue ` +
-              `(is the XR render loop running?).`,
-          ),
-        );
-      }
     }, this.ACTION_TIMEOUT_MS);
   }
 
@@ -546,6 +600,9 @@ export class RemoteControlInterface {
             action.start();
           }
           const leftover = action.tick(remainingMs);
+          action.elapsedMs =
+            (action.elapsedMs ?? 0) +
+            (leftover < 0 ? remainingMs : remainingMs - leftover);
           if (leftover < 0) {
             break;
           }
@@ -683,6 +740,8 @@ export class RemoteControlInterface {
       : undefined;
     switch (deviceId) {
       case 'headset':
+        // A placed headset stands the body there for the next sequence.
+        this.sequenceBody = null;
         if (position) {
           this.device.position.set(position.x, position.y, position.z);
         }
@@ -959,11 +1018,15 @@ export class RemoteControlInterface {
 
   /**
    * A direction input (XR-origin vector, or a name relative to the headset's
-   * yaw) as a GlobalSpace unit vector. `from` (GlobalSpace) is the point
-   * toward-head / away-from-head start at.
+   * yaw, or to `body` when given) as a GlobalSpace unit vector. `from`
+   * (GlobalSpace) is the point toward-head / away-from-head start at.
    */
-  private directionToGlobal(value: unknown, what: string, from?: vec3): vec3 {
-    const body = this.bodyFrame();
+  private directionToGlobal(
+    value: unknown,
+    what: string,
+    from?: vec3,
+    body: BodyFrame = this.bodyFrame(),
+  ): vec3 {
     if (typeof value === 'string') {
       if (!(NAMED_DIRECTIONS as readonly string[]).includes(value)) {
         throw new Error(
@@ -989,6 +1052,7 @@ export class RemoteControlInterface {
     hand: XRHandInput,
     orientation: unknown,
     targetGlobal: vec3 | null,
+    body: BodyFrame = this.bodyFrame(),
   ): { wristRotation?: quat; rayRotation?: Quat } {
     if (orientation === undefined) {
       return {};
@@ -997,7 +1061,6 @@ export class RemoteControlInterface {
       if (!targetGlobal) {
         throw new Error(`orientation 'auto' needs a position to reach toward.`);
       }
-      const body = this.bodyFrame();
       const directions = autoDirections(
         shoulderPosition(body, hand.inputSource.handedness),
         targetGlobal,
@@ -1029,14 +1092,14 @@ export class RemoteControlInterface {
       }
       const from = targetGlobal ?? undefined;
       const directions: HandDirections = {
-        fingers: this.directionToGlobal(input.fingers, 'fingers', from),
+        fingers: this.directionToGlobal(input.fingers, 'fingers', from, body),
         palm:
           input.palm !== undefined
-            ? this.directionToGlobal(input.palm, 'palm', from)
+            ? this.directionToGlobal(input.palm, 'palm', from, body)
             : undefined,
         thumb:
           input.thumb !== undefined
-            ? this.directionToGlobal(input.thumb, 'thumb', from)
+            ? this.directionToGlobal(input.thumb, 'thumb', from, body)
             : undefined,
       };
       return { wristRotation: this.wristFromDirections(hand, directions) };
@@ -1938,6 +2001,7 @@ export class RemoteControlInterface {
     if (!state) {
       // Reset to initial state; held buttons are cancelled, not completed.
       this.cancelHeldInputs();
+      this.sequenceBody = null;
       this.device.position.set(0, 1.6, 0);
       this.device.quaternion.set(0, 0, 0, 1);
       this.device.primaryInputMode = 'controller';
@@ -2052,6 +2116,9 @@ export class RemoteControlInterface {
     'get_gamepad_state',
     'get_device_state',
     'get_hand_state',
+    'list_targets',
+    // Stops a running sequence; must not wait behind it
+    'cancel_sequence',
     // World/scene introspection - reads the synthetic environment (SEM)
     'get_world_state',
     'get_objects',
@@ -2076,6 +2143,7 @@ export class RemoteControlInterface {
     'set_gamepad_state',
     'select',
     '_hand_motion',
+    'run_sequence',
   ]);
 
   /**
@@ -2103,6 +2171,7 @@ export class RemoteControlInterface {
     'set_gamepad_state',
     'set_device_state',
     'set_hand_pose',
+    'run_sequence',
   ]);
 
   /**
@@ -2189,6 +2258,13 @@ export class RemoteControlInterface {
       );
     }
 
+    if (method === 'run_sequence') {
+      return this.enqueueSequence(
+        normalizedParams as unknown as RunSequenceParams,
+        normalizedParams,
+      );
+    }
+
     // Handle select specially - it's a discrete action that enqueues multiple sub-actions
     if (method === 'select') {
       const selectParams = normalizedParams as unknown as SelectParams;
@@ -2232,6 +2308,10 @@ export class RemoteControlInterface {
         return this.executeGetHandState(
           params as unknown as GetHandStateParams,
         );
+      case 'list_targets':
+        return this.executeListTargets();
+      case 'cancel_sequence':
+        return this.executeCancelSequence();
       case 'get_world_state':
         return this.executeGetWorldState();
       case 'get_objects':
@@ -2467,6 +2547,7 @@ export class RemoteControlInterface {
           actualDuration: elapsedMs / 1000,
         };
       },
+      durationMs,
     );
   }
 
@@ -2492,6 +2573,7 @@ export class RemoteControlInterface {
         return [this.pinchChannel(deviceId, value, durationMs, easing)];
       },
       (): SetSelectValueResult => ({ device: deviceId, value }),
+      durationMs,
     );
   }
 
@@ -2517,6 +2599,7 @@ export class RemoteControlInterface {
         poseId: hand.poseId,
         fingers: hand.fingerPoses,
       }),
+      durationMs,
     );
   }
 
@@ -2575,6 +2658,7 @@ export class RemoteControlInterface {
         return channels;
       },
       () => this.executeGetHandState({ device: deviceId }),
+      Math.max(0, ...channels.map((c) => (c.delayMs ?? 0) + c.durationMs)),
     );
   }
 
@@ -2604,6 +2688,7 @@ export class RemoteControlInterface {
       'select',
       params as unknown as Record<string, unknown>,
       {
+        estimateMs: holdMs + 2 * rampMs,
         start: () => {
           run = this.channels.run([phases[0]()]);
         },
@@ -2628,6 +2713,188 @@ export class RemoteControlInterface {
         result: () => ({ device: deviceId, duration }),
       },
     ) as Promise<SelectResult>;
+  }
+
+  // =============================================================================
+  // Hand sequences
+  // =============================================================================
+
+  /**
+   * Registers how run_sequence steps turn `target` names into points in the
+   * scene: an app framework knows its objects, IWER doesn't. Pass null to
+   * remove it.
+   */
+  setTargetResolver(resolver: TargetResolver | null): void {
+    this.targetResolver = resolver;
+  }
+
+  /** Runs a hand sequence; same as `dispatch('run_sequence', params)`. */
+  runSequence(
+    params: RunSequenceParams,
+  ): Promise<SequenceResult | SequencePlan> {
+    return this.dispatch(
+      'run_sequence',
+      params as unknown as Record<string, unknown>,
+    ) as Promise<SequenceResult | SequencePlan>;
+  }
+
+  /** What the sequence runner needs from remote control. */
+  private sequenceHost(): SequenceHost {
+    return {
+      hand: (deviceId) => this.handFor(deviceId),
+      liveHand: (deviceId) => this.requireLiveHand(deviceId),
+      otherHand: (deviceId) => {
+        const other =
+          this.device.hands[deviceId === 'hand-left' ? 'right' : 'left'];
+        return other?.connected ? other : undefined;
+      },
+      headPose: () => ({
+        position: vec3.clone(this.device.position.vec3),
+        rotation: quat.clone(this.device.quaternion.quat),
+      }),
+      setHeadPose: (position, rotation) => {
+        this.device.position.set(position[0], position[1], position[2]);
+        this.device.quaternion.set(
+          rotation[0],
+          rotation[1],
+          rotation[2],
+          rotation[3],
+        );
+      },
+      originToGlobal: (position) =>
+        this.toVec3(
+          this.transformXROriginToGlobal(vec3FromGl(position)),
+          'position',
+        ),
+      globalToOrigin: (position) =>
+        this.toVec3(
+          this.transformGlobalToXROrigin(vec3FromGl(position)),
+          'position',
+        ),
+      originDirectionToGlobal: (direction) =>
+        vec3.transformQuat(vec3.create(), direction, this.originRotation()),
+      globalDirectionToOrigin: (direction) =>
+        vec3.transformQuat(
+          vec3.create(),
+          direction,
+          quat.invert(quat.create(), this.originRotation()),
+        ),
+      directionToGlobal: (value, what, from, body) =>
+        this.directionToGlobal(value, what, from, body),
+      anchorPosition: (hand, anchor, graspPinch) =>
+        this.anchorPosition(hand, anchor, graspPinch),
+      requireAnchor: (anchor) => this.requireAnchor(anchor),
+      resolveOrientation: (hand, orientation, target, body) =>
+        this.resolveHandOrientation(hand, orientation, target, body),
+      parsePose: (hand, poseId, fingers) =>
+        this.parseHandPose(hand, {
+          device:
+            hand.inputSource.handedness === 'left' ? 'hand-left' : 'hand-right',
+          poseId,
+          fingers,
+        }),
+      setPinch: (deviceId, value) => this.setDeviceSelectValue(deviceId, value),
+      latestPinch: (deviceId) => this.latestSelectValue(deviceId),
+      pinchButton: (deviceId) =>
+        this.handFor(deviceId).inputSource.gamepad![P_GAMEPAD].buttonsMap
+          .pinch!,
+      channels: this.channels,
+      resolver: () => this.targetResolver,
+      handState: (deviceId) => this.executeGetHandState({ device: deviceId }),
+      bodyState: () => this.sequenceBody,
+      setBodyState: (state) => {
+        this.sequenceBody = {
+          forward: vec3.clone(state.forward),
+          standing: vec3.clone(state.standing),
+        };
+      },
+    };
+  }
+
+  /**
+   * run_sequence: validated and planned at dispatch (a dry run answers right
+   * away), then run as one timed action holding the head of the queue.
+   */
+  private enqueueSequence(
+    params: RunSequenceParams,
+    rawParams: Record<string, unknown>,
+  ): Promise<SequenceResult | SequencePlan> {
+    const host = this.sequenceHost();
+    const warnings: string[] = [];
+    const plan = SequenceRunner.describe(
+      host,
+      params,
+      planSequence(host, params),
+      warnings,
+    );
+    if (params.dryRun) {
+      try {
+        this.requireLiveHand(params.device);
+      } catch (error) {
+        warnings.push((error as Error).message);
+      }
+      return Promise.resolve(plan);
+    }
+    // The agent waits for everything queued ahead as well.
+    const queuedS = this.queuedMs() / 1000;
+    if (plan.duration + queuedS > SEQUENCE_BUDGET_S) {
+      throw new Error(
+        `The sequence would take about ${plan.duration.toFixed(1)} s` +
+          (queuedS > 0.05
+            ? `, after ${queuedS.toFixed(1)} s of commands queued ahead`
+            : '') +
+          `; keep it under ${SEQUENCE_BUDGET_S} s (split it into several run_sequence calls).`,
+      );
+    }
+    // Plan again for the run: segments keep their own state.
+    const segments = planSequence(host, params);
+    const deadline = performance.now() + this.SEQUENCE_DEADLINE_MS;
+    let runner!: SequenceRunner;
+    return this.enqueueTick('run_sequence', rawParams, {
+      estimateMs: plan.duration * 1000,
+      start: () => {
+        runner = new SequenceRunner(host, params, segments, deadline);
+        runner.start();
+      },
+      tick: (deltaMs) => (runner.done ? deltaMs : runner.tick(deltaMs)),
+      result: () => runner.result(),
+      abort: (reason) => {
+        this.releaseHands();
+        return runner.abort(reason);
+      },
+    }) as Promise<SequenceResult>;
+  }
+
+  /**
+   * cancel_sequence: stops a running sequence at the current frame. Fades,
+   * ramps and pins are let go; the pinch stays as it is.
+   */
+  private executeCancelSequence(): CancelSequenceResult {
+    const head = this.commandQueue[0];
+    if (
+      head?.type !== 'tick' ||
+      head.method !== 'run_sequence' ||
+      !head.started ||
+      !head.abort
+    ) {
+      return { cancelled: false };
+    }
+    this.commandQueue.shift();
+    this.armWatchdog();
+    const sequence = head.abort('cancelled') as SequenceResult;
+    head.resolve(sequence);
+    if (this.commandQueue.length === 0) {
+      this.startReleaseTimer();
+    }
+    return { cancelled: true, sequence };
+  }
+
+  /** list_targets: what the page's target resolver knows. */
+  private executeListTargets(): ListTargetsResult {
+    if (!this.targetResolver) {
+      return { resolver: false, targets: [] };
+    }
+    return { resolver: true, targets: this.targetResolver.list?.() ?? [] };
   }
 
   /**
@@ -2658,13 +2925,9 @@ export class RemoteControlInterface {
    * next session.
    */
   onSessionEnd(): void {
-    const pending = this.commandQueue;
-    this.commandQueue = [];
-    this.armWatchdog();
-    for (const action of pending) {
-      action.reject(new Error('The XR session ended.'));
-    }
     this.releaseHands();
+    // A running sequence resolves with what it did; the rest reject.
+    this.interruptQueue('session-ended', () => 'The XR session ended.');
     if (this._isCaptured) {
       this.startReleaseTimer();
     }
@@ -2677,13 +2940,6 @@ export class RemoteControlInterface {
     this.cancelReleaseTimer();
     this._isCaptured = false;
     this.device.controlMode = 'manual';
-    // Clear pending actions
-    const pending = this.commandQueue;
-    this.commandQueue = [];
-    this.armWatchdog();
-    for (const action of pending) {
-      action.reject(new Error('Capture released'));
-    }
 
     // Cancel any held input on BOTH controllers and hands so an interrupted
     // select/squeeze/thumbstick (or hand pinch) doesn't stay engaged. Held
@@ -2694,6 +2950,8 @@ export class RemoteControlInterface {
     for (const hand of ['left', 'right'] as const) {
       this.device.controllers[hand]?.updateAxes('thumbstick', 0, 0);
     }
+    // Clear pending actions; a running sequence resolves with what it did.
+    this.interruptQueue('released', () => 'Capture released');
   }
 
   /**
