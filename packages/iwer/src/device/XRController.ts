@@ -6,6 +6,11 @@
  */
 
 import { Gamepad, GamepadConfig } from '../gamepad/Gamepad.js';
+import {
+  nextPressed,
+  writeImmediateValue,
+  writePendingValue,
+} from '../gamepad/button-edges.js';
 import { GlobalSpace, XRSpace } from '../spaces/XRSpace.js';
 import { P_CONTROLLER, P_GAMEPAD, P_TRACKED_INPUT } from '../private.js';
 import {
@@ -84,7 +89,7 @@ export class XRController extends XRTrackedInput {
   }
 
   updateButtonValue(id: string, value: number) {
-    if (value > 1 || value < 0) {
+    if (!(value >= 0 && value <= 1)) {
       console.warn(`Out-of-range value ${value} provided for button ${id}.`);
       return;
     }
@@ -101,7 +106,7 @@ export class XRController extends XRTrackedInput {
         );
         return;
       }
-      gamepadButton[P_GAMEPAD].pendingValue = value;
+      writePendingValue(gamepadButton, value);
     } else {
       console.warn(`Current controller does not have button ${id}.`);
     }
@@ -109,10 +114,12 @@ export class XRController extends XRTrackedInput {
 
   /**
    * Set button value immediately (bypasses pending mechanism).
-   * Use this for programmatic control where value should be readable immediately.
+   * Use this for programmatic control where value should be readable
+   * immediately. Releasing a pressed button this way cancels its action
+   * (`selectend`/`squeezeend` without `select`/`squeeze`).
    */
   setButtonValueImmediate(id: string, value: number) {
-    if (value > 1 || value < 0) {
+    if (!(value >= 0 && value <= 1)) {
       console.warn(`Out-of-range value ${value} provided for button ${id}.`);
       return;
     }
@@ -129,13 +136,7 @@ export class XRController extends XRTrackedInput {
         );
         return;
       }
-      // Set both value and pendingValue for immediate effect
-      if (gamepadButton[P_GAMEPAD].immediateTransitionFrom === null) {
-        gamepadButton[P_GAMEPAD].immediateTransitionFrom =
-          gamepadButton[P_GAMEPAD].value;
-      }
-      gamepadButton[P_GAMEPAD].value = value;
-      gamepadButton[P_GAMEPAD].pendingValue = value;
+      writeImmediateValue(gamepadButton, value);
     } else {
       console.warn(`Current controller does not have button ${id}.`);
     }
@@ -184,6 +185,22 @@ export class XRController extends XRTrackedInput {
     } else {
       console.warn(`Current controller does not have ${id} axes.`);
     }
+  }
+
+  /**
+   * Whether a button is pressed, including a value written this frame that
+   * the next frame will apply (matching getButtonValue).
+   */
+  getButtonPressed(id: string): boolean {
+    const gamepadButton =
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[id];
+    if (!gamepadButton) {
+      return false;
+    }
+    const pending = gamepadButton[P_GAMEPAD].pendingValue;
+    return pending === null
+      ? gamepadButton.pressed
+      : nextPressed(gamepadButton, gamepadButton.pressed, pending);
   }
 
   /**

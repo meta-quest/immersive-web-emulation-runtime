@@ -11,6 +11,7 @@ import {
   P_ANCHOR,
   P_DEVICE,
   P_FRAME,
+  P_GAMEPAD,
   P_HIT_TEST,
   P_MESH,
   P_PLANE,
@@ -51,7 +52,12 @@ import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
 import { XREye } from '../views/XRView.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
-import { XRInputSourceEventHandler } from '../events/XRInputSourceEvent.js';
+import {
+  XRInputSourceEvent,
+  XRInputSourceEventHandler,
+} from '../events/XRInputSourceEvent.js';
+import { edgeEventTypes, resetButton } from '../gamepad/button-edges.js';
+import { GamepadButton } from '../gamepad/Gamepad.js';
 import { mat4 } from 'gl-matrix';
 
 export type XRVisibilityState = 'visible' | 'visible-blurred' | 'hidden';
@@ -417,6 +423,36 @@ export class XRSession extends EventTarget {
         const removed = prevInputs.filter((item) => !currInputs.includes(item));
 
         this[P_SESSION].activeInputSources = currInputs;
+
+        // A source that goes away mid-press ends its action without
+        // completing it (`selectend`/`squeezeend` alone), on this frame and
+        // before the source change is announced. Sources hidden by a
+        // visibility change are cleared silently instead, as the native
+        // override does, so becoming visible again can't produce a click.
+        const visible =
+          this[P_SESSION].device[P_DEVICE].visibilityState === 'visible';
+        for (const inputSource of removed) {
+          for (const button of inputSource.gamepad?.buttons ?? []) {
+            if (!(button instanceof GamepadButton)) {
+              continue;
+            }
+            const trigger = button[P_GAMEPAD].eventTrigger;
+            const frame = this[P_SESSION].activeFrame;
+            if (
+              visible &&
+              trigger &&
+              frame &&
+              button[P_GAMEPAD].lastFramePressed
+            ) {
+              for (const type of edgeEventTypes('cancel', trigger)) {
+                this.dispatchEvent(
+                  new XRInputSourceEvent(type, { frame, inputSource }),
+                );
+              }
+            }
+            resetButton(button);
+          }
+        }
 
         if (added.length > 0 || removed.length > 0) {
           this.dispatchEvent(

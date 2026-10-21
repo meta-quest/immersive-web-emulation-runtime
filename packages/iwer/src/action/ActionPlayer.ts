@@ -34,6 +34,7 @@ import { InputSchema } from './ActionRecorder.js';
 import { XREye } from '../views/XRView.js';
 import type { XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSourceEvent } from '../events/XRInputSourceEvent.js';
+import { edgeEventTypes } from '../gamepad/button-edges.js';
 import { XRJointSpace } from '../spaces/XRJointSpace.js';
 import type { XRSession } from '../session/XRSession.js';
 import { XRSpace } from '../spaces/XRSpace.js';
@@ -129,6 +130,15 @@ export class ActionPlayer {
     // baseline for select/squeeze edge detection. -1 means none yet (so the
     // first applied frame establishes the baseline without firing edges).
     lastEventFramePointer: number;
+    // Actions whose start the app was sent, keyed by input index and trigger.
+    // Only these get a release or cancel.
+    startedActions: Map<
+      string,
+      { index: number; trigger: 'select' | 'squeeze' }
+    >;
+    // A loop wrap, seek or restart jumped away mid-press: started actions are
+    // cancelled (`<trigger>end` alone) on the next dispatch.
+    cancelPending: boolean;
   };
 
   constructor(
@@ -185,6 +195,8 @@ export class ActionPlayer {
           : 1,
       eventContext: options.eventContext,
       lastEventFramePointer: -1,
+      startedActions: new Map(),
+      cancelPending: false,
     };
 
     mat4.fromTranslation(
@@ -291,11 +303,13 @@ export class ActionPlayer {
     this[P_ACTION_PLAYER].autoAdvance = true;
     this[P_ACTION_PLAYER].manualFrameActive = false;
     this[P_ACTION_PLAYER].actualTimeStamp = performance.now();
-    // Reset edge-detection baseline so the first frame doesn't spuriously fire.
-    this[P_ACTION_PLAYER].lastEventFramePointer = -1;
+    // Reset edge-detection baseline so the first frame doesn't spuriously
+    // fire; anything held from an earlier run is cancelled.
+    this.markDiscontinuity();
   }
 
   stop() {
+    this.cancelStartedActions();
     this[P_ACTION_PLAYER].playing = false;
     this[P_ACTION_PLAYER].autoAdvance = true;
     this[P_ACTION_PLAYER].manualFrameActive = false;
@@ -384,9 +398,9 @@ export class ActionPlayer {
     const nextFramePointer = this.findFramePointer(absolute);
     if (nextFramePointer !== state.recordedFramePointer) {
       state.eventContext?.onDiscontinuity?.();
-      // A frame-changing seek is a discontinuity: reset the edge baseline so
-      // the jump itself doesn't manufacture select/squeeze edges.
-      state.lastEventFramePointer = -1;
+      // A frame-changing seek is a discontinuity: cancel what was held and
+      // reset the edge baseline so the jump doesn't manufacture edges.
+      this.markDiscontinuity();
     }
     state.playbackTime = absolute;
     state.recordedFramePointer = nextFramePointer;
@@ -437,12 +451,13 @@ export class ActionPlayer {
           state.recordedFramePointer = 0;
           state.playbackTime = state.startingTimeStamp;
           // The wrap is a discontinuity; don't fire edges across it.
-          state.lastEventFramePointer = -1;
+          this.markDiscontinuity();
         } else {
           state.playbackTime = state.endingTimeStamp;
           this.applyFrameAtPointer(0);
           // Publicly the player is stopped at the end, but native mode keeps
           // presenting this explicitly selected frame until stop() or play().
+          this.cancelStartedActions();
           state.playing = false;
           return;
         }
@@ -465,6 +480,7 @@ export class ActionPlayer {
     this[P_ACTION_PLAYER].actualTimeStamp = now;
     this[P_ACTION_PLAYER].playbackTime! += delta;
     const frames = this[P_ACTION_PLAYER].frames;
+    let reachedEnd = false;
     if (
       this[P_ACTION_PLAYER].playbackTime! >
       this[P_ACTION_PLAYER].endingTimeStamp
@@ -485,13 +501,13 @@ export class ActionPlayer {
         this[P_ACTION_PLAYER].recordedFramePointer =
           this.findFramePointer(wrapped);
         // The wrap is a discontinuity; don't manufacture edges across it.
-        this[P_ACTION_PLAYER].lastEventFramePointer = -1;
+        this.markDiscontinuity();
       } else {
         // Clamp to the recording's end so the final frame's pose is rendered
         // once (and single-frame recordings render at all) before stopping.
         this[P_ACTION_PLAYER].playbackTime =
           this[P_ACTION_PLAYER].endingTimeStamp;
-        this.stop();
+        reachedEnd = true;
       }
     }
     // Guard the advance so we never read past the last frame.
@@ -513,6 +529,11 @@ export class ActionPlayer {
         (((nextFrameData[0] as number) - lastFrameData[0]) as number)
       : 0;
     this.applyFrameAtPointer(alpha);
+    if (reachedEnd) {
+      // Stop after the final frame's edges, so an action still held at the
+      // end is cancelled rather than left open.
+      this.stop();
+    }
   }
 
   /**
@@ -602,6 +623,10 @@ export class ActionPlayer {
       return;
     }
     const baseline = state.lastEventFramePointer;
+    if (state.cancelPending) {
+      state.cancelPending = false;
+      this.cancelStartedActions();
+    }
     if (baseline < 0 || baseline === pointer) {
       // First applied frame (or no advance): establish the baseline silently.
       state.lastEventFramePointer = pointer;
@@ -664,40 +689,74 @@ export class ActionPlayer {
         if (eventTrigger == null) {
           return;
         }
-        const lastValue = fromData.buttons![buttonIndex]?.[2] ?? 0;
-        const nextValue = states[2];
-        if (lastValue === 0 && nextValue > 0) {
+        // Edges follow the recorded pressed bit, which already reflects the
+        // button's press/release thresholds. A release is only sent for an
+        // action whose start was sent.
+        const wasPressed = fromData.buttons![buttonIndex]?.[0] === 1;
+        const isPressed = states[0] === 1;
+        const key = `${index}:${eventTrigger}`;
+        const started = this[P_ACTION_PLAYER].startedActions;
+        let edge: 'press' | 'release' | null = null;
+        if (!wasPressed && isPressed) {
+          edge = 'press';
+          started.set(key, { index, trigger: eventTrigger });
+        } else if (wasPressed && !isPressed && started.delete(key)) {
+          edge = 'release';
+        }
+        for (const type of edgeEventTypes(edge, eventTrigger)) {
           context.session.dispatchEvent(
-            new XRInputSourceEvent(eventTrigger, { frame, inputSource }),
-          );
-          context.session.dispatchEvent(
-            new XRInputSourceEvent(eventTrigger + 'start', {
-              frame,
-              inputSource,
-            }),
-          );
-        } else if (lastValue > 0 && nextValue === 0) {
-          context.session.dispatchEvent(
-            new XRInputSourceEvent(eventTrigger + 'end', {
-              frame,
-              inputSource,
-            }),
+            new XRInputSourceEvent(type, { frame, inputSource }),
           );
         }
       });
     }
   }
 
+  /** Mark a jump in playback: started actions are cancelled on the next dispatch. */
+  private markDiscontinuity() {
+    const state = this[P_ACTION_PLAYER];
+    if (state.startedActions.size > 0) {
+      state.cancelPending = true;
+    }
+    state.lastEventFramePointer = -1;
+  }
+
   /**
-   * Map a recorded button index to its event trigger using the xr-standard
-   * mapping convention (button 0 -> 'select', button 1 -> 'squeeze'), matching
-   * how IWER's controller/hand configs assign eventTrigger. Other buttons (and
-   * non-xr-standard mappings) have no trigger.
+   * Ends every started action without completing it (`<trigger>end` alone),
+   * or forgets them when there is no frame to deliver on.
+   */
+  private cancelStartedActions() {
+    const state = this[P_ACTION_PLAYER];
+    const context = state.eventContext;
+    const frame = context?.getFrame();
+    if (context && frame) {
+      for (const { index, trigger } of state.startedActions.values()) {
+        const inputSource = state.inputSources.get(index)?.source;
+        if (!inputSource) continue;
+        for (const type of edgeEventTypes('cancel', trigger)) {
+          context.session.dispatchEvent(
+            new XRInputSourceEvent(type, { frame, inputSource }),
+          );
+        }
+      }
+    }
+    state.startedActions.clear();
+    state.cancelPending = false;
+  }
+
+  /**
+   * Map a recorded button index to its event trigger: for xr-standard mappings
+   * button 0 -> 'select' and button 1 -> 'squeeze'; for hands (IWER's hand
+   * gamepad has no mapping) button 0, the pinch, -> 'select'. Other buttons
+   * have no trigger.
    */
   private eventTriggerForButton(
     schema: InputSchema,
     buttonIndex: number,
   ): 'select' | 'squeeze' | null {
+    if (schema.hasHand && schema.mapping !== GamepadMappingType.XRStandard) {
+      return buttonIndex === 0 ? 'select' : null;
+    }
     if (schema.mapping !== GamepadMappingType.XRStandard) {
       return null;
     }
@@ -763,7 +822,11 @@ export class ActionPlayer {
       const gamepad = inputSource.gamepad!;
       nextInputData.buttons!.forEach((states, index) => {
         const gamepadButton = gamepad.buttons[index]! as GamepadButton;
-        gamepadButton[P_GAMEPAD].pressed = states[0] === 1 ? true : false;
+        // The flag follows the frame edges have been dispatched for (the
+        // earlier of the two being blended), so `pressed` and the
+        // select/squeeze events change together.
+        gamepadButton[P_GAMEPAD].pressed =
+          lastInputData.buttons![index][0] === 1;
         gamepadButton[P_GAMEPAD].touched = states[1] === 1 ? true : false;
         const lastValue = lastInputData.buttons![index][2];
         const nextValue = states[2];

@@ -57,7 +57,7 @@ test('queues a normal release until after the next frame-start boundary', async 
   assert.equal(layer.gazeCommitPendingRelease, undefined);
 });
 
-test('cancels a queued release synchronously during teardown', async () => {
+test('a forced release keeps a release the user already made', async () => {
   const { deferred, immediate, layer } = createLayerHarness();
   layer.gazeCommitActive = { mode: 'hand', handedness: 'right' };
 
@@ -66,8 +66,35 @@ test('cancels a queued release synchronously during teardown', async () => {
   layer.releaseGazeCommit(true);
   await Promise.resolve();
 
+  // Written for the next frame (a completed click), not cancelled.
+  assert.deepEqual(deferred, [0]);
+  assert.deepEqual(immediate, []);
+  assert.equal(layer.gazeCommitPendingRelease, undefined);
+});
+
+test('a forced release leaves a release already queued for the frame alone', async () => {
+  const { deferred, immediate, layer } = createLayerHarness();
+  layer.gazeCommitActive = { mode: 'hand', handedness: 'right' };
+
+  layer.releaseGazeCommit(false);
+  layer.schedulePendingGazeRelease();
+  await Promise.resolve();
+  assert.deepEqual(deferred, [0]);
+
+  layer.releaseGazeCommit(true);
+  assert.deepEqual(deferred, [0]);
+  assert.deepEqual(immediate, []);
+});
+
+test('a forced release cancels a press that is still held', () => {
+  const { deferred, immediate, layer } = createLayerHarness();
+  layer.gazeCommitActive = { mode: 'hand', handedness: 'right' };
+
+  layer.releaseGazeCommit(true);
+
   assert.deepEqual(deferred, []);
   assert.deepEqual(immediate, [0]);
+  assert.equal(layer.gazeCommitActive, undefined);
 });
 
 test('ignores foreign pointer movement while a gaze pointer is captured', () => {

@@ -1570,6 +1570,39 @@ describe('XRNativeOverride', () => {
     expect(events).toEqual(['selectstart', 'selectend']);
   });
 
+  test('completes a released select but only ends a cancelled one', async () => {
+    const device = new XRDevice(metaQuest3);
+    const nativeXR = new MockXRSystem();
+    override = installNativeOverride(device, {
+      xrSystem: nativeXR as unknown as XRSystem,
+      globalObject: makeNativeGlobal(),
+      onUnsupported: 'throw',
+    });
+    const session = await nativeXR.requestSession('immersive-vr');
+    publishInitialInputSources(session);
+    const events: string[] = [];
+    for (const type of ['selectstart', 'select', 'selectend']) {
+      session.addEventListener(type, () => events.push(type));
+    }
+    const frame = (time: number) => {
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(time);
+    };
+
+    device.controllers.right!.updateButtonValue('trigger', 1);
+    frame(80);
+    device.controllers.right!.updateButtonValue('trigger', 0);
+    frame(81);
+    expect(events).toEqual(['selectstart', 'select', 'selectend']);
+
+    events.length = 0;
+    device.controllers.right!.updateButtonValue('trigger', 1);
+    frame(82);
+    device.remote.forceRelease();
+    frame(83);
+    expect(events).toEqual(['selectstart', 'selectend']);
+  });
+
   test('always invokes the application callback when frame preparation throws', async () => {
     const device = new XRDevice(metaQuest3);
     const nativeXR = new MockXRSystem();

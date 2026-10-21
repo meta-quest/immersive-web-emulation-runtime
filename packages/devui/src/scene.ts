@@ -476,9 +476,12 @@ export class InputLayer {
     }
 
     if (forceImmediate) {
+      const queued = this.gazeCommitPendingRelease?.queuedForFrame;
       this.gazeCommitPendingRelease = undefined;
-      if (pendingRelease) {
-        this.writeGazeCommitValue(pendingRelease, 0, true);
+      // The user already let go: that release completes the click, so it
+      // stays a release (queued for the next frame) rather than a cancel.
+      if (pendingRelease && !queued) {
+        this.writeGazeCommitValue(pendingRelease, 0, false);
       }
       if (active && active !== pendingRelease) {
         this.writeGazeCommitValue(active, 0, true);

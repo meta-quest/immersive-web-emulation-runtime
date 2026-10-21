@@ -324,7 +324,7 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'set_select_value',
     title: 'Set select value',
     description:
-      'Set the select value (trigger/pinch), 0..1. Use xr_select for a full press+release.',
+      'Set the select value (trigger/pinch), 0..1. A hand pinch selects at 0.9 and lets go at 0.7; a trigger selects above 0. Use xr_select for a full press+release.',
     readOnlyHint: false,
     inputShape: {
       device: selectableDeviceEnum,
@@ -336,7 +336,7 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'select',
     title: 'Select (press + release)',
     description:
-      'Perform a full select gesture (fires selectstart → select → selectend) over `duration` seconds (default 0.15). Requires an active session.',
+      'Perform a full select gesture: selectstart on press, then select and selectend on release, holding `duration` seconds (default 0.15). Requires an active session.',
     readOnlyHint: false,
     inputShape: {
       device: selectableDeviceEnum,

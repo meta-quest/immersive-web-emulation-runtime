@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import type { ButtonThresholds } from './button-edges.js';
 import { P_GAMEPAD } from '../private.js';
 
 export enum GamepadMappingType {
@@ -34,12 +35,20 @@ export class GamepadButton {
   [P_GAMEPAD]: {
     type: 'analog' | 'binary' | 'manual';
     eventTrigger: 'select' | 'squeeze' | null;
+    // The pressed flag. Set by the frame update (see button-edges.ts) for
+    // analog and binary buttons, and by the owner for manual buttons.
     pressed: boolean;
     touched: boolean;
     value: number;
     lastFrameValue: number;
+    lastFramePressed: boolean;
     pendingValue: number | null;
-    immediateTransitionFrom: number | null;
+    // Press/release levels; null presses above 0 and releases at 0.
+    thresholds: ButtonThresholds | null;
+    cancelRequested: boolean;
+    // Bumped on every cancel, so observers with their own baselines (the
+    // native override) can tell a cancel from a release.
+    cancelGeneration: number;
   };
 
   constructor(
@@ -53,17 +62,16 @@ export class GamepadButton {
       touched: false,
       value: 0,
       lastFrameValue: 0,
+      lastFramePressed: false,
       pendingValue: null,
-      immediateTransitionFrom: null,
+      thresholds: null,
+      cancelRequested: false,
+      cancelGeneration: 0,
     };
   }
 
   get pressed() {
-    if (this[P_GAMEPAD].type === 'manual') {
-      return this[P_GAMEPAD].pressed;
-    } else {
-      return this[P_GAMEPAD].value > 0;
-    }
+    return this[P_GAMEPAD].pressed;
   }
 
   get touched() {

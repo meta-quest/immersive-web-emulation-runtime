@@ -118,6 +118,33 @@ describe('XRHandInput', () => {
     }).toThrow('"default" and "pinch" hand pose configs are required');
   });
 
+  test('rejects pinch thresholds outside 0 < release < press <= 1', () => {
+    for (const pinchThresholds of [
+      { press: 0.7, release: 0.9 },
+      { press: 0.8, release: 0.8 },
+      { press: 0.9, release: 0 },
+      { press: 1.2, release: 0.7 },
+      { press: Number.NaN, release: 0.7 },
+    ]) {
+      expect(
+        () =>
+          new XRHandInput(
+            { ...oculusHandConfig, pinchThresholds },
+            XRHandedness.Left,
+            globalSpace,
+          ),
+      ).toThrow('pinchThresholds need 0 < release < press <= 1');
+    }
+    const custom = new XRHandInput(
+      { ...oculusHandConfig, pinchThresholds: { press: 1, release: 0.5 } },
+      XRHandedness.Left,
+      globalSpace,
+    );
+    custom.updatePinchValue(0.95);
+    custom.onFrameStart(mockFrame);
+    expect(custom.inputSource.gamepad!.buttons[0]!.pressed).toBe(false);
+  });
+
   test('should throw error for missing pinch pose config', () => {
     const invalidConfig = {
       ...oculusHandConfig,

@@ -31,7 +31,7 @@ Fingers currently taken from other poses on top of `poseId`, keyed by finger (`t
 
 ### `pinchValue`
 
-Indicates the current level of the pinch gesture being emulated, with a range from `0` (no pinch) to `1` (full pinch).
+Indicates the current level of the pinch gesture being emulated, with a range from `0` (no pinch) to `1` (full pinch). The hand selects when the pinch reaches `0.9` (gamepad button 0 `pressed`, `selectstart`) and lets go when it falls to `0.7` or below (`select`, then `selectend`); see `pinchThresholds` in [XRHandInputConfig](./config-interfaces.md#xrhandinputconfig).
 
 - **Type**: `number`
 - **Readonly**

@@ -366,9 +366,9 @@ export function registerXREventsTests(harness: TestHarness): void {
       canvas = null;
     });
 
-    // 18. select lifecycle [SKIP:native] [DEVIATION: iwer fires select on press not release]
+    // 18. select lifecycle in spec order [SKIP:native]
     harness.it(
-      'select lifecycle [SKIP:native] [DEVIATION: iwer select timing]',
+      'select lifecycle: selectstart on press, select then selectend on release [SKIP:native]',
       async (ctx) => {
         harness.skipIf(ctx.mode === 'native', 'Requires iwer device control');
         const result = await startSession('immersive-vr');
@@ -386,28 +386,24 @@ export function registerXREventsTests(harness: TestHarness): void {
 
         await pressButton(ctx, session, 'right', 'trigger');
         await advanceFrames(session, 2);
+        harness.assert(
+          events.join(',') === 'selectstart',
+          `only selectstart should fire on press (got: ${events.join(', ')})`,
+        );
 
         await releaseButton(ctx, session, 'right', 'trigger');
         await advanceFrames(session, 2);
 
         harness.assert(
-          events.includes('selectstart'),
-          `selectstart should fire (got: ${events.join(', ')})`,
-        );
-        harness.assert(
-          events.includes('selectend'),
-          `selectend should fire (got: ${events.join(', ')})`,
-        );
-        harness.assert(
-          events.includes('select'),
-          `select should fire (got: ${events.join(', ')})`,
+          events.join(',') === 'selectstart,select,selectend',
+          `expected selectstart, select, selectend (got: ${events.join(', ')})`,
         );
       },
     );
 
-    // 19. squeeze lifecycle [SKIP:native] [DEVIATION: same ordering issue]
+    // 19. squeeze lifecycle in spec order [SKIP:native]
     harness.it(
-      'squeeze lifecycle [SKIP:native] [DEVIATION: iwer squeeze timing]',
+      'squeeze lifecycle: squeezestart on press, squeeze then squeezeend on release [SKIP:native]',
       async (ctx) => {
         harness.skipIf(ctx.mode === 'native', 'Requires iwer device control');
         const result = await startSession('immersive-vr');
@@ -425,21 +421,17 @@ export function registerXREventsTests(harness: TestHarness): void {
 
         await pressButton(ctx, session, 'right', 'squeeze');
         await advanceFrames(session, 2);
+        harness.assert(
+          events.join(',') === 'squeezestart',
+          `only squeezestart should fire on press (got: ${events.join(', ')})`,
+        );
 
         await releaseButton(ctx, session, 'right', 'squeeze');
         await advanceFrames(session, 2);
 
         harness.assert(
-          events.includes('squeezestart'),
-          `squeezestart should fire (got: ${events.join(', ')})`,
-        );
-        harness.assert(
-          events.includes('squeezeend'),
-          `squeezeend should fire (got: ${events.join(', ')})`,
-        );
-        harness.assert(
-          events.includes('squeeze'),
-          `squeeze should fire (got: ${events.join(', ')})`,
+          events.join(',') === 'squeezestart,squeeze,squeezeend',
+          `expected squeezestart, squeeze, squeezeend (got: ${events.join(', ')})`,
         );
       },
     );

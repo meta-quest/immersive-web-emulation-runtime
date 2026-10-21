@@ -76,6 +76,10 @@ describe('XRController', () => {
         type,
         pendingValue: 0,
         touched: false,
+        pressed: false,
+        value: 0,
+        lastFramePressed: false,
+        thresholds: null,
       },
     });
 

@@ -11,7 +11,11 @@ import type {
   ActionPlayer,
   ActionPlayerEventContext,
 } from '../action/ActionPlayer.js';
-import type { XRDevice, XRGlobalObject } from '../device/XRDevice.js';
+import {
+  MAX_REMOTE_FRAME_MS,
+  type XRDevice,
+  type XRGlobalObject,
+} from '../device/XRDevice.js';
 import {
   isGazeTrackingFeature,
   supportsGazeTracking,
@@ -19,6 +23,7 @@ import {
 } from '../device/XRGazeInput.js';
 import type { XRTrackedInput } from '../device/XRTrackedInput.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
+import { advanceButton, resetButton } from '../gamepad/button-edges.js';
 import { XRHandJoint as IwerHandJoint } from '../input/XRHand.js';
 import type { XRInputSource as IwerInputSource } from '../input/XRInputSource.js';
 import {
@@ -169,7 +174,11 @@ interface InputBinding {
   gripSpace?: XRSpace;
   joints: JointBinding[];
   eventButtons: GamepadButton[];
-  previousButtonValues: Map<GamepadButton, number>;
+  // Per-binding edge baselines: the pressed flag and cancel generation this
+  // binding last observed. Shared button state only advances on the
+  // shared-state driver, so each binding diffs against its own copy.
+  previousButtonPressed: Map<GamepadButton, boolean>;
+  previousCancelGeneration: Map<GamepadButton, number>;
   activeButtons: Set<GamepadButton>;
   /**
    * Actions the application has actually been told about: a start event was
@@ -633,6 +642,12 @@ export class XRNativeOverride implements NativeOverrideHandle {
   /** Timestamp of the last frame that advanced shared device/playback state. */
   private lastPrimaryTime: number | undefined;
   private wiredPlayer: ActionPlayer | null = null;
+  // Recorded actions whose completion event (`select`/`squeeze`) arrived and
+  // is waiting for its end event.
+  private playbackCompletions = new WeakMap<
+    IwerInputSource,
+    Set<InputActionTrigger>
+  >();
   private previousPlayerContext: ActionPlayerEventContext | undefined;
   /**
    * Set while a native frame samples a recording. It keeps the final sampled
@@ -1265,7 +1280,8 @@ export class XRNativeOverride implements NativeOverrideHandle {
       gripSpace,
       joints,
       eventButtons: this.eventButtons(iwerSource),
-      previousButtonValues: new Map(),
+      previousButtonPressed: new Map(),
+      previousCancelGeneration: new Map(),
       activeButtons: new Set(),
       activeActions: new Set(),
       pendingActions: new Set(),
@@ -1524,8 +1540,16 @@ export class XRNativeOverride implements NativeOverrideHandle {
 
   private resetButtonBaseline(binding: InputBinding): void {
     for (const button of binding.eventButtons) {
-      binding.previousButtonValues.set(button, button.value);
+      this.observeButton(binding, button);
     }
+  }
+
+  private observeButton(binding: InputBinding, button: GamepadButton): void {
+    binding.previousButtonPressed.set(button, button.pressed);
+    binding.previousCancelGeneration.set(
+      button,
+      button[P_GAMEPAD].cancelGeneration,
+    );
   }
 
   /**
@@ -2179,7 +2203,9 @@ export class XRNativeOverride implements NativeOverrideHandle {
     const previousTime = this.lastPrimaryTime;
     this.lastPrimaryTime = time;
     const delta =
-      previousTime === undefined ? 16.67 : Math.max(0, time - previousTime);
+      previousTime === undefined
+        ? 16.67
+        : Math.min(Math.max(0, time - previousTime), MAX_REMOTE_FRAME_MS);
     if (this.options.mode === 'gaze-only') {
       this.device[P_DEVICE].remote.update(delta);
       // A queued command may target the synthetic device's viewer. Reassert
@@ -2239,16 +2265,9 @@ export class XRNativeOverride implements NativeOverrideHandle {
       input.updateTargetRaySpace();
       for (const button of input.inputSource.gamepad?.buttons ?? []) {
         if (button instanceof GamepadButton) {
-          // An immediate write already moved `value`, so the edge is measured
-          // from the value it replaced instead of from the new one.
-          button[P_GAMEPAD].lastFrameValue =
-            button[P_GAMEPAD].immediateTransitionFrom ??
-            button[P_GAMEPAD].value;
-          button[P_GAMEPAD].immediateTransitionFrom = null;
-          if (button[P_GAMEPAD].pendingValue != null) {
-            button[P_GAMEPAD].value = button[P_GAMEPAD].pendingValue;
-            button[P_GAMEPAD].pendingValue = null;
-          }
+          // Edges are dispatched per binding (dispatchButtonTransitions), so
+          // the shared advance's own edge report is not used here.
+          advanceButton(button);
         }
       }
       (input as { updateHandPose?: () => void }).updateHandPose?.();
@@ -2548,17 +2567,14 @@ export class XRNativeOverride implements NativeOverrideHandle {
         if (clearsSharedInputState) {
           this.releaseButton(button);
         }
-        binding.previousButtonValues.set(button, button.value);
+        this.observeButton(binding, button);
       }
     }
   }
 
   /** Drops a shared device button back to a fully released, edge-free state. */
   private releaseButton(button: GamepadButton): void {
-    button[P_GAMEPAD].value = 0;
-    button[P_GAMEPAD].pendingValue = 0;
-    button[P_GAMEPAD].lastFrameValue = 0;
-    button[P_GAMEPAD].immediateTransitionFrom = null;
+    resetButton(button);
   }
 
   private connectedSources(
@@ -2582,29 +2598,29 @@ export class XRNativeOverride implements NativeOverrideHandle {
         continue;
       }
       for (const button of binding.eventButtons) {
-        const previous = binding.previousButtonValues.get(button) ?? 0;
-        const current = button.value;
-        binding.previousButtonValues.set(button, current);
+        const previous = binding.previousButtonPressed.get(button) ?? false;
+        const cancelled =
+          (binding.previousCancelGeneration.get(button) ??
+            button[P_GAMEPAD].cancelGeneration) !==
+          button[P_GAMEPAD].cancelGeneration;
+        const current = button.pressed;
+        this.observeButton(binding, button);
         const trigger = button[P_GAMEPAD].eventTrigger;
         if (!trigger) {
           continue;
         }
-        if (previous === 0 && current > 0) {
-          binding.activeButtons.add(button);
-          this.dispatchInputEvent(
-            adapter,
-            `${trigger}start` as InputEventName,
-            frame,
-            binding.inputSource,
-          );
-        } else if (previous > 0 && current === 0) {
+        // A release completes the action (`<trigger>` + `<trigger>end`); a
+        // cancel only ends it (`<trigger>end`).
+        if (previous && (cancelled || !current)) {
           if (binding.activeButtons.delete(button)) {
-            this.dispatchInputEvent(
-              adapter,
-              trigger,
-              frame,
-              binding.inputSource,
-            );
+            if (!cancelled) {
+              this.dispatchInputEvent(
+                adapter,
+                trigger,
+                frame,
+                binding.inputSource,
+              );
+            }
             this.dispatchInputEvent(
               adapter,
               `${trigger}end` as InputEventName,
@@ -2612,6 +2628,15 @@ export class XRNativeOverride implements NativeOverrideHandle {
               binding.inputSource,
             );
           }
+        }
+        if (current && (!previous || cancelled)) {
+          binding.activeButtons.add(button);
+          this.dispatchInputEvent(
+            adapter,
+            `${trigger}start` as InputEventName,
+            frame,
+            binding.inputSource,
+          );
         }
       }
     }
@@ -2672,17 +2697,13 @@ export class XRNativeOverride implements NativeOverrideHandle {
   }
 
   /**
-   * Translates one ActionPlayer edge into WebXR's native event order and queues
-   * it on every live session.
+   * Queues one ActionPlayer edge on every live session, addressed to the
+   * native facades.
    *
-   * ActionPlayer emits `<trigger>` + `<trigger>start` when a recorded button
-   * goes down and `<trigger>end` when it comes back up. That order is IWER's
-   * long-standing emulated behavior and is left untouched for the emulated
-   * runtime, but WebXR specifies `<trigger>start` on press and `<trigger>` +
-   * `<trigger>end` on release. On a browser-owned session the application is
-   * entitled to the specified order, and to the same order the override
-   * already produces for live device input, so the press-time completion event
-   * is dropped and reissued on release.
+   * ActionPlayer emits WebXR order: `<trigger>start` on press, `<trigger>` then
+   * `<trigger>end` on release, and `<trigger>end` alone on a cancel. The
+   * completion event is held until its end arrives, so each session emits the
+   * pair only for an action it saw start.
    */
   private forwardPlaybackEvent(event: Event): void {
     const recorded = (event as { inputSource?: IwerInputSource }).inputSource;
@@ -2702,10 +2723,16 @@ export class XRNativeOverride implements NativeOverrideHandle {
     if (suffix !== '' && suffix !== 'start' && suffix !== 'end') {
       return;
     }
+    let completions = this.playbackCompletions.get(recorded);
+    if (!completions) {
+      completions = new Set();
+      this.playbackCompletions.set(recorded, completions);
+    }
     if (suffix === '') {
-      // The player's press-time completion event; release reissues it in order.
+      completions.add(trigger);
       return;
     }
+    const completed = suffix === 'end' && completions.delete(trigger);
     for (const adapter of this.liveSessions) {
       let binding: InputBinding;
       try {
@@ -2735,7 +2762,9 @@ export class XRNativeOverride implements NativeOverrideHandle {
         if (!binding.pendingActions.delete(trigger)) {
           continue;
         }
-        this.emitInputEvent(adapter, trigger, binding.inputSource, true);
+        if (completed) {
+          this.emitInputEvent(adapter, trigger, binding.inputSource, true);
+        }
         this.emitInputEvent(
           adapter,
           `${trigger}end` as InputEventName,
@@ -4485,7 +4514,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
         if (clearsSharedInputState) {
           this.releaseButton(button);
         }
-        binding.previousButtonValues.set(button, button.value);
+        this.observeButton(binding, button);
       }
       binding.activeButtons.clear();
     }

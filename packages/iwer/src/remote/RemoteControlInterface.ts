@@ -14,6 +14,8 @@ import type {
 import type { Vec3, Quat } from '../types/state.js';
 import { P_DEVICE } from '../private.js';
 import { XRHandFinger, handFingerJoints } from '../device/XRHandInput.js';
+import { GamepadButton } from '../gamepad/Gamepad.js';
+import { cancelButton } from '../gamepad/button-edges.js';
 import type {
   DeviceId,
   ConnectedInputDeviceId,
@@ -298,12 +300,13 @@ export class RemoteControlInterface {
   readonly RELEASE_TIMEOUT_MS = 30000;
 
   /**
-   * Per-action timeout in milliseconds. A queued action is rejected if no frame
-   * advances the queue within this window (plus the action's own duration), so
-   * callers don't hang forever when the XR render loop is paused or throttled.
+   * Queue watchdog in milliseconds. Queued actions are rejected when no frame
+   * arrives for this long, so callers don't hang forever when the XR render
+   * loop is paused. Frames that keep arriving keep the queue alive, however
+   * long the actions ahead of it run.
    */
   readonly ACTION_TIMEOUT_MS = 10000;
-  private actionTimers = new WeakMap<Action, ReturnType<typeof setTimeout>>();
+  private watchdog: ReturnType<typeof setTimeout> | null = null;
 
   constructor(device: XRDevice) {
     this.device = device;
@@ -353,7 +356,7 @@ export class RemoteControlInterface {
         reject,
       };
       this.commandQueue.push(action);
-      this.armActionTimeout(action, method);
+      this.armWatchdog();
     });
   }
 
@@ -381,43 +384,39 @@ export class RemoteControlInterface {
         reject,
       };
       this.commandQueue.push(action);
-      // Give duration actions their full runtime plus the standard grace window.
-      this.armActionTimeout(action, method, durationMs);
+      this.armWatchdog();
     });
   }
 
   /**
-   * Arm a timeout that rejects and removes a queued action if no frame processes
-   * it in time. Without this, a state-mutating dispatch hangs forever when the
-   * render loop that drives update() is paused.
+   * (Re)arm the queue watchdog. Called on every enqueue and every frame, so it
+   * only fires when frames stop arriving while actions are waiting.
    */
-  private armActionTimeout(action: Action, method: string, extraMs = 0): void {
-    const timeoutMs = this.ACTION_TIMEOUT_MS + extraMs;
-    const timer = setTimeout(() => {
-      const index = this.commandQueue.indexOf(action);
-      if (index === -1) {
-        return;
-      }
-      this.commandQueue.splice(index, 1);
-      this.actionTimers.delete(action);
-      action.reject(
-        new Error(
-          `RemoteControlInterface: action '${method}' timed out after ` +
-            `${timeoutMs}ms with no frame processing the queue ` +
-            `(is the XR render loop running?).`,
-        ),
-      );
-    }, timeoutMs);
-    this.actionTimers.set(action, timer);
-  }
-
-  /** Clear a queued action's timeout once it has been settled. */
-  private clearActionTimeout(action: Action): void {
-    const timer = this.actionTimers.get(action);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      this.actionTimers.delete(action);
+  private armWatchdog(): void {
+    if (this.watchdog !== null) {
+      clearTimeout(this.watchdog);
+      this.watchdog = null;
     }
+    if (this.commandQueue.length === 0) {
+      return;
+    }
+    this.watchdog = setTimeout(() => {
+      this.watchdog = null;
+      const stalled = this.commandQueue;
+      this.commandQueue = [];
+      // Nothing can finish what was held; end it without completing it.
+      this.cancelHeldInputs();
+      this.startReleaseTimer();
+      for (const action of stalled) {
+        action.reject(
+          new Error(
+            `RemoteControlInterface: action '${action.method}' timed out after ` +
+              `${this.ACTION_TIMEOUT_MS}ms with no frame processing the queue ` +
+              `(is the XR render loop running?).`,
+          ),
+        );
+      }
+    }, this.ACTION_TIMEOUT_MS);
   }
 
   /**
@@ -440,8 +439,19 @@ export class RemoteControlInterface {
       this.device.controlMode = 'programmatic';
     }
 
+    // Devices whose buttons were written this frame.
+    const written = new Set<unknown>();
     while (this.commandQueue.length > 0) {
       const action = this.commandQueue[0];
+      // A second write to a device's buttons waits for the next frame, so a
+      // press and the release queued behind it never land in the same frame
+      // (the app would see neither edge). Different devices share a frame.
+      const writes = RemoteControlInterface.INPUT_WRITE_METHODS.has(
+        action.method,
+      );
+      if (writes && written.has(action.params.device)) {
+        break;
+      }
 
       if (action.type === 'discrete') {
         // Execute discrete action immediately
@@ -451,8 +461,13 @@ export class RemoteControlInterface {
         } catch (error) {
           action.reject(error as Error);
         }
-        this.clearActionTimeout(action);
         this.commandQueue.shift();
+        if (writes) {
+          written.add(action.params.device);
+        }
+        if (RemoteControlInterface.FRAME_ENDING_METHODS.has(action.method)) {
+          break;
+        }
         // Continue to next action
       } else {
         // Duration action - lerp by delta time
@@ -466,7 +481,6 @@ export class RemoteControlInterface {
           } catch (error) {
             action.reject(error as Error);
           }
-          this.clearActionTimeout(action);
           this.commandQueue.shift();
           // Continue to next action
         } else {
@@ -476,7 +490,6 @@ export class RemoteControlInterface {
             this.applyDurationLerpState(action, t);
           } catch (error) {
             action.reject(error as Error);
-            this.clearActionTimeout(action);
             this.commandQueue.shift();
             continue;
           }
@@ -488,6 +501,7 @@ export class RemoteControlInterface {
 
     // Notify state change
     this.device.notifyStateChange();
+    this.armWatchdog();
 
     // Start release timer if queue is empty
     if (this.commandQueue.length === 0) {
@@ -741,6 +755,9 @@ export class RemoteControlInterface {
     deviceId: SelectableDeviceId,
     value: number,
   ): void {
+    if (typeof value !== 'number' || !(value >= 0 && value <= 1)) {
+      throw new Error(`Select value must be within [0, 1], got ${value}.`);
+    }
     switch (deviceId) {
       case 'controller-left':
         this.device.controllers.left?.updateButtonValue('trigger', value);
@@ -1273,7 +1290,7 @@ export class RemoteControlInterface {
         .replace('b-button', 'b'),
       value: controller.getButtonValue(name),
       touched: controller.getButtonTouched(name),
-      pressed: controller.getButtonValue(name) > 0.5,
+      pressed: controller.getButtonPressed(name),
     }));
 
     const axesData = controller.getAxes();
@@ -1438,7 +1455,8 @@ export class RemoteControlInterface {
     const { state } = params;
 
     if (!state) {
-      // Reset to initial state
+      // Reset to initial state; held buttons are cancelled, not completed.
+      this.cancelHeldInputs();
       this.device.position.set(0, 1.6, 0);
       this.device.quaternion.set(0, 0, 0, 1);
       this.device.primaryInputMode = 'controller';
@@ -1613,6 +1631,27 @@ export class RemoteControlInterface {
   private static readonly ACTIVE_IMMEDIATE_METHODS = new Set([
     'accept_session',
     'end_session',
+  ]);
+
+  /**
+   * Queued methods that write a device's buttons. A second write to the same
+   * device waits for the next frame (see update()).
+   */
+  private static readonly INPUT_WRITE_METHODS = new Set([
+    'set_select_value',
+    'set_gamepad_state',
+    '_select_press',
+    '_select_release',
+  ]);
+
+  /**
+   * Queued methods that end the queue's work for the frame: they change which
+   * input sources exist, which the app hears about before any edge.
+   */
+  private static readonly FRAME_ENDING_METHODS = new Set([
+    'set_input_mode',
+    'set_connected',
+    'set_device_state',
   ]);
 
   /**
@@ -1837,6 +1876,7 @@ export class RemoteControlInterface {
       };
 
       this.commandQueue.push(action1, action2, action3);
+      this.armWatchdog();
     });
   }
 
@@ -1863,41 +1903,62 @@ export class RemoteControlInterface {
   }
 
   /**
+   * Called when the XR session ends: queued commands can't run against a
+   * session that is gone, so they are rejected instead of resuming in the
+   * next session.
+   */
+  onSessionEnd(): void {
+    const pending = this.commandQueue;
+    this.commandQueue = [];
+    this.armWatchdog();
+    for (const action of pending) {
+      action.reject(new Error('The XR session ended.'));
+    }
+    if (this._isCaptured) {
+      this.startReleaseTimer();
+    }
+  }
+
+  /**
    * Force release capture mode (for testing/cleanup)
    */
   forceRelease(): void {
     this.cancelReleaseTimer();
     this._isCaptured = false;
     this.device.controlMode = 'manual';
-    // Clear pending actions (and their timeout timers)
-    for (const action of this.commandQueue) {
-      this.clearActionTimeout(action);
+    // Clear pending actions
+    const pending = this.commandQueue;
+    this.commandQueue = [];
+    this.armWatchdog();
+    for (const action of pending) {
       action.reject(new Error('Capture released'));
     }
-    this.commandQueue = [];
 
-    // Reset any stuck input values on BOTH controllers and hands so an
-    // interrupted select/squeeze/thumbstick (or hand pinch) doesn't stay
-    // engaged. Poses are intentionally left where they are.
+    // Cancel any held input on BOTH controllers and hands so an interrupted
+    // select/squeeze/thumbstick (or hand pinch) doesn't stay engaged. Held
+    // select/squeeze actions end without completing. Poses are intentionally
+    // left where they are.
+    this.cancelHeldInputs();
     for (const hand of ['left', 'right'] as const) {
-      const controller = this.device.controllers[hand];
-      if (controller) {
-        const buttonNames = [
-          'trigger',
-          'squeeze',
-          'thumbstick',
-          'thumbrest',
-          hand === 'left' ? 'x-button' : 'a-button',
-          hand === 'left' ? 'y-button' : 'b-button',
-        ];
-        for (const name of buttonNames) {
-          controller.updateButtonValue(name, 0);
+      this.device.controllers[hand]?.updateAxes('thumbstick', 0, 0);
+    }
+  }
+
+  /**
+   * Cancel every held button on both controllers and hands: values drop to 0
+   * and a press the app saw ends with `selectend`/`squeezeend` alone.
+   */
+  private cancelHeldInputs(): void {
+    for (const hand of ['left', 'right'] as const) {
+      for (const input of [
+        this.device.controllers[hand],
+        this.device.hands[hand],
+      ]) {
+        for (const button of input?.inputSource.gamepad?.buttons ?? []) {
+          if (button instanceof GamepadButton) {
+            cancelButton(button);
+          }
         }
-        controller.updateAxes('thumbstick', 0, 0);
-      }
-      const handInput = this.device.hands[hand];
-      if (handInput) {
-        handInput.updatePinchValue(0);
       }
     }
   }

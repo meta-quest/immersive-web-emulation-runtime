@@ -29,6 +29,11 @@ import { mat4, quat, vec3 } from 'gl-matrix';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRJointSpace } from '../spaces/XRJointSpace.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
+import {
+  ButtonThresholds,
+  writeImmediateValue,
+  writePendingValue,
+} from '../gamepad/button-edges.js';
 import { libraryHandPoses } from './configs/hand/library.js';
 import { pinchHandPose } from './configs/hand/pinch.js';
 import { pointHandPose } from './configs/hand/point.js';
@@ -44,6 +49,16 @@ export interface HandPose {
   gripOffsetMatrix?: mat4;
 }
 
+/**
+ * Pinch levels at which a hand selects and lets go: press at 0.9 (fingertips
+ * about 1 cm apart), release at 0.7 (about 3 cm apart), so a pinch that closes
+ * gradually selects when the fingertips meet, as hand tracking does.
+ */
+export const DEFAULT_PINCH_THRESHOLDS: ButtonThresholds = {
+  press: 0.9,
+  release: 0.7,
+};
+
 export interface XRHandInputConfig {
   profileId: string;
   fallbackProfileIds: string[];
@@ -54,6 +69,11 @@ export interface XRHandInputConfig {
     // Additional poses can be specified freely with string keys.
     [poseId: string]: HandPose;
   };
+  /**
+   * Pinch press/release levels, 0 < release < press <= 1; defaults to
+   * DEFAULT_PINCH_THRESHOLDS.
+   */
+  pinchThresholds?: ButtonThresholds;
 }
 
 export type XRHandFinger = 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
@@ -234,6 +254,20 @@ export class XRHandInput extends XRTrackedInput {
         'InvalidStateError',
       );
     }
+    const pinchThresholds =
+      handInputConfig.pinchThresholds ?? DEFAULT_PINCH_THRESHOLDS;
+    if (
+      !(
+        pinchThresholds.release > 0 &&
+        pinchThresholds.release < pinchThresholds.press &&
+        pinchThresholds.press <= 1
+      )
+    ) {
+      throw new DOMException(
+        'pinchThresholds need 0 < release < press <= 1',
+        'InvalidStateError',
+      );
+    }
 
     const targetRaySpace = new XRSpace(globalSpace);
     const gripSpace = new XRSpace(targetRaySpace);
@@ -256,6 +290,8 @@ export class XRHandInput extends XRTrackedInput {
     );
 
     super(inputSource);
+    const pinchButton = inputSource.gamepad![P_GAMEPAD].buttonsMap.pinch!;
+    pinchButton[P_GAMEPAD].thresholds = { ...pinchThresholds };
     const blendedPose = { jointTransforms: {} } as HandPose;
     handJoints.forEach((jointName) => {
       blendedPose.jointTransforms[jointName] = {
@@ -450,31 +486,29 @@ export class XRHandInput extends XRTrackedInput {
   }
 
   updatePinchValue(value: number) {
-    if (value > 1 || value < 0) {
+    if (!(value >= 0 && value <= 1)) {
       console.warn(`Out-of-range value ${value} provided for pinch`);
       return;
     }
-    const gamepadButton =
-      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[
-        'pinch'
-      ]!;
-    gamepadButton[P_GAMEPAD].pendingValue = value;
+    writePendingValue(
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap.pinch!,
+      value,
+    );
   }
 
-  /** Clear or seed pinch state synchronously for interaction cancellation. */
+  /**
+   * Set pinch synchronously. Releasing a held pinch this way cancels the
+   * select (`selectend` without `select`), for interaction cancellation.
+   */
   setPinchValueImmediate(value: number) {
-    if (value > 1 || value < 0) {
+    if (!(value >= 0 && value <= 1)) {
       console.warn(`Out-of-range value ${value} provided for pinch`);
       return;
     }
-    const gamepadButton =
-      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap.pinch!;
-    if (gamepadButton[P_GAMEPAD].immediateTransitionFrom === null) {
-      gamepadButton[P_GAMEPAD].immediateTransitionFrom =
-        gamepadButton[P_GAMEPAD].value;
-    }
-    gamepadButton[P_GAMEPAD].value = value;
-    gamepadButton[P_GAMEPAD].pendingValue = value;
+    writeImmediateValue(
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap.pinch!,
+      value,
+    );
   }
 
   onFrameStart(frame: XRFrame): void {

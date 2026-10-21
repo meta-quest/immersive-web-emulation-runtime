@@ -11,6 +11,12 @@ import {
   GamepadHapticActuator,
   GamepadMappingType,
 } from '../../src/gamepad/Gamepad.js';
+import {
+  advanceButton,
+  cancelButton,
+  writeImmediateValue,
+  writePendingValue,
+} from '../../src/gamepad/button-edges.js';
 import { P_GAMEPAD } from '../../src/private.js';
 
 describe('GamepadButton', () => {
@@ -39,11 +45,12 @@ describe('GamepadButton', () => {
   test('should handle analog type button pressed based on value', () => {
     const button = new GamepadButton('analog', 'select');
 
-    // For analog type, pressed should be based on value > 0
+    // Without thresholds, an analog button is pressed while its value is > 0
     expect(button.pressed).toBe(false);
 
-    // Set value > 0
-    button[P_GAMEPAD].value = 0.5;
+    writePendingValue(button, 0.5);
+    expect(button.pressed).toBe(false); // applied on the next frame
+    expect(advanceButton(button)).toBe('press');
     expect(button.pressed).toBe(true);
   });
 
@@ -59,7 +66,7 @@ describe('GamepadButton', () => {
 
     // Reset touched and set value > 0 (which makes pressed true)
     button[P_GAMEPAD].touched = false;
-    button[P_GAMEPAD].value = 0.5;
+    writeImmediateValue(button, 0.5);
     expect(button.touched).toBe(true); // Should be true because pressed is true
   });
 
@@ -70,9 +77,85 @@ describe('GamepadButton', () => {
     expect(button.pressed).toBe(false);
     expect(button.touched).toBe(false);
 
-    button[P_GAMEPAD].value = 1;
+    writeImmediateValue(button, 1);
     expect(button.pressed).toBe(true);
     expect(button.touched).toBe(true);
+  });
+
+  test('presses and releases at its thresholds, with hysteresis', () => {
+    const button = new GamepadButton('analog', 'select');
+    button[P_GAMEPAD].thresholds = { press: 0.9, release: 0.7 };
+    const step = (value: number) => {
+      writePendingValue(button, value);
+      return advanceButton(button);
+    };
+    expect(step(0.5)).toBe(null);
+    expect(button.pressed).toBe(false);
+    expect(step(0.9)).toBe('press');
+    expect(step(0.8)).toBe(null);
+    expect(button.pressed).toBe(true);
+    expect(step(0.7)).toBe('release');
+    expect(step(0.85)).toBe(null);
+    expect(button.pressed).toBe(false);
+  });
+
+  test('keeps only the latest write before a frame', () => {
+    const button = new GamepadButton('analog', null);
+    writePendingValue(button, 0.2);
+    writePendingValue(button, 0.4);
+    writePendingValue(button, 0.6);
+    expect(advanceButton(button)).toBe('press');
+    expect(button.value).toBe(0.6);
+  });
+
+  test('cancels a press the app saw, and only that', () => {
+    const button = new GamepadButton('analog', 'select');
+    writePendingValue(button, 1);
+    advanceButton(button);
+    cancelButton(button);
+    expect(button.pressed).toBe(false);
+    expect(button.value).toBe(0);
+    expect(advanceButton(button)).toBe('cancel');
+
+    // A press cancelled before any frame saw it reports nothing.
+    writePendingValue(button, 1);
+    cancelButton(button);
+    expect(advanceButton(button)).toBe(null);
+  });
+
+  test('an immediate release of a held button is a cancel', () => {
+    const button = new GamepadButton('analog', 'select');
+    writePendingValue(button, 1);
+    advanceButton(button);
+    writeImmediateValue(button, 0);
+    expect(button.pressed).toBe(false);
+    expect(advanceButton(button)).toBe('cancel');
+  });
+
+  test('a cancelling immediate write keeps the value asked for', () => {
+    const button = new GamepadButton('analog', 'select');
+    button[P_GAMEPAD].thresholds = { press: 0.9, release: 0.7 };
+    writePendingValue(button, 1);
+    advanceButton(button);
+    writeImmediateValue(button, 0.5);
+    expect(button.pressed).toBe(false);
+    expect(button.value).toBe(0.5);
+    expect(advanceButton(button)).toBe('cancel');
+    expect(button.value).toBe(0.5);
+    expect(advanceButton(button)).toBe(null);
+  });
+
+  test('an immediate press while a cancel is pending waits for the next frame', () => {
+    const button = new GamepadButton('analog', 'select');
+    writePendingValue(button, 1);
+    advanceButton(button);
+    cancelButton(button);
+    writeImmediateValue(button, 1);
+    // The cancel's frame reports the end alone, with the button released.
+    expect(button.pressed).toBe(false);
+    expect(advanceButton(button)).toBe('cancel');
+    expect(button.pressed).toBe(false);
+    expect(advanceButton(button)).toBe('press');
   });
 
   test('should get button value', () => {
