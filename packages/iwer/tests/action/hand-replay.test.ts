@@ -63,8 +63,9 @@ describe('replaying a recorded hand pinch', () => {
   });
 
   // Records a right-hand pinch, one value per frame: by default open for 2
-  // frames, pinched for 3, open for 2.
-  const recordPinch = (pinch = [0, 0, 1, 1, 1, 0, 0]) => {
+  // frames, pinched for 3, open for 2. `tap` holds the tap microgesture
+  // button down on the frames where it is 1.
+  const recordPinch = (pinch = [0, 0, 1, 1, 1, 0, 0], tap?: number[]) => {
     const recorder = new ActionRecorder(session as any, refSpace as any);
     let i = 0;
     const cb = (_t: number, frame: XRFrame) => {
@@ -72,6 +73,7 @@ describe('replaying a recorded hand pinch', () => {
       i++;
       if (i < pinch.length) {
         device.hands.right!.updatePinchValue(pinch[i]);
+        if (tap) device.hands.right!.updateGestureButton('tap', tap[i] as 0);
         session.requestAnimationFrame(cb as any);
       } else {
         session.end();
@@ -82,9 +84,12 @@ describe('replaying a recorded hand pinch', () => {
     return recorder.getRecording();
   };
 
-  const playerWithEvents = (loop = false, pinch?: number[]) => {
+  const playerWithEvents = (
+    loop = false,
+    pinch?: number[],
+    recording = recordPinch(pinch),
+  ) => {
     const events: string[] = [];
-    const recording = recordPinch(pinch);
     const player = new ActionPlayer(refSpace, recording, 0.063, {
       loop,
       eventContext: {
@@ -158,5 +163,52 @@ describe('replaying a recorded hand pinch', () => {
     player.playFrame();
     expect(player.playing).toBe(false);
     expect(events).toEqual(['selectstart', 'selectend']);
+  });
+
+  test('records the hand gamepad as Quest Browser lays it out, and replays a microgesture on its button without events', () => {
+    const recording = recordPinch(
+      [0, 0, 1, 1, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 1, 1, 0],
+    );
+    const hand = recording.schema
+      .map(([, schema]) => schema)
+      .find((schema) => schema.hasHand && schema.handedness === 'right')!;
+    expect(hand.mapping).toBe('xr-standard');
+    expect(hand.numButtons).toBe(10);
+    const { player, events } = playerWithEvents(false, undefined, recording);
+    const source = () =>
+      Array.from(player.inputSources ?? []).find(
+        (s) => s.hand && s.handedness === 'right',
+      );
+    const tapDown: boolean[] = [];
+    for (let i = 0; i < 9; i++) {
+      player.stepFrames(1);
+      tapDown.push(source()?.gamepad?.buttons[9]?.pressed ?? false);
+    }
+    expect(tapDown.filter(Boolean).length).toBe(2);
+    // Only the pinch fires events.
+    expect(events).toEqual(['selectstart', 'select', 'selectend']);
+  });
+
+  test('a recording from before the hand gamepad had a mapping still selects on button 0', () => {
+    const recording = recordPinch();
+    for (const [index, schema] of recording.schema) {
+      if (!schema.hasHand) continue;
+      schema.mapping = '' as typeof schema.mapping;
+      schema.numButtons = 1;
+      // Keep only button 0 of each recorded gamepad (no axes).
+      for (const frame of recording.frames) {
+        for (const input of frame.slice(8)) {
+          if (Array.isArray(input) && input[0] === index) {
+            const gamepad = input[input.length - 1] as unknown[];
+            gamepad.splice(1);
+          }
+        }
+      }
+    }
+    const { player, events } = playerWithEvents(false, undefined, recording);
+    player.stepFrames(1);
+    player.stepFrames(10);
+    expect(events).toEqual(['selectstart', 'select', 'selectend']);
   });
 });

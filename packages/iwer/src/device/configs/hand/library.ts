@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HandPoseAngles, buildHandPose } from './builder.js';
+import { HandPoseAngles, ThumbAngles, buildHandPose } from './builder.js';
 
 import type { HandPose } from '../../XRHandInput.js';
 import { pinchHandPose } from './pinch.js';
@@ -213,6 +213,24 @@ export const handPoseAngles: Record<string, HandPoseAngles> = {
     ring: { mcp: 80, pip: 99, dip: 63, yaw: 8.1, roll: 12 },
     pinky: { mcp: 85, pip: 101, dip: 65, yaw: 21.9, roll: -19.5 },
   },
+  // Fingers loosely curled (the index's middle bone square to the hand), the
+  // thumb hovering just off its side: ready for microgestures.
+  microgesture: {
+    thumb: {
+      cmc: [-49.1, 6.9, -62],
+      shift: 1,
+      mcp: 37.9,
+      ip: 40.1,
+      mcpYaw: 2.6,
+      mcpRoll: 3.2,
+      ipYaw: -15.3,
+      ipRoll: -12.3,
+    },
+    index: { mcp: 40, pip: 50, dip: 30, yaw: -10, roll: -3.2 },
+    middle: { mcp: 58, pip: 72, dip: 44, yaw: 3.6, roll: 0 },
+    ring: { mcp: 62, pip: 74, dip: 46, yaw: 8.1, roll: 12 },
+    pinky: { mcp: 66, pip: 76, dip: 46, yaw: 21.9, roll: -19.5 },
+  },
   // Power grip wrapped around a 4 cm handle.
   grip: {
     thumb: {
@@ -289,4 +307,116 @@ export const handPoseAngles: Record<string, HandPoseAngles> = {
 export const libraryHandPoses: Record<string, HandPose> = {};
 for (const [id, angles] of Object.entries(handPoseAngles)) {
   libraryHandPoses[id] = buildHandPose(angles, relaxedHandPose, pinchHandPose);
+}
+
+/**
+ * Where the thumb goes during microgestures, on the `microgesture` pose. Tap
+ * and the side swipes touch the side of the index finger's middle bone and
+ * slide toward its tip or knuckle; the forward and backward swipes touch a
+ * little behind (or in front) and slide around the bone, over its back or
+ * toward the palm. Only the thumb of these poses is used; each was solved to
+ * keep the thumb tip on the finger's surface.
+ */
+export type MicrogestureThumb =
+  | 'touch'
+  | 'tip-mid'
+  | 'tip'
+  | 'knuckle-mid'
+  | 'knuckle'
+  | 'forward-start'
+  | 'forward-mid'
+  | 'forward'
+  | 'backward-start'
+  | 'backward-mid'
+  | 'backward';
+
+const microgestureThumbAngles: Record<MicrogestureThumb, ThumbAngles> = {
+  touch: {
+    cmc: [-42.1, 4.7, -62.6],
+    mcp: 35.1,
+    ip: 35.5,
+    mcpYaw: 4,
+    ipYaw: -13.7,
+  },
+  'tip-mid': {
+    cmc: [-39.3, -0.9, -61],
+    mcp: 32.4,
+    ip: 31.5,
+    mcpYaw: 2.6,
+    ipYaw: -13.4,
+  },
+  tip: {
+    cmc: [-35.4, -7.3, -59.8],
+    mcp: 27.9,
+    ip: 25.9,
+    mcpYaw: 1.4,
+    ipYaw: -12.4,
+  },
+  'knuckle-mid': {
+    cmc: [-45.6, 8.2, -67.7],
+    mcp: 35.5,
+    ip: 39.9,
+    mcpYaw: 5.1,
+    ipYaw: -13.6,
+  },
+  knuckle: {
+    cmc: [-47.1, 11.5, -71],
+    mcp: 34.1,
+    ip: 41.7,
+    mcpYaw: 7.5,
+    ipYaw: -12.1,
+  },
+  'forward-start': {
+    cmc: [-46.1, 7.7, -64],
+    mcp: 43.2,
+    ip: 45.7,
+    mcpYaw: 3.8,
+    ipYaw: -15,
+  },
+  'forward-mid': {
+    cmc: [-42, 3.2, -63.4],
+    mcp: 33.7,
+    ip: 35.1,
+    mcpYaw: 5.1,
+    ipYaw: -13.1,
+  },
+  forward: {
+    cmc: [-30.6, -2.4, -60.3],
+    mcp: 20.2,
+    ip: 16.6,
+    mcpYaw: 4.3,
+    ipYaw: -9.5,
+  },
+  'backward-start': {
+    cmc: [-38.1, 1.9, -62.3],
+    mcp: 29.2,
+    ip: 28.5,
+    mcpYaw: 4,
+    ipYaw: -12.1,
+  },
+  'backward-mid': {
+    cmc: [-45.1, 8.2, -62.2],
+    mcp: 41.9,
+    ip: 43.2,
+    mcpYaw: 3.5,
+    ipYaw: -14.6,
+  },
+  backward: {
+    cmc: [-44.8, 10.2, -63.7],
+    mcp: 48.5,
+    ip: 49.5,
+    mcpYaw: 3.6,
+    ipYaw: -14.8,
+  },
+};
+
+// Each keyframe keeps the rest thumb's base shift and twists.
+export const microgestureThumbPoses = {} as Record<MicrogestureThumb, HandPose>;
+for (const [id, thumb] of Object.entries(microgestureThumbAngles)) {
+  const rest = handPoseAngles.microgesture;
+  microgestureThumbPoses[id as MicrogestureThumb] = buildHandPose(
+    { ...rest, thumb: { ...rest.thumb, ...thumb } },
+    relaxedHandPose,
+    pinchHandPose,
+  );
 }

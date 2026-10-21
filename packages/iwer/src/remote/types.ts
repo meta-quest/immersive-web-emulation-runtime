@@ -12,6 +12,7 @@ import type {
   XRHandFinger,
 } from '../device/XRHandInput.js';
 import type { Easing, NamedDirection } from './hand-motion.js';
+import type { Microgesture } from './microgesture.js';
 
 // =============================================================================
 // Device Identifiers
@@ -308,6 +309,26 @@ export interface SetHandPoseResult {
 }
 
 /**
+ * Parameters for microgesture tool
+ */
+export interface MicrogestureParams {
+  device: 'hand-left' | 'hand-right';
+  gesture: Microgesture;
+}
+
+/**
+ * Result of microgesture tool
+ */
+export interface MicrogestureResult {
+  device: 'hand-left' | 'hand-right';
+  gesture: Microgesture;
+  /** The hand gamepad button that pulsed: 5 to 9. */
+  button: number;
+  /** When the button was pressed, in milliseconds from the command's start. */
+  registeredAtMs: number;
+}
+
+/**
  * Parameters for get_hand_state tool
  */
 export interface GetHandStateParams {
@@ -438,6 +459,11 @@ export interface SequenceStep {
     stepTo?: SequenceTarget;
     facing?: DirectionInput;
   };
+  /**
+   * A thumb microgesture where the hand is, as a step of its own (only
+   * `label` alongside); `events` reports it.
+   */
+  microgesture?: Microgesture;
 }
 
 /**
@@ -473,7 +499,10 @@ export interface SequenceResult {
     startPerf: number;
     endPerf: number;
   }[];
-  /** Select events the app saw, from the hand's own button edges. */
+  /**
+   * Select events and microgestures (by gesture name) the app saw, from the
+   * hand's own button edges.
+   */
   events: { t: number; type: string }[];
   /** Each press and how long (real time, ms) the fingertip was within 2 cm of it. */
   presses: { label: string; contactMs: number | null }[];
@@ -489,7 +518,7 @@ export interface SequencePlan {
   segments: {
     step: number;
     label: string;
-    kind: 'move' | 'hold' | 'press' | 'press-hold' | 'retract';
+    kind: 'move' | 'hold' | 'press' | 'press-hold' | 'retract' | 'microgesture';
     /** Seconds, including any walk. */
     duration: number;
     /** Where the anchor ends up (XR-origin). */

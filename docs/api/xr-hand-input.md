@@ -42,6 +42,12 @@ The pose a change in progress fades from (the pose set before it), or `null` whe
 - **Type**: `string | null`
 - **Readonly**
 
+### `thumbMotion`
+
+A thumb movement shown on top of the pose, or `null`: the thumb is `weight` of the way from its place in `from` to its place in `to` (two hand poses), relative to the displayed palm. Nothing else moves, and anchors (`grasp` included) keep the displayed pose, so a pinned hand stays where it is. Remote control's microgestures set it every frame and clear it when they end.
+
+- **Type**: `ThumbMotion | null` (`{ from: HandPose; to: HandPose; weight: number }`)
+
 ### `pin`
 
 Where remote control holds the hand (see `setPin`), or `null`.
@@ -55,6 +61,8 @@ Indicates the current level of the pinch gesture being emulated, with a range fr
 
 - **Type**: `number`
 - **Readonly**
+
+The hand's gamepad has Quest Browser's layout: mapping `xr-standard`, 10 buttons, no axes. Button 0 is the pinch (the only button that fires events), buttons 1 to 3 are empty, 4 is the menu gesture and 5 to 9 are the microgestures: swipe left, swipe right, swipe forward, swipe backward and thumb tap (see `updateGestureButton`).
 
 ### `connected`
 
@@ -140,7 +148,7 @@ handAxes(): { fingers: vec3; palm: vec3; thumb: vec3 }
 
 ### `setFingerPose`
 
-Takes one finger from another pose while the rest of the hand keeps `poseId`. Each joint blends relative to its parent joint and the finger stays attached to the base pose's palm. At a partial `weight`, each bone's length lies between its lengths in the two poses. The 20 generated poses are built on the captured `default` skeleton, so between them each finger's bones keep exactly the same lengths; the captured `pinch` and `point` come from other captures and differ slightly.
+Takes one finger from another pose while the rest of the hand keeps `poseId`. Each joint blends relative to its parent joint and the finger stays attached to the base pose's palm. At a partial `weight`, each bone's length lies between its lengths in the two poses. The 21 generated poses are built on the captured `default` skeleton, so between them each finger's bones keep exactly the same lengths; the captured `pinch` and `point` come from other captures and differ slightly.
 
 The blended finger is computed when `poseId`, `setFingerPose` or `clearFingerPoses` changes, not every frame.
 
@@ -159,6 +167,16 @@ Clears the blend for one finger, or for every finger if called without arguments
 ```typescript
 clearFingerPoses(finger?: XRHandFinger): void
 ```
+
+### `updateGestureButton`
+
+Writes one of the gamepad's gesture buttons for the next frame: `1` pressed, `0` released. These buttons fire no session events; apps read them from the gamepad. Quest holds a recognized microgesture down for about 35 ms; remote control's `microgesture` does the same and moves the thumb too.
+
+```typescript
+updateGestureButton(id: HandGestureButton, value: 0 | 1): void
+```
+
+- `id`: **HandGestureButton** - `menu` (button 4), `swipe-left`, `swipe-right`, `swipe-forward`, `swipe-backward` or `tap` (buttons 5 to 9).
 
 ### `updatePinchValue`
 

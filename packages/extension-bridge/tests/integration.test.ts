@@ -159,7 +159,7 @@ describe('full chain integration', () => {
 
   it('lists the full tool catalog', async () => {
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(24);
+    expect(tools.length).toBe(25);
     const names = tools.map((t) => t.name);
     expect(names).toContain('xr_accept_session');
     expect(names).toContain('xr_look_at');
@@ -286,6 +286,32 @@ describe('full chain integration', () => {
           device: 'hand-right',
           steps: [{ target: 'button', press: { deep: 0.01 } }],
         },
+      })) as { isError?: boolean };
+      rejected = res.isError === true;
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
+    expect(browser.calls.length).toBe(before + 1);
+  });
+
+  it('forwards a microgesture intact and rejects an unknown gesture', async () => {
+    const before = browser.calls.length;
+    const sent = (await client.callTool({
+      name: 'xr_microgesture',
+      arguments: { device: 'hand-left', gesture: 'swipe-forward' },
+    })) as { isError?: boolean };
+    expect(sent.isError).toBeFalsy();
+    expect(browser.calls.at(-1)).toEqual({
+      method: 'microgesture',
+      params: { device: 'hand-left', gesture: 'swipe-forward' },
+    });
+
+    let rejected = false;
+    try {
+      const res = (await client.callTool({
+        name: 'xr_microgesture',
+        arguments: { device: 'hand-left', gesture: 'wave' },
       })) as { isError?: boolean };
       rejected = res.isError === true;
     } catch {

@@ -19,11 +19,11 @@ import {
 } from '../src/contract.js';
 
 describe('tool catalog', () => {
-  it('contains the 24 planned tools with unique names + methods', () => {
-    expect(TOOLS).toHaveLength(24);
-    expect(new Set(TOOLS.map((t) => t.mcpName)).size).toBe(24);
-    expect(new Set(TOOLS.map((t) => t.wsMethod)).size).toBe(24);
-    expect(CATALOG_VERSION).toBe(4);
+  it('contains the 25 planned tools with unique names + methods', () => {
+    expect(TOOLS).toHaveLength(25);
+    expect(new Set(TOOLS.map((t) => t.mcpName)).size).toBe(25);
+    expect(new Set(TOOLS.map((t) => t.wsMethod)).size).toBe(25);
+    expect(CATALOG_VERSION).toBe(5);
   });
 
   it('maps every mcpName to a wsMethod; device tools are in KNOWN_METHODS, browser tools are not', () => {
@@ -400,6 +400,7 @@ describe('run_sequence params', () => {
           body: { position: { relativeTo: 'head', x: 0, y: 0, z: -0.5 } },
           pinch: 0,
         },
+        { label: 'tap', microgesture: 'tap' },
       ],
     };
     expect(run.parse(params)).toEqual(params);
@@ -426,6 +427,7 @@ describe('run_sequence params', () => {
       step({ offset: { x: 0, y: 0, z: 0, w: 1 } }),
       step({ fingers: { index: { poseId: 'fist', wieght: 1 } } }),
       step({ orientation: { fingers: 'forward', thum: 'up' } }),
+      step({ microgestures: 'tap' }),
     ];
     for (const args of bad) {
       expect([args, run.safeParse(args).success]).toEqual([args, false]);
@@ -442,6 +444,7 @@ describe('run_sequence params', () => {
       { device: 'hand-right', steps: [{ press: { retract: 0.01 } }] },
       { device: 'hand-right', steps: [{ pinch: { value: 1, at: 'start' } }] },
       { device: 'hand-right', steps: [{ duration: 1 }], idleHand: 'drop' },
+      { device: 'hand-right', steps: [{ microgesture: 'pinch' }] },
     ];
     for (const args of bad) {
       expect([args, run.safeParse(args).success]).toEqual([args, false]);
@@ -453,6 +456,71 @@ describe('run_sequence params', () => {
       expect(schemaOf(name).safeParse({}).success).toBe(true);
       expect(schemaOf(name).safeParse({ force: true }).success).toBe(false);
     }
+  });
+});
+
+describe('microgesture params', () => {
+  const tool = TOOL_BY_MCP_NAME.get('xr_microgesture')!;
+  const schema = inputSchemaOf(tool);
+  const gestures = [
+    'swipe-left',
+    'swipe-right',
+    'swipe-forward',
+    'swipe-backward',
+    'tap',
+  ];
+
+  it('maps xr_microgesture onto the queued microgesture method, strictly', () => {
+    expect(tool.wsMethod).toBe('microgesture');
+    expect(tool.readOnlyHint).toBe(false);
+    expect(tool.strictInput).toBe(true);
+  });
+
+  it('takes each gesture on either hand, and nothing else', () => {
+    for (const device of ['hand-left', 'hand-right']) {
+      for (const gesture of gestures) {
+        const args = { device, gesture };
+        expect(schema.parse(args)).toEqual(args);
+      }
+    }
+    const bad: Record<string, unknown>[] = [
+      { device: 'hand-right' },
+      { device: 'hand-right', gesture: 'pinch' },
+      { device: 'hand-right', gesture: 'swipe-up' },
+      { device: 'controller-right', gesture: 'tap' },
+      { device: 'hand-right', gesture: 'tap', duration: 1 },
+      { device: 'hand-right', gestures: 'tap' },
+    ];
+    for (const args of bad) {
+      expect([args, schema.safeParse(args).success]).toEqual([args, false]);
+    }
+  });
+
+  it('names the same gestures as the run_sequence step and the IWER catalog', () => {
+    const shape = tool.inputShape as { gesture: z.ZodEnum<[string]> };
+    expect(shape.gesture.options).toEqual(gestures);
+    const catalog = REMOTE_METHOD_SCHEMAS.microgesture as {
+      properties: { gesture: { enum: string[] } };
+    };
+    expect(catalog.properties.gesture.enum).toEqual(gestures);
+    const run = inputSchemaOf(TOOL_BY_MCP_NAME.get('xr_run_sequence')!);
+    for (const gesture of gestures) {
+      expect(
+        run.safeParse({
+          device: 'hand-right',
+          steps: [{ microgesture: gesture }],
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it('lists the button each gesture presses, as IWER and Quest number them', () => {
+    gestures.forEach((gesture, i) => {
+      expect(tool.description).toContain(`${5 + i} ${gesture}`);
+    });
+    expect(TOOL_BY_MCP_NAME.get('xr_run_sequence')!.description).toContain(
+      '{"microgesture":"swipe-left"}',
+    );
   });
 });
 
@@ -698,6 +766,28 @@ describe('IWER method catalog (iwer/lib/remote/catalog.js)', () => {
       { device: 'hand-right', steps: [step] },
       false,
     ]),
+    ['xr_microgesture', { device: 'hand-left', gesture: 'tap' }, true],
+    ['xr_microgesture', { device: 'hand-left', gesture: 'pinch' }, false],
+    ['xr_microgesture', { device: 'hand-left' }, false],
+    ['xr_microgesture', { device: 'controller-left', gesture: 'tap' }, false],
+    [
+      'xr_microgesture',
+      { device: 'hand-left', gesture: 'tap', duration: 1 },
+      false,
+    ],
+    [
+      'xr_run_sequence',
+      {
+        device: 'hand-left',
+        steps: [{ label: 'swipe', microgesture: 'swipe-backward' }],
+      },
+      true,
+    ],
+    [
+      'xr_run_sequence',
+      { device: 'hand-left', steps: [{ microgesture: 'wave' }] },
+      false,
+    ],
     ['xr_cancel_sequence', {}, true],
     ['xr_cancel_sequence', { now: true }, false],
     ['xr_list_targets', {}, true],

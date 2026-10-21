@@ -29,6 +29,7 @@ export const BUILTIN_HAND_POSE_IDS = [
   'pinch-pinky',
   'tripod',
   'key-pinch',
+  'microgesture',
   'grip',
   'claw',
   'hook',

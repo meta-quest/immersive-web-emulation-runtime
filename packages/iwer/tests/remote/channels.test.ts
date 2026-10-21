@@ -129,4 +129,48 @@ describe('ChannelEngine', () => {
     expect(run.done).toBe(true);
     expect(engine.isActive()).toBe(false);
   });
+
+  test('a channel stopped before it finishes is cancelled once, whatever stops it; a finished one never is', () => {
+    const engine = new ChannelEngine();
+    const cancels: string[] = [];
+    const make = (name: string, device: string, kind: Channel['kind']) =>
+      recorder(device, kind, 100, { cancel: () => cancels.push(name) }).channel;
+
+    // Finishing does not cancel.
+    const done = engine.run([make('done', 'hand-right', 'thumb')]);
+    done.advance(150);
+    done.stop();
+    engine.stop();
+    expect(cancels).toEqual([]);
+
+    // run.stop(), begun or not (a delayed channel).
+    const stopped = engine.run([
+      make('begun', 'hand-right', 'thumb'),
+      { ...make('waiting', 'hand-right', 'pose'), delayMs: 50 },
+    ]);
+    stopped.advance(10);
+    stopped.stop();
+    stopped.stop();
+    expect(cancels).toEqual(['begun', 'waiting']);
+
+    // engine.stop(), for one device.
+    cancels.length = 0;
+    const both = engine.run([
+      make('right', 'hand-right', 'thumb'),
+      make('left', 'hand-left', 'thumb'),
+    ]);
+    both.advance(10);
+    engine.stop('hand-right');
+    both.advance(10);
+    expect(cancels).toEqual(['right']);
+
+    // A later run taking the slot; the earlier run then stopping changes
+    // nothing for it.
+    const later = engine.run([make('later', 'hand-left', 'thumb')]);
+    expect(cancels).toEqual(['right', 'left']);
+    both.stop();
+    expect(cancels).toEqual(['right', 'left']);
+    later.advance(100);
+    expect(cancels).toEqual(['right', 'left']);
+  });
 });

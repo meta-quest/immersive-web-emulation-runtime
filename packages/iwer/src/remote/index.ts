@@ -41,6 +41,8 @@ export type {
   SetHandPoseResult,
   GetHandStateParams,
   GetHandStateResult,
+  MicrogestureParams,
+  MicrogestureResult,
   SequencePosition,
   SequenceTarget,
   TargetFace,
@@ -73,3 +75,5 @@ export type {
   SetDeviceStateResult,
 } from './types.js';
 export type { Easing, NamedDirection } from './hand-motion.js';
+export { MICROGESTURES } from './microgesture.js';
+export type { Microgesture } from './microgesture.js';

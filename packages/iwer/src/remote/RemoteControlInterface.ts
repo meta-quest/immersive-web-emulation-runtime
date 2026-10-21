@@ -42,6 +42,15 @@ import {
   SequenceRunner,
   planSequence,
 } from './sequence.js';
+import {
+  MICROGESTURES,
+  MICROGESTURE_POSE,
+  MICROGESTURE_READY_S,
+  MicrogesturePlayer,
+  isMicrogesture,
+  microgestureSeconds,
+  readyForMicrogesture,
+} from './microgesture.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
 import { cancelButton } from '../gamepad/button-edges.js';
 import type {
@@ -83,6 +92,8 @@ import type {
   SetHandPoseResult,
   GetHandStateParams,
   GetHandStateResult,
+  MicrogestureParams,
+  MicrogestureResult,
   OrientationInput,
   RunSequenceParams,
   SequencePlan,
@@ -2143,6 +2154,7 @@ export class RemoteControlInterface {
     'set_gamepad_state',
     'select',
     '_hand_motion',
+    'microgesture',
     'run_sequence',
   ]);
 
@@ -2171,6 +2183,7 @@ export class RemoteControlInterface {
     'set_gamepad_state',
     'set_device_state',
     'set_hand_pose',
+    'microgesture',
     'run_sequence',
   ]);
 
@@ -2254,6 +2267,13 @@ export class RemoteControlInterface {
     ) {
       return this.enqueuePoseFade(
         normalizedParams as unknown as SetHandPoseParams,
+        normalizedParams,
+      );
+    }
+
+    if (method === 'microgesture') {
+      return this.enqueueMicrogesture(
+        normalizedParams as unknown as MicrogestureParams,
         normalizedParams,
       );
     }
@@ -2715,6 +2735,94 @@ export class RemoteControlInterface {
     ) as Promise<SelectResult>;
   }
 
+  /**
+   * microgesture: the thumb swipes or taps on the side of the index finger
+   * and the gesture's hand gamepad button pulses for 35 ms, as on Quest. A
+   * hand not in the microgesture pose takes it first (0.25 s), letting go of
+   * a light pinch; a hand that is selecting must let go first. Runs the
+   * pose, pinch and thumb channels of the hand as one queued action.
+   */
+  private enqueueMicrogesture(
+    params: MicrogestureParams,
+    rawParams: Record<string, unknown>,
+  ): Promise<MicrogestureResult> {
+    const { device: deviceId, gesture } = params;
+    const hand = this.handFor(deviceId);
+    if (!isMicrogesture(gesture)) {
+      throw new Error(
+        `gesture must be one of ${MICROGESTURES.join(', ')} (got ${JSON.stringify(gesture)}).`,
+      );
+    }
+    if (!hand.poseIds.includes(MICROGESTURE_POSE)) {
+      throw new Error(
+        `${deviceId} has no '${MICROGESTURE_POSE}' pose to make microgestures from.`,
+      );
+    }
+    let run!: ChannelRun;
+    let player!: MicrogesturePlayer;
+    let lead = 0;
+    return this.enqueueTick('microgesture', rawParams, {
+      estimateMs: (MICROGESTURE_READY_S + microgestureSeconds(gesture)) * 1000,
+      start: () => {
+        this.requireLiveHand(deviceId);
+        if (hand.inputSource.gamepad!.buttons[0]!.pressed) {
+          throw new Error(
+            `${deviceId} is pinching (select is pressed); let go first (set_select_value 0) before a microgesture.`,
+          );
+        }
+        const pinch = this.latestSelectValue(deviceId);
+        const channels: Channel[] = [];
+        if (!readyForMicrogesture(hand, pinch)) {
+          lead = MICROGESTURE_READY_S;
+          channels.push(
+            this.poseChannel(
+              hand,
+              deviceId,
+              { poseId: MICROGESTURE_POSE },
+              lead * 1000,
+              'minimum-jerk',
+            ),
+          );
+          if (pinch > 0) {
+            channels.push(
+              this.pinchChannel(deviceId, 0, lead * 1000, 'minimum-jerk'),
+            );
+          }
+        }
+        player = new MicrogesturePlayer(hand, gesture);
+        channels.push(player.channel(deviceId, lead * 1000));
+        run = this.channels.run(channels);
+      },
+      tick: (deltaMs) => {
+        if (player.releasePending) {
+          // The gesture registered on its last frame: the app has seen the
+          // press, so the button comes up now. This frame takes no time.
+          player.finish();
+          return deltaMs;
+        }
+        let leftover: number;
+        try {
+          leftover = run.advance(deltaMs);
+        } catch (error) {
+          run.stop();
+          throw error;
+        }
+        if (run.interrupted) {
+          throw new Error(
+            `${deviceId}'s microgesture stopped: remote control let go of the hand.`,
+          );
+        }
+        return leftover < 0 || player.releasePending ? -1 : leftover;
+      },
+      result: (): MicrogestureResult => ({
+        device: deviceId,
+        gesture,
+        button: player.button,
+        registeredAtMs: Math.round((lead + (player.pressedAt ?? 0)) * 1000),
+      }),
+    }) as Promise<MicrogestureResult>;
+  }
+
   // =============================================================================
   // Hand sequences
   // =============================================================================
@@ -2798,6 +2906,10 @@ export class RemoteControlInterface {
       pinchButton: (deviceId) =>
         this.handFor(deviceId).inputSource.gamepad![P_GAMEPAD].buttonsMap
           .pinch!,
+      gestureButton: (deviceId, gesture) =>
+        this.handFor(deviceId).inputSource.gamepad![P_GAMEPAD].buttonsMap[
+          gesture
+        ]!,
       channels: this.channels,
       resolver: () => this.targetResolver,
       handState: (deviceId) => this.executeGetHandState({ device: deviceId }),

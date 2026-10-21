@@ -14,7 +14,7 @@
 import { z, type ZodRawShape } from 'zod';
 
 /** Bumped when the catalog shape changes; surfaced in the version handshake. */
-export const CATALOG_VERSION = 4;
+export const CATALOG_VERSION = 5;
 
 // --- Reusable shapes -------------------------------------------------------
 
@@ -74,6 +74,7 @@ export const HAND_POSE_IDS = [
   'pinch-pinky',
   'tripod',
   'key-pinch',
+  'microgesture',
   'grip',
   'claw',
   'hook',
@@ -101,6 +102,7 @@ const HAND_POSE_GLOSS: Record<(typeof HAND_POSE_IDS)[number], string> = {
   'pinch-pinky': 'thumb to pinky tip',
   tripod: 'thumb, index, middle tips together',
   'key-pinch': 'thumb against side of index',
+  microgesture: 'loose curl, thumb by the side of the index',
   grip: 'wrapped around a handle',
   claw: 'holding a ball',
   hook: 'carrying a bag handle',
@@ -306,6 +308,12 @@ const standOff = z
   .object({ distance: z.number().min(0), normal: direction.optional() })
   .strict();
 
+const microgesture = z
+  .enum(['swipe-left', 'swipe-right', 'swipe-forward', 'swipe-backward', 'tap'])
+  .describe(
+    "A thumb microgesture on the side of the curled index finger: swipe left / right (the user's), forward (over the finger), backward (toward the palm), or tap.",
+  );
+
 const sequenceStep = z
   .object({
     label: z.string().optional(),
@@ -377,12 +385,17 @@ const sequenceStep = z
       .describe(
         'Move the body first: to position, or a step closer to stepTo; facing turns it. The hand goes along.',
       ),
+    microgesture: microgesture
+      .optional()
+      .describe(
+        'Make a microgesture where the hand is, as a step of its own (only label alongside); events report it by name.',
+      ),
   })
   .strict();
 
 const RUN_SEQUENCE_DESCRIPTION =
   "Run a whole hand interaction in one call with natural motion: one smooth arc per move, the head turning to each target first, the body leaning or stepping closer when needed, the other hand resting by the hip. Steps run in order and each step's properties animate together. Positions are XR-origin metres; -Z is forward, +Y up. Resolves when done with the select events the app saw, step times, press contact times, warnings and the final hand state. " +
-  'Rules: press buttons with `press`, not a pinch. To pick something up, target it with `pinch:{value:1,at:"arrival"}` (the grasp point, between thumb and index, goes on the target). While holding, targeting a surface sets the object down on it; let go with pinch 0. The anchor carries over to later steps. A thumbs up is poseId "thumbs-up" with orientation {fingers:"forward",thumb:"up"} at a head-relative position. Get names from xr_list_targets and check a plan with dryRun:true first. ' +
+  'Rules: press buttons with `press`, not a pinch. To pick something up, target it with `pinch:{value:1,at:"arrival"}` (the grasp point, between thumb and index, goes on the target). While holding, targeting a surface sets the object down on it; let go with pinch 0. The anchor carries over to later steps. A thumbs up is poseId "thumbs-up" with orientation {fingers:"forward",thumb:"up"} at a head-relative position. A microgesture is a step of its own, {"microgesture":"swipe-left"}, with the hand raised in view and the pinch open (see xr_microgesture). Get names from xr_list_targets and check a plan with dryRun:true first. ' +
   'Example: {"device":"hand-right","steps":[{"label":"reach","target":"button","press":{}},{"label":"grab","target":"piece","approach":{"distance":0.06},"pinch":{"value":1,"at":"arrival"}},{"label":"carry","target":"tray","depart":{"distance":0.08},"approach":{"distance":0.06}},{"label":"release","pinch":0,"duration":0.15},{"label":"thumbs up","position":{"relativeTo":"head","x":0.12,"y":-0.35,"z":-0.35},"anchor":"wrist","orientation":{"fingers":"forward","thumb":"up"},"poseId":"thumbs-up"},{"label":"hold","duration":1}]}';
 
 // --- Tool definition -------------------------------------------------------
@@ -626,6 +639,19 @@ export const TOOLS: readonly ToolDef[] = [
       fingers: fingerPoses.optional(),
       duration: z.number().min(0).optional(),
       easing: easing.optional(),
+    },
+  },
+  {
+    mcpName: 'xr_microgesture',
+    wsMethod: 'microgesture',
+    title: 'Make a microgesture',
+    description:
+      'Swipe or tap the thumb on the side of the curled index finger, as on Quest. The app sees the hand gamepad (xr-standard) button pressed for 35 ms when the gesture completes: 5 swipe-left, 6 swipe-right, 7 swipe-forward, 8 swipe-backward, 9 tap; no select events. A hand not in the "microgesture" pose takes it first (0.25 s); a hand that is selecting must let go first. Raise the hand side-on in view first, e.g. xr_set_transform with anchor "wrist" and orientation {fingers:[0,-0.6,-0.8],palm:"left"} (right hand; "right" for the left). Requires an active session and hand input.',
+    readOnlyHint: false,
+    strictInput: true,
+    inputShape: {
+      device: handEnum,
+      gesture: microgesture,
     },
   },
   {

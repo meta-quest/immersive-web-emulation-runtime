@@ -111,6 +111,13 @@ const selectDevice = oneOf(
 );
 const controller = oneOf('controller-left', 'controller-right');
 const hand = oneOf('hand-left', 'hand-right');
+const microgesture = oneOf(
+  'swipe-left',
+  'swipe-right',
+  'swipe-forward',
+  'swipe-backward',
+  'tap',
+);
 
 const fingerPose: Schema = {
   anyOf: [str, obj({ poseId: str, weight: unit }, ['poseId'])],
@@ -191,6 +198,7 @@ const sequenceStep: Schema = obj({
     ],
   },
   body: obj({ position: sequencePosition, stepTo: target, facing: direction }),
+  microgesture,
 });
 
 /** Parameter schemas for every remote method, by method name. */
@@ -270,6 +278,10 @@ export const REMOTE_METHOD_SCHEMAS: Readonly<Record<string, Schema>> = {
   ),
   get_hand_state: obj({ device: hand, joints: oneOf('key', 'all') }, [
     'device',
+  ]),
+  microgesture: obj({ device: hand, gesture: microgesture }, [
+    'device',
+    'gesture',
   ]),
   run_sequence: obj(
     {

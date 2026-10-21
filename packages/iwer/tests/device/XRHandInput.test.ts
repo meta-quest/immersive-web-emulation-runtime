@@ -16,7 +16,12 @@ import { XRHandedness } from '../../src/input/XRInputSource';
 import { GlobalSpace } from '../../src/spaces/XRSpace';
 import { XRFrame } from '../../src/frameloop/XRFrame';
 import { BUILTIN_HAND_POSE_IDS } from '../../src/device/configs/hand/ids';
-import { handPoseAngles } from '../../src/device/configs/hand/library';
+import {
+  handPoseAngles,
+  libraryHandPoses,
+  microgestureThumbPoses,
+} from '../../src/device/configs/hand/library';
+import { GamepadButton } from '../../src/gamepad/Gamepad';
 import { P_SPACE } from '../../src/private';
 import { mat4, vec3 } from 'gl-matrix';
 
@@ -707,6 +712,175 @@ describe('XRHandInput', () => {
         'Unknown finger hasOwnProperty',
       );
       expect(() => xrHandInput.updateHandPose()).not.toThrow();
+    });
+  });
+
+  describe('hand gamepad', () => {
+    beforeEach(() => {
+      xrHandInput = new XRHandInput(
+        oculusHandConfig,
+        XRHandedness.Right,
+        globalSpace,
+      );
+    });
+
+    test('is laid out as Quest Browser reports it: xr-standard, pinch on 0, menu on 4, microgestures on 5 to 9', () => {
+      const gamepad = xrHandInput.inputSource.gamepad!;
+      expect(gamepad.mapping).toBe('xr-standard');
+      expect(gamepad.buttons).toHaveLength(10);
+      expect(gamepad.axes).toHaveLength(0);
+      // Buttons 1 to 3 are empty slots.
+      for (const i of [1, 2, 3]) {
+        expect(gamepad.buttons[i]).not.toBeInstanceOf(GamepadButton);
+        expect(gamepad.buttons[i]!.pressed).toBe(false);
+      }
+      xrHandInput.updatePinchValue(1);
+      xrHandInput.onFrameStart(mockFrame);
+      expect(gamepad.buttons[0]!.value).toBe(1);
+      xrHandInput.updatePinchValue(0);
+      const ids = [
+        'menu',
+        'swipe-left',
+        'swipe-right',
+        'swipe-forward',
+        'swipe-backward',
+        'tap',
+      ] as const;
+      ids.forEach((id, i) => {
+        xrHandInput.updateGestureButton(id, 1);
+        xrHandInput.onFrameStart(mockFrame);
+        const pressed = gamepad.buttons.flatMap((button, index) =>
+          button!.pressed ? [index] : [],
+        );
+        expect([id, pressed]).toEqual([id, [4 + i]]);
+        xrHandInput.updateGestureButton(id, 0);
+        xrHandInput.onFrameStart(mockFrame);
+        expect(gamepad.buttons[4 + i]!.pressed).toBe(false);
+      });
+    });
+
+    test('gesture buttons fire no session events; the pinch still selects', () => {
+      const dispatch = mockFrame.session.dispatchEvent as jest.Mock;
+      xrHandInput.updateGestureButton('tap', 1);
+      xrHandInput.onFrameStart(mockFrame);
+      xrHandInput.updateGestureButton('tap', 0);
+      xrHandInput.onFrameStart(mockFrame);
+      expect(dispatch).not.toHaveBeenCalled();
+      xrHandInput.updatePinchValue(1);
+      xrHandInput.onFrameStart(mockFrame);
+      expect(dispatch.mock.calls.map((call) => call[0].type)).toEqual([
+        'selectstart',
+      ]);
+    });
+
+    test('updateGestureButton writes only gesture buttons, and only 0 or 1', () => {
+      const gamepad = xrHandInput.inputSource.gamepad!;
+      xrHandInput.updateGestureButton('pinch' as any, 1);
+      xrHandInput.updateGestureButton('constructor' as any, 1);
+      xrHandInput.updateGestureButton('tap', 0.5 as any);
+      xrHandInput.onFrameStart(mockFrame);
+      expect(gamepad.buttons.some((button) => button!.pressed)).toBe(false);
+      expect(gamepad.buttons[0]!.value).toBe(0);
+      expect(console.warn).toHaveBeenCalledWith(
+        'Invalid value 1 provided for gesture button pinch',
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        'Invalid value 0.5 provided for gesture button tap',
+      );
+    });
+  });
+
+  describe('thumb motion', () => {
+    const local = (joint: XRHandJoint) =>
+      jointPosition(
+        xrHandInput.inputSource.hand!.get(joint)![P_SPACE].offsetMatrix,
+      );
+
+    beforeEach(() => {
+      xrHandInput = new XRHandInput(
+        oculusHandConfig,
+        XRHandedness.Right,
+        globalSpace,
+      );
+      xrHandInput.poseId = 'microgesture';
+      xrHandInput.updateHandPose();
+    });
+
+    test("moves only the thumb, from one pose's thumb toward another's, and stops when cleared", () => {
+      const others = Object.values(XRHandJoint).filter(
+        (joint) => !handFingerJoints.thumb.includes(joint),
+      );
+      const before = others.map(local);
+      const restTip = local(XRHandJoint.ThumbTip);
+      const grip = mat4.clone(
+        xrHandInput.inputSource.gripSpace![P_SPACE].offsetMatrix,
+      );
+      xrHandInput.thumbMotion = {
+        from: libraryHandPoses.microgesture,
+        to: microgestureThumbPoses.tip,
+        weight: 1,
+      };
+      expect(xrHandInput.thumbMotion!.weight).toBe(1);
+      xrHandInput.updateHandPose();
+      expect(
+        vec3.distance(local(XRHandJoint.ThumbTip), restTip),
+      ).toBeGreaterThan(0.01);
+      others.forEach((joint, i) => {
+        expect([joint, vec3.distance(local(joint), before[i])]).toEqual([
+          joint,
+          0,
+        ]);
+      });
+      expectMatrixClose(
+        xrHandInput.inputSource.gripSpace![P_SPACE].offsetMatrix,
+        grip,
+      );
+      // Halfway lies between the two.
+      xrHandInput.thumbMotion = {
+        from: libraryHandPoses.microgesture,
+        to: microgestureThumbPoses.tip,
+        weight: 0.5,
+      };
+      xrHandInput.updateHandPose();
+      const half = vec3.distance(local(XRHandJoint.ThumbTip), restTip);
+      expect(half).toBeGreaterThan(0.003);
+      xrHandInput.thumbMotion = null;
+      xrHandInput.updateHandPose();
+      expect(vec3.distance(local(XRHandJoint.ThumbTip), restTip)).toBeLessThan(
+        1e-9,
+      );
+    });
+
+    test('a hand pinned by its grasp point stays where it is while the thumb moves', () => {
+      xrHandInput.setPin({
+        anchor: 'grasp',
+        target: vec3.fromValues(0, 1, -0.4),
+      });
+      const ray = vec3.clone(xrHandInput.position.vec3);
+      xrHandInput.thumbMotion = {
+        from: libraryHandPoses.microgesture,
+        to: microgestureThumbPoses.forward,
+        weight: 1,
+      };
+      xrHandInput.updateHandPose();
+      expect(vec3.distance(xrHandInput.position.vec3, ray)).toBeLessThan(1e-9);
+    });
+
+    test('every keyframe keeps the microgesture pose outside the thumb', () => {
+      const rest = libraryHandPoses.microgesture;
+      for (const [id, pose] of Object.entries(microgestureThumbPoses)) {
+        for (const joint of Object.values(XRHandJoint)) {
+          if (handFingerJoints.thumb.includes(joint)) continue;
+          expect([
+            id,
+            joint,
+            distance(
+              pose.jointTransforms[joint].offsetMatrix,
+              rest.jointTransforms[joint].offsetMatrix,
+            ),
+          ]).toEqual([id, joint, 0]);
+        }
+      }
     });
   });
 });

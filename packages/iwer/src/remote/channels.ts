@@ -9,9 +9,10 @@ import { Easing, ease } from './hand-motion.js';
 
 /**
  * What a channel animates on its device: where it is (`transform`), a hand's
- * pose (`pose`) or its select value (`pinch`).
+ * pose (`pose`), its select value (`pinch`) or a thumb microgesture on top
+ * of the pose (`thumb`).
  */
-export type ChannelKind = 'transform' | 'pose' | 'pinch';
+export type ChannelKind = 'transform' | 'pose' | 'pinch' | 'thumb';
 
 /**
  * One aspect of one device animated over time. Remote control's timed
@@ -29,6 +30,11 @@ export interface Channel {
   begin?: () => void;
   /** Applies eased progress, from 0 to 1 (exactly 1 on its last frame). */
   apply: (progress: number) => void;
+  /**
+   * Called once if the channel stops before it finishes (begun or not), so
+   * it can undo what it would otherwise leave behind (a pressed button).
+   */
+  cancel?: () => void;
 }
 
 interface ChannelState {
@@ -124,7 +130,10 @@ export class ChannelRun {
       if (!state.done) {
         state.done = true;
         this.stoppedEarly = true;
-        this.engine.release(this, state.channel);
+        if (this.engine.owns(this, state.channel)) {
+          this.engine.release(this, state.channel);
+          state.channel.cancel?.();
+        }
       }
     }
   }
@@ -136,13 +145,17 @@ export class ChannelRun {
  * the same device, which stops where it is.
  */
 export class ChannelEngine {
-  private owners = new Map<string, ChannelRun>();
+  private owners = new Map<string, { run: ChannelRun; channel: Channel }>();
 
   /** Starts `channels` together; nothing moves until the run advances. */
   run(channels: Channel[]): ChannelRun {
     const run = new ChannelRun(this, channels);
     for (const channel of channels) {
-      this.owners.set(channelKey(channel), run);
+      const key = channelKey(channel);
+      const replaced = this.owners.get(key);
+      // The channel of an earlier run it replaces stops where it is.
+      if (replaced && replaced.run !== run) replaced.channel.cancel?.();
+      this.owners.set(key, { run, channel });
     }
     return run;
   }
@@ -160,17 +173,18 @@ export class ChannelEngine {
 
   /** Stops every channel, or every channel of `device`, where it is. */
   stop(device?: string): void {
-    for (const key of [...this.owners.keys()]) {
+    for (const [key, owner] of [...this.owners]) {
       if (device === undefined || key.startsWith(`${device}:`)) {
         // Its run notices on its next advance that it no longer owns it.
         this.owners.delete(key);
+        owner.channel.cancel?.();
       }
     }
   }
 
   /** @internal Whether `run` still owns `channel`'s slot. */
   owns(run: ChannelRun, channel: Channel): boolean {
-    return this.owners.get(channelKey(channel)) === run;
+    return this.owners.get(channelKey(channel))?.run === run;
   }
 
   /** @internal Frees `channel`'s slot if `run` still owns it. */

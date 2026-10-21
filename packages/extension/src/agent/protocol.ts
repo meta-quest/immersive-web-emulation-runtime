@@ -88,6 +88,7 @@ export const ALLOWED_METHODS: ReadonlySet<string> = new Set([
   'set_device_state',
   'set_hand_pose',
   'get_hand_state',
+  'microgesture',
   'run_sequence',
   'cancel_sequence',
   'list_targets',

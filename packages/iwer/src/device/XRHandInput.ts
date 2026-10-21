@@ -143,11 +143,47 @@ export const oculusHandConfig: XRHandInputConfig = {
   },
 };
 
+/**
+ * Hand gamepad buttons other than the pinch, from button 4: the menu gesture
+ * (a palm-up pinch), then the microgestures (thumb swipes and tap).
+ */
+const HAND_GESTURE_BUTTONS = [
+  'menu',
+  'swipe-left',
+  'swipe-right',
+  'swipe-forward',
+  'swipe-backward',
+  'tap',
+] as const;
+export type HandGestureButton = (typeof HAND_GESTURE_BUTTONS)[number];
+
+/**
+ * The hand gamepad as Quest Browser reports it: the pinch on button 0 (the
+ * only one that fires events), buttons 1 to 3 empty, then the gesture
+ * buttons on 4 to 9.
+ */
 const XRHandGamepadConfig: GamepadConfig = {
-  mapping: GamepadMappingType.None,
-  buttons: [{ id: 'pinch', type: 'analog', eventTrigger: 'select' }],
+  mapping: GamepadMappingType.XRStandard,
+  buttons: [
+    { id: 'pinch', type: 'analog', eventTrigger: 'select' },
+    null,
+    null,
+    null,
+    ...HAND_GESTURE_BUTTONS.map((id) => ({ id, type: 'binary' as const })),
+  ],
   axes: [],
 };
+
+/**
+ * A thumb movement shown on top of the hand's pose (microgestures): the
+ * thumb is `weight` of the way from its place in `from` to its place in
+ * `to`, each relative to the palm.
+ */
+export interface ThumbMotion {
+  from: HandPose;
+  to: HandPose;
+  weight: number;
+}
 
 const fromPosition = vec3.create();
 const fromQuaternion = quat.create();
@@ -434,6 +470,7 @@ const anchorScratch = vec3.create();
 // The second point of a two-point anchor (never `anchorOffset`'s output).
 const anchorPartScratch = vec3.create();
 const pinchedScratch = createPose();
+const thumbScratch = createPose();
 const wristLocalScratch = quat.create();
 const desiredRotation = quat.create();
 const radialScratch = vec3.create();
@@ -462,6 +499,8 @@ export class XRHandInput extends XRTrackedInput {
     transitionProgress: number | null;
     // The hand before pinch: pose, finger blends and any transition.
     displayedPose: HandPose;
+    // A thumb movement shown on top of the displayed pose, or null.
+    thumbMotion: ThumbMotion | null;
     pin: HandPin | null;
   };
 
@@ -532,6 +571,7 @@ export class XRHandInput extends XRTrackedInput {
       transitionFromId: 'default',
       transitionProgress: null,
       displayedPose: createPose(),
+      thumbMotion: null,
       pin: null,
     };
 
@@ -577,7 +617,7 @@ export class XRHandInput extends XRTrackedInput {
    * `poseId`, e.g. curl the middle, ring and pinky of `open` from `fist`.
    * `weight` blends between the base pose's finger (0) and `poseId`'s (1).
    * Each joint blends relative to its parent joint and keeps a bone length
-   * between the two poses' lengths. The 20 generated poses are built on the
+   * between the two poses' lengths. The 21 generated poses are built on the
    * captured relaxed skeleton, so between them each finger's bones keep
    * exactly the same lengths.
    */
@@ -853,8 +893,9 @@ export class XRHandInput extends XRTrackedInput {
   }
 
   /**
-   * Updates the joints and grip from the pose, finger blends, any pose change
-   * and the pinch, then re-solves the pin. Runs every frame.
+   * Updates the joints and grip from the pose, finger blends, any pose change,
+   * any thumb movement and the pinch, then re-solves the pin. Runs every
+   * frame.
    */
   updateHandPose() {
     const state = this[P_HAND_INPUT];
@@ -862,6 +903,21 @@ export class XRHandInput extends XRTrackedInput {
     this.updateDisplayedPose();
     const displayed = state.displayedPose;
     let shown = displayed;
+    // A thumb movement moves only the thumb, relative to the displayed palm;
+    // anchors (grasp included) keep the displayed pose, so a pinned hand stays
+    // where it is.
+    const motion = state.thumbMotion;
+    if (motion) {
+      copyPose(thumbScratch, displayed);
+      blendChain(
+        thumbScratch,
+        motion.from,
+        motion.to,
+        handFingerJoints.thumb,
+        motion.weight,
+      );
+      shown = thumbScratch;
+    }
     // Pinch closes the thumb and index onto each other, relative to the
     // displayed palm; the rest of the hand and the grip keep their pose.
     const pinchValue = this.pinchValue;
@@ -931,6 +987,34 @@ export class XRHandInput extends XRTrackedInput {
     }
     writeImmediateValue(
       this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap.pinch!,
+      value,
+    );
+  }
+
+  /**
+   * The thumb movement shown on top of the pose (microgestures), or null.
+   * Applies from the next pose update (every frame).
+   */
+  get thumbMotion(): ThumbMotion | null {
+    return this[P_HAND_INPUT].thumbMotion;
+  }
+
+  set thumbMotion(motion: ThumbMotion | null) {
+    this[P_HAND_INPUT].thumbMotion = motion;
+  }
+
+  /**
+   * Writes a gesture button (menu, or a microgesture) for the next frame:
+   * 1 pressed, 0 released. These buttons fire no session events; apps read
+   * them from the hand's gamepad.
+   */
+  updateGestureButton(id: HandGestureButton, value: 0 | 1) {
+    if (!HAND_GESTURE_BUTTONS.includes(id) || (value !== 0 && value !== 1)) {
+      console.warn(`Invalid value ${value} provided for gesture button ${id}`);
+      return;
+    }
+    writePendingValue(
+      this[P_TRACKED_INPUT].inputSource.gamepad![P_GAMEPAD].buttonsMap[id]!,
       value,
     );
   }

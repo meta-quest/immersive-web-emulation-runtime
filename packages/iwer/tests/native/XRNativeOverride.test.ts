@@ -12,7 +12,10 @@ import {
   type CompressedRecording,
 } from '../../src/action/ActionPlayer.js';
 import type { InputSchema } from '../../src/action/ActionRecorder.js';
-import type { SequenceResult } from '../../src/remote/types.js';
+import type {
+  MicrogestureResult,
+  SequenceResult,
+} from '../../src/remote/types.js';
 import {
   metaQuest3,
   metaQuestPro,
@@ -2998,6 +3001,59 @@ describe('XRNativeOverride', () => {
       expect(result!.final!.anchors.grasp.x).toBeCloseTo(0.2, 3);
       // Letting go lifts the hand 3.5 cm off what it held.
       expect(result!.final!.anchors.grasp.y).toBeCloseTo(1.235, 3);
+    });
+
+    test("a microgesture moves a native hand's thumb; hand sources publish no gamepad, so its button is not visible", async () => {
+      const device = new XRDevice(metaQuest3);
+      const nativeXR = new MockXRSystem(HAND_FEATURES);
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr');
+      device.primaryInputMode = 'hand';
+      const events: string[] = [];
+      for (const type of ['selectstart', 'select', 'selectend']) {
+        session.addEventListener(type, () => events.push(type));
+      }
+      let time = 10;
+      const frame = () => {
+        session.requestAnimationFrame(() => {});
+        session.fireFrame(time);
+        time += 16;
+      };
+      frame();
+      const thumb = () =>
+        mat4.getTranslation(
+          vec3.create(),
+          device.hands.right!.inputSource.hand!.get(IwerHandJoint.ThumbTip)![
+            P_SPACE
+          ].offsetMatrix,
+        );
+      const rest = thumb();
+      let moved = 0;
+      let result: MicrogestureResult | undefined;
+      void device.remote
+        .dispatch('microgesture', { device: 'hand-right', gesture: 'tap' })
+        .then((value) => (result = value as MicrogestureResult));
+      for (let i = 0; i < 100 && !result; i++) {
+        frame();
+        moved = Math.max(moved, vec3.distance(thumb(), rest));
+        for (let j = 0; j < 5; j++) await Promise.resolve();
+      }
+      expect(result).toEqual({
+        device: 'hand-right',
+        gesture: 'tap',
+        button: 9,
+        registeredAtMs: expect.any(Number),
+      });
+      expect(moved).toBeGreaterThan(0.005);
+      expect(events).toEqual([]);
+      const rightHand = session.inputSources.find(
+        (source) => (source as XRInputSource).handedness === 'right',
+      ) as XRInputSource;
+      expect(rightHand.gamepad).toBeNull();
     });
 
     test('publishes stable XRHand-shaped facades over every joint', async () => {

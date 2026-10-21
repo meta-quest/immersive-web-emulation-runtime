@@ -233,13 +233,14 @@ xrDevice.hands['right'].quaternion.copy(quat);
 
 Hand poses present a unique challenge for emulation, given the variability in hand shapes and the differences in hand tracking implementations across platforms. IWER ships a library of base hand poses for development. `default`, `pinch` and `point` were captured on a Meta Quest 3; the rest are built on the skeleton of the captured `default` pose:
 
-| Group    | Poses                                                                       |
-| -------- | --------------------------------------------------------------------------- |
-| Neutral  | `default`, `open`, `flat`, `fist`                                           |
-| Pinches  | `pinch`, `pinch-middle`, `pinch-ring`, `pinch-pinky`, `tripod`, `key-pinch` |
-| Pointing | `point`, `finger-gun`                                                       |
-| Gestures | `thumbs-up`, `peace`, `three`, `four`, `ok`, `rock`, `call`                 |
-| Grasps   | `grip`, `claw`, `hook`, `cup`                                               |
+| Group         | Poses                                                                       |
+| ------------- | --------------------------------------------------------------------------- |
+| Neutral       | `default`, `open`, `flat`, `fist`                                           |
+| Pinches       | `pinch`, `pinch-middle`, `pinch-ring`, `pinch-pinky`, `tripod`, `key-pinch` |
+| Pointing      | `point`, `finger-gun`                                                       |
+| Gestures      | `thumbs-up`, `peace`, `three`, `four`, `ok`, `rock`, `call`                 |
+| Grasps        | `grip`, `claw`, `hook`, `cup`                                               |
+| Microgestures | `microgesture` (fingers loosely curled, the thumb by the index)             |
 
 ```javascript
 // Setting the pose of the left hand:
@@ -286,6 +287,18 @@ const pinchGestureJob = setInterval(() => {
 ```
 
 The pinch closes the thumb and index onto each other, relative to the palm; the wrist, the grip and the other fingers keep the pose. The hand selects when the pinch reaches 0.9 and lets go at 0.7. To script whole interactions (a fingertip on a button, timed pinches, pose fades) through remote control, see [Scripting Hand Interactions](./scripting-hands.md).
+
+### Microgestures
+
+Each hand has a gamepad laid out as Quest Browser reports it: mapping `xr-standard`, the pinch on button 0, the menu gesture on button 4 and Quest's thumb microgestures on buttons 5 to 9 (swipe left, right, forward and backward along the curled index finger, and a thumb tap). Only the pinch fires session events; read the others from `inputSource.gamepad.buttons`. Remote control's `microgesture` command makes one with the thumb motion and a 35 ms press, as on Quest (see [Microgestures](./scripting-hands.md#microgestures)); `updateGestureButton()` writes a button directly:
+
+```javascript
+await xrDevice.remote.dispatch('microgesture', {
+  device: 'hand-right',
+  gesture: 'swipe-left',
+});
+// The app sees inputSource.gamepad.buttons[5].pressed for 35 ms.
+```
 
 ## Platform Features
 

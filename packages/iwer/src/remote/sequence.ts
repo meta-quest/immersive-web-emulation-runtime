@@ -21,6 +21,16 @@ import {
   ease,
 } from './hand-motion.js';
 import type { Channel, ChannelEngine, ChannelRun } from './channels.js';
+import {
+  MICROGESTURES,
+  MICROGESTURE_POSE,
+  MICROGESTURE_READY_S,
+  MicrogesturePlayer,
+  isMicrogesture,
+  microgestureSeconds,
+  readyForMicrogesture,
+} from './microgesture.js';
+import type { Microgesture } from './microgesture.js';
 import { edgeEventTypes } from '../gamepad/button-edges.js';
 import type { GamepadButton } from '../gamepad/Gamepad.js';
 import { XRHandJoint } from '../input/XRHand.js';
@@ -89,6 +99,8 @@ export interface SequenceHost {
   latestPinch(deviceId: HandDeviceId): number;
   /** The hand's select button (its pinch). */
   pinchButton(deviceId: HandDeviceId): GamepadButton;
+  /** One of the hand's microgesture buttons. */
+  gestureButton(deviceId: HandDeviceId, gesture: Microgesture): GamepadButton;
   channels: ChannelEngine;
   resolver(): TargetResolver | null;
   handState(deviceId: HandDeviceId): GetHandStateResult;
@@ -153,6 +165,7 @@ const STEP_KEYS = [
   'fingers',
   'pinch',
   'body',
+  'microgesture',
 ];
 const SEQUENCE_KEYS = ['device', 'steps', 'idleHand', 'body', 'gaze', 'dryRun'];
 const UP = vec3.fromValues(0, 1, 0);
@@ -355,6 +368,8 @@ interface Segment {
   kind: SequencePlan['segments'][number]['kind'];
   /** For press segments: the surface point and normal (contact timing). */
   press?: { point: vec3; normal: vec3 };
+  /** For microgesture segments: the gesture, from `start` seconds. */
+  micro?: { player: MicrogesturePlayer; start: number };
   /** Computes the path and channel targets when the segment starts. */
   prepare: (ctx: RunContext) => void;
   duration: number; // seconds, filled by prepare (estimate before)
@@ -393,6 +408,11 @@ interface Segment {
 interface RunContext {
   host: SequenceHost;
   params: RunSequenceParams;
+  /**
+   * When planning at dispatch (dry run, time budget): the pose and pinch the
+   * hand will have when the next segment starts. Null while running.
+   */
+  planned: { poseId: string; blended: boolean; pinch: number } | null;
   hand: XRHandInput;
   anchor: HandAnchor;
   body: BodyFrame;
@@ -550,7 +570,9 @@ export const planSequence = (
     const label = step.label ?? `step ${index}`;
     const following = params.steps[index + 1];
     const nextPlaces = following !== undefined && stepPlaces(following);
-    if (step.press) {
+    if (step.microgesture !== undefined) {
+      segments.push(microgestureSegment(index, label, step.microgesture));
+    } else if (step.press) {
       segments.push(...pressSegments(index, label, step, nextPlaces));
     } else {
       const next = params.steps.slice(index + 1).find(stepPlaces);
@@ -629,6 +651,26 @@ const validateStep = (
   step: SequenceStep,
 ) => {
   const hand = host.hand(params.device);
+  if (step.microgesture !== undefined) {
+    if (!isMicrogesture(step.microgesture)) {
+      throw new Error(
+        `microgesture must be one of ${MICROGESTURES.join(', ')}.`,
+      );
+    }
+    const others = Object.keys(step).filter(
+      (key) => key !== 'label' && key !== 'microgesture',
+    );
+    if (others.length > 0) {
+      throw new Error(
+        `a microgesture step takes only a label (got ${others.join(', ')}); move or pose the hand in a step before it.`,
+      );
+    }
+    if (!hand.poseIds.includes(MICROGESTURE_POSE)) {
+      throw new Error(
+        `the hand has no '${MICROGESTURE_POSE}' pose to make microgestures from.`,
+      );
+    }
+  }
   if (
     step.duration !== undefined &&
     step.duration !== 'auto' &&
@@ -1202,6 +1244,69 @@ const stepSegment = (
       }
     };
   }
+  return segment;
+};
+
+/**
+ * A microgesture where the hand is: the hand takes the microgesture pose
+ * first (letting a light pinch go) unless it is ready, then the thumb moves
+ * and the gesture's button pulses. The hand holds still meanwhile.
+ */
+const microgestureSegment = (
+  index: number,
+  label: string,
+  gesture: Microgesture,
+): Segment => {
+  const segment: Segment = {
+    step: index,
+    label,
+    kind: 'microgesture',
+    duration: MICROGESTURE_READY_S + microgestureSeconds(gesture),
+    stallAfter: true,
+    prepare: (ctx) => {
+      const { hand, host, planned } = ctx;
+      const pinching =
+        'the hand is pinching (select is pressed); open the pinch (pinch: 0) in a step before the microgesture.';
+      if (planned) {
+        if (planned.pinch >= 0.9) {
+          ctx.warnings.push(
+            `${where(segment.step, ctx.params.steps[segment.step])}: ${pinching}`,
+          );
+        }
+      } else if (hand.inputSource.gamepad!.buttons[0]!.pressed) {
+        // Checked when the step starts: a step before it may let go.
+        throw new Error(pinching);
+      }
+      prepareMove(ctx, segment, { duration: 0 }, false);
+      const pinch = planned?.pinch ?? host.latestPinch(ctx.params.device);
+      const ready = planned
+        ? planned.poseId === MICROGESTURE_POSE &&
+          !planned.blended &&
+          pinch === 0
+        : readyForMicrogesture(hand, pinch);
+      const lead = ready ? 0 : MICROGESTURE_READY_S;
+      if (lead > 0) {
+        segment.pose = {
+          value: host.parsePose(hand, MICROGESTURE_POSE, undefined),
+          start: 0,
+          end: lead,
+          easing: 'minimum-jerk',
+        };
+        if (pinch > 0) {
+          segment.pinch = {
+            value: 0,
+            start: 0,
+            end: lead,
+            easing: 'minimum-jerk',
+            from: pinch,
+          };
+        }
+      }
+      const player = new MicrogesturePlayer(hand, gesture);
+      segment.micro = { player, start: lead };
+      segment.duration = lead + player.duration;
+    },
+  };
   return segment;
 };
 
@@ -2065,6 +2170,15 @@ const createContext = (
   return {
     host,
     params,
+    planned: dry
+      ? {
+          poseId: hand.poseId,
+          blended:
+            Object.keys(hand.fingerPoses).length > 0 ||
+            hand.poseTransitionProgress !== null,
+          pinch: host.latestPinch(params.device),
+        }
+      : null,
     hand,
     anchor: hand.pin?.anchor ?? 'target-ray',
     body,
@@ -2152,8 +2266,11 @@ export class SequenceRunner {
   })[] = [];
   private seenPressed: boolean;
   private seenCancels: number;
+  private seenGestures: boolean[];
   private openPress: { point: vec3; normal: vec3 } | null = null;
   private idle: IdleHand | null = null;
+  // The latest microgesture, until its button is up.
+  private micro: MicrogesturePlayer | null = null;
 
   constructor(
     private readonly host: SequenceHost,
@@ -2165,6 +2282,10 @@ export class SequenceRunner {
     const button = host.pinchButton(params.device)[P_GAMEPAD];
     this.seenPressed = button.lastFramePressed;
     this.seenCancels = button.cancelGeneration;
+    this.seenGestures = MICROGESTURES.map(
+      (gesture) =>
+        host.gestureButton(params.device, gesture)[P_GAMEPAD].lastFramePressed,
+    );
   }
 
   get done(): boolean {
@@ -2229,6 +2350,11 @@ export class SequenceRunner {
     if (this.finished) return deltaMs;
     // What the app saw last frame.
     this.observeEdges();
+    if (this.micro?.releasePending) {
+      // A microgesture that registered on its step's last frame has been
+      // seen; its button comes up now.
+      this.micro.finish();
+    }
     let remaining = deltaMs / 1000 + this.carryS;
     this.carryS = 0;
     if (this.ending) {
@@ -2286,7 +2412,7 @@ export class SequenceRunner {
     }
   }
 
-  /** Records the select edges the app saw on the last frame. */
+  /** Records the select edges and microgestures the app saw on the last frame. */
   private observeEdges() {
     const state = this.host.pinchButton(this.params.device)[P_GAMEPAD];
     const pressed = state.lastFramePressed;
@@ -2302,6 +2428,15 @@ export class SequenceRunner {
     }
     this.seenPressed = pressed;
     this.seenCancels = state.cancelGeneration;
+    MICROGESTURES.forEach((gesture, i) => {
+      const down = this.host.gestureButton(this.params.device, gesture)[
+        P_GAMEPAD
+      ].lastFramePressed;
+      if (down && !this.seenGestures[i]) {
+        this.events.push({ t: +this.clock.toFixed(3), type: gesture });
+      }
+      this.seenGestures[i] = down;
+    });
   }
 
   private advanceSegment() {
@@ -2325,6 +2460,7 @@ export class SequenceRunner {
       }
     }
     this.segmentStart = this.clock;
+    if (segment.micro) this.micro = segment.micro.player;
     this.run = this.host.channels.run(this.channelsFor(segment));
     const last = this.steps[this.steps.length - 1];
     if (!last || last.index !== segment.step) {
@@ -2402,6 +2538,10 @@ export class SequenceRunner {
       easing: 'linear',
       apply: (progress) => this.applyPlacement(segment, at(progress)),
     });
+    if (segment.micro) {
+      const { player, start } = segment.micro;
+      channels.push(player.channel(device, start * 1000));
+    }
     if (this.idle) {
       channels.push({
         device: this.idle.device,
@@ -2514,7 +2654,11 @@ export class SequenceRunner {
       carry(back, scratch, 1 - fw, scratch);
       if (wrist) wrist = carryRotation(back, wrist, 1 - fw, scratchQuat);
     }
-    if (segment.kind === 'hold' && !segment.pinch && hand.pinchValue < 0.5) {
+    if (
+      (segment.kind === 'hold' || segment.kind === 'microgesture') &&
+      !segment.pinch &&
+      hand.pinchValue < 0.5
+    ) {
       // A held hand is never perfectly still (but steady while holding
       // something or pinching).
       sway(this.segmentStart + t, 1, HAND_SWAY_M, swayScratch);
@@ -2602,9 +2746,11 @@ export class SequenceRunner {
   private finish(completed: boolean, reason?: string, failedStep?: number) {
     if (this.finished) return;
     if (!completed) {
-      // Stop where it is: channels let go, fades snap to their pose; pins and
-      // the pinch stay.
+      // Stop where it is: channels let go, fades snap to their pose, a
+      // microgesture's thumb returns and its button comes up; pins and the
+      // pinch stay.
       this.run?.stop();
+      this.micro?.cancel();
       for (const hand of [this.ctx.hand, this.idle?.hand]) {
         if (hand && hand.poseTransitionProgress !== null) {
           hand.poseTransitionProgress = null;
@@ -2727,6 +2873,12 @@ export class SequenceRunner {
           );
         }
         total += segment.duration;
+        const planned = ctx.planned!;
+        if (segment.pose) {
+          planned.poseId = segment.pose.value.poseId;
+          planned.blended = Object.keys(segment.pose.value.fingers).length > 0;
+        }
+        if (segment.pinch) planned.pinch = segment.pinch.value;
         if (segment.target) {
           hand.setPin({
             anchor: ctx.anchor,

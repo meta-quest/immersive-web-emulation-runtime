@@ -5,7 +5,7 @@ title: Scripting Hand Interactions
 
 # Scripting Hand Interactions
 
-IWER's remote control interface (`device.remote`) can drive an emulated hand the way a person moves one: put a fingertip on a button, close a pinch over a tenth of a second, fade from one pose to another, or run a whole interaction (press a button, pick something up, set it down, give a thumbs up) in one call with [`run_sequence`](#sequences). Your app's real interaction code reacts, because IWER updates the same joints, gamepad and select events the app reads. Agents reach the same commands over MCP through the IWER browser extension (`xr_set_transform`, `xr_animate_to`, `xr_set_select_value`, `xr_set_hand_pose`, `xr_get_hand_state`, `xr_run_sequence`, `xr_cancel_sequence`, `xr_list_targets`).
+IWER's remote control interface (`device.remote`) can drive an emulated hand the way a person moves one: put a fingertip on a button, close a pinch over a tenth of a second, fade from one pose to another, swipe the thumb along the index finger as a Quest [microgesture](#microgestures), or run a whole interaction (press a button, pick something up, set it down, give a thumbs up) in one call with [`run_sequence`](#sequences). Your app's real interaction code reacts, because IWER updates the same joints, gamepad and select events the app reads. Agents reach the same commands over MCP through the IWER browser extension (`xr_set_transform`, `xr_animate_to`, `xr_set_select_value`, `xr_set_hand_pose`, `xr_get_hand_state`, `xr_microgesture`, `xr_run_sequence`, `xr_cancel_sequence`, `xr_list_targets`).
 
 ```js
 const remote = device.remote;
@@ -110,9 +110,43 @@ const state = await remote.dispatch('get_hand_state', { device: 'hand-right' });
 
 `joints: 'all'` adds every joint's position and radius. `get_device_state` reports each hand's `poseId` and `pinchValue`, and `set_device_state` accepts them.
 
+## Microgestures
+
+Quest recognizes small thumb gestures on a relaxed hand: a swipe along the side of the curled index finger (left or right, the user's left and right), over it (forward) or back toward the palm (backward), and a tap on its side. Quest Browser reports them on the hand's `xr-standard` gamepad, and IWER's hand gamepad has the same layout:
+
+| Button | Meaning                                      |
+| ------ | -------------------------------------------- |
+| 0      | The pinch (select, the only one with events) |
+| 1–3    | Empty                                        |
+| 4      | The menu gesture (no motion yet)             |
+| 5, 6   | Swipe left, swipe right                      |
+| 7, 8   | Swipe forward, swipe backward                |
+| 9      | Thumb tap                                    |
+
+`microgesture { device, gesture }` makes one, with `gesture` one of `swipe-left`, `swipe-right`, `swipe-forward`, `swipe-backward` or `tap`:
+
+```js
+// Raise the hand side-on in front of the chest, palm in.
+await remote.dispatch('set_transform', {
+  device: 'hand-right',
+  anchor: 'wrist',
+  position: { x: 0.12, y: 1.2, z: -0.3 },
+  orientation: { fingers: [0, -0.59, -0.81], palm: 'left' },
+});
+await remote.dispatch('microgesture', {
+  device: 'hand-right',
+  gesture: 'swipe-left',
+});
+// { device: 'hand-right', gesture: 'swipe-left', button: 5, registeredAtMs: 486 }
+```
+
+The thumb touches the side of the index finger, slides along it (or taps) and returns to rest in about 0.3 s. As on Quest, the gesture registers at the end of the motion, as the thumb lifts: its button is pressed for 35 ms and always for at least one frame, then released, so read the rising edge. `registeredAtMs` is when that happened, from the command's start. A hand not in the `microgesture` pose (fingers loosely curled, the thumb just off the index) takes it first, over 0.25 s, letting go of a light pinch; a hand that is selecting must let go first (`set_select_value 0`), or the command fails. The swipes are left and right for the user: on the right hand, a swipe left slides the thumb toward the index tip; on the left hand, toward the knuckle. Hold the hand side-on (palm toward the body's midline, fingers about 35° down) for swipes to read the same in the scene.
+
+In a sequence, `{ microgesture: 'tap' }` is a step of its own ([Steps](#steps)), and the result's `events` lists it by name. In native override mode the thumb moves, but hand sources publish no gamepad, so the application doesn't see the buttons.
+
 ## Live hands
 
-The new parameters (`anchor`, hand directions, `'auto'`, and `duration` on a pinch or a pose) and `run_sequence` need a hand the app can see: input mode `hand`, connected, and `hand-tracking` enabled on the session. The check runs when the command reaches the head of the queue, so a `set_input_mode` sent just before it counts. Otherwise the command fails with a message saying what to fix. Commands without the new parameters still apply to a hand the app can't see.
+The new parameters (`anchor`, hand directions, `'auto'`, and `duration` on a pinch or a pose), `microgesture` and `run_sequence` need a hand the app can see: input mode `hand`, connected, and `hand-tracking` enabled on the session. The check runs when the command reaches the head of the queue, so a `set_input_mode` sent just before it counts. Otherwise the command fails with a message saying what to fix. Commands without the new parameters still apply to a hand the app can't see.
 
 ## Sequences
 
@@ -165,6 +199,7 @@ A move travels along one smooth arc (leaving along `depart`, arriving along `app
 | `approach`, `depart`              | `{ distance, normal? }`: come straight in along the surface normal for the last `distance` metres, or lift straight off first (straight down / up while holding). A press and a let-go lift off automatically.                                                                       |
 | `body`                            | `{ position }` or `{ stepTo: target }` moves the body first (the hand goes along); `facing` (a direction) turns it.                                                                                                                                                                  |
 | `duration`                        | Seconds for the reach, or `'auto'` (the default for moves): scaled to the path length, the wrist turn and any pose change.                                                                                                                                                           |
+| `microgesture`                    | A [microgesture](#microgestures) where the hand is, as a step of its own (only `label` alongside). The hand takes the `microgesture` pose first unless it is in it; the step fails if the hand is selecting when it starts.                                                          |
 | `label`                           | Names the step in the result and in errors.                                                                                                                                                                                                                                          |
 
 A step with only a `duration` holds. `start` and `end` are fractions of the step's reach (default 0 and 1); the default easing is `minimum-jerk`. Steps and every object in them reject unknown keys, and every error names the step (`Step 2 ('carry'): ...`).
@@ -230,7 +265,7 @@ An unknown name is an error that lists the closest known names. `list_targets` (
 // {
 //   completed: true, cancelled: false,
 //   steps: [{ label, start, end, startPerf, endPerf }],  // sequence seconds and performance.now()
-//   events: [{ t, type }],      // select events the app saw, from the hand's own button edges
+//   events: [{ t, type }],      // select events and microgestures the app saw, from the hand's own button edges
 //   presses: [{ label, contactMs }],  // real time the fingertip was within 2 cm of each press
 //   warnings: [],
 //   pinchValue: 0,
@@ -240,7 +275,7 @@ An unknown name is an error that lists the closest known names. `list_targets` (
 
 A step that fails (a target gone when its step starts, say) stops the sequence with `{ completed: false, failedStep, reason }`; the hand stays where it is and the pinch is left as it is.
 
-`dryRun: true` validates the sequence, resolves every target and returns the plan without moving anything: each step's segments (a `press` expands into a reach and a hold, and a pull-back unless the next step moves on), their durations, targets and walks, and warnings.
+`dryRun: true` validates the sequence, resolves every target and returns the plan without moving anything: each step's segments (a `press` expands into a reach and a hold, and a pull-back unless the next step moves on; a microgesture is one `microgesture` segment), their durations, targets and walks, and warnings.
 
 ### Stopping
 

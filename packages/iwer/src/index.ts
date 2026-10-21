@@ -39,7 +39,7 @@ export { GamepadMappingType } from './gamepad/Gamepad.js';
 export type { GamepadConfig, Button, Axis } from './gamepad/Gamepad.js';
 
 // Remote Control Interface
-export { RemoteControlInterface } from './remote/index.js';
+export { RemoteControlInterface, MICROGESTURES } from './remote/index.js';
 export type {
   DeviceId,
   PoseDeviceId,
@@ -75,6 +75,9 @@ export type {
   SetHandPoseResult,
   GetHandStateParams,
   GetHandStateResult,
+  MicrogestureParams,
+  MicrogestureResult,
+  Microgesture,
   SequencePosition,
   SequenceTarget,
   TargetFace,
@@ -186,7 +189,9 @@ export type {
   FingerPoseBlend,
   HandAnchor,
   HandDirections,
+  HandGestureButton,
   HandPin,
+  ThumbMotion,
   XRHandFinger,
 } from './device/XRHandInput.js';
 export {

@@ -746,9 +746,10 @@ export class ActionPlayer {
 
   /**
    * Map a recorded button index to its event trigger: for xr-standard mappings
-   * button 0 -> 'select' and button 1 -> 'squeeze'; for hands (IWER's hand
-   * gamepad has no mapping) button 0, the pinch, -> 'select'. Other buttons
-   * have no trigger.
+   * button 0 -> 'select' and button 1 -> 'squeeze' (a hand's button 1 is an
+   * empty slot, and its gesture buttons, 4 to 9, have no trigger); for hands
+   * recorded before the hand gamepad had a mapping, button 0, the pinch,
+   * -> 'select'. Other buttons have no trigger.
    */
   private eventTriggerForButton(
     schema: InputSchema,
