@@ -6,7 +6,9 @@
  */
 
 import { z } from 'zod';
+import { BUILTIN_HAND_POSE_IDS } from 'iwer/lib/device/configs/hand/ids.js';
 import {
+  HAND_POSE_IDS,
   TOOLS,
   TOOL_BY_MCP_NAME,
   MCP_TO_METHOD,
@@ -132,6 +134,42 @@ describe('tool catalog', () => {
         false,
       );
     }
+  });
+
+  it('xr_set_hand_pose lists the runtime poses and accepts finger blends', () => {
+    expect([...HAND_POSE_IDS]).toEqual([...BUILTIN_HAND_POSE_IDS]);
+    const tool = TOOL_BY_MCP_NAME.get('xr_set_hand_pose')!;
+    for (const id of HAND_POSE_IDS) {
+      expect(tool.description).toMatch(new RegExp(`(^|[ :])${id} \\([^)]+\\)`));
+    }
+    expect(tool.description).toContain('Poses only shape the hand');
+
+    const schema = z.object(tool.inputShape);
+    expect(
+      schema.safeParse({
+        device: 'hand-left',
+        poseId: 'open',
+        fingers: {
+          middle: 'fist',
+          ring: { poseId: 'fist' },
+          pinky: { poseId: 'fist', weight: 0.5 },
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        device: 'hand-left',
+        poseId: 'open',
+        fingers: { elbow: 'fist' },
+      }).success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({
+        device: 'hand-left',
+        poseId: 'open',
+        fingers: { index: { poseId: 'fist', weight: 2 } },
+      }).success,
+    ).toBe(false);
   });
 
   it('accepts gaze state without an independent position', () => {

@@ -100,7 +100,7 @@
     {
       "name": "xr_set_hand_pose",
       "title": "Set hand pose",
-      "description": "Set a named hand pose (e.g. \"relaxed\", \"point\", \"pinch\") on a hand device.",
+      "description": "Set a named hand pose on a hand device. Poses only shape the hand; to pinch (select), use the pinch value (xr_set_select_value). Poses: default (relaxed), pinch (thumb and index touching), point (index extended), open (high five), flat (fingers together, blade), fist (closed fist), thumbs-up (fist with thumb up), finger-gun (index and thumb out), peace (V sign), three (index, middle, ring up), four (four fingers up, thumb folded), ok (thumb-index circle), rock (index and pinky out), call (thumb and pinky out), pinch-middle (thumb to middle tip), pinch-ring (thumb to ring tip), pinch-pinky (thumb to pinky tip), tripod (thumb, index, middle tips together), key-pinch (thumb against side of index), grip (wrapped around a handle), claw (holding a ball), hook (carrying a bag handle), cup (scooping water). Optionally take individual fingers from other poses, e.g. poseId \"open\" with fingers {\"middle\":\"fist\",\"ring\":\"fist\",\"pinky\":\"fist\"}, or blend partway with {\"poseId\":\"fist\",\"weight\":0.5}. Setting a pose clears earlier finger overrides.",
       "readOnly": false
     },
     {

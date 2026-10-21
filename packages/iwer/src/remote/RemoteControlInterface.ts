@@ -13,6 +13,7 @@ import type {
 } from '../device/XRDevice.js';
 import type { Vec3, Quat } from '../types/state.js';
 import { P_DEVICE } from '../private.js';
+import { XRHandFinger, handFingerJoints } from '../device/XRHandInput.js';
 import type {
   DeviceId,
   ConnectedInputDeviceId,
@@ -48,6 +49,8 @@ import type {
   RemoteDeviceState,
   SetDeviceStateParams,
   SetDeviceStateResult,
+  SetHandPoseParams,
+  SetHandPoseResult,
   OrientationInput,
 } from './types.js';
 import {
@@ -841,12 +844,7 @@ export class RemoteControlInterface {
           params as unknown as SetSelectValueParams,
         );
       case 'set_hand_pose':
-        return this.executeSetHandPose(
-          params as unknown as {
-            device: 'hand-left' | 'hand-right';
-            poseId: string;
-          },
-        );
+        return this.executeSetHandPose(params as unknown as SetHandPoseParams);
 
       // Gamepad tools
       case 'get_gamepad_state':
@@ -1054,14 +1052,8 @@ export class RemoteControlInterface {
     return { device: deviceId, value };
   }
 
-  private executeSetHandPose(params: {
-    device: 'hand-left' | 'hand-right';
-    poseId: string;
-  }): {
-    device: 'hand-left' | 'hand-right';
-    poseId: string;
-  } {
-    const { device: deviceId, poseId } = params;
+  private executeSetHandPose(params: SetHandPoseParams): SetHandPoseResult {
+    const { device: deviceId, poseId, fingers } = params;
     const hand =
       deviceId === 'hand-left'
         ? 'left'
@@ -1077,9 +1069,53 @@ export class RemoteControlInterface {
     if (!handInput) {
       throw new Error(`Hand ${hand} not available`);
     }
-    // poseId is a public, validated setter on XRHandInput.
+    const available = handInput.poseIds;
+    const requireKnown = (id: unknown): string => {
+      if (typeof id !== 'string' || !available.includes(id)) {
+        throw new Error(
+          `Unknown hand pose '${id}'. Available poses: ${available.join(', ')}.`,
+        );
+      }
+      return id;
+    };
+    requireKnown(poseId);
+    if (
+      fingers !== undefined &&
+      (fingers === null ||
+        typeof fingers !== 'object' ||
+        Array.isArray(fingers))
+    ) {
+      throw new Error('fingers must map finger names to poses.');
+    }
+    const fingerNames = Object.keys(handFingerJoints);
+    const blends = Object.entries(fingers ?? {}).map(([finger, blend]) => {
+      if (!fingerNames.includes(finger)) {
+        throw new Error(
+          `Unknown finger '${finger}'. Fingers: ${fingerNames.join(', ')}.`,
+        );
+      }
+      if (typeof blend !== 'string' && (!blend || typeof blend !== 'object')) {
+        throw new Error(
+          `Finger '${finger}' takes a pose id or { poseId, weight }.`,
+        );
+      }
+      const { poseId: fingerPoseId, weight = 1 } =
+        typeof blend === 'string' ? { poseId: blend } : blend;
+      if (typeof weight !== 'number' || !(weight >= 0 && weight <= 1)) {
+        throw new Error(`Finger weight must be within [0, 1], got ${weight}.`);
+      }
+      return {
+        finger: finger as XRHandFinger,
+        poseId: requireKnown(fingerPoseId),
+        weight,
+      };
+    });
+    // Setting poseId clears earlier finger blends; then apply the new ones.
     handInput.poseId = poseId;
-    return { device: deviceId, poseId };
+    for (const { finger, poseId: fingerPoseId, weight } of blends) {
+      handInput.setFingerPose(finger, fingerPoseId, weight);
+    }
+    return { device: deviceId, poseId, fingers: handInput.fingerPoses };
   }
 
   // =============================================================================

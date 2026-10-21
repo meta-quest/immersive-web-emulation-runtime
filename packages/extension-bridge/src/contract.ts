@@ -14,7 +14,7 @@
 import { z, type ZodRawShape } from 'zod';
 
 /** Bumped when the catalog shape changes; surfaced in the version handshake. */
-export const CATALOG_VERSION = 1;
+export const CATALOG_VERSION = 2;
 
 // --- Reusable shapes -------------------------------------------------------
 
@@ -52,6 +52,87 @@ const controllerEnum = z
 const handEnum = z
   .enum(['hand-left', 'hand-right'])
   .describe('A hand-tracking device.');
+
+// Keep in sync with iwer's BUILTIN_HAND_POSE_IDS (checked by contract tests).
+export const HAND_POSE_IDS = [
+  'default',
+  'pinch',
+  'point',
+  'open',
+  'flat',
+  'fist',
+  'thumbs-up',
+  'finger-gun',
+  'peace',
+  'three',
+  'four',
+  'ok',
+  'rock',
+  'call',
+  'pinch-middle',
+  'pinch-ring',
+  'pinch-pinky',
+  'tripod',
+  'key-pinch',
+  'grip',
+  'claw',
+  'hook',
+  'cup',
+] as const;
+
+// One short gloss per built-in pose, for xr_set_hand_pose.
+const HAND_POSE_GLOSS: Record<(typeof HAND_POSE_IDS)[number], string> = {
+  default: 'relaxed',
+  pinch: 'thumb and index touching',
+  point: 'index extended',
+  open: 'high five',
+  flat: 'fingers together, blade',
+  fist: 'closed fist',
+  'thumbs-up': 'fist with thumb up',
+  'finger-gun': 'index and thumb out',
+  peace: 'V sign',
+  three: 'index, middle, ring up',
+  four: 'four fingers up, thumb folded',
+  ok: 'thumb-index circle',
+  rock: 'index and pinky out',
+  call: 'thumb and pinky out',
+  'pinch-middle': 'thumb to middle tip',
+  'pinch-ring': 'thumb to ring tip',
+  'pinch-pinky': 'thumb to pinky tip',
+  tripod: 'thumb, index, middle tips together',
+  'key-pinch': 'thumb against side of index',
+  grip: 'wrapped around a handle',
+  claw: 'holding a ball',
+  hook: 'carrying a bag handle',
+  cup: 'scooping water',
+};
+
+const HAND_POSE_GLOSSES = HAND_POSE_IDS.map(
+  (id) => `${id} (${HAND_POSE_GLOSS[id]})`,
+).join(', ');
+
+const fingerPose = z
+  .union([
+    z.string(),
+    z.object({
+      poseId: z.string(),
+      weight: z.number().min(0).max(1).optional(),
+    }),
+  ])
+  .describe(
+    'A pose id, or {poseId, weight} where weight 0-1 blends from the base pose toward it.',
+  );
+
+const fingerPoses = z
+  .object({
+    thumb: fingerPose.optional(),
+    index: fingerPose.optional(),
+    middle: fingerPose.optional(),
+    ring: fingerPose.optional(),
+    pinky: fingerPose.optional(),
+  })
+  .strict()
+  .describe('Fingers to take from other poses, on top of poseId.');
 
 const vec3 = z
   .object({ x: z.number(), y: z.number(), z: z.number() })
@@ -318,9 +399,14 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'set_hand_pose',
     title: 'Set hand pose',
     description:
-      'Set a named hand pose (e.g. "relaxed", "point", "pinch") on a hand device.',
+      `Set a named hand pose on a hand device. Poses only shape the hand; to pinch (select), use the pinch value (xr_set_select_value). Poses: ${HAND_POSE_GLOSSES}. ` +
+      'Optionally take individual fingers from other poses, e.g. poseId "open" with fingers {"middle":"fist","ring":"fist","pinky":"fist"}, or blend partway with {"poseId":"fist","weight":0.5}. Setting a pose clears earlier finger overrides.',
     readOnlyHint: false,
-    inputShape: { device: handEnum, poseId: z.string() },
+    inputShape: {
+      device: handEnum,
+      poseId: z.string(),
+      fingers: fingerPoses.optional(),
+    },
   },
   // --- World (SEM) ---
   {

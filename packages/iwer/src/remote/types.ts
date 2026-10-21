@@ -6,6 +6,7 @@
  */
 
 import type { Vec3, Quat, EulerRotation, InputMode } from '../types/state.js';
+import type { FingerPoseBlend, XRHandFinger } from '../device/XRHandInput.js';
 
 // =============================================================================
 // Device Identifiers
@@ -231,6 +232,27 @@ export interface SetSelectValueParams {
 export interface SetSelectValueResult {
   device: SelectableDeviceId;
   value: number;
+}
+
+/**
+ * Parameters for set_hand_pose tool
+ */
+export interface SetHandPoseParams {
+  device: 'hand-left' | 'hand-right';
+  poseId: string;
+  /** Per-finger overrides: a pose id, or a pose id with a 0-1 blend weight. */
+  fingers?: Partial<
+    Record<XRHandFinger, string | { poseId: string; weight?: number }>
+  >;
+}
+
+/**
+ * Result of set_hand_pose tool
+ */
+export interface SetHandPoseResult {
+  device: 'hand-left' | 'hand-right';
+  poseId: string;
+  fingers: Partial<Record<XRHandFinger, FingerPoseBlend>>;
 }
 
 /**

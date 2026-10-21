@@ -67,6 +67,8 @@ export type {
   GetSelectValueResult,
   SetSelectValueParams,
   SetSelectValueResult,
+  SetHandPoseParams,
+  SetHandPoseResult,
   SelectParams,
   SelectResult,
   GamepadButtonInfo,
@@ -156,6 +158,9 @@ export { XRJointPose } from './pose/XRJointPose.js';
 // Input
 export { XRInputSource, XRInputSourceArray } from './input/XRInputSource.js';
 export { XRHand } from './input/XRHand.js';
+export { BUILTIN_HAND_POSE_IDS } from './device/configs/hand/ids.js';
+export type { BuiltinHandPoseId } from './device/configs/hand/ids.js';
+export type { FingerPoseBlend, XRHandFinger } from './device/XRHandInput.js';
 export {
   XRGazeInput,
   GAZE_TRACKING_FEATURES,

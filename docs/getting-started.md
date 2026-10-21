@@ -231,14 +231,40 @@ xrDevice.hands['right'].quaternion.copy(quat);
 
 ### Pose Control
 
-Hand poses present a unique challenge for emulation, given the variability in hand shapes and the differences in hand tracking implementations across platforms. To address this, IWER includes several preset hand poses, derived from obfuscated hand tracking data captured on a Meta Quest 3 device. These presets offer a universal starting point for hand pose emulation, though for optimal accuracy, capturing and using your own hand tracking data is recommended. The following example demonstrates how to apply these preset poses:
+Hand poses present a unique challenge for emulation, given the variability in hand shapes and the differences in hand tracking implementations across platforms. IWER ships a library of base hand poses for development. `default`, `pinch` and `point` were captured on a Meta Quest 3; the rest are built on the skeleton of the captured `default` pose:
+
+| Group    | Poses                                                                       |
+| -------- | --------------------------------------------------------------------------- |
+| Neutral  | `default`, `open`, `flat`, `fist`                                           |
+| Pinches  | `pinch`, `pinch-middle`, `pinch-ring`, `pinch-pinky`, `tripod`, `key-pinch` |
+| Pointing | `point`, `finger-gun`                                                       |
+| Gestures | `thumbs-up`, `peace`, `three`, `four`, `ok`, `rock`, `call`                 |
+| Grasps   | `grip`, `claw`, `hook`, `cup`                                               |
 
 ```javascript
-// Setting the pose of the left hand to a "relaxed" state:
-xrDevice.hands['left'].poseId = 'relaxed';
+// Setting the pose of the left hand:
+xrDevice.hands['left'].poseId = 'open';
 
-// Using the "default" pose for the right hand:
-xrDevice.hands['right'].poseId = 'default'; // "default" and "pinch" are essential poses for configuring emulated hands.
+// Every pose this hand can take:
+console.log(xrDevice.hands['left'].poseIds);
+```
+
+You can also take individual fingers from other poses. A borrowed finger keeps its source pose's spread as well as its curl, so take straight fingers from `flat` when they should lie together and from `open` when they should fan out. Setting `poseId` clears these finger blends:
+
+```javascript
+const hand = xrDevice.hands['right'];
+hand.poseId = 'open';
+// Curl three fingers to make a finger gun from an open hand:
+hand.setFingerPose('middle', 'fist');
+hand.setFingerPose('ring', 'fist');
+hand.setFingerPose('pinky', 'fist');
+// Blend the index halfway toward a fist:
+hand.setFingerPose('index', 'fist', 0.5);
+hand.clearFingerPoses('index');
+
+// Point from a fist, with the index straight and in line with the hand:
+hand.poseId = 'fist';
+hand.setFingerPose('index', 'flat');
 ```
 
 ### Pinch Control

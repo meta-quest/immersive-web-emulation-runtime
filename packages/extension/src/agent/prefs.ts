@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import type { BuiltinHandPoseId } from 'iwer/lib/device/configs/hand/ids.js';
+
 export const STORAGE_KEY = 'iwe-prefs:v1';
 export const ENABLED_DOMAINS_KEY = 'iwe-enabled-domains:v1';
 export const WHATS_NEW_FLAG = 'iwe:seenWhatsNew:v2';
@@ -26,7 +28,7 @@ export type EnvironmentId =
 export type InputMode = 'controller' | 'hand';
 export type GazeMode = 'off' | 'cursor' | 'head-locked';
 export type GazeCommitHand = 'left' | 'right';
-export type HandPoseId = 'default' | 'pinch' | 'point';
+export type HandPoseId = BuiltinHandPoseId;
 export type Handedness = 'left' | 'right';
 export type KeyMapType = Partial<Record<Handedness, Record<string, string>>>;
 

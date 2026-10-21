@@ -33,6 +33,8 @@ export type {
   GetSelectValueResult,
   SetSelectValueParams,
   SetSelectValueResult,
+  SetHandPoseParams,
+  SetHandPoseResult,
   SelectParams,
   SelectResult,
   GamepadButtonInfo,

@@ -19,9 +19,11 @@ import React from 'react';
 import { ScrubControl } from './scrub.js';
 import { TransformHandles } from '@pmndrs/handle';
 import { Vector3Input } from './vec3.js';
+import type { XRDevice } from 'iwer';
 import type { XRHandInput } from 'iwer/lib/device/XRHandInput.js';
 
 interface HandProps {
+  xrDevice: XRDevice;
   hand: XRHandInput;
   handle: TransformHandles;
   handedness: string;
@@ -29,6 +31,7 @@ interface HandProps {
 }
 
 export const HandUI: React.FC<HandProps> = ({
+  xrDevice,
   hand,
   handle,
   handedness,
@@ -132,6 +135,7 @@ export const HandUI: React.FC<HandProps> = ({
         ) : (
           <>
             <PoseSelector
+              xrDevice={xrDevice}
               hand={hand}
               pointerLocked={pointerLocked}
               mappedKey={keyMap[handedness as XRHandedness]!.pose}

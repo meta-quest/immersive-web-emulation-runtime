@@ -1130,6 +1130,109 @@ describe('RemoteControlInterface', () => {
     });
   });
 
+  describe('set_hand_pose', () => {
+    beforeEach(() => {
+      mockActiveSession();
+    });
+
+    test('sets a pose and per-finger blends', async () => {
+      const promise = remote.dispatch('set_hand_pose', {
+        device: 'hand-left',
+        poseId: 'open',
+        fingers: {
+          middle: 'fist',
+          ring: { poseId: 'fist' },
+          pinky: { poseId: 'fist', weight: 0.5 },
+        },
+      });
+      remote.update(16.67);
+      const result = (await promise) as {
+        poseId: string;
+        fingers: Record<string, unknown>;
+      };
+
+      expect(result.poseId).toBe('open');
+      expect(device.hands.left!.poseId).toBe('open');
+      expect(device.hands.left!.fingerPoses).toEqual({
+        middle: { poseId: 'fist', weight: 1 },
+        ring: { poseId: 'fist', weight: 1 },
+        pinky: { poseId: 'fist', weight: 0.5 },
+      });
+      expect(result.fingers).toEqual(device.hands.left!.fingerPoses);
+    });
+
+    test('replaces earlier finger blends', async () => {
+      device.hands.left!.setFingerPose('index', 'point');
+      const promise = remote.dispatch('set_hand_pose', {
+        device: 'hand-left',
+        poseId: 'fist',
+      });
+      remote.update(16.67);
+      await promise;
+
+      expect(device.hands.left!.fingerPoses).toEqual({});
+    });
+
+    test('rejects unknown poses and fingers without changing the hand', async () => {
+      const unknownPose = remote.dispatch('set_hand_pose', {
+        device: 'hand-right',
+        poseId: 'relaxed',
+      });
+      remote.update(16.67);
+      await expect(unknownPose).rejects.toThrow(
+        /Unknown hand pose 'relaxed'\. Available poses: default, pinch, point/,
+      );
+
+      const unknownFinger = remote.dispatch('set_hand_pose', {
+        device: 'hand-right',
+        poseId: 'fist',
+        fingers: { elbow: 'open' },
+      });
+      remote.update(16.67);
+      await expect(unknownFinger).rejects.toThrow(/Unknown finger 'elbow'/);
+      expect(device.hands.right!.poseId).toBe('default');
+    });
+
+    test('rejects prototype names, malformed blends and non-numeric weights', async () => {
+      const cases: [Record<string, unknown>, RegExp][] = [
+        [{ poseId: 'constructor' }, /Unknown hand pose 'constructor'/],
+        [
+          { poseId: 'open', fingers: { constructor: 'fist' } },
+          /Unknown finger 'constructor'/,
+        ],
+        [
+          { poseId: 'open', fingers: { index: 'toString' } },
+          /Unknown hand pose 'toString'/,
+        ],
+        [
+          { poseId: 'open', fingers: { index: null } },
+          /Finger 'index' takes a pose id or \{ poseId, weight \}/,
+        ],
+        [
+          {
+            poseId: 'open',
+            fingers: { index: { poseId: 'fist', weight: '1' } },
+          },
+          /Finger weight must be within \[0, 1\], got 1/,
+        ],
+        [
+          { poseId: 'open', fingers: ['fist'] },
+          /fingers must map finger names/,
+        ],
+      ];
+      for (const [params, error] of cases) {
+        const promise = remote.dispatch('set_hand_pose', {
+          device: 'hand-right',
+          ...params,
+        });
+        remote.update(16.67);
+        await expect(promise).rejects.toThrow(error);
+      }
+      expect(device.hands.right!.poseId).toBe('default');
+      expect(device.hands.right!.fingerPoses).toEqual({});
+    });
+  });
+
   describe('Gamepad Tools', () => {
     describe('get_gamepad_state', () => {
       test('should get left controller gamepad state', async () => {
