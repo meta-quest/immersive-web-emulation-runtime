@@ -9,6 +9,7 @@ import { P_REF_SPACE } from '../private.js';
 import { XRReferenceSpaceEventHandler } from '../events/XRReferenceSpaceEvent.js';
 import { XRSpace } from './XRSpace.js';
 import { mat4 } from 'gl-matrix';
+import type { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 
 export enum XRReferenceSpaceType {
   Viewer = 'viewer',
@@ -54,9 +55,13 @@ export class XRReferenceSpace extends XRSpace {
   }
 
   // Create a new XRReferenceSpace with an offset from the current space
-  getOffsetReferenceSpace(originOffset: mat4): XRReferenceSpace {
+  getOffsetReferenceSpace(
+    originOffset: XRRigidTransform | mat4,
+  ): XRReferenceSpace {
+    const matrix =
+      'matrix' in originOffset ? originOffset.matrix : originOffset;
     // Create a new XRReferenceSpace with the originOffset as its offsetMatrix
     // The new space's parent is set to 'this' (the current XRReferenceSpace)
-    return new XRReferenceSpace(this[P_REF_SPACE].type, this, originOffset);
+    return new XRReferenceSpace(this[P_REF_SPACE].type, this, matrix);
   }
 }
