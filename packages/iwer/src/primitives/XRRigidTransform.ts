@@ -8,6 +8,7 @@
 import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { P_RIGID_TRANSFORM } from '../private.js';
+import { convertDOMPointInit } from '../utils/DOMPointInit.js';
 
 export class XRRigidTransform {
   [P_RIGID_TRANSFORM]: {
@@ -20,24 +21,44 @@ export class XRRigidTransform {
   };
 
   constructor(position?: DOMPointInit, orientation?: DOMPointInit) {
-    // Default values
-    const defaultPosition = vec3.fromValues(0, 0, 0);
-    const defaultOrientation = quat.create();
-
-    const resolvedPosition = position
-      ? vec3.fromValues(position.x!, position.y!, position.z!)
-      : defaultPosition;
-    const resolvedOrientation = orientation
-      ? quat.normalize(
-          quat.create(),
-          quat.fromValues(
-            orientation.x!,
-            orientation.y!,
-            orientation.z!,
-            orientation.w!,
-          ),
-        )
-      : defaultOrientation;
+    const positionInit = convertDOMPointInit(position);
+    const orientationInit = convertDOMPointInit(orientation);
+    if (positionInit.w !== 1) {
+      throw new TypeError('XRRigidTransform position.w must be 1');
+    }
+    if (
+      !Object.values(positionInit).every(Number.isFinite) ||
+      !Object.values(orientationInit).every(Number.isFinite)
+    ) {
+      throw new TypeError(
+        'XRRigidTransform position and orientation must be finite',
+      );
+    }
+    if (
+      orientationInit.x === 0 &&
+      orientationInit.y === 0 &&
+      orientationInit.z === 0 &&
+      orientationInit.w === 0
+    ) {
+      throw new DOMException(
+        'XRRigidTransform orientation must have nonzero length',
+        'InvalidStateError',
+      );
+    }
+    const resolvedPosition = vec3.fromValues(
+      positionInit.x,
+      positionInit.y,
+      positionInit.z,
+    );
+    const resolvedOrientation = quat.normalize(
+      quat.create(),
+      quat.fromValues(
+        orientationInit.x,
+        orientationInit.y,
+        orientationInit.z,
+        orientationInit.w,
+      ),
+    );
 
     this[P_RIGID_TRANSFORM] = {
       matrix: mat4.create(),

@@ -10,9 +10,19 @@ import { XRRay } from 'iwer';
 
 /**
  * XRRay — constructor overloads, direction normalization, validation, matrix, readonly
- * 15 tests
+ * 47 tests
  */
 export function registerXRRayTests(harness: TestHarness): void {
+  function assertTypeError(fn: () => void): void {
+    let error: unknown;
+    try {
+      fn();
+    } catch (caught: unknown) {
+      error = caught;
+    }
+    harness.assertInstanceOf(error, TypeError);
+  }
+
   harness.describe('XRRay', () => {
     // 1. default constructor creates ray with origin (0,0,0,1)
     harness.it('default constructor creates ray with origin (0,0,0,1)', () => {
@@ -74,24 +84,132 @@ export function registerXRRayTests(harness: TestHarness): void {
       harness.assertApprox(len, 1.0, 1e-6, 'direction should be unit length');
     });
 
-    // 7. zero direction throws DOMException('TypeError')
-    harness.it('zero direction throws DOMException(TypeError)', () => {
-      harness.assertDOMException(
+    // 7. zero direction throws JavaScript TypeError
+    harness.it('zero direction throws JavaScript TypeError', () => {
+      assertTypeError(
         () => new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x: 0, y: 0, z: 0, w: 0 }),
-        'TypeError',
-        'Zero direction should throw TypeError DOMException',
       );
     });
 
-    // 8. direction.w !== 0 throws DOMException('TypeError')
-    harness.it('direction.w !== 0 throws DOMException(TypeError)', () => {
-      harness.assertDOMException(
+    // 8. direction.w !== 0 throws JavaScript TypeError
+    for (const w of [1, -1]) {
+      harness.it(`direction.w = ${w} throws JavaScript TypeError`, () => {
+        assertTypeError(
+          () => new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x: 0, y: 0, z: -1, w }),
+        );
+      });
+    }
+
+    for (const w of [0, 99, NaN, Infinity, -Infinity]) {
+      harness.it(`origin.w = ${w} throws JavaScript TypeError`, () => {
+        assertTypeError(() => new XRRay({ w }));
+      });
+    }
+
+    const directionMembers = ['w', 'x', 'y', 'z'] as const;
+    for (const member of directionMembers) {
+      for (const value of [NaN, Infinity, -Infinity]) {
+        harness.it(
+          `direction.${member} = ${value} throws during restricted double conversion`,
+          () => {
+            const reads: string[] = [];
+            const direction: DOMPointInit = {};
+            for (const key of directionMembers) {
+              Object.defineProperty(direction, key, {
+                get() {
+                  reads.push(key);
+                  return key === member ? value : key === 'z' ? -1 : 0;
+                },
+              });
+            }
+            assertTypeError(() => new XRRay({}, direction));
+            harness.assertEqual(
+              reads.join(','),
+              directionMembers
+                .slice(0, directionMembers.indexOf(member) + 1)
+                .join(','),
+              'Direction conversion must stop at the non-finite member',
+            );
+          },
+        );
+      }
+    }
+
+    harness.it('direction conversion precedes origin.w validation', () => {
+      let directionRead = false;
+      assertTypeError(
         () =>
-          new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x: 0, y: 0, z: -1, w: 1 }),
-        'TypeError',
-        'Non-zero direction.w should throw TypeError DOMException',
+          new XRRay(
+            { w: 0 },
+            {
+              get w() {
+                directionRead = true;
+                return Infinity;
+              },
+            },
+          ),
+      );
+      harness.assert(
+        directionRead,
+        'Direction must be converted before checking origin.w',
       );
     });
+
+    for (const member of ['x', 'y', 'z'] as const) {
+      for (const value of [NaN, Infinity, -Infinity]) {
+        harness.it(`origin.${member} = ${value} remains unrestricted`, () => {
+          const ray = new XRRay({ [member]: value });
+          harness.assert(
+            Object.is(ray.origin[member], value),
+            `origin.${member} should retain ${value}`,
+          );
+          harness.assertEqual(ray.origin.w, 1);
+          harness.assertEqual(ray.direction.x, 0);
+          harness.assertEqual(ray.direction.y, 0);
+          harness.assertEqual(ray.direction.z, -1);
+          harness.assertEqual(ray.direction.w, 0);
+        });
+      }
+    }
+
+    for (const { name, origin, direction, expectedX } of [
+      {
+        name: 'empty dictionaries',
+        origin: {},
+        direction: {},
+        expectedX: 0,
+      },
+      {
+        name: 'partial dictionaries',
+        origin: { x: 5 },
+        direction: { z: -2 },
+        expectedX: 5,
+      },
+      {
+        name: 'undefined members',
+        origin: { x: undefined, y: undefined, z: undefined, w: undefined },
+        direction: { x: undefined, y: undefined, z: undefined, w: undefined },
+        expectedX: 0,
+      },
+      {
+        name: 'undefined arguments',
+        origin: undefined,
+        direction: undefined,
+        expectedX: 0,
+      },
+    ]) {
+      harness.it(`${name} retain ray defaults`, () => {
+        const ray = new XRRay(origin, direction);
+        harness.assertEqual(ray.origin.x, expectedX);
+        harness.assertEqual(ray.origin.y, 0);
+        harness.assertEqual(ray.origin.z, 0);
+        harness.assertEqual(ray.origin.w, 1);
+        harness.assertEqual(ray.direction.x, 0);
+        harness.assertEqual(ray.direction.y, 0);
+        harness.assertEqual(ray.direction.z, -1);
+        harness.assertEqual(ray.direction.w, 0);
+      });
+    }
 
     // 9. matrix is Float32Array(16)
     harness.it('matrix is Float32Array(16)', () => {

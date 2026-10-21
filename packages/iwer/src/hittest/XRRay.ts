@@ -2,6 +2,7 @@ import { mat4, vec3, vec4 } from 'gl-matrix';
 
 import { P_RAY } from '../private.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
+import { convertDOMPointInit } from '../utils/DOMPointInit.js';
 
 class DOMPointReadOnly {
   constructor(
@@ -23,8 +24,8 @@ export class XRRay {
     origin?: DOMPointInit | XRRigidTransform,
     direction?: DOMPointInit,
   ) {
-    const _origin: DOMPointInit = { x: 0, y: 0, z: 0, w: 1 };
-    const _direction: DOMPointInit = { x: 0, y: 0, z: -1, w: 0 };
+    let _origin = { x: 0, y: 0, z: 0, w: 1 };
+    let _direction = { x: 0, y: 0, z: -1, w: 0 };
 
     if (origin instanceof XRRigidTransform) {
       const transform = origin;
@@ -54,26 +55,16 @@ export class XRRay {
       _direction.z = directionVec4[2];
       _direction.w = directionVec4[3];
     } else {
-      if (origin) {
-        _origin.x = origin.x;
-        _origin.y = origin.y;
-        _origin.z = origin.z;
-        _origin.w = origin.w;
+      _origin = convertDOMPointInit(origin);
+      _direction = convertDOMPointInit(direction, -1, 0, true);
+      if (_direction.x === 0 && _direction.y === 0 && _direction.z === 0) {
+        throw new TypeError('XRRay direction must have nonzero length');
       }
-      if (direction) {
-        if (
-          (direction.x === 0 && direction.y === 0 && direction.z === 0) ||
-          direction.w !== 0
-        ) {
-          throw new DOMException(
-            'Invalid direction value to construct XRRay',
-            'TypeError',
-          );
-        }
-        _direction.x = direction.x;
-        _direction.y = direction.y;
-        _direction.z = direction.z;
-        _direction.w = direction.w;
+      if (_direction.w !== 0) {
+        throw new TypeError('XRRay direction.w must be 0');
+      }
+      if (_origin.w !== 1) {
+        throw new TypeError('XRRay origin.w must be 1');
       }
     }
 

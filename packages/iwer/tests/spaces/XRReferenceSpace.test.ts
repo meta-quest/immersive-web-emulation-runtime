@@ -12,6 +12,7 @@ import {
   XRReferenceSpaceType,
 } from '../../src/spaces/XRReferenceSpace';
 import { mat4, vec3 } from 'gl-matrix';
+import { XRRigidTransform } from '../../src/primitives/XRRigidTransform';
 
 describe('XRReferenceSpace', () => {
   let globalSpace: GlobalSpace;
@@ -65,5 +66,73 @@ describe('XRReferenceSpace', () => {
     mat4.translate(expectedMatrix, expectedMatrix, vec3.fromValues(1, 1, 0)); // Combined translation
 
     expect(mat4.equals(globalMatrix, expectedMatrix)).toBeTruthy();
+  });
+
+  test('getOffsetReferenceSpace accepts a transform with a finite offset and preserves parent and type', () => {
+    const transform = new XRRigidTransform({ x: 1, y: 2, z: 3, w: 1 });
+    const offsetSpace = xrReferenceSpace.getOffsetReferenceSpace(transform);
+    const matrix = offsetSpace[P_SPACE].offsetMatrix;
+
+    expect(Array.from(matrix).every(Number.isFinite)).toBe(true);
+    expect(mat4.equals(matrix, transform.matrix)).toBe(true);
+    expect(Array.from(mat4.getTranslation(vec3.create(), matrix))).toEqual([
+      1, 2, 3,
+    ]);
+    expect(offsetSpace[P_SPACE].parentSpace).toBe(xrReferenceSpace);
+    expect(offsetSpace[P_REF_SPACE].type).toBe(XRReferenceSpaceType.Local);
+  });
+
+  test('nested transform offsets compose translation and rotation', () => {
+    const parentOffset = new XRRigidTransform(
+      { x: 1, y: 2, z: 3, w: 1 },
+      { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 },
+    );
+    const parentSpace = xrReferenceSpace.getOffsetReferenceSpace(parentOffset);
+    const childOffset = new XRRigidTransform({ x: 2, y: 0, z: 0, w: 1 });
+    const childSpace = parentSpace.getOffsetReferenceSpace(childOffset);
+    const matrix = XRSpaceUtils.calculateGlobalOffsetMatrix(childSpace);
+    const expected = mat4.multiply(
+      mat4.create(),
+      parentOffset.matrix,
+      childOffset.matrix,
+    );
+
+    expect(Array.from(matrix).every(Number.isFinite)).toBe(true);
+    expect(mat4.equals(matrix, expected)).toBe(true);
+    const position = mat4.getTranslation(vec3.create(), matrix);
+    expect(position[0]).toBeCloseTo(1);
+    expect(position[1]).toBeCloseTo(4);
+    expect(position[2]).toBeCloseTo(3);
+    expect(childSpace[P_SPACE].parentSpace).toBe(parentSpace);
+    expect(childSpace[P_REF_SPACE].type).toBe(XRReferenceSpaceType.Local);
+  });
+
+  test('transform offsets copy the matrix independently of the input and siblings', () => {
+    const transform = new XRRigidTransform({ x: 1, y: 2, z: 3, w: 1 });
+    const first = xrReferenceSpace.getOffsetReferenceSpace(transform);
+    const second = xrReferenceSpace.getOffsetReferenceSpace(transform);
+
+    expect(first[P_SPACE].offsetMatrix).not.toBe(transform.matrix);
+    expect(first[P_SPACE].offsetMatrix).not.toBe(second[P_SPACE].offsetMatrix);
+    transform.matrix[12] = 99;
+    first[P_SPACE].offsetMatrix[13] = 88;
+
+    expect(
+      Array.from(second[P_SPACE].offsetMatrix).every(Number.isFinite),
+    ).toBe(true);
+    expect(first[P_SPACE].offsetMatrix[12]).toBe(1);
+    expect(second[P_SPACE].offsetMatrix[12]).toBe(1);
+    expect(second[P_SPACE].offsetMatrix[13]).toBe(2);
+    expect(transform.matrix[13]).toBe(2);
+  });
+
+  test('getOffsetReferenceSpace still accepts ordinary matrix arrays', () => {
+    const matrix = Array.from(
+      mat4.fromTranslation(mat4.create(), [1, 2, 3]),
+    ) as mat4;
+    const offsetSpace = xrReferenceSpace.getOffsetReferenceSpace(matrix);
+
+    expect(Array.from(offsetSpace[P_SPACE].offsetMatrix)).toEqual(matrix);
+    expect(offsetSpace[P_SPACE].offsetMatrix).not.toBe(matrix);
   });
 });
