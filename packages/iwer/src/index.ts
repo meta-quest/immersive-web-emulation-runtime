@@ -188,6 +188,13 @@ export {
   type XRGPUEquirectLayerInit,
   type XRGPUCubeLayerInit,
 } from './layers/XRGPUBinding.js';
+export {
+  XRMediaBinding,
+  type XRMediaLayerInit,
+  type XRMediaQuadLayerInit,
+  type XRMediaCylinderLayerInit,
+  type XRMediaEquirectLayerInit,
+} from './layers/XRMediaBinding.js';
 
 // Planes
 export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';

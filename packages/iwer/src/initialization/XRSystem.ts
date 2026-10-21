@@ -14,6 +14,7 @@ import {
 
 import { P_SESSION, P_SYSTEM } from '../private.js';
 import { findWebGPUDepthConfiguration } from '../depth/XRDepthInformation.js';
+import { defineMediaBinding } from '../layers/XRMediaBinding.js';
 import {
   isGazeTrackingFeature,
   supportsGazeTracking,
@@ -204,6 +205,14 @@ export class XRSystem extends EventTarget {
           },
           { once: true },
         );
+
+        // Media layers (XRMediaBinding) are only IWER's to draw in WebGPU
+        // sessions with layers.
+        if (webgpuSession && enabledFeatures.includes('layers')) {
+          session.addEventListener('end', defineMediaBinding(), {
+            once: true,
+          });
+        }
 
         resolve(session);
       },

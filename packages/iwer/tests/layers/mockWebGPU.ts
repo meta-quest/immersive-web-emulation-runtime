@@ -102,6 +102,7 @@ export const createMockGPUDevice = () => {
       submit: jest.fn(),
       writeBuffer: jest.fn(),
       writeTexture: jest.fn(),
+      copyExternalImageToTexture: jest.fn(),
     },
   };
   const passesLabelled = (label: string) =>

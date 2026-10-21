@@ -38,6 +38,7 @@ import { XREye } from '../../src/views/XRView.js';
 import { XRRigidTransform } from '../../src/primitives/XRRigidTransform.js';
 import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta.js';
 import { P_COMPOSITION_LAYER, P_SYSTEM } from '../../src/private.js';
+import type { GPULayerTextures } from '../../src/layers/GPULayerTextures.js';
 import { createMockCanvasContext, createMockGPUDevice } from './mockWebGPU.js';
 
 const RENDER_ATTACHMENT = 0x10;
@@ -69,6 +70,10 @@ const runFrame = (
   session.requestAnimationFrame((_time, frame) => callback(frame));
   jest.runOnlyPendingTimers();
 };
+
+// The texture descriptors of a layer the app draws.
+const descriptors = (layer: XRCompositionLayer) =>
+  (layer[P_COMPOSITION_LAYER].textures as GPULayerTextures).descriptors;
 
 // Calls `action` and returns what it threw, so checks run outside frames.
 const thrown = (action: () => unknown) => {
@@ -243,8 +248,7 @@ describe('WebGPU composition layers', () => {
     });
 
     test('lays out the color texture for each layout', () => {
-      const color = (layer: XRCompositionLayer) =>
-        layer[P_COMPOSITION_LAYER].textures.descriptors.color;
+      const color = (layer: XRCompositionLayer) => descriptors(layer).color;
       expect(color(binding.createQuadLayer(init()))).toMatchObject({
         size: [128, 64, 1],
         format: 'rgba8unorm',
@@ -267,17 +271,16 @@ describe('WebGPU composition layers', () => {
       const withDepth = binding.createQuadLayer(
         init({ depthStencilFormat: 'depth24plus', layout: 'stereo' }),
       );
-      expect(
-        withDepth[P_COMPOSITION_LAYER].textures.descriptors.depthStencil,
-      ).toMatchObject({ size: [128, 64, 2], format: 'depth24plus' });
+      expect(descriptors(withDepth).depthStencil).toMatchObject({
+        size: [128, 64, 2],
+        format: 'depth24plus',
+      });
     });
 
     test('limits mipLevels to the mip chain of the texture', () => {
       const layer = binding.createQuadLayer(init({ mipLevels: 20 }));
       expect(layer.mipLevels).toBe(8);
-      expect(
-        layer[P_COMPOSITION_LAYER].textures.descriptors.color.mipLevelCount,
-      ).toBe(8);
+      expect(descriptors(layer).color.mipLevelCount).toBe(8);
       expect(binding.createQuadLayer(init({ mipLevels: 3 })).mipLevels).toBe(3);
     });
 
@@ -390,9 +393,7 @@ describe('WebGPU composition layers', () => {
       const square = init({ viewPixelWidth: 64, viewPixelHeight: 64 });
       const mono = binding.createCubeLayer(square);
       expect(mono).toBeInstanceOf(XRCubeLayer);
-      expect(mono[P_COMPOSITION_LAYER].textures.descriptors.color.size).toEqual(
-        [64, 64, 6],
-      );
+      expect(descriptors(mono).color.size).toEqual([64, 64, 6]);
       expect(mono.orientation).toMatchObject({ x: 0, y: 0, z: 0, w: 1 });
       const orientation = new DOMPointReadOnly(0, 1, 0, 0);
       const stereo = binding.createCubeLayer({
@@ -400,9 +401,7 @@ describe('WebGPU composition layers', () => {
         layout: 'stereo',
         orientation,
       });
-      expect(
-        stereo[P_COMPOSITION_LAYER].textures.descriptors.color.size,
-      ).toEqual([64, 64, 12]);
+      expect(descriptors(stereo).color.size).toEqual([64, 64, 12]);
       expect(stereo.orientation).not.toBe(orientation);
       expect(stereo.orientation).toMatchObject({ x: 0, y: 1, z: 0, w: 0 });
 

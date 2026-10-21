@@ -107,7 +107,7 @@ const DEPTH_STENCIL_FORMATS: WebGPUTextureFormat[] = [
   'depth32float',
   'depth32float-stencil8',
 ];
-const LAYOUTS: XRLayerLayout[] = [
+export const LAYOUTS: XRLayerLayout[] = [
   'default',
   'mono',
   'stereo',
@@ -161,7 +161,10 @@ const toUnsignedLong = (value: unknown): number => {
 };
 
 // WebIDL float with a dictionary default: non-finite values throw.
-const toFloat = (value: number | undefined, fallback: number): number => {
+export const toFloat = (
+  value: number | undefined,
+  fallback: number,
+): number => {
   if (value === undefined) {
     return fallback;
   }
@@ -400,7 +403,9 @@ const layoutSize = ({ viewPixelWidth, viewPixelHeight, layout }: LayerInit) => {
   }
 };
 
-const copyTransform = (transform: XRRigidTransform | null | undefined) => {
+export const copyTransform = (
+  transform: XRRigidTransform | null | undefined,
+) => {
   if (transform === null || transform === undefined) {
     return new XRRigidTransform();
   }
@@ -665,7 +670,9 @@ export class XRGPUBinding {
       throw new TypeError('Use getViewSubImage for projection layers.');
     }
     const eyeIndex = eye === XREye.Right ? 1 : 0;
-    const { layout, textures } = layer[P_COMPOSITION_LAYER];
+    const { layout } = layer[P_COMPOSITION_LAYER];
+    // validateSubImage turned media layers away.
+    const textures = layer[P_COMPOSITION_LAYER].textures as GPULayerTextures;
     if (layout !== 'mono' && eye === XREye.None) {
       throw new TypeError(`A "${layout}" layer needs an eye.`);
     }
@@ -833,6 +840,9 @@ export class XRGPUBinding {
     }
     if (state.session !== session) {
       throw invalidState("The layer's session differs from the binding's.");
+    }
+    if (!(state.textures instanceof GPULayerTextures)) {
+      throw invalidState('Media layers have no subimages.');
     }
     if (state.textures.device !== device) {
       throw invalidState('The layer was created with a different GPUDevice.');

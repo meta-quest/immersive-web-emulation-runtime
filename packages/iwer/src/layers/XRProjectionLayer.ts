@@ -14,6 +14,7 @@ import { XRLayer } from './XRWebGLLayer.js';
 import { XRRenderState } from '../session/XRRenderState.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import type { GPULayerTextures } from './GPULayerTextures.js';
+import type { GPUMediaTextures } from './GPUMediaTextures.js';
 import type { XRSession } from '../session/XRSession.js';
 
 export type XRLayerLayout =
@@ -38,7 +39,8 @@ export type XRCompositionLayerInit = {
   layout: XRLayerLayout;
   isStatic: boolean;
   mipLevels: number;
-  textures: GPULayerTextures;
+  // Media layers show a video instead of textures the app draws.
+  textures: GPULayerTextures | GPUMediaTextures;
 };
 
 /**
@@ -57,7 +59,7 @@ export class XRCompositionLayer extends XRLayer {
     isStatic: boolean;
     mipLevels: number;
     needsRedraw: boolean;
-    textures: GPULayerTextures;
+    textures: GPULayerTextures | GPUMediaTextures;
   };
 
   constructor(session: XRSession, init: XRCompositionLayerInit) {
@@ -160,6 +162,10 @@ export class XRCompositionLayer extends XRLayer {
  * view, created by XRGPUBinding.createProjectionLayer.
  */
 export class XRProjectionLayer extends XRCompositionLayer {
+  // Projection layers are always drawn by the app.
+  declare [P_COMPOSITION_LAYER]: XRCompositionLayer[typeof P_COMPOSITION_LAYER] & {
+    textures: GPULayerTextures;
+  };
   [P_PROJECTION_LAYER]: {
     ignoreDepthValues: boolean;
     fixedFoveation: number;

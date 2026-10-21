@@ -57,6 +57,7 @@ import { XREye } from '../views/XRView.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSourceEventHandler } from '../events/XRInputSourceEvent.js';
+import { GPULayerTextures } from '../layers/GPULayerTextures.js';
 import { XRGPUPresenter } from '../layers/XRGPUPresenter.js';
 import {
   XRCompositionLayer,
@@ -239,10 +240,14 @@ export class XRSession extends EventTarget {
       releaseLayers: (frame: XRFrame) => {
         try {
           const encoders = new Map<GPUDevice, GPUCommandEncoder>();
-          const released: XRCompositionLayer[] = [];
+          const released: [XRCompositionLayer, GPULayerTextures][] = [];
           for (const layer of this[P_SESSION].gpuLayers) {
             const { textures } = layer[P_COMPOSITION_LAYER];
-            if (textures.current?.frame !== frame) {
+            // Media layers have nothing for the app to draw.
+            if (
+              !(textures instanceof GPULayerTextures) ||
+              textures.current?.frame !== frame
+            ) {
               continue;
             }
             const device = textures.device as GPUDevice;
@@ -254,15 +259,14 @@ export class XRSession extends EventTarget {
               encoders.set(device, encoder);
             }
             textures.release(frame, encoder);
-            released.push(layer);
+            released.push([layer, textures]);
           }
           for (const [device, encoder] of encoders) {
             device.queue.submit([encoder.finish()]);
           }
-          for (const layer of released) {
-            const state = layer[P_COMPOSITION_LAYER];
-            state.textures.expire();
-            state.needsRedraw = false;
+          for (const [layer, textures] of released) {
+            textures.expire();
+            layer[P_COMPOSITION_LAYER].needsRedraw = false;
             if (layer instanceof XRProjectionLayer) {
               const projection = layer[P_PROJECTION_LAYER];
               projection.viewportScales = projection.frameViewportScales;

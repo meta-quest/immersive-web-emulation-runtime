@@ -23,6 +23,7 @@ import {
   XREquirectLayer,
   XRQuadLayer,
 } from './XRSpaceLayers.js';
+import { GPUMediaTextures } from './GPUMediaTextures.js';
 import { synthesizeFrame } from './GPUSpaceWarp.js';
 import { XRSpaceUtils } from '../spaces/XRSpace.js';
 import { XREye } from '../views/XRView.js';
@@ -476,6 +477,16 @@ export class XRGPUPresenter {
     synthesizeFrom: XRFrame | null = null,
   ): void {
     try {
+      // Media layers show their video's current frame.
+      for (const layer of layers) {
+        const textures =
+          P_COMPOSITION_LAYER in layer
+            ? (layer as XRCompositionLayer)[P_COMPOSITION_LAYER].textures
+            : null;
+        if (textures instanceof GPUMediaTextures) {
+          textures.update();
+        }
+      }
       const drawable = layers.filter(
         (layer): layer is XRCompositionLayer =>
           P_COMPOSITION_LAYER in layer &&
@@ -738,12 +749,18 @@ export class XRGPUPresenter {
   ): Draw | null {
     const state = layer[P_COMPOSITION_LAYER];
     const texture = (
-      synthesized
-        ? state.textures.synthesisTargets().color
+      synthesized && layer instanceof XRProjectionLayer
+        ? layer[P_COMPOSITION_LAYER].textures.synthesisTargets().color
         : state.textures.released!.color
     ) as GPUTexture;
-    // forceMonoPresentation shows the left eye's image to both eyes.
-    const eyeIndex = state.forceMonoPresentation ? 0 : region.eyeIndex;
+    const media =
+      state.textures instanceof GPUMediaTextures ? state.textures : null;
+    // forceMonoPresentation shows the left eye's image to both eyes, and a
+    // media layer's invertStereo swaps the eyes' halves of its video.
+    let eyeIndex = state.forceMonoPresentation ? 0 : region.eyeIndex;
+    if (media?.invertStereo) {
+      eyeIndex = 1 - eyeIndex;
+    }
     const offset = index * DRAW_STRIDE;
     const floats = new Float32Array(data, offset, DRAW_SIZE / 4);
     const uints = new Uint32Array(data, offset, DRAW_SIZE / 4);
@@ -906,7 +923,8 @@ export class XRGPUPresenter {
     floats[31] = infinite ? 1 : 0;
     switch (state.layout) {
       case 'stereo':
-        uints[27] = eyeIndex;
+        // A video is one image, so both eyes see all of it.
+        uints[27] = media ? 0 : eyeIndex;
         break;
       case 'stereo-left-right':
         uvRect.set([eyeIndex * 0.5, 0, 0.5, 1]);

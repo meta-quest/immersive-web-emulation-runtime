@@ -104,6 +104,18 @@ session.updateRenderState({ layers: [projectionLayer, quad] });
 
 As the binding describes, the textures a layer gives out in a frame start cleared and are destroyed when the frame ends. IWER keeps showing the last frame each layer was drawn in, so a layer created with `isStatic: true` only needs drawing while `needsRedraw` is `true`.
 
+With `'layers'`, `XRMediaBinding` also creates quad, cylinder and equirect layers that show a video. IWER copies the video's current frame each time it draws, on a `GPUDevice` of its own, so these layers work without an `XRGPUBinding`. As with any WebGPU upload, the video must be same-origin or served with CORS. IWER defines `XRMediaBinding` only while such a session runs, so a WebXR Layers polyfill that an app loads for WebGL sessions still installs.
+
+```javascript
+const media = new XRMediaBinding(session);
+const screen = media.createQuadLayer(video, {
+  space: await session.requestReferenceSpace('local'),
+  transform: new XRRigidTransform({ x: 0, y: 0, z: -2, w: 1 }),
+  width: 1.6, // The height follows the video's aspect ratio.
+});
+session.updateRenderState({ layers: [projectionLayer, screen] });
+```
+
 IWER's WebGPU types are the standard ones on TypeScript 6. On TypeScript 5, add `@webgpu/types` to get them; without it, WebGPU values are typed loosely.
 
 A projection layer's `fixedFoveation` (0 to 1, default 0) lowers the resolution away from the centre of each view when IWER draws it, like fixed foveated rendering on a headset.
