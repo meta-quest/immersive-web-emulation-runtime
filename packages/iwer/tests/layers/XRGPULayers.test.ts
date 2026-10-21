@@ -614,7 +614,7 @@ describe('WebGPU composition layers', () => {
       expect(left.depthStencilTexture).toBe(right.depthStencilTexture);
       expect(left.depthStencilTexture.format).toBe('depth16unorm');
       expect(left.motionVectorTexture).toBeNull();
-      expect(left.colorTexture.destroy).toHaveBeenCalled();
+      expect((left.colorTexture as any).destroyMock).toHaveBeenCalled();
     });
 
     test('validates the layer and frame', async () => {

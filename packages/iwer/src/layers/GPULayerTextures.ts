@@ -35,6 +35,9 @@ const textureSize = (descriptor: GPUTextureDescriptor) => {
   return { width, height, layers };
 };
 
+// The textures released to the compositor, in copy order.
+const COPIED = ['color', 'depthStencil', 'motionVector'] as const;
+
 /**
  * The textures of a WebGPU-backed layer, following the WebGPU binding's
  * texture lifecycle. The first subimage request in a frame gets new, cleared
@@ -61,6 +64,8 @@ export class GPULayerTextures {
   private compositorTextures: GPULayerTextureSet | null = null;
   private synthesis: { color: WebGPUTexture; depth: WebGPUTexture } | null =
     null;
+  // Current textures the app destroyed, after IWER copied them.
+  private kept = new WeakSet<WebGPUTexture>();
 
   constructor(
     device: WebGPUDevice,
@@ -102,6 +107,11 @@ export class GPULayerTextures {
       clearDepthStencil(encoder, this.current.depthStencil, depthStencil);
       this.device.queue.submit([encoder.finish()]);
     }
+    for (const key of COPIED) {
+      if (key === 'color' || this.releaseDepth) {
+        this.keepOnDestroy(key, this.current[key]);
+      }
+    }
     return this.current;
   }
 
@@ -115,27 +125,13 @@ export class GPULayerTextures {
       return false;
     }
     this.compositorTextures ??= this.createCompositorTextures();
-    const target = this.compositorTextures;
-    copyAllMips(encoder, current.color, target.color, this.descriptors.color);
-    if (this.releaseDepth) {
-      if (current.depthStencil && target.depthStencil) {
-        copyAllMips(
-          encoder,
-          current.depthStencil,
-          target.depthStencil,
-          this.descriptors.depthStencil!,
-        );
-      }
-      if (current.motionVector && target.motionVector) {
-        copyAllMips(
-          encoder,
-          current.motionVector,
-          target.motionVector,
-          this.descriptors.motionVector!,
-        );
+    for (const key of COPIED) {
+      const texture = current[key];
+      if (texture && !this.kept.has(texture)) {
+        this.copy(key, texture, encoder);
       }
     }
-    this.released = target;
+    this.released = this.compositorTextures;
     this.releasedFrame = frame;
     return true;
   }
@@ -173,10 +169,52 @@ export class GPULayerTextures {
     if (!current) {
       return;
     }
-    current.color.destroy();
-    current.depthStencil?.destroy();
-    current.motionVector?.destroy();
     this.current = null;
+    for (const key of COPIED) {
+      const texture = current[key];
+      if (texture && !this.kept.has(texture)) {
+        texture.destroy();
+      }
+    }
+  }
+
+  /**
+   * The app may destroy a current texture to end its write access, but the
+   * binding says that leaves the layer's image alone. IWER's current textures
+   * are that image, so it copies what was drawn for the compositor first.
+   */
+  private keepOnDestroy(
+    key: (typeof COPIED)[number],
+    texture: WebGPUTexture | null,
+  ): void {
+    if (!texture) {
+      return;
+    }
+    const destroy = texture.destroy.bind(texture);
+    texture.destroy = () => {
+      if (this.current?.[key] === texture && !this.kept.has(texture)) {
+        this.kept.add(texture);
+        this.compositorTextures ??= this.createCompositorTextures();
+        const encoder = this.device.createCommandEncoder({
+          label: 'IWER layer release',
+        });
+        this.copy(key, texture, encoder);
+        this.device.queue.submit([encoder.finish()]);
+      }
+      destroy();
+    };
+  }
+
+  // Copies a current texture into the compositor's, if it keeps that kind.
+  private copy(
+    key: (typeof COPIED)[number],
+    source: WebGPUTexture,
+    encoder: WebGPUCommandEncoder,
+  ): void {
+    const target = this.compositorTextures![key];
+    if (target) {
+      copyAllMips(encoder, source, target, this.descriptors[key]!);
+    }
   }
 
   destroy(): void {

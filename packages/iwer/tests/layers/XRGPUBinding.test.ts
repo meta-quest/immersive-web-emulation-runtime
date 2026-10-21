@@ -766,15 +766,84 @@ describe('XRGPUBinding', () => {
           }),
         ]);
         expect(compositorTexture.usage).toBe(TEXTURE_BINDING | COPY_DST);
-        expect((colorTexture as any).destroy).toHaveBeenCalledTimes(1);
+        expect((colorTexture as any).destroyMock).toHaveBeenCalledTimes(1);
         expect(compositorTexture.destroy).not.toHaveBeenCalled();
         expect(layer.needsRedraw).toBe(false);
         // Copied before the frame's textures were destroyed.
         expect(
           gpu.device.queue.submit.mock.invocationCallOrder[0],
         ).toBeLessThan(
-          (colorTexture as any).destroy.mock.invocationCallOrder[0],
+          (colorTexture as any).destroyMock.mock.invocationCallOrder[0],
         );
+      });
+
+      test('keeps what was drawn when the app destroys a current texture', () => {
+        let colorTexture: any;
+        runFrame(session, (frame) => {
+          const [left, right] = views(frame);
+          colorTexture = binding.getViewSubImage(layer, left).colorTexture;
+          // Ends the app's write access...
+          colorTexture.destroy();
+          expect(colorTexture.destroyMock).toHaveBeenCalledTimes(1);
+          // ...and later subimages in the frame give the same texture.
+          expect(binding.getViewSubImage(layer, right).colorTexture).toBe(
+            colorTexture,
+          );
+        });
+        const compositorTexture =
+          layer[P_COMPOSITION_LAYER].textures.released!.color;
+        // Copied once, just before it was destroyed.
+        expect(gpu.copies).toEqual([
+          expect.objectContaining({
+            source: { texture: colorTexture, mipLevel: 0 },
+            destination: { texture: compositorTexture, mipLevel: 0 },
+          }),
+        ]);
+        expect(
+          gpu.device.queue.submit.mock.invocationCallOrder[0],
+        ).toBeLessThan(colorTexture.destroyMock.mock.invocationCallOrder[0]);
+        expect(colorTexture.destroyMock).toHaveBeenCalledTimes(1);
+        expect(gpu.compositorPasses()).toHaveLength(1);
+      });
+
+      test('a texture destroyed after its frame is not copied again', () => {
+        let colorTexture: any;
+        runFrame(session, (frame) => {
+          colorTexture = binding.getViewSubImage(
+            layer,
+            views(frame)[0],
+          ).colorTexture;
+        });
+        colorTexture.destroy();
+        runFrame(session, (frame) => {
+          binding.getViewSubImage(layer, views(frame)[0]);
+          colorTexture.destroy();
+        });
+        expect(
+          gpu.copies.filter((copy) => copy.source.texture === colorTexture),
+        ).toHaveLength(1);
+        expect(gpu.copies).toHaveLength(2);
+      });
+
+      test('the compositor keeps no depth, so destroying it copies nothing', () => {
+        const depthLayer = binding.createProjectionLayer({
+          colorFormat: 'bgra8unorm',
+          depthStencilFormat: 'depth24plus',
+        });
+        session.updateRenderState({ layers: [depthLayer] });
+        runFrame(session, (frame) => {
+          binding
+            .getViewSubImage(depthLayer, views(frame)[0])
+            .depthStencilTexture!.destroy();
+        });
+        expect(gpu.copies.map((copy) => copy.source.texture.format)).toEqual([
+          'bgra8unorm',
+        ]);
+        expect(
+          gpu.device.createCommandEncoder.mock.calls.filter(
+            ([descriptor]: any[]) => descriptor?.label === 'IWER layer release',
+          ),
+        ).toHaveLength(1);
       });
 
       test.each<[GPUTextureFormat, boolean, boolean]>([
@@ -867,7 +936,7 @@ describe('XRGPUBinding', () => {
         const compositorTexture = layer[P_COMPOSITION_LAYER].textures.released!
           .color as any;
         layer.destroy();
-        expect(colorTexture.destroy).toHaveBeenCalledTimes(1);
+        expect(colorTexture.destroyMock).toHaveBeenCalledTimes(1);
         expect(compositorTexture.destroy).toHaveBeenCalledTimes(1);
       });
 

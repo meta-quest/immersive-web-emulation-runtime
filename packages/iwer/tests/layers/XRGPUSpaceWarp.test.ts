@@ -365,6 +365,28 @@ describe('WebGPU space warp', () => {
       });
     });
 
+    test('keeps depth and motion vectors the app destroys', () => {
+      const layer = showLayer();
+      runFrame(session, (frame) => {
+        const subImage = binding.getViewSubImage(
+          layer,
+          frame.getViewerPose(space)!.views[0],
+        );
+        subImage.depthStencilTexture!.destroy();
+        subImage.motionVectorTexture!.destroy();
+      });
+      const released = layer[P_COMPOSITION_LAYER].textures.released!;
+      // Each is copied when destroyed, and the color when the frame ends.
+      expect(
+        gpu.copies
+          .filter((copy) => copy.label === 'IWER layer release')
+          .map((copy) => copy.destination.texture),
+      ).toEqual([released.depthStencil, released.motionVector, released.color]);
+      // They still drive space warp.
+      tick();
+      expect(gpu.warpPasses()).toHaveLength(1);
+    });
+
     test('hands the depth and motion vectors to the compositor', () => {
       const layer = showLayer();
       drawFrame(layer);

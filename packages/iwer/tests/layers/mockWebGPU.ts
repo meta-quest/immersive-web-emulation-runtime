@@ -8,18 +8,23 @@
 // Minimal WebGPU stand-ins for the layer tests. They record what IWER asks of
 // the device, tagged with the label of the command encoder involved.
 
-export const createMockTexture = (descriptor: any) => ({
-  label: descriptor.label,
-  width: descriptor.size[0],
-  height: descriptor.size[1],
-  depthOrArrayLayers: descriptor.size[2],
-  format: descriptor.format,
-  usage: descriptor.usage,
-  mipLevelCount: descriptor.mipLevelCount ?? 1,
-  descriptor,
-  createView: jest.fn((viewDescriptor?: any) => ({ viewDescriptor })),
-  destroy: jest.fn(),
-});
+export const createMockTexture = (descriptor: any) => {
+  // IWER wraps destroy() on layer textures, so tests check this one.
+  const destroyMock = jest.fn();
+  return {
+    label: descriptor.label,
+    width: descriptor.size[0],
+    height: descriptor.size[1],
+    depthOrArrayLayers: descriptor.size[2],
+    format: descriptor.format,
+    usage: descriptor.usage,
+    mipLevelCount: descriptor.mipLevelCount ?? 1,
+    descriptor,
+    createView: jest.fn((viewDescriptor?: any) => ({ viewDescriptor })),
+    destroy: destroyMock,
+    destroyMock,
+  };
+};
 
 // The uniforms of one compositor draw (see XRGPUPresenter's Draw struct).
 export type MockDraw = {
