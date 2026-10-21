@@ -35,6 +35,15 @@ export type MockDraw = {
   infinite: number;
 };
 
+// The uniforms of one space warp view (see GPUSpaceWarp's Warp struct).
+export type MockWarp = {
+  matrix: number[];
+  grid: number[];
+  arrayLayer: number;
+  extrapolation: number;
+  colorScale: number;
+};
+
 const DRAW_STRIDE = 256;
 
 export const createMockGPUDevice = () => {
@@ -92,23 +101,46 @@ export const createMockGPUDevice = () => {
   };
   const passesLabelled = (label: string) =>
     renderPasses.filter((pass) => pass.label === label);
+  const lastWrite = (label: string): ArrayBuffer | null => {
+    const call = device.queue.writeBuffer.mock.calls
+      .filter(([buffer]: any[]) => buffer.label === label)
+      .slice(-1)[0];
+    return call ? call[2] : null;
+  };
   return {
     device: device as any,
     renderPasses,
     copies,
     compositorPasses: () => passesLabelled('IWER layer compositor'),
     depthClears: () => passesLabelled('IWER layer depth clear'),
+    warpPasses: () => passesLabelled('IWER space warp'),
+    // The uniforms of every view in the last space warp.
+    warps: (): MockWarp[] => {
+      const data = lastWrite('IWER space warp views');
+      const warps: MockWarp[] = [];
+      for (
+        let offset = 0;
+        data && offset < data.byteLength;
+        offset += DRAW_STRIDE
+      ) {
+        const floats = new Float32Array(data, offset, 24);
+        const uints = new Uint32Array(data, offset, 24);
+        warps.push({
+          matrix: [...floats.slice(0, 16)],
+          grid: [uints[16], uints[17]],
+          arrayLayer: uints[18],
+          extrapolation: floats[19],
+          colorScale: floats[20],
+        });
+      }
+      return warps;
+    },
     // The uniforms of every draw the compositor issued in its last pass.
     draws: (): MockDraw[] => {
-      const call = device.queue.writeBuffer.mock.calls
-        .filter(
-          ([buffer]: any[]) => buffer.label === 'IWER layer compositor draws',
-        )
-        .slice(-1)[0];
-      if (!call) {
+      const data = lastWrite('IWER layer compositor draws');
+      if (!data) {
         return [];
       }
-      const data: ArrayBuffer = call[2];
       const draws: MockDraw[] = [];
       for (let offset = 0; offset < data.byteLength; offset += DRAW_STRIDE) {
         const floats = new Float32Array(data, offset, 32);

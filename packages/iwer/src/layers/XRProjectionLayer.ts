@@ -12,8 +12,8 @@ import {
 } from '../private.js';
 import { XRLayer } from './XRWebGLLayer.js';
 import { XRRenderState } from '../session/XRRenderState.js';
+import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import type { GPULayerTextures } from './GPULayerTextures.js';
-import type { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import type { XRSession } from '../session/XRSession.js';
 
 export type XRLayerLayout =
@@ -168,6 +168,7 @@ export class XRProjectionLayer extends XRCompositionLayer {
     // Each view's viewport scale this frame, and in the last released frame.
     frameViewportScales: number[];
     viewportScales: number[];
+    deltaPose: XRRigidTransform | null;
   };
 
   constructor(
@@ -187,6 +188,7 @@ export class XRProjectionLayer extends XRCompositionLayer {
       frameFixedFoveation: 0,
       frameViewportScales: [1, 1],
       viewportScales: [1, 1],
+      deltaPose: null,
     };
   }
 
@@ -229,11 +231,22 @@ export class XRProjectionLayer extends XRCompositionLayer {
     this[P_PROJECTION_LAYER].fixedFoveation = Math.min(1, Math.max(0, level));
   }
 
-  // Space warp isn't emulated, so deltaPose stays null and setting it has no
-  // effect, as the spec describes for unsupporting devices.
+  // With space warp, the app's own motion of the view since the last frame,
+  // such as artificial locomotion. Without it, deltaPose stays null and
+  // setting it does nothing, as the Layers spec describes. IWER's frame
+  // synthesis doesn't need it: the motion vectors include that motion.
   get deltaPose(): XRRigidTransform | null {
-    return null;
+    return this[P_PROJECTION_LAYER].deltaPose;
   }
 
-  set deltaPose(_value: XRRigidTransform | null) {}
+  set deltaPose(value: XRRigidTransform | null) {
+    const transform = value ?? null;
+    if (transform !== null && !(transform instanceof XRRigidTransform)) {
+      throw new TypeError('deltaPose must be an XRRigidTransform or null.');
+    }
+    const { session } = this[P_COMPOSITION_LAYER];
+    if (session[P_SESSION].enabledFeatures.includes('space-warp')) {
+      this[P_PROJECTION_LAYER].deltaPose = transform;
+    }
+  }
 }

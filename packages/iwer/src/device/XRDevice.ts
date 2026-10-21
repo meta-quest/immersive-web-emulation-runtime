@@ -107,7 +107,8 @@ export type WebXRFeature =
   | 'eye-tracking'
   | 'depth-sensing'
   | 'webgpu'
-  | 'layers';
+  | 'layers'
+  | 'space-warp';
 
 export interface XRDeviceConfig {
   name: string;
@@ -304,6 +305,10 @@ export class XRDevice {
     onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => void;
     onSessionEnd: () => void;
     onFrameStart: (frame: XRFrame) => void;
+    // A frame IWER synthesizes with space warp: tracking moves on, but the
+    // app gets no frame.
+    onSynthesizedFrame: () => void;
+    updateRemote: () => void;
 
     // action playback
     actionPlayer?: ActionPlayer;
@@ -593,7 +598,7 @@ export class XRDevice {
           window.dispatchEvent(new Event('resize'));
         }
       },
-      onFrameStart: (frame: XRFrame) => {
+      updateRemote: () => {
         // Calculate delta time for remote control
         const now = performance.now();
         const deltaTimeMs =
@@ -606,6 +611,14 @@ export class XRDevice {
         if (this[P_DEVICE].remote) {
           this[P_DEVICE].remote.update(deltaTimeMs);
         }
+      },
+      onSynthesizedFrame: () => {
+        this[P_DEVICE].updateRemote();
+        this[P_DEVICE].updateViews();
+        this.drawVisibilityMask();
+      },
+      onFrameStart: (frame: XRFrame) => {
+        this[P_DEVICE].updateRemote();
 
         if (this[P_DEVICE].actionPlayer?.playing) {
           this[P_DEVICE].actionPlayer.playFrame();

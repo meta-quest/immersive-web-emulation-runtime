@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { mat4, quat } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 import {
   P_COMPOSITION_LAYER,
   P_DEVICE,
@@ -23,9 +23,11 @@ import {
   XREquirectLayer,
   XRQuadLayer,
 } from './XRSpaceLayers.js';
+import { synthesizeFrame } from './GPUSpaceWarp.js';
 import { XRSpaceUtils } from '../spaces/XRSpace.js';
 import { XREye } from '../views/XRView.js';
 import type { XRDevice } from '../device/XRDevice.js';
+import type { XRFrame } from '../frameloop/XRFrame.js';
 import type { XRLayer } from './XRWebGLLayer.js';
 import type { XRSession } from '../session/XRSession.js';
 
@@ -378,6 +380,12 @@ type Surface = {
   device: GPUDevice | null;
 };
 
+// The views a frame the app drew was shown with.
+type FramePoses = {
+  time: number;
+  views: Map<XREye, { view: mat4; projection: mat4 }>;
+};
+
 const scratchModel = mat4.create();
 const scratchRotation = quat.create();
 
@@ -390,6 +398,45 @@ const rotationOnly = (out: mat4, matrix: mat4) => {
 };
 
 /**
+ * Maps the NDC of a view of the last drawn frame to clip space of the view's
+ * current pose, for space warp. Motion vectors include camera motion, so a
+ * frame extrapolated along them is seen from the camera pose extrapolated the
+ * same way; depth then reprojects it to where the head is now.
+ */
+const warpMatrix = (
+  region: ViewRegion,
+  last: FramePoses,
+  previous: FramePoses | undefined,
+  extrapolation: number,
+): mat4 => {
+  const drawn = last.views.get(region.eye) ?? region;
+  const previousView = previous?.views.get(region.eye)?.view ?? drawn.view;
+  const camera = mat4.invert(mat4.create(), drawn.view) ?? mat4.create();
+  // The camera's motion over the last frame, in its own space, scaled.
+  const motion = mat4.multiply(mat4.create(), previousView, camera);
+  const rotation = quat.slerp(
+    quat.create(),
+    quat.create(),
+    mat4.getRotation(quat.create(), motion),
+    extrapolation,
+  );
+  const translation = vec3.scale(
+    vec3.create(),
+    mat4.getTranslation(vec3.create(), motion),
+    extrapolation,
+  );
+  mat4.multiply(
+    camera,
+    camera,
+    mat4.fromRotationTranslation(mat4.create(), rotation, translation),
+  );
+  const matrix = mat4.invert(mat4.create(), drawn.projection) ?? mat4.create();
+  mat4.multiply(matrix, camera, matrix);
+  mat4.multiply(matrix, region.view, matrix);
+  return mat4.multiply(matrix, region.projection, matrix);
+};
+
+/**
  * Draws the layers of a WebGPU session onto IWER-owned canvases, mounted where
  * a WebGL session's canvas would be. Layers are composited in render state
  * order with source-over blending; consecutive layers on the same GPUDevice
@@ -399,6 +446,8 @@ export class XRGPUPresenter {
   private xrDevice: XRDevice;
   private format: GPUTextureFormat;
   private surfaces: Surface[] = [];
+  // The last two frames the app drew, newest first, for space warp.
+  private poses: FramePoses[] = [];
 
   constructor(xrDevice: XRDevice) {
     this.xrDevice = xrDevice;
@@ -416,7 +465,16 @@ export class XRGPUPresenter {
     }
   }
 
-  present(session: XRSession, layers: XRLayer[]): void {
+  /**
+   * Shows the layers. With `synthesizeFrom`, this is a frame IWER synthesizes
+   * with space warp: projection layers that submitted motion vectors in that
+   * frame are extrapolated from it, and other layers show their last frame.
+   */
+  present(
+    session: XRSession,
+    layers: readonly XRLayer[],
+    synthesizeFrom: XRFrame | null = null,
+  ): void {
     try {
       const drawable = layers.filter(
         (layer): layer is XRCompositionLayer =>
@@ -439,15 +497,75 @@ export class XRGPUPresenter {
         }
       }
       const regions = this.viewRegions(session);
+      let synthesized = new Set<XRCompositionLayer>();
+      if (synthesizeFrom) {
+        synthesized = this.synthesize(drawable, regions, synthesizeFrom);
+      } else {
+        this.poses = [
+          {
+            time: performance.now(),
+            views: new Map(
+              regions.map(({ eye, view, projection }) => [
+                eye,
+                { view: mat4.clone(view), projection: mat4.clone(projection) },
+              ]),
+            ),
+          },
+          ...this.poses.slice(0, 1),
+        ];
+      }
       this.surfaces.forEach(({ canvas }, index) => {
         canvas.style.visibility = index < runs.length ? '' : 'hidden';
       });
       runs.forEach((run, index) =>
-        this.drawRun(this.surface(index), run, regions),
+        this.drawRun(this.surface(index), run, regions, synthesized),
       );
     } catch (error) {
       console.error(error);
     }
+  }
+
+  // Draws a synthesized frame for each projection layer with motion vectors
+  // from `frame`, and returns those layers.
+  private synthesize(
+    layers: XRCompositionLayer[],
+    regions: ViewRegion[],
+    frame: XRFrame,
+  ): Set<XRCompositionLayer> {
+    const synthesized = new Set<XRCompositionLayer>();
+    const [last, previous] = this.poses;
+    if (!last) {
+      return synthesized;
+    }
+    // Motion vectors span the time since the previous frame; extrapolate by
+    // the share of that which has passed since the last one.
+    const interval = previous ? last.time - previous.time : 0;
+    const extrapolation =
+      interval > 0
+        ? Math.min(1, Math.max(0, (performance.now() - last.time) / interval))
+        : 0.5;
+    for (const layer of layers) {
+      const { textures, forceMonoPresentation } = layer[P_COMPOSITION_LAYER];
+      if (
+        !(layer instanceof XRProjectionLayer) ||
+        textures.releasedFrame !== frame ||
+        !textures.released?.motionVector
+      ) {
+        continue;
+      }
+      const scales = layer[P_PROJECTION_LAYER].viewportScales;
+      // forceMonoPresentation shows the left view to both eyes.
+      const views = regions
+        .filter((region) => !forceMonoPresentation || region.eyeIndex === 0)
+        .map((region) => ({
+          arrayLayer: region.eyeIndex,
+          clipFromSource: warpMatrix(region, last, previous, extrapolation),
+          colorScale: scales[region.eyeIndex] ?? 1,
+        }));
+      synthesizeFrame(textures, views, extrapolation);
+      synthesized.add(layer);
+    }
+    return synthesized;
   }
 
   detach(): void {
@@ -509,6 +627,7 @@ export class XRGPUPresenter {
     surface: Surface,
     layers: XRCompositionLayer[],
     regions: ViewRegion[],
+    synthesized: Set<XRCompositionLayer>,
   ): void {
     const device = layers[0][P_COMPOSITION_LAYER].textures.device as GPUDevice;
     const { canvas } = surface;
@@ -536,7 +655,14 @@ export class XRGPUPresenter {
     const data = new ArrayBuffer(regions.length * layers.length * DRAW_STRIDE);
     for (const region of regions) {
       for (const layer of layers) {
-        const draw = this.encodeDraw(device, layer, region, data, draws.length);
+        const draw = this.encodeDraw(
+          device,
+          layer,
+          region,
+          data,
+          draws.length,
+          synthesized.has(layer),
+        );
         if (draw) {
           draws.push(draw);
         }
@@ -598,10 +724,14 @@ export class XRGPUPresenter {
     region: ViewRegion,
     data: ArrayBuffer,
     index: number,
+    synthesized: boolean,
   ): Draw | null {
     const state = layer[P_COMPOSITION_LAYER];
-    const released = state.textures.released!;
-    const texture = released.color as GPUTexture;
+    const texture = (
+      synthesized
+        ? state.textures.synthesisTargets().color
+        : state.textures.released!.color
+    ) as GPUTexture;
     // forceMonoPresentation shows the left eye's image to both eyes.
     const eyeIndex = state.forceMonoPresentation ? 0 : region.eyeIndex;
     const offset = index * DRAW_STRIDE;

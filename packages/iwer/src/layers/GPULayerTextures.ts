@@ -55,8 +55,12 @@ export class GPULayerTextures {
   current: (GPULayerTextureSet & { frame: XRFrame }) | null = null;
   // The compositor's copy of the last released textures, if any.
   released: GPULayerTextureSet | null = null;
+  // The frame those textures were released in.
+  releasedFrame: XRFrame | null = null;
   destroyed = false;
   private compositorTextures: GPULayerTextureSet | null = null;
+  private synthesis: { color: WebGPUTexture; depth: WebGPUTexture } | null =
+    null;
 
   constructor(
     device: WebGPUDevice,
@@ -132,7 +136,35 @@ export class GPULayerTextures {
       }
     }
     this.released = target;
+    this.releasedFrame = frame;
     return true;
+  }
+
+  /**
+   * Where IWER draws the frames it synthesizes from the released textures with
+   * space warp: a color texture laid out like the layer's, and a depth buffer.
+   */
+  synthesisTargets(): { color: WebGPUTexture; depth: WebGPUTexture } {
+    if (!this.synthesis) {
+      const { color } = this.descriptors;
+      const [width, height] = color.size as number[];
+      this.synthesis = {
+        color: this.device.createTexture({
+          label: 'IWER synthesized frame',
+          size: color.size,
+          format: color.format,
+          usage: RENDER_ATTACHMENT | TEXTURE_BINDING,
+          textureBindingViewDimension: '2d-array',
+        } as GPUTextureDescriptor),
+        depth: this.device.createTexture({
+          label: 'IWER synthesized frame depth',
+          size: [width, height, 1],
+          format: 'depth24plus',
+          usage: RENDER_ATTACHMENT,
+        }),
+      };
+    }
+    return this.synthesis;
   }
 
   // Ends write access to the frame's current textures.
@@ -157,7 +189,10 @@ export class GPULayerTextures {
     target?.color.destroy();
     target?.depthStencil?.destroy();
     target?.motionVector?.destroy();
+    this.synthesis?.color.destroy();
+    this.synthesis?.depth.destroy();
     this.compositorTextures = null;
+    this.synthesis = null;
     this.released = null;
   }
 

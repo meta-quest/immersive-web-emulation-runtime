@@ -108,12 +108,24 @@ IWER's WebGPU types are the standard ones on TypeScript 6. On TypeScript 5, add 
 
 A projection layer's `fixedFoveation` (0 to 1, default 0) lowers the resolution away from the centre of each view when IWER draws it, like fixed foveated rendering on a headset.
 
+With the `'space-warp'` feature, a projection layer created with a depth format other than `'stencil8'` also gives out a `motionVectorTexture` (`rgba16float`), and its depth/stencil texture uses the motion vectors' lower resolution, about a quarter of the view's in each direction. As on a Quest, the app then runs at half the frame rate: after each frame that draws the layer, IWER synthesizes the next one by moving every pixel along its motion vector and reprojecting it with depth to the latest head pose. Motion vectors are the pixel's NDC position in the current frame minus its position in the previous frame, camera motion included, so missing or wrong motion vectors show up as stutter or wobble, as they would on a headset. Frames that don't draw the layer run at the full rate.
+
+```javascript
+const session = await navigator.xr.requestSession('immersive-vr', {
+  requiredFeatures: ['webgpu', 'space-warp'],
+});
+const layer = binding.createProjectionLayer({
+  colorFormat: binding.getPreferredColorFormat(),
+  depthStencilFormat: 'depth24plus',
+});
+// In each frame, render color into subImage.colorTexture, then depth and
+// motion vectors over the whole of subImage.depthStencilTexture and
+// subImage.motionVectorTexture.
+```
+
 With `installRuntime({ polyfillLayers: true })`, the WebXR Layers polyfill keeps handling WebGL sessions, and WebGPU sessions bypass it.
 
-Limitations:
-
-- Space warp isn't emulated, so `deltaPose` is `null`.
-- WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`. For depth sensing, use `XRFrame.getDepthInformation()` for CPU-optimized depth or `XRGPUBinding.getDepthInformation()` for GPU-optimized depth, a texture of linear depth with one array layer per view: `r32float` meters, or `r16uint` millimeters for `'unsigned-short'`. The session uses the first usage and data format in `depthSensing` that it supports.
+As the binding requires, WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`. For depth sensing, use `XRFrame.getDepthInformation()` for CPU-optimized depth or `XRGPUBinding.getDepthInformation()` for GPU-optimized depth, a texture of linear depth with one array layer per view: `r32float` meters, or `r16uint` millimeters for `'unsigned-short'`. The session uses the first usage and data format in `depthSensing` that it supports.
 
 ## Understanding IWER's Global Reference Space
 

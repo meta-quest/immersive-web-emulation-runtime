@@ -149,8 +149,12 @@ export class XRSystem extends EventTarget {
           ) {
             return false;
           }
-          if (feature === 'layers' && webgpuSession) {
-            // IWER emulates the WebXR Layers API for WebGPU sessions.
+          if (
+            (feature === 'layers' || feature === 'space-warp') &&
+            webgpuSession
+          ) {
+            // IWER emulates the WebXR Layers API, space warp included, for
+            // WebGPU sessions.
             return true;
           }
           return isGazeTrackingFeature(feature)

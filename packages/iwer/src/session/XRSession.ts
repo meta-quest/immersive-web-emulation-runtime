@@ -149,6 +149,11 @@ export class XRSession extends EventTarget {
     >;
     gpuPresenter: XRGPUPresenter | null;
     releaseLayers: (frame: XRFrame) => void;
+    // With space warp, a frame that submitted motion vectors; IWER
+    // synthesizes the next device frame from it.
+    spaceWarpFrame: XRFrame | null;
+    synthesizeFrame: (frame: XRFrame) => void;
+    updateProjectionMatrices: () => void;
     // framerate
     nominalFrameRate: number;
     // reference spaces
@@ -268,6 +273,59 @@ export class XRSession extends EventTarget {
           console.error(error);
         }
       },
+      spaceWarpFrame: null,
+      synthesizeFrame: (frame: XRFrame) => {
+        const now = performance.now();
+        this[P_SESSION].updateProjectionMatrices();
+        const device = this[P_SESSION].device[P_DEVICE];
+        device.devui?.render(now);
+        if (this[P_SESSION].mode === 'immersive-ar') {
+          device.sem?.render(now);
+        }
+        device.onSynthesizedFrame();
+        this[P_SESSION].gpuPresenter?.present(
+          this,
+          this[P_SESSION].renderState.layers ?? [],
+          frame,
+        );
+      },
+      updateProjectionMatrices: () => {
+        const { depthNear, depthFar } = this[P_SESSION].renderState;
+        const context = this[P_SESSION].renderState.baseLayer?.context;
+        const { width, height } = context?.canvas ?? {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        };
+        if (this[P_SESSION].mode !== 'inline') {
+          const aspect =
+            (width * (this[P_SESSION].device.stereoEnabled ? 0.5 : 1.0)) /
+            height;
+          // WebGPU clip space has a [0, 1] depth range
+          const perspective = this[P_SESSION].hasWebGPU
+            ? mat4.perspectiveZO
+            : mat4.perspective;
+          perspective(
+            this[P_SESSION].projectionMatrices[XREye.Left],
+            this[P_SESSION].device.fovy,
+            aspect,
+            depthNear,
+            depthFar,
+          );
+          mat4.copy(
+            this[P_SESSION].projectionMatrices[XREye.Right],
+            this[P_SESSION].projectionMatrices[XREye.Left],
+          );
+        } else {
+          const aspect = width / height;
+          mat4.perspective(
+            this[P_SESSION].projectionMatrices[XREye.None],
+            this[P_SESSION].renderState.inlineVerticalFieldOfView!,
+            aspect,
+            depthNear,
+            depthFar,
+          );
+        }
+      },
       enabledFeatures: enabledFeatures,
       hasAnchors: enabledFeatures.includes('anchors'),
       hasPlanes: enabledFeatures.includes('plane-detection'),
@@ -314,6 +372,14 @@ export class XRSession extends EventTarget {
         this[P_SESSION].deviceFrameHandle = globalThis.requestAnimationFrame(
           this[P_SESSION].onDeviceFrame,
         );
+
+        // Space warp: the app skips this frame and IWER synthesizes it.
+        const synthesizeFrom = this[P_SESSION].spaceWarpFrame;
+        if (synthesizeFrom) {
+          this[P_SESSION].spaceWarpFrame = null;
+          this[P_SESSION].synthesizeFrame(synthesizeFrom);
+          return;
+        }
 
         if (this[P_SESSION].pendingRenderState != null) {
           this[P_SESSION].renderState = this[P_SESSION].pendingRenderState;
@@ -408,40 +474,7 @@ export class XRSession extends EventTarget {
         }
 
         // Calculate projection matrices
-        const { depthNear, depthFar } = this[P_SESSION].renderState;
-        const { width, height } = context?.canvas ?? {
-          width: window.innerWidth,
-          height: window.innerHeight,
-        };
-        if (this[P_SESSION].mode !== 'inline') {
-          const aspect =
-            (width * (this[P_SESSION].device.stereoEnabled ? 0.5 : 1.0)) /
-            height;
-          // WebGPU clip space has a [0, 1] depth range
-          const perspective = this[P_SESSION].hasWebGPU
-            ? mat4.perspectiveZO
-            : mat4.perspective;
-          perspective(
-            this[P_SESSION].projectionMatrices[XREye.Left],
-            this[P_SESSION].device.fovy,
-            aspect,
-            depthNear,
-            depthFar,
-          );
-          mat4.copy(
-            this[P_SESSION].projectionMatrices[XREye.Right],
-            this[P_SESSION].projectionMatrices[XREye.Left],
-          );
-        } else {
-          const aspect = width / height;
-          mat4.perspective(
-            this[P_SESSION].projectionMatrices[XREye.None],
-            this[P_SESSION].renderState.inlineVerticalFieldOfView!,
-            aspect,
-            depthNear,
-            depthFar,
-          );
-        }
+        this[P_SESSION].updateProjectionMatrices();
 
         const now = performance.now();
         const frame = new XRFrame(
@@ -512,6 +545,16 @@ export class XRSession extends EventTarget {
         this[P_SESSION].releaseLayers(frame);
         if (!this[P_SESSION].ended) {
           this[P_SESSION].gpuPresenter?.present(this, layers);
+          // After a frame that submits motion vectors, IWER synthesizes the
+          // next device frame from it. Other frames run as if space warp was
+          // off, as the spec requires.
+          const submitted = layers.some(
+            (layer) =>
+              layer instanceof XRProjectionLayer &&
+              layer[P_COMPOSITION_LAYER].textures.releasedFrame === frame &&
+              layer[P_COMPOSITION_LAYER].textures.descriptors.motionVector,
+          );
+          this[P_SESSION].spaceWarpFrame = submitted ? frame : null;
         }
 
         // WebGPU depth textures are only valid during their frame.

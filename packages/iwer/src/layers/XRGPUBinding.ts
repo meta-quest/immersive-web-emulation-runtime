@@ -117,6 +117,30 @@ const LAYOUTS: XRLayerLayout[] = [
 
 const MIN_SCALE_FACTOR = 0.2;
 
+// "Scale an XR GPU texture size", fitting it in maxTextureDimension2D.
+const scaleTextureSize = (
+  device: WebGPUDevice,
+  size: { width: number; height: number },
+  scale: number,
+) => {
+  let width = Math.max(1, Math.floor(size.width * scale));
+  let height = Math.max(1, Math.floor(size.height * scale));
+  const maxDimension = device.limits.maxTextureDimension2D;
+  if (width > maxDimension || height > maxDimension) {
+    const fit = maxDimension / Math.max(width, height);
+    width = Math.max(1, Math.floor(width * fit));
+    height = Math.max(1, Math.floor(height * fit));
+  }
+  return [width, height] as const;
+};
+
+// The recommended motion vector resolution: like Quest's, about a quarter of
+// the view's in each direction.
+const motionVectorResolution = (size: { width: number; height: number }) => ({
+  width: Math.ceil(size.width / 4),
+  height: Math.ceil(size.height / 4),
+});
+
 // Immersive sessions always report a left and a right view.
 const VIEW_COUNT = 2;
 
@@ -414,7 +438,10 @@ export class XRGPUBinding {
   }
 
   get usesDepthValues(): boolean {
-    return false;
+    // Only space warp makes IWER's compositor read depth.
+    return this[P_GPU_BINDING].session[P_SESSION].enabledFeatures.includes(
+      'space-warp',
+    );
   }
 
   getPreferredColorFormat(): WebGPUTextureFormat {
@@ -454,18 +481,18 @@ export class XRGPUBinding {
 
     const viewSize =
       session[P_SESSION].device[P_DEVICE].getRecommendedViewResolution();
+    const hasDepthAspect =
+      depthStencilFormat != null && depthStencilFormat !== 'stencil8';
+    const useSpaceWarp = hasDepthAspect && this.usesDepthValues;
     const scale = Math.min(
       Math.max(scaleFactor, MIN_SCALE_FACTOR),
       Math.max(this.nativeProjectionScaleFactor, 1.0),
     );
-    let width = Math.max(1, Math.floor(viewSize.width * scale));
-    let height = Math.max(1, Math.floor(viewSize.height * scale));
-    const maxDimension = device.limits.maxTextureDimension2D;
-    if (width > maxDimension || height > maxDimension) {
-      const fit = maxDimension / Math.max(width, height);
-      width = Math.max(1, Math.floor(width * fit));
-      height = Math.max(1, Math.floor(height * fit));
-    }
+    const [width, height] = scaleTextureSize(device, viewSize, scale);
+    // With space warp, depth shares the motion vectors' lower resolution.
+    const [depthWidth, depthHeight] = useSpaceWarp
+      ? scaleTextureSize(device, motionVectorResolution(viewSize), scale)
+      : [width, height];
     const usage = toUnsignedLong(textureUsage);
     const color = createDescriptor(
       device,
@@ -482,18 +509,34 @@ export class XRGPUBinding {
         ? createDescriptor(
             device,
             'XRProjectionLayer depth/stencil',
-            width,
-            height,
+            depthWidth,
+            depthHeight,
             VIEW_COUNT,
             1,
             depthStencilFormat,
             usage,
           )
         : null;
+    const motionVector = useSpaceWarp
+      ? createDescriptor(
+          device,
+          'XRProjectionLayer motion vectors',
+          depthWidth,
+          depthHeight,
+          VIEW_COUNT,
+          1,
+          'rgba16float',
+          usage,
+        )
+      : null;
     return new XRProjectionLayer(
       session,
-      new GPULayerTextures(device, { color, depthStencil, motionVector: null }),
-      true,
+      new GPULayerTextures(
+        device,
+        { color, depthStencil, motionVector },
+        useSpaceWarp,
+      ),
+      !(hasDepthAspect && this.usesDepthValues),
     );
   }
 

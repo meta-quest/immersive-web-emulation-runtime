@@ -28,6 +28,7 @@ import {
 } from '../../src/layers/XRProjectionLayer.js';
 import { XRLayer, XRWebGLLayer } from '../../src/layers/XRWebGLLayer.js';
 import { XRFrame } from '../../src/frameloop/XRFrame.js';
+import { XRRigidTransform } from '../../src/primitives/XRRigidTransform.js';
 import {
   XRReferenceSpace,
   XRReferenceSpaceType,
@@ -456,7 +457,8 @@ describe('XRGPUBinding', () => {
         });
 
         layer.fixedFoveation = 0.5;
-        layer.deltaPose = {} as any;
+        // Without space warp, setting deltaPose does nothing.
+        layer.deltaPose = new XRRigidTransform();
         layer.opacity = 0.25;
         layer.quality = 'text-optimized';
         layer.blendTextureSourceAlpha = false;
@@ -481,6 +483,8 @@ describe('XRGPUBinding', () => {
         layer.fixedFoveation = null;
         expect(layer.fixedFoveation).toBe(0);
         expect(() => (layer.fixedFoveation = NaN)).toThrow(TypeError);
+        // WebIDL still checks the type.
+        expect(() => (layer.deltaPose = {} as any)).toThrow(TypeError);
         // Like any WebIDL enum attribute, unknown qualities are ignored.
         layer.quality = 'sharpest' as any;
         expect(layer.quality).toBe('text-optimized');
