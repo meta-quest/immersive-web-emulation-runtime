@@ -84,7 +84,7 @@ export function registerXRSpaceTests(harness: TestHarness): void {
       'getOffsetReferenceSpace applies a transform to forward and reverse poses',
       async () => {
         const space = await session.requestReferenceSpace('local');
-        const offset = new XRRigidTransform({ x: 1, y: 2, z: 3 });
+        const offset = new XRRigidTransform({ x: 1, y: 2, z: 3, w: 1 });
         const offsetSpace = space.getOffsetReferenceSpace(offset);
 
         harness.assert(offsetSpace != null, 'offsetSpace should exist');

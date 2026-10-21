@@ -69,7 +69,7 @@ describe('XRReferenceSpace', () => {
   });
 
   test('getOffsetReferenceSpace accepts a transform with a finite offset and preserves parent and type', () => {
-    const transform = new XRRigidTransform({ x: 1, y: 2, z: 3 });
+    const transform = new XRRigidTransform({ x: 1, y: 2, z: 3, w: 1 });
     const offsetSpace = xrReferenceSpace.getOffsetReferenceSpace(transform);
     const matrix = offsetSpace[P_SPACE].offsetMatrix;
 
@@ -84,11 +84,11 @@ describe('XRReferenceSpace', () => {
 
   test('nested transform offsets compose translation and rotation', () => {
     const parentOffset = new XRRigidTransform(
-      { x: 1, y: 2, z: 3 },
-      { z: Math.SQRT1_2, w: Math.SQRT1_2 },
+      { x: 1, y: 2, z: 3, w: 1 },
+      { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 },
     );
     const parentSpace = xrReferenceSpace.getOffsetReferenceSpace(parentOffset);
-    const childOffset = new XRRigidTransform({ x: 2 });
+    const childOffset = new XRRigidTransform({ x: 2, y: 0, z: 0, w: 1 });
     const childSpace = parentSpace.getOffsetReferenceSpace(childOffset);
     const matrix = XRSpaceUtils.calculateGlobalOffsetMatrix(childSpace);
     const expected = mat4.multiply(
@@ -108,7 +108,7 @@ describe('XRReferenceSpace', () => {
   });
 
   test('transform offsets copy the matrix independently of the input and siblings', () => {
-    const transform = new XRRigidTransform({ x: 1, y: 2, z: 3 });
+    const transform = new XRRigidTransform({ x: 1, y: 2, z: 3, w: 1 });
     const first = xrReferenceSpace.getOffsetReferenceSpace(transform);
     const second = xrReferenceSpace.getOffsetReferenceSpace(transform);
 
