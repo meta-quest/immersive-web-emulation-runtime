@@ -16,9 +16,12 @@ import {
 } from '../../src/spaces/XRReferenceSpace.js';
 
 import { GamepadMappingType } from '../../src/gamepad/Gamepad.js';
-import { InputSchema } from '../../src/action/ActionRecorder.js';
+import {
+  ActionRecorder,
+  InputSchema,
+} from '../../src/action/ActionRecorder.js';
 import { P_ACTION_PLAYER, P_SPACE } from '../../src/private.js';
-import { mat4, vec3 } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 import type { XRSession } from '../../src/session/XRSession.js';
 
 // Helper: build a fresh local reference space rooted at a GlobalSpace, matching
@@ -129,6 +132,139 @@ describe('ActionPlayer', () => {
       };
       const player = new ActionPlayer(refSpace, recording, 0.063);
       expect(player.duration).toBe(0);
+    });
+  });
+
+  describe('rounded recording timestamps', () => {
+    let nowSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      nowSpy = jest.spyOn(performance, 'now').mockReturnValue(0);
+    });
+
+    afterEach(() => {
+      nowSpy.mockRestore();
+    });
+
+    const recordFrames = (timestamps: number[]): CompressedRecording => {
+      const recorder = new ActionRecorder(
+        { inputSources: [] } as any,
+        makeRefSpace() as any,
+      );
+      timestamps.forEach((timestamp, index) => {
+        nowSpy.mockReturnValue(timestamp);
+        const matrix = mat4.fromRotationTranslation(
+          mat4.create(),
+          index === 1 ? [0, 1, 0, 0] : [0, 0, 0, 1],
+          [index * 3 + 1, index * 3 + 2, index * 3 + 3],
+        );
+        recorder.recordFrame({
+          getViewerPose: () => ({ transform: { matrix } }),
+        } as any);
+      });
+      return recorder.getRecording();
+    };
+
+    const expectPose = (
+      player: ActionPlayer,
+      expectedPosition: number[],
+      expectedQuaternion: number[],
+    ) => {
+      const matrix = player.viewerSpace[P_SPACE].offsetMatrix;
+      const position = translationOf(player.viewerSpace);
+      const quaternion = mat4.getRotation(quat.create(), matrix);
+      expect(Array.from(matrix).every(Number.isFinite)).toBe(true);
+      expect(Array.from(position).every(Number.isFinite)).toBe(true);
+      expect(Array.from(quaternion).every(Number.isFinite)).toBe(true);
+      expectedPosition.forEach((value, index) => {
+        expect(position[index]).toBeCloseTo(value);
+      });
+      expectedQuaternion.forEach((value, index) => {
+        expect(quaternion[index]).toBeCloseTo(value);
+      });
+      expect(quat.length(quaternion)).toBeCloseTo(1);
+    };
+
+    it.each([
+      {
+        name: 'initial tied interval at zero elapsed time',
+        timestamps: [1000.01, 1000.04, 1010],
+        expectedTimestamps: [1000, 1000, 1010],
+        elapsed: 0,
+        playing: true,
+      },
+      {
+        name: 'nonlooping zero-duration recording after elapsed time',
+        timestamps: [1000.01, 1000.04],
+        expectedTimestamps: [1000, 1000],
+        elapsed: 1,
+        playing: false,
+      },
+    ])(
+      'selects the later finite pose for $name',
+      ({ timestamps, expectedTimestamps, elapsed, playing }) => {
+        const recording = recordFrames(timestamps);
+        expect(recording.frames.map((frame) => frame[0])).toEqual(
+          expectedTimestamps,
+        );
+        const player = new ActionPlayer(makeRefSpace(), recording, 0.063);
+        nowSpy.mockReturnValue(2000);
+        player.play();
+        nowSpy.mockReturnValue(2000 + elapsed);
+        player.playFrame();
+
+        expectPose(player, [4, 5, 6], [0, 1, 0, 0]);
+        expect(player.playing).toBe(playing);
+        expect(player.currentTime).toBe(0);
+      },
+    );
+
+    it.each([
+      {
+        name: 'ordinary interval',
+        timestamps: [1000, 1010],
+        elapsed: 5,
+        position: [2.5, 3.5, 4.5],
+        quaternion: [0, Math.SQRT1_2, 0, Math.SQRT1_2],
+      },
+      {
+        name: 'interval after interior tied timestamps',
+        timestamps: [1000, 1010.01, 1010.04, 1020],
+        elapsed: 15,
+        position: [8.5, 9.5, 10.5],
+        quaternion: [0, 0, 0, 1],
+      },
+    ])(
+      'preserves interpolation for an $name',
+      ({ timestamps, elapsed, position, quaternion }) => {
+        const player = new ActionPlayer(
+          makeRefSpace(),
+          recordFrames(timestamps),
+          0.063,
+        );
+        nowSpy.mockReturnValue(2000);
+        player.play();
+        nowSpy.mockReturnValue(2000 + elapsed);
+        player.playFrame();
+
+        expectPose(player, position, quaternion);
+        expect(player.currentTime).toBe(elapsed);
+      },
+    );
+
+    it('seeks to the later sample at an interior tied timestamp', () => {
+      const player = new ActionPlayer(
+        makeRefSpace(),
+        recordFrames([1000, 1010.01, 1010.04, 1020]),
+        0.063,
+      );
+      nowSpy.mockReturnValue(2000);
+      player.play();
+      player.seek(10);
+      player.playFrame();
+
+      expectPose(player, [7, 8, 9], [0, 0, 0, 1]);
+      expect(player.currentTime).toBe(10);
     });
   });
 

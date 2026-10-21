@@ -106,11 +106,13 @@ export function registerXRHitTestTests(harness: TestHarness): void {
 
     // 9. XRRay direction validation
     harness.it('XRRay direction validation', () => {
-      harness.assertDOMException(
-        () => new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x: 0, y: 0, z: 0, w: 0 }),
-        'TypeError',
-        'Zero direction should throw',
-      );
+      let error: unknown;
+      try {
+        new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x: 0, y: 0, z: 0, w: 0 });
+      } catch (caught: unknown) {
+        error = caught;
+      }
+      harness.assertInstanceOf(error, TypeError);
     });
 
     // 10. XRRay matrix is Float32Array(16)

@@ -9,9 +9,19 @@ import type { TestHarness } from '@harness/test-harness';
 
 /**
  * §8 XRRigidTransform — constructor, position, orientation, matrix, inverse
- * 19 tests
+ * 51 tests
  */
 export function registerXRRigidTransformTests(harness: TestHarness): void {
+  function assertTypeError(fn: () => void): void {
+    let error: unknown;
+    try {
+      fn();
+    } catch (caught: unknown) {
+      error = caught;
+    }
+    harness.assertInstanceOf(error, TypeError);
+  }
+
   harness.describe('§8 XRRigidTransform', () => {
     // 1. default constructor → identity position (0,0,0,1)
     harness.it('default constructor → identity position (0,0,0,1)', () => {
@@ -37,6 +47,7 @@ export function registerXRRigidTransformTests(harness: TestHarness): void {
       harness.assertApprox(t.position.x, 1, 0.0001);
       harness.assertApprox(t.position.y, 2, 0.0001);
       harness.assertApprox(t.position.z, 3, 0.0001);
+      harness.assertApprox(t.position.w, 1, 0.0001);
     });
 
     // 4. constructor with position+orientation
@@ -71,11 +82,109 @@ export function registerXRRigidTransformTests(harness: TestHarness): void {
       harness.assertInstanceOf(t.position, DOMPointReadOnly);
     });
 
-    // 7. position.w is always 1
-    harness.it('position.w is always 1', () => {
-      const t = new XRRigidTransform({ x: 5, y: 6, z: 7, w: 99 });
-      harness.assertApprox(t.position.w, 1, 0.0001);
-    });
+    // 7. position.w must be 1
+    for (const w of [0, 99]) {
+      harness.it(`position.w = ${w} throws JavaScript TypeError`, () => {
+        assertTypeError(() => new XRRigidTransform({ x: 5, y: 6, z: 7, w }));
+      });
+    }
+
+    for (const dictionary of ['position', 'orientation'] as const) {
+      for (const member of ['x', 'y', 'z', 'w'] as const) {
+        for (const value of [NaN, Infinity, -Infinity]) {
+          harness.it(
+            `${dictionary}.${member} = ${value} throws JavaScript TypeError`,
+            () => {
+              const point = { [member]: value };
+              assertTypeError(() =>
+                dictionary === 'position'
+                  ? new XRRigidTransform(point)
+                  : new XRRigidTransform({}, point),
+              );
+            },
+          );
+        }
+      }
+    }
+
+    for (const { name, position, orientation, expectedX } of [
+      {
+        name: 'empty dictionaries',
+        position: {},
+        orientation: {},
+        expectedX: 0,
+      },
+      {
+        name: 'partial dictionaries',
+        position: { x: 5 },
+        orientation: { w: 2 },
+        expectedX: 5,
+      },
+      {
+        name: 'undefined members',
+        position: { x: undefined, y: undefined, z: undefined, w: undefined },
+        orientation: { x: undefined, y: undefined, z: undefined, w: undefined },
+        expectedX: 0,
+      },
+      {
+        name: 'undefined arguments',
+        position: undefined,
+        orientation: undefined,
+        expectedX: 0,
+      },
+    ]) {
+      harness.it(`${name} retain transform defaults`, () => {
+        const t = new XRRigidTransform(position, orientation);
+        harness.assertEqual(t.position.x, expectedX);
+        harness.assertEqual(t.position.y, 0);
+        harness.assertEqual(t.position.z, 0);
+        harness.assertEqual(t.position.w, 1);
+        harness.assertEqual(t.orientation.x, 0);
+        harness.assertEqual(t.orientation.y, 0);
+        harness.assertEqual(t.orientation.z, 0);
+        harness.assertEqual(t.orientation.w, 1);
+      });
+    }
+
+    for (const { name, position, orientation } of [
+      { name: 'invalid position.w', position: { w: 99 }, orientation: {} },
+      { name: 'non-finite position.x', position: { x: NaN }, orientation: {} },
+      {
+        name: 'non-finite orientation.w',
+        position: {},
+        orientation: { w: Infinity },
+      },
+    ]) {
+      harness.it(`${name} is checked after both dictionaries convert`, () => {
+        const reads: string[] = [];
+        const trackReads = (
+          name: string,
+          point: DOMPointInit,
+        ): DOMPointInit => {
+          const tracked: DOMPointInit = {};
+          for (const member of ['w', 'x', 'y', 'z'] as const) {
+            Object.defineProperty(tracked, member, {
+              get() {
+                reads.push(`${name}.${member}`);
+                return point[member];
+              },
+            });
+          }
+          return tracked;
+        };
+        assertTypeError(
+          () =>
+            new XRRigidTransform(
+              trackReads('position', position),
+              trackReads('orientation', orientation),
+            ),
+        );
+        harness.assertEqual(
+          reads.join(','),
+          'position.w,position.x,position.y,position.z,orientation.w,orientation.x,orientation.y,orientation.z',
+        );
+      });
+    }
 
     // 8. orientation is DOMPointReadOnly
     harness.it('orientation is DOMPointReadOnly', () => {
@@ -163,27 +272,20 @@ export function registerXRRigidTransformTests(harness: TestHarness): void {
       );
     });
 
-    // 16. zero quaternion → NaN matrix [DEVIATION: spec says TypeError]
-    harness.it(
-      'zero quaternion → NaN matrix [DEVIATION: spec says TypeError]',
-      () => {
-        // iwer normalizes the zero quaternion (producing NaN), rather than throwing TypeError
-        try {
-          const t = new XRRigidTransform(
-            { x: 0, y: 0, z: 0, w: 1 },
-            { x: 0, y: 0, z: 0, w: 0 },
-          );
-          const hasNaN = Array.from(t.matrix).some(isNaN);
-          harness.assert(
-            hasNaN,
-            'Zero quaternion should produce NaN matrix values',
-          );
-        } catch (_e: any) {
-          // Throwing is also valid per spec
-          harness.assert(true, 'Zero quaternion threw');
-        }
-      },
-    );
+    // 16. zero quaternion throws InvalidStateError during normalization
+    harness.it('zero quaternion throws DOMException(InvalidStateError)', () => {
+      let error: unknown;
+      try {
+        new XRRigidTransform(
+          { x: 0, y: 0, z: 0, w: 1 },
+          { x: 0, y: 0, z: 0, w: 0 },
+        );
+      } catch (caught: unknown) {
+        error = caught;
+      }
+      harness.assertInstanceOf(error, DOMException);
+      harness.assertEqual((error as DOMException).name, 'InvalidStateError');
+    });
 
     // 17. position is readonly
     harness.it('position is readonly', () => {

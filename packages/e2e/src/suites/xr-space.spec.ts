@@ -6,7 +6,7 @@
  */
 
 import type { TestHarness } from '@harness/test-harness';
-import { startSession, cleanup } from '@harness/xr-helpers';
+import { startSession, withFrame, cleanup } from '@harness/xr-helpers';
 
 /**
  * §6 XRSpace / XRReferenceSpace — reference space types, getOffsetReferenceSpace, onreset
@@ -79,16 +79,45 @@ export function registerXRSpaceTests(harness: TestHarness): void {
       harness.assertProperty(space, 'onreset');
     });
 
-    // 10. getOffsetReferenceSpace returns new XRReferenceSpace [DEVIATION: takes mat4]
+    // 10. getOffsetReferenceSpace applies a transform to forward and reverse poses
     harness.it(
-      'getOffsetReferenceSpace returns new XRReferenceSpace [DEVIATION: may take mat4]',
+      'getOffsetReferenceSpace applies a transform to forward and reverse poses',
       async () => {
         const space = await session.requestReferenceSpace('local');
-        const offset = new XRRigidTransform();
+        const offset = new XRRigidTransform({ x: 1, y: 2, z: 3 });
         const offsetSpace = space.getOffsetReferenceSpace(offset);
 
         harness.assert(offsetSpace != null, 'offsetSpace should exist');
         harness.assertInstanceOf(offsetSpace, XRReferenceSpace);
+        await withFrame(session, (_time, frame) => {
+          for (const { origin, base, expected } of [
+            { origin: offsetSpace, base: space, expected: [1, 2, 3] },
+            { origin: space, base: offsetSpace, expected: [-1, -2, -3] },
+          ]) {
+            const pose = frame.getPose(origin, base);
+            harness.assert(pose != null, 'Offset space pose should exist');
+            const { matrix, position, orientation } = pose!.transform;
+            harness.assert(
+              Array.from(matrix).every(Number.isFinite),
+              'Offset space pose matrix should be finite',
+            );
+            for (const member of ['x', 'y', 'z', 'w'] as const) {
+              harness.assert(
+                Number.isFinite(position[member]) &&
+                  Number.isFinite(orientation[member]),
+                `Offset space position.${member} and orientation.${member} should be finite`,
+              );
+            }
+            harness.assertApprox(position.x, expected[0], 1e-5);
+            harness.assertApprox(position.y, expected[1], 1e-5);
+            harness.assertApprox(position.z, expected[2], 1e-5);
+            harness.assertApprox(position.w, 1, 1e-5);
+            harness.assertApprox(orientation.x, 0, 1e-5);
+            harness.assertApprox(orientation.y, 0, 1e-5);
+            harness.assertApprox(orientation.z, 0, 1e-5);
+            harness.assertApprox(orientation.w, 1, 1e-5);
+          }
+        });
       },
     );
 

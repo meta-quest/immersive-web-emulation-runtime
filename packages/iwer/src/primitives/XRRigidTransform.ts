@@ -23,6 +23,28 @@ export class XRRigidTransform {
   constructor(position?: DOMPointInit, orientation?: DOMPointInit) {
     const positionInit = convertDOMPointInit(position);
     const orientationInit = convertDOMPointInit(orientation);
+    if (positionInit.w !== 1) {
+      throw new TypeError('XRRigidTransform position.w must be 1');
+    }
+    if (
+      !Object.values(positionInit).every(Number.isFinite) ||
+      !Object.values(orientationInit).every(Number.isFinite)
+    ) {
+      throw new TypeError(
+        'XRRigidTransform position and orientation must be finite',
+      );
+    }
+    if (
+      orientationInit.x === 0 &&
+      orientationInit.y === 0 &&
+      orientationInit.z === 0 &&
+      orientationInit.w === 0
+    ) {
+      throw new DOMException(
+        'XRRigidTransform orientation must have nonzero length',
+        'InvalidStateError',
+      );
+    }
     const resolvedPosition = vec3.fromValues(
       positionInit.x,
       positionInit.y,

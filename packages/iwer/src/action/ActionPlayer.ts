@@ -508,9 +508,14 @@ export class ActionPlayer {
     const nextFrameData = hasNextFrame
       ? frames[this[P_ACTION_PLAYER].recordedFramePointer + 1]
       : lastFrameData;
+    const frameDuration =
+      (nextFrameData[0] as number) - (lastFrameData[0] as number);
+    // Recorder timestamp rounding can give consecutive frames the same time.
     const alpha = hasNextFrame
-      ? ((this[P_ACTION_PLAYER].playbackTime - lastFrameData[0]) as number) /
-        (((nextFrameData[0] as number) - lastFrameData[0]) as number)
+      ? frameDuration === 0
+        ? 1
+        : ((this[P_ACTION_PLAYER].playbackTime - lastFrameData[0]) as number) /
+          frameDuration
       : 0;
     this.applyFrameAtPointer(alpha);
   }

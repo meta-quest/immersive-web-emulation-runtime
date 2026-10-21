@@ -56,15 +56,15 @@ export class XRRay {
       _direction.w = directionVec4[3];
     } else {
       _origin = convertDOMPointInit(origin);
-      _direction = convertDOMPointInit(direction, -1, 0);
-      if (
-        (_direction.x === 0 && _direction.y === 0 && _direction.z === 0) ||
-        _direction.w !== 0
-      ) {
-        throw new DOMException(
-          'Invalid direction value to construct XRRay',
-          'TypeError',
-        );
+      _direction = convertDOMPointInit(direction, -1, 0, true);
+      if (_direction.x === 0 && _direction.y === 0 && _direction.z === 0) {
+        throw new TypeError('XRRay direction must have nonzero length');
+      }
+      if (_direction.w !== 0) {
+        throw new TypeError('XRRay direction.w must be 0');
+      }
+      if (_origin.w !== 1) {
+        throw new TypeError('XRRay origin.w must be 1');
       }
     }
 

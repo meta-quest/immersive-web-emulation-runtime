@@ -9,6 +9,15 @@ import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { XRRigidTransform } from '../../src/primitives/XRRigidTransform';
 
+function getConstructorError(...args: unknown[]): unknown {
+  try {
+    Reflect.construct(XRRigidTransform, args);
+  } catch (error) {
+    return error;
+  }
+  throw new Error('Expected XRRigidTransform construction to throw');
+}
+
 describe('XRRigidTransform', () => {
   it('should create an identity transform with no arguments', () => {
     const transform = new XRRigidTransform();
@@ -84,7 +93,7 @@ describe('XRRigidTransform', () => {
 
   it('converts null members to zero instead of applying defaults', () => {
     const transform = Reflect.construct(XRRigidTransform, [
-      { x: null, y: null, z: null, w: null },
+      { x: null, y: null, z: null, w: 1 },
       { x: null, y: null, z: 2, w: null },
     ]);
 
@@ -104,6 +113,22 @@ describe('XRRigidTransform', () => {
     expect(transform.orientation.y).toBe(0);
     expect(transform.orientation.z).toBeCloseTo(Math.SQRT1_2);
     expect(transform.orientation.w).toBeCloseTo(Math.SQRT1_2);
+  });
+
+  it.each([0, -0, -1, 2, null, false, '0'])(
+    'rejects position.w that does not convert to one: %p',
+    (w) => {
+      expect(() => Reflect.construct(XRRigidTransform, [{ w }])).toThrow(
+        TypeError,
+      );
+    },
+  );
+
+  it.each([true, '1'])('accepts position.w that converts to one: %p', (w) => {
+    const transform = Reflect.construct(XRRigidTransform, [{ w }]);
+
+    expect(transform.position.w).toBe(1);
+    expect(transform.matrix).toEqual(mat4.create());
   });
 
   it.each([BigInt(1), Symbol('coordinate')])(
@@ -153,28 +178,154 @@ describe('XRRigidTransform', () => {
     expect(transform.matrix).toEqual(mat4.create());
   });
 
-  it.each([NaN, Infinity, -Infinity, 0])(
-    'preserves existing non-finite and zero-orientation behavior: %p',
-    (value) => {
-      const transform = new XRRigidTransform(
-        { x: value, y: 0, z: 0, w: 1 },
-        { x: value, y: 0, z: 0, w: 0 },
-      );
-      const orientation = quat.normalize(
-        quat.create(),
-        quat.fromValues(value, 0, 0, 0),
-      );
+  describe.each(['w', 'x', 'y', 'z'])('non-finite %s', (member) => {
+    it.each([NaN, Infinity, -Infinity])(
+      'rejects a non-finite position member: %p',
+      (value) => {
+        expect(() => new XRRigidTransform({ [member]: value })).toThrow(
+          TypeError,
+        );
+      },
+    );
 
-      expect(transform.position.x).toBe(value);
-      expect(transform.orientation).toMatchObject({
-        x: orientation[0],
-        y: orientation[1],
-        z: orientation[2],
-        w: orientation[3],
-      });
-      expect(transform.matrix).toEqual(
-        mat4.fromRotationTranslation(mat4.create(), orientation, [value, 0, 0]),
+    it.each([NaN, Infinity, -Infinity])(
+      'rejects a non-finite orientation member: %p',
+      (value) => {
+        expect(
+          () => new XRRigidTransform(undefined, { [member]: value }),
+        ).toThrow(TypeError);
+      },
+    );
+  });
+
+  it.each([
+    { x: 0, y: 0, z: 0, w: 0 },
+    { x: -0, y: -0, z: -0, w: -0 },
+    { x: -0, y: 0, z: -0, w: 0 },
+  ])('rejects a zero quaternion with InvalidStateError: %p', (orientation) => {
+    const error = getConstructorError(undefined, orientation);
+
+    expect(error).toBeInstanceOf(DOMException);
+    expect(error).toMatchObject({ name: 'InvalidStateError' });
+  });
+
+  it.each([
+    { x: 0, y: 0, z: 4, w: 0 },
+    { x: 0, y: 0, z: 4, w: 4 },
+    { x: 0, y: 0, z: 0, w: 4 },
+  ])('normalizes a nonzero, non-unit quaternion: %p', (orientation) => {
+    const transform = new XRRigidTransform(undefined, orientation);
+    const length = Math.hypot(
+      orientation.x,
+      orientation.y,
+      orientation.z,
+      orientation.w,
+    );
+
+    for (const member of ['x', 'y', 'z', 'w'] as const) {
+      expect(transform.orientation[member]).toBeCloseTo(
+        orientation[member] / length,
       );
+    }
+    expect(transform.matrix.every(Number.isFinite)).toBe(true);
+  });
+
+  it.each(['w', 'x', 'y', 'z'])(
+    'does not reject a finite nonzero %s that narrows to Float32 zero',
+    (member) => {
+      const transform = new XRRigidTransform(undefined, {
+        x: 0,
+        y: 0,
+        z: 0,
+        w: 0,
+        [member]: Number.MIN_VALUE,
+      });
+
+      expect(transform.matrix.every(Number.isFinite)).toBe(true);
+    },
+  );
+
+  describe.each(['position', 'orientation'])(
+    '%s conversion exceptions',
+    (throwingDictionary) => {
+      it.each(['getter', 'valueOf'])(
+        'propagates a %s exception before constructor validation',
+        (phase) => {
+          const calls: string[] = [];
+          const sentinel = new Error('dictionary conversion sentinel');
+          const points = ['position', 'orientation'].map((dictionary) => {
+            const point = {};
+            for (const member of ['w', 'x', 'y', 'z']) {
+              const key = `${dictionary}.${member}`;
+              const throws =
+                dictionary === throwingDictionary && member === 'z';
+              Object.defineProperty(point, member, {
+                get() {
+                  calls.push(key);
+                  if (throws && phase === 'getter') {
+                    throw sentinel;
+                  }
+                  return {
+                    valueOf() {
+                      calls.push(`convert ${key}`);
+                      if (throws && phase === 'valueOf') {
+                        throw sentinel;
+                      }
+                      return dictionary === 'position' && member === 'x'
+                        ? NaN
+                        : 0;
+                    },
+                  };
+                },
+              });
+            }
+            return point;
+          });
+
+          expect(getConstructorError(...points)).toBe(sentinel);
+          const order = [
+            'position.w',
+            'convert position.w',
+            'position.x',
+            'convert position.x',
+            'position.y',
+            'convert position.y',
+            'position.z',
+            'convert position.z',
+            'orientation.w',
+            'convert orientation.w',
+            'orientation.x',
+            'convert orientation.x',
+            'orientation.y',
+            'convert orientation.y',
+            'orientation.z',
+            'convert orientation.z',
+          ];
+          const lastCall = `${phase === 'valueOf' ? 'convert ' : ''}${throwingDictionary}.z`;
+          expect(calls).toEqual(order.slice(0, order.indexOf(lastCall) + 1));
+        },
+      );
+    },
+  );
+
+  it('validates position.w before checking non-finite members', () => {
+    const error = getConstructorError({ w: 0, x: NaN }, { y: Infinity, w: 0 });
+
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error).toMatchObject({
+      message: expect.stringMatching(/position.*w/i),
+    });
+  });
+
+  it.each([NaN, Infinity, -Infinity])(
+    'rejects non-finite position before normalizing a zero quaternion: %p',
+    (x) => {
+      const error = getConstructorError({ x }, { x: 0, y: 0, z: 0, w: 0 });
+
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error).toMatchObject({
+        message: expect.stringMatching(/finite/i),
+      });
     },
   );
 
