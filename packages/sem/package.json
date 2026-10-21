@@ -1,6 +1,6 @@
 {
   "name": "@iwer/sem",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "description": "Synthetic Environment Module for IWER",
   "type": "module",
   "sideEffects": false,
