@@ -42,6 +42,13 @@ import {
   XRSubImage,
 } from '../layers/XRGPUBinding.js';
 import {
+  XRCubeLayer,
+  XRCylinderLayer,
+  XREquirectLayer,
+  XRQuadLayer,
+} from '../layers/XRSpaceLayers.js';
+import { XRLayerEvent } from '../events/XRLayerEvent.js';
+import {
   XRReferenceSpace,
   XRReferenceSpaceType,
 } from '../spaces/XRReferenceSpace.js';
@@ -99,7 +106,8 @@ export type WebXRFeature =
   | 'gaze-tracking'
   | 'eye-tracking'
   | 'depth-sensing'
-  | 'webgpu';
+  | 'webgpu'
+  | 'layers';
 
 export interface XRDeviceConfig {
   name: string;
@@ -861,6 +869,11 @@ export class XRDevice {
     setGlobal('XRProjectionLayer', XRProjectionLayer);
     setGlobal('XRGPUBinding', XRGPUBinding);
     setGlobal('XRGPUSubImage', XRGPUSubImage);
+    setGlobal('XRQuadLayer', XRQuadLayer);
+    setGlobal('XRCylinderLayer', XRCylinderLayer);
+    setGlobal('XREquirectLayer', XREquirectLayer);
+    setGlobal('XRCubeLayer', XRCubeLayer);
+    setGlobal('XRLayerEvent', XRLayerEvent);
     setGlobal('XRWebGLBinding', XRWebGLBinding);
   }
 

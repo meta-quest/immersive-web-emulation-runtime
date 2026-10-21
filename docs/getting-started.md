@@ -85,6 +85,25 @@ const layer = binding.createProjectionLayer({
 session.updateRenderState({ layers: [layer] });
 ```
 
+With the `'layers'` feature, WebGPU sessions can also show quad, cylinder, equirect and cube layers, up to `session.maxRenderLayers` (16) at once. IWER draws them in `renderState.layers` order, each blended over the ones before it:
+
+```javascript
+const session = await navigator.xr.requestSession('immersive-vr', {
+  requiredFeatures: ['webgpu', 'layers'],
+});
+const quad = binding.createQuadLayer({
+  colorFormat: binding.getPreferredColorFormat(),
+  space: await session.requestReferenceSpace('local'),
+  viewPixelWidth: 512,
+  viewPixelHeight: 512,
+  transform: new XRRigidTransform({ x: 0, y: 0, z: -2, w: 1 }),
+});
+session.updateRenderState({ layers: [projectionLayer, quad] });
+// In each frame, binding.getSubImage(quad, frame) gives the texture to draw.
+```
+
+As the binding describes, the textures a layer gives out in a frame start cleared and are destroyed when the frame ends. IWER keeps showing the last frame each layer was drawn in, so a layer created with `isStatic: true` only needs drawing while `needsRedraw` is `true`.
+
 IWER's WebGPU types are the standard ones on TypeScript 6. On TypeScript 5, add `@webgpu/types` to get them; without it, WebGPU values are typed loosely.
 
 A projection layer's `fixedFoveation` (0 to 1, default 0) lowers the resolution away from the centre of each view when IWER draws it, like fixed foveated rendering on a headset.
@@ -93,7 +112,6 @@ With `installRuntime({ polyfillLayers: true })`, the WebXR Layers polyfill keeps
 
 Limitations:
 
-- A session shows a single projection layer. The `'layers'` feature and quad, cylinder, equirect and cube layers are not emulated.
 - Space warp isn't emulated, so `deltaPose` is `null`.
 - WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`. For depth sensing, use `XRFrame.getDepthInformation()` for CPU-optimized depth or `XRGPUBinding.getDepthInformation()` for GPU-optimized depth, a texture of linear depth with one array layer per view: `r32float` meters, or `r16uint` millimeters for `'unsigned-short'`. The session uses the first usage and data format in `depthSensing` that it supports.
 

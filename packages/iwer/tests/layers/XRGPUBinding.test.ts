@@ -35,8 +35,11 @@ import {
 import { XRSystem } from '../../src/initialization/XRSystem.js';
 import { XRView } from '../../src/views/XRView.js';
 import { XRWebGLBinding } from '../../src/depth/XRWebGLBinding.js';
+import { XRViewport } from '../../src/views/XRViewport.js';
+import { createMockCanvasContext, createMockGPUDevice } from './mockWebGPU.js';
 import { metaQuestTouchPlus } from '../../src/device/configs/controller/meta.js';
 import {
+  P_COMPOSITION_LAYER,
   P_DEVICE,
   P_PROJECTION_LAYER,
   P_SYSTEM,
@@ -63,68 +66,6 @@ const deviceConfig: XRDeviceConfig = {
   interactionMode: XRInteractionMode.WorldSpace,
   userAgent: 'Test user agent',
 };
-
-const createMockTexture = (descriptor: any) => ({
-  label: descriptor.label,
-  width: descriptor.size[0],
-  height: descriptor.size[1],
-  depthOrArrayLayers: descriptor.size[2],
-  format: descriptor.format,
-  usage: descriptor.usage,
-  createView: jest.fn((viewDescriptor?: any) => ({ viewDescriptor })),
-  destroy: jest.fn(),
-});
-
-const createMockGPUDevice = () => {
-  const renderPasses: any[] = [];
-  let resolveLost: (info: unknown) => void = () => {};
-  const device = {
-    features: new Set<string>(),
-    limits: { maxTextureDimension2D: 8192 },
-    lost: new Promise((resolve) => {
-      resolveLost = resolve;
-    }),
-    createTexture: jest.fn(createMockTexture),
-    createShaderModule: jest.fn(() => ({})),
-    createRenderPipeline: jest.fn(() => ({
-      getBindGroupLayout: jest.fn(() => ({})),
-    })),
-    createSampler: jest.fn(() => ({})),
-    createBuffer: jest.fn((descriptor: any) => ({ ...descriptor })),
-    createBindGroup: jest.fn(() => ({})),
-    createCommandEncoder: jest.fn(() => ({
-      beginRenderPass: jest.fn((descriptor: any) => {
-        const pass = {
-          descriptor,
-          setPipeline: jest.fn(),
-          setBindGroup: jest.fn(),
-          setViewport: jest.fn(),
-          draw: jest.fn(),
-          end: jest.fn(),
-        };
-        renderPasses.push(pass);
-        return pass;
-      }),
-      finish: jest.fn(() => ({})),
-    })),
-    queue: {
-      submit: jest.fn(),
-      writeBuffer: jest.fn(),
-      writeTexture: jest.fn(),
-    },
-  };
-  return {
-    device: device as any,
-    renderPasses,
-    lose: () => resolveLost({ reason: 'destroyed', message: '' }),
-  };
-};
-
-const createMockCanvasContext = () => ({
-  configure: jest.fn(),
-  unconfigure: jest.fn(),
-  getCurrentTexture: jest.fn(() => ({ createView: jest.fn(() => ({})) })),
-});
 
 const invalidState = expect.objectContaining({ name: 'InvalidStateError' });
 const notSupported = expect.objectContaining({ name: 'NotSupportedError' });
@@ -382,8 +323,8 @@ describe('XRGPUBinding', () => {
     });
 
     describe('createProjectionLayer', () => {
-      const textureDescriptor = (index = 0) =>
-        gpu.device.createTexture.mock.calls[index][0];
+      const descriptors = (layer: XRProjectionLayer) =>
+        layer[P_COMPOSITION_LAYER].textures.descriptors;
 
       test('requires a colorFormat', () => {
         expect(() => binding.createProjectionLayer({} as any)).toThrow(
@@ -404,40 +345,40 @@ describe('XRGPUBinding', () => {
             depthStencilFormat: 'rgba8unorm',
           }),
         ).toThrow(notSupported);
-        expect(gpu.device.createTexture).not.toHaveBeenCalled();
       });
 
-      test('allocates a two-layer texture array on the binding device', () => {
+      test('describes a two-layer texture array on the binding device', () => {
         const layer = binding.createProjectionLayer({
           colorFormat: 'rgba8unorm',
         });
-
-        expect(gpu.device.createTexture).toHaveBeenCalledTimes(1);
-        expect(textureDescriptor()).toMatchObject({
+        const { textures } = layer[P_COMPOSITION_LAYER];
+        expect(textures.device).toBe(gpu.device);
+        expect(textures.descriptors.color).toMatchObject({
           size: [1200, 800, 2],
           format: 'rgba8unorm',
           dimension: '2d',
           mipLevelCount: 1,
           sampleCount: 1,
+          usage: RENDER_ATTACHMENT,
+          viewFormats: [],
         });
-        expect(textureDescriptor().usage).toBe(
-          RENDER_ATTACHMENT | TEXTURE_BINDING,
-        );
+        expect(textures.descriptors.depthStencil).toBeNull();
+        expect(textures.descriptors.motionVector).toBeNull();
         expect(layer).toMatchObject({
           textureWidth: 1200,
           textureHeight: 800,
           textureArrayLength: 2,
         });
+        // Textures are made per frame, once the app draws.
+        expect(gpu.device.createTexture).not.toHaveBeenCalled();
       });
 
-      test('adds the requested texture usage', () => {
-        binding.createProjectionLayer({
+      test('keeps the requested texture usage', () => {
+        const layer = binding.createProjectionLayer({
           colorFormat: 'rgba16float',
           textureUsage: COPY_SRC,
         });
-        expect(textureDescriptor().usage).toBe(
-          COPY_SRC | RENDER_ATTACHMENT | TEXTURE_BINDING,
-        );
+        expect(descriptors(layer).color.usage).toBe(COPY_SRC);
       });
 
       test('sizes each view to half the window in stereo', () => {
@@ -469,18 +410,18 @@ describe('XRGPUBinding', () => {
         expect([layer.textureWidth, layer.textureHeight]).toEqual([600, 400]);
       });
 
-      test('allocates a matching depth/stencil texture when requested', () => {
-        binding.createProjectionLayer({
+      test('describes a matching depth/stencil texture when requested', () => {
+        const layer = binding.createProjectionLayer({
           colorFormat: 'rgba8unorm',
           depthStencilFormat: 'depth24plus',
         });
-        expect(gpu.device.createTexture).toHaveBeenCalledTimes(2);
-        expect(textureDescriptor(1)).toMatchObject({
+        expect(descriptors(layer).depthStencil).toMatchObject({
           size: [1200, 800, 2],
           format: 'depth24plus',
           dimension: '2d',
           mipLevelCount: 1,
           sampleCount: 1,
+          usage: RENDER_ATTACHMENT,
         });
       });
 
@@ -540,24 +481,9 @@ describe('XRGPUBinding', () => {
         layer.fixedFoveation = null;
         expect(layer.fixedFoveation).toBe(0);
         expect(() => (layer.fixedFoveation = NaN)).toThrow(TypeError);
-      });
-
-      test('clears depth to 1.0 when a layer with depth is created', () => {
-        binding.createProjectionLayer({ colorFormat: 'rgba8unorm' });
-        expect(gpu.device.queue.submit).not.toHaveBeenCalled();
-
-        binding.createProjectionLayer({
-          colorFormat: 'rgba8unorm',
-          depthStencilFormat: 'depth24plus',
-        });
-        expect(gpu.device.queue.submit).toHaveBeenCalledTimes(1);
-        expect(gpu.renderPasses).toHaveLength(2);
-        gpu.renderPasses.forEach((pass) => {
-          expect(pass.descriptor.depthStencilAttachment).toMatchObject({
-            depthClearValue: 1,
-            depthLoadOp: 'clear',
-          });
-        });
+        // Like any WebIDL enum attribute, unknown qualities are ignored.
+        layer.quality = 'sharpest' as any;
+        expect(layer.quality).toBe('text-optimized');
       });
 
       test('rejects usages and formats the device cannot create', () => {
@@ -580,6 +506,7 @@ describe('XRGPUBinding', () => {
           notSupported,
         );
         expect(create({ textureUsage: 0x10 | 0x20 })).toThrow(notSupported);
+        expect(create({ textureUsage: 0 })).toThrow(notSupported);
         expect(create({ textureUsage: 0x10 | STORAGE_BINDING })).not.toThrow();
 
         gpu.device.features.add('bgra8unorm-storage');
@@ -595,15 +522,14 @@ describe('XRGPUBinding', () => {
         ).not.toThrow();
       });
 
-      test('destroy() destroys the layer textures', () => {
+      test('destroy() marks the layer destroyed and frees its textures', () => {
         const layer = binding.createProjectionLayer({
           colorFormat: 'rgba8unorm',
           depthStencilFormat: 'depth32float',
         });
         layer.destroy();
-        gpu.device.createTexture.mock.results.forEach(({ value }: any) => {
-          expect(value.destroy).toHaveBeenCalled();
-        });
+        expect(layer[P_COMPOSITION_LAYER].destroyed).toBe(true);
+        expect(layer[P_COMPOSITION_LAYER].textures.destroyed).toBe(true);
       });
 
       test('throws InvalidStateError once the session has ended', async () => {
@@ -649,10 +575,10 @@ describe('XRGPUBinding', () => {
         );
       });
 
-      test('rejects layers that are not WebGPU projection layers', () => {
+      test('rejects anything that is not an XRLayer', () => {
         expect(() =>
-          session.updateRenderState({ layers: [new XRLayer()] }),
-        ).toThrow(notSupported);
+          session.updateRenderState({ layers: [{} as any] }),
+        ).toThrow(TypeError);
       });
 
       test('rejects a layer from another session', async () => {
@@ -667,7 +593,7 @@ describe('XRGPUBinding', () => {
 
         expect(() =>
           session.updateRenderState({ layers: [otherLayer] }),
-        ).toThrow(invalidState);
+        ).toThrow(TypeError);
         await otherSession.end();
       });
 
@@ -715,15 +641,16 @@ describe('XRGPUBinding', () => {
 
         await session.end();
         for (const layer of [unused, replaced, active, pending]) {
-          expect(
-            layer[P_PROJECTION_LAYER].colorTexture.destroy,
-          ).toHaveBeenCalledTimes(1);
+          expect(layer[P_COMPOSITION_LAYER].destroyed).toBe(true);
+          expect(layer[P_COMPOSITION_LAYER].textures.destroyed).toBe(true);
         }
         // destroy() is idempotent
+        const destroyTextures = jest.spyOn(
+          active[P_COMPOSITION_LAYER].textures,
+          'destroy',
+        );
         active.destroy();
-        expect(
-          active[P_PROJECTION_LAYER].colorTexture.destroy,
-        ).toHaveBeenCalledTimes(1);
+        expect(destroyTextures).not.toHaveBeenCalled();
       });
     });
 
@@ -747,7 +674,7 @@ describe('XRGPUBinding', () => {
         expect(callback).toHaveBeenCalledTimes(1);
       });
 
-      test('getViewSubImage returns the layer texture and per-view descriptors', () => {
+      test('getViewSubImage returns the frame textures and per-view descriptors', () => {
         let subImages: XRGPUSubImage[] = [];
         runFrame(session, (frame) => {
           subImages = views(frame).map((view) =>
@@ -790,10 +717,154 @@ describe('XRGPUBinding', () => {
         runFrame(session, (frame) => {
           subImage = binding.getViewSubImage(depthLayer, views(frame)[1]);
         });
-        // [0] is the beforeEach layer; [1] and [2] belong to depthLayer.
-        const depthTexture = gpu.device.createTexture.mock.results[2].value;
+        const depthTexture = gpu.device.createTexture.mock.results[1].value;
         expect(depthTexture.format).toBe('depth24plus');
         expect(subImage!.depthStencilTexture).toBe(depthTexture);
+      });
+
+      test('each frame gets new textures, shared by all of its subimages', () => {
+        const textures: GPUTexture[][] = [];
+        for (let i = 0; i < 2; i++) {
+          runFrame(session, (frame) => {
+            textures.push(
+              views(frame).map(
+                (view) => binding.getViewSubImage(layer, view).colorTexture,
+              ),
+            );
+          });
+        }
+        expect(textures[0][0]).toBe(textures[0][1]);
+        expect(textures[1][0]).toBe(textures[1][1]);
+        expect(textures[1][0]).not.toBe(textures[0][0]);
+        // The app's textures copy out to the compositor, with their usage.
+        expect((textures[0][0] as any).usage).toBe(
+          RENDER_ATTACHMENT | COPY_SRC,
+        );
+      });
+
+      test('releases each drawn frame to the compositor and ends write access', () => {
+        let colorTexture: GPUTexture | undefined;
+        runFrame(session, (frame) => {
+          colorTexture = binding.getViewSubImage(
+            layer,
+            views(frame)[0],
+          ).colorTexture;
+          expect(layer.needsRedraw).toBe(true);
+        });
+        const compositorTexture = layer[P_COMPOSITION_LAYER].textures.released!
+          .color as any;
+        expect(gpu.copies).toEqual([
+          expect.objectContaining({
+            label: 'IWER layer release',
+            source: { texture: colorTexture, mipLevel: 0 },
+            destination: { texture: compositorTexture, mipLevel: 0 },
+            size: [1200, 800, 2],
+          }),
+        ]);
+        expect(compositorTexture.usage).toBe(TEXTURE_BINDING | COPY_DST);
+        expect((colorTexture as any).destroy).toHaveBeenCalledTimes(1);
+        expect(compositorTexture.destroy).not.toHaveBeenCalled();
+        expect(layer.needsRedraw).toBe(false);
+        // Copied before the frame's textures were destroyed.
+        expect(
+          gpu.device.queue.submit.mock.invocationCallOrder[0],
+        ).toBeLessThan(
+          (colorTexture as any).destroy.mock.invocationCallOrder[0],
+        );
+      });
+
+      test.each<[GPUTextureFormat, boolean, boolean]>([
+        ['depth24plus', true, false],
+        ['depth24plus-stencil8', true, true],
+        ['stencil8', false, true],
+      ])(
+        'clears each frame %s texture to depth 1 and stencil 0',
+        (format, hasDepth, hasStencil) => {
+          const depthLayer = binding.createProjectionLayer({
+            colorFormat: 'bgra8unorm',
+            depthStencilFormat: format,
+          });
+          session.updateRenderState({ layers: [depthLayer] });
+          runFrame(session, (frame) => {
+            binding.getViewSubImage(depthLayer, views(frame)[0]);
+          });
+          const clears = gpu.depthClears();
+          expect(clears).toHaveLength(2);
+          clears.forEach((pass, index) => {
+            expect(pass.descriptor.colorAttachments).toEqual([]);
+            const attachment = pass.descriptor.depthStencilAttachment;
+            expect(attachment.view.viewDescriptor).toMatchObject({
+              dimension: '2d',
+              baseArrayLayer: index,
+              arrayLayerCount: 1,
+            });
+            expect(attachment.depthClearValue).toBe(hasDepth ? 1 : undefined);
+            expect(attachment.depthLoadOp).toBe(hasDepth ? 'clear' : undefined);
+            expect(attachment.stencilClearValue).toBe(
+              hasStencil ? 0 : undefined,
+            );
+            expect(attachment.stencilLoadOp).toBe(
+              hasStencil ? 'clear' : undefined,
+            );
+          });
+        },
+      );
+
+      test("getViewSubImage applies the view's requested viewport scale", () => {
+        let viewport: XRViewport | undefined;
+        runFrame(session, (frame) => {
+          const [view] = views(frame);
+          view.requestViewportScale(0.5);
+          viewport = binding.getViewSubImage(layer, view).viewport;
+        });
+        expect(viewport).toMatchObject({ x: 0, y: 0, width: 600, height: 400 });
+        expect(layer[P_PROJECTION_LAYER].viewportScales).toEqual([0.5, 1]);
+      });
+
+      test('a requested viewport scale lasts until it changes', () => {
+        const widths: number[] = [];
+        const frameWidth = (request?: number) =>
+          runFrame(session, (frame) => {
+            const [view] = views(frame);
+            if (request !== undefined) {
+              view.requestViewportScale(request);
+            }
+            widths.push(binding.getViewSubImage(layer, view).viewport.width);
+          });
+        frameWidth(0.5);
+        frameWidth();
+        frameWidth(1);
+        expect(widths).toEqual([600, 600, 1200]);
+      });
+
+      test('the viewport scale holds for the rest of a frame once used', () => {
+        const widths: number[] = [];
+        runFrame(session, (frame) => {
+          const [view] = views(frame);
+          widths.push(binding.getViewSubImage(layer, view).viewport.width);
+          view.requestViewportScale(0.5);
+          widths.push(binding.getViewSubImage(layer, view).viewport.width);
+        });
+        runFrame(session, (frame) => {
+          const [view] = views(frame);
+          widths.push(binding.getViewSubImage(layer, view).viewport.width);
+        });
+        expect(widths).toEqual([1200, 1200, 600]);
+      });
+
+      test('destroy() frees the frame and compositor textures', () => {
+        let colorTexture: any;
+        runFrame(session, (frame) => {
+          colorTexture = binding.getViewSubImage(
+            layer,
+            views(frame)[0],
+          ).colorTexture;
+        });
+        const compositorTexture = layer[P_COMPOSITION_LAYER].textures.released!
+          .color as any;
+        layer.destroy();
+        expect(colorTexture.destroy).toHaveBeenCalledTimes(1);
+        expect(compositorTexture.destroy).toHaveBeenCalledTimes(1);
       });
 
       test('getViewSubImage throws InvalidStateError outside an animation frame', () => {
@@ -821,12 +892,14 @@ describe('XRGPUBinding', () => {
         runFrame(session, (frame) => {
           const [view] = views(frame);
           attempt(() => binding.getViewSubImage(otherLayer, view));
+          attempt(() => binding.getViewSubImage({} as any, view));
           layer.destroy();
           attempt(() => binding.getViewSubImage(layer, view));
         });
-        expect(errors).toHaveLength(2);
+        expect(errors).toHaveLength(3);
         expect(errors[0]).toBeInstanceOf(TypeError);
-        expect(errors[1]).toMatchObject({ name: 'InvalidStateError' });
+        expect(errors[1]).toBeInstanceOf(TypeError);
+        expect(errors[2]).toMatchObject({ name: 'InvalidStateError' });
       });
 
       test('projection matrices use a [0, 1] depth range', () => {
@@ -845,6 +918,7 @@ describe('XRGPUBinding', () => {
 
     describe('presentation', () => {
       let layer: XRProjectionLayer;
+      let refSpace: XRReferenceSpace;
 
       const useLayer = (depthStencilFormat?: GPUTextureFormat) => {
         layer = binding.createProjectionLayer({
@@ -853,11 +927,24 @@ describe('XRGPUBinding', () => {
         });
         session.updateRenderState({ layers: [layer] });
       };
+      // Runs a frame in which the app draws the layer, plus `callback`.
+      const drawFrame = (callback: (frame: XRFrame) => void = () => {}) =>
+        runFrame(session, (frame) => {
+          for (const view of frame.getViewerPose(refSpace)!.views) {
+            binding.getViewSubImage(layer, view);
+          }
+          callback(frame);
+        });
 
-      beforeEach(() => useLayer());
+      beforeEach(async () => {
+        useLayer();
+        refSpace = await session.requestReferenceSpace(
+          XRReferenceSpaceType.Local,
+        );
+      });
 
       test('mounts a WebGPU canvas configured for the layer device', () => {
-        runFrame(session);
+        drawFrame();
         const canvas = xrDevice.appCanvas!;
         expect(canvas).toBeInstanceOf(HTMLCanvasElement);
         expect(canvas.parentElement).toBe(xrDevice.canvasContainer);
@@ -870,130 +957,116 @@ describe('XRGPUBinding', () => {
         });
       });
 
-      test('composites every frame with one submit and a cached pipeline', () => {
+      test('shows nothing until the layer is first drawn', () => {
         runFrame(session);
-        expect(gpu.device.queue.submit).toHaveBeenCalledTimes(1);
+        expect(gpu.compositorPasses()).toHaveLength(0);
+        expect(xrDevice.appCanvas!.style.visibility).toBe('hidden');
+        drawFrame();
+        expect(gpu.compositorPasses()).toHaveLength(1);
+        expect(xrDevice.appCanvas!.style.visibility).toBe('');
+      });
+
+      test('keeps showing the last drawn frame, with cached pipeline and bindings', () => {
+        drawFrame();
         runFrame(session);
-        expect(gpu.device.queue.submit).toHaveBeenCalledTimes(2);
+        const passes = gpu.compositorPasses();
+        expect(passes).toHaveLength(2);
+        const bound = passes.map(
+          (pass: any) => pass.setBindGroup.mock.calls[1][1],
+        );
+        expect(bound[1]).toBe(bound[0]);
+        expect(gpu.copies).toHaveLength(1);
         expect(gpu.device.createRenderPipeline).toHaveBeenCalledTimes(1);
         expect(gpu.device.createBuffer).toHaveBeenCalledTimes(1);
-        expect(gpu.device.createBindGroup).toHaveBeenCalledTimes(1);
       });
 
       test('draws the left view over the whole canvas in mono', () => {
-        runFrame(session);
-        const [composite] = gpu.renderPasses;
+        drawFrame();
+        const [composite] = gpu.compositorPasses();
         expect(composite.descriptor.colorAttachments[0]).toMatchObject({
           loadOp: 'clear',
           storeOp: 'store',
+          clearValue: [0, 0, 0, 0],
         });
         expect(composite.setViewport.mock.calls).toEqual([
           [0, 0, 1200, 800, 0, 1],
         ]);
-        expect(composite.draw.mock.calls).toEqual([[3, 1, 0, 0]]);
+        expect(composite.draw.mock.calls).toEqual([[3]]);
+        expect(composite.setBindGroup.mock.calls[0]).toEqual([
+          0,
+          expect.anything(),
+          [0],
+        ]);
+        expect(gpu.draws()[0]).toMatchObject({
+          arrayLayer: 0,
+          uvRect: [0, 0, 1, 1],
+          opacity: 1,
+          blendSourceAlpha: 1,
+        });
       });
 
       test('draws each view into its half of the canvas in stereo', () => {
         xrDevice.stereoEnabled = true;
-        runFrame(session);
-        const [composite] = gpu.renderPasses;
+        drawFrame();
+        const [composite] = gpu.compositorPasses();
         expect(composite.setViewport.mock.calls).toEqual([
           [0, 0, 600, 800, 0, 1],
           [600, 0, 600, 800, 0, 1],
         ]);
-        expect(composite.draw.mock.calls).toEqual([
-          [3, 1, 0, 0],
-          [3, 1, 0, 1],
-        ]);
-      });
-
-      test('clears every array layer after compositing', () => {
-        runFrame(session);
-        const clears = gpu.renderPasses.slice(1);
-        expect(clears).toHaveLength(2);
-        clears.forEach((pass, index) => {
-          expect(pass.descriptor.colorAttachments[0]).toMatchObject({
-            loadOp: 'clear',
-            storeOp: 'store',
-            clearValue: [0, 0, 0, 0],
-            view: {
-              viewDescriptor: {
-                dimension: '2d',
-                baseArrayLayer: index,
-                arrayLayerCount: 1,
-              },
-            },
-          });
-          expect(pass.descriptor.depthStencilAttachment).toBeUndefined();
-        });
-      });
-
-      test.each<[GPUTextureFormat, boolean, boolean]>([
-        ['depth24plus', true, false],
-        ['depth24plus-stencil8', true, true],
-        ['stencil8', false, true],
-      ])('clears only the aspects of %s', (format, hasDepth, hasStencil) => {
-        useLayer(format);
-        const before = gpu.renderPasses.length;
-        runFrame(session);
-        const clears = gpu.renderPasses.slice(before + 1);
-        expect(clears).toHaveLength(2);
-        clears.forEach((pass) => {
-          const attachment = pass.descriptor.depthStencilAttachment;
-          expect(attachment.depthClearValue).toBe(hasDepth ? 1 : undefined);
-          expect(attachment.depthLoadOp).toBe(hasDepth ? 'clear' : undefined);
-          expect(attachment.stencilClearValue).toBe(hasStencil ? 0 : undefined);
-          expect(attachment.stencilLoadOp).toBe(
-            hasStencil ? 'clear' : undefined,
-          );
-        });
+        expect(
+          composite.setBindGroup.mock.calls.map((call: any[]) => call[2]),
+        ).toEqual([[0], undefined, [256], undefined]);
+        expect(gpu.draws().map((draw) => draw.arrayLayer)).toEqual([0, 1]);
       });
 
       test('shows the left view in both eyes when forceMonoPresentation is set', () => {
         xrDevice.stereoEnabled = true;
         layer.forceMonoPresentation = true;
-        const before = gpu.renderPasses.length;
-        runFrame(session);
-        expect(gpu.renderPasses[before].draw.mock.calls).toEqual([
-          [3, 1, 0, 0],
-          [3, 1, 0, 0],
-        ]);
+        drawFrame();
+        expect(gpu.draws().map((draw) => draw.arrayLayer)).toEqual([0, 0]);
       });
 
       test('applies the layer opacity and blendTextureSourceAlpha', () => {
-        const { writeBuffer, submit } = gpu.device.queue;
-        const params = () => [...writeBuffer.mock.lastCall[2]];
-        runFrame(session);
-        expect(params()).toEqual([1, 1, 0, 0]);
-        const buffer = gpu.device.createBuffer.mock.results[0].value;
-        expect(writeBuffer.mock.lastCall[0]).toBe(buffer);
-        expect(
-          gpu.device.createBindGroup.mock.calls[0][0].entries,
-        ).toContainEqual({ binding: 2, resource: { buffer } });
-        // Written before the submit that draws with it.
-        expect(writeBuffer.mock.invocationCallOrder[0]).toBeLessThan(
-          submit.mock.invocationCallOrder[0],
-        );
-
+        drawFrame();
+        expect(gpu.draws()[0]).toMatchObject({
+          opacity: 1,
+          blendSourceAlpha: 1,
+        });
         layer.opacity = 0.25;
         layer.blendTextureSourceAlpha = false;
-        runFrame(session);
-        expect(params()).toEqual([0.25, 0, 0, 0]);
+        drawFrame();
+        expect(gpu.draws()[0]).toMatchObject({
+          opacity: 0.25,
+          blendSourceAlpha: 0,
+        });
+        // The draws are written before the submit that uses them.
+        const { writeBuffer, submit } = gpu.device.queue;
+        expect(writeBuffer.mock.invocationCallOrder.slice(-1)[0]).toBeLessThan(
+          submit.mock.invocationCallOrder.slice(-1)[0]!,
+        );
       });
 
       test('applies fixedFoveation from the frame after it changes', () => {
-        const { writeBuffer } = gpu.device.queue;
-        const foveation = () => writeBuffer.mock.lastCall[2][2];
-        runFrame(session, () => {
+        drawFrame(() => {
           layer.fixedFoveation = 0.75;
         });
-        expect(foveation()).toBe(0);
-        runFrame(session);
-        expect(foveation()).toBe(0.75);
+        expect(gpu.draws()[0].fixedFoveation).toBe(0);
+        drawFrame();
+        expect(gpu.draws()[0].fixedFoveation).toBe(0.75);
+      });
+
+      test('shows only the part of each view the app was given', () => {
+        drawFrame();
+        runFrame(session, (frame) => {
+          const [view] = frame.getViewerPose(refSpace)!.views;
+          view.requestViewportScale(0.5);
+          binding.getViewSubImage(layer, view);
+        });
+        expect(gpu.draws()[0].uvRect).toEqual([0, 0, 0.5, 0.5]);
       });
 
       test('hides the canvas while no usable layer is set', () => {
-        runFrame(session);
+        drawFrame();
         const canvas = xrDevice.appCanvas!;
         expect(canvas.style.visibility).toBe('');
 
@@ -1006,7 +1079,7 @@ describe('XRGPUBinding', () => {
         expect(canvas.style.visibility).toBe('hidden');
 
         useLayer();
-        runFrame(session);
+        drawFrame();
         expect(canvas.style.visibility).toBe('');
       });
 
@@ -1019,31 +1092,32 @@ describe('XRGPUBinding', () => {
           .spyOn(console, 'error')
           .mockImplementation(() => {});
         const callback = jest.fn();
-        runFrame(session, callback);
-        runFrame(session, callback);
+        drawFrame(callback);
+        drawFrame(callback);
         expect(callback).toHaveBeenCalledTimes(2);
         expect(consoleError).toHaveBeenCalledWith(error);
       });
 
       test('skips presentation when the session ends during the frame', () => {
         const consoleError = jest.spyOn(console, 'error');
-        runFrame(session, () => {
+        drawFrame(() => {
           session.end();
         });
-        expect(gpu.device.queue.submit).not.toHaveBeenCalled();
+        expect(gpu.compositorPasses()).toHaveLength(0);
         expect(consoleError).not.toHaveBeenCalled();
       });
 
       test('removes the canvas, unconfigures the context and destroys the layer on end', async () => {
-        runFrame(session);
+        drawFrame();
         const canvas = xrDevice.appCanvas!;
+        const compositorTexture = layer[P_COMPOSITION_LAYER].textures.released!
+          .color as any;
         await session.end();
         expect(canvas.isConnected).toBe(false);
         expect(xrDevice.canvasContainer.isConnected).toBe(false);
         expect(xrDevice.appCanvas).toBeUndefined();
         expect(canvasContext.unconfigure).toHaveBeenCalled();
-        const colorTexture = gpu.device.createTexture.mock.results[0].value;
-        expect(colorTexture.destroy).toHaveBeenCalled();
+        expect(compositorTexture.destroy).toHaveBeenCalled();
       });
     });
   });

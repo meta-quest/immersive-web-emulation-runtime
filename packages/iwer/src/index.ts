@@ -171,11 +171,22 @@ export {
   XRProjectionLayer,
 } from './layers/XRProjectionLayer.js';
 export {
+  XRQuadLayer,
+  XRCylinderLayer,
+  XREquirectLayer,
+  XRCubeLayer,
+} from './layers/XRSpaceLayers.js';
+export {
   XRGPUBinding,
   XRGPUDepthInformation,
   XRGPUSubImage,
   XRSubImage,
   type XRGPUProjectionLayerInit,
+  type XRGPULayerInit,
+  type XRGPUQuadLayerInit,
+  type XRGPUCylinderLayerInit,
+  type XRGPUEquirectLayerInit,
+  type XRGPUCubeLayerInit,
 } from './layers/XRGPUBinding.js';
 
 // Planes
@@ -201,6 +212,7 @@ export { XRRay } from './hittest/XRRay.js';
 
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';
+export { XRLayerEvent } from './events/XRLayerEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';
 export { XRInputSourcesChangeEvent } from './events/XRInputSourcesChangeEvent.js';
 export { XRReferenceSpaceEvent } from './events/XRReferenceSpaceEvent.js';

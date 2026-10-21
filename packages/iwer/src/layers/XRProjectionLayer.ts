@@ -11,9 +11,10 @@ import {
   P_SESSION,
 } from '../private.js';
 import { XRLayer } from './XRWebGLLayer.js';
+import { XRRenderState } from '../session/XRRenderState.js';
+import type { GPULayerTextures } from './GPULayerTextures.js';
 import type { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import type { XRSession } from '../session/XRSession.js';
-import type { WebGPUDevice, WebGPUTexture } from '../types/webgpu.js';
 
 export type XRLayerLayout =
   | 'default'
@@ -27,6 +28,23 @@ export type XRLayerQuality =
   | 'text-optimized'
   | 'graphics-optimized';
 
+const QUALITIES: XRLayerQuality[] = [
+  'default',
+  'text-optimized',
+  'graphics-optimized',
+];
+
+export type XRCompositionLayerInit = {
+  layout: XRLayerLayout;
+  isStatic: boolean;
+  mipLevels: number;
+  textures: GPULayerTextures;
+};
+
+/**
+ * Base class of the layers created by XRGPUBinding. Each is backed by WebGPU
+ * textures on the binding's device.
+ */
 export class XRCompositionLayer extends XRLayer {
   [P_COMPOSITION_LAYER]: {
     session: XRSession;
@@ -35,9 +53,14 @@ export class XRCompositionLayer extends XRLayer {
     forceMonoPresentation: boolean;
     opacity: number;
     quality: XRLayerQuality;
+    layout: XRLayerLayout;
+    isStatic: boolean;
+    mipLevels: number;
+    needsRedraw: boolean;
+    textures: GPULayerTextures;
   };
 
-  constructor(session: XRSession) {
+  constructor(session: XRSession, init: XRCompositionLayerInit) {
     super();
     this[P_COMPOSITION_LAYER] = {
       session,
@@ -46,23 +69,27 @@ export class XRCompositionLayer extends XRLayer {
       forceMonoPresentation: false,
       opacity: 1.0,
       quality: 'default',
+      ...init,
+      needsRedraw: true,
     };
+    // Tracked so the session can release and free the layer's textures.
+    session[P_SESSION].gpuLayers.add(this);
   }
 
   get layout(): XRLayerLayout {
-    return 'default';
+    return this[P_COMPOSITION_LAYER].layout;
   }
 
   get isStatic(): boolean {
-    return false;
+    return this[P_COMPOSITION_LAYER].isStatic;
   }
 
   get needsRedraw(): boolean {
-    return true;
+    return this[P_COMPOSITION_LAYER].needsRedraw;
   }
 
   get mipLevels(): number {
-    return 1;
+    return this[P_COMPOSITION_LAYER].mipLevels;
   }
 
   get blendTextureSourceAlpha(): boolean {
@@ -70,7 +97,7 @@ export class XRCompositionLayer extends XRLayer {
   }
 
   set blendTextureSourceAlpha(value: boolean) {
-    this[P_COMPOSITION_LAYER].blendTextureSourceAlpha = value;
+    this[P_COMPOSITION_LAYER].blendTextureSourceAlpha = Boolean(value);
   }
 
   get forceMonoPresentation(): boolean {
@@ -78,7 +105,7 @@ export class XRCompositionLayer extends XRLayer {
   }
 
   set forceMonoPresentation(value: boolean) {
-    this[P_COMPOSITION_LAYER].forceMonoPresentation = value;
+    this[P_COMPOSITION_LAYER].forceMonoPresentation = Boolean(value);
   }
 
   get opacity(): number {
@@ -94,11 +121,37 @@ export class XRCompositionLayer extends XRLayer {
   }
 
   set quality(value: XRLayerQuality) {
-    this[P_COMPOSITION_LAYER].quality = value;
+    // Like any WebIDL enum attribute, unknown values are ignored.
+    if (QUALITIES.includes(value)) {
+      this[P_COMPOSITION_LAYER].quality = value;
+    }
   }
 
   destroy(): void {
-    this[P_COMPOSITION_LAYER].destroyed = true;
+    const state = this[P_COMPOSITION_LAYER];
+    if (state.destroyed) {
+      return;
+    }
+    state.destroyed = true;
+    state.textures.destroy();
+    const session = state.session[P_SESSION];
+    session.gpuLayers.delete(this);
+    // A destroyed layer leaves the pending render state, as the Layers spec
+    // describes.
+    if (session.pendingRenderState === null) {
+      if (!session.renderState.layers?.includes(this)) {
+        return;
+      }
+      session.pendingRenderState = new XRRenderState({}, session.renderState);
+    }
+    const pending = session.pendingRenderState;
+    if (!pending.layers?.includes(this)) {
+      return;
+    }
+    session.pendingRenderState = new XRRenderState(
+      { layers: pending.layers.filter((layer) => layer !== this) },
+      pending,
+    );
   }
 }
 
@@ -108,46 +161,55 @@ export class XRCompositionLayer extends XRLayer {
  */
 export class XRProjectionLayer extends XRCompositionLayer {
   [P_PROJECTION_LAYER]: {
-    device: WebGPUDevice;
-    colorTexture: WebGPUTexture;
-    depthStencilTexture: WebGPUTexture | null;
+    ignoreDepthValues: boolean;
     fixedFoveation: number;
     // Latched when each frame starts, so a change applies from the next frame.
     frameFixedFoveation: number;
+    // Each view's viewport scale this frame, and in the last released frame.
+    frameViewportScales: number[];
+    viewportScales: number[];
   };
 
   constructor(
     session: XRSession,
-    device: WebGPUDevice,
-    colorTexture: WebGPUTexture,
-    depthStencilTexture: WebGPUTexture | null,
+    textures: GPULayerTextures,
+    ignoreDepthValues: boolean,
   ) {
-    super(session);
+    super(session, {
+      layout: 'default',
+      isStatic: false,
+      mipLevels: 1,
+      textures,
+    });
     this[P_PROJECTION_LAYER] = {
-      device,
-      colorTexture,
-      depthStencilTexture,
+      ignoreDepthValues,
       fixedFoveation: 0,
       frameFixedFoveation: 0,
+      frameViewportScales: [1, 1],
+      viewportScales: [1, 1],
     };
-    // Tracked so the session can release every layer's textures when it ends.
-    session[P_SESSION].projectionLayers.add(this);
   }
 
   get textureWidth(): number {
-    return this[P_PROJECTION_LAYER].colorTexture.width;
+    return (
+      this[P_COMPOSITION_LAYER].textures.descriptors.color.size as number[]
+    )[0];
   }
 
   get textureHeight(): number {
-    return this[P_PROJECTION_LAYER].colorTexture.height;
+    return (
+      this[P_COMPOSITION_LAYER].textures.descriptors.color.size as number[]
+    )[1];
   }
 
   get textureArrayLength(): number {
-    return this[P_PROJECTION_LAYER].colorTexture.depthOrArrayLayers;
+    return (
+      this[P_COMPOSITION_LAYER].textures.descriptors.color.size as number[]
+    )[2];
   }
 
   get ignoreDepthValues(): boolean {
-    return true;
+    return this[P_PROJECTION_LAYER].ignoreDepthValues;
   }
 
   // 0 is no foveation and 1 the most. IWER lowers the resolution away from
@@ -174,14 +236,4 @@ export class XRProjectionLayer extends XRCompositionLayer {
   }
 
   set deltaPose(_value: XRRigidTransform | null) {}
-
-  destroy(): void {
-    if (this[P_COMPOSITION_LAYER].destroyed) {
-      return;
-    }
-    super.destroy();
-    this[P_PROJECTION_LAYER].colorTexture.destroy();
-    this[P_PROJECTION_LAYER].depthStencilTexture?.destroy();
-    this[P_COMPOSITION_LAYER].session[P_SESSION].projectionLayers.delete(this);
-  }
 }

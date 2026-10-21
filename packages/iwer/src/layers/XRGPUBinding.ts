@@ -18,12 +18,24 @@ import {
   P_VIEW,
 } from '../private.js';
 import { XREye, type XRView } from '../views/XRView.js';
-import { XRProjectionLayer } from './XRProjectionLayer.js';
-import { clearArrayLayers } from './XRGPUPresenter.js';
+import {
+  XRCompositionLayer,
+  XRProjectionLayer,
+  type XRLayerLayout,
+} from './XRProjectionLayer.js';
+import {
+  XRCubeLayer,
+  XRCylinderLayer,
+  XREquirectLayer,
+  XRQuadLayer,
+  checkLayerSpace,
+} from './XRSpaceLayers.js';
+import { GPULayerTextures } from './GPULayerTextures.js';
 import { XRViewport } from '../views/XRViewport.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import type { XRFrame } from '../frameloop/XRFrame.js';
 import type { XRSession } from '../session/XRSession.js';
+import type { XRSpace } from '../spaces/XRSpace.js';
 import type {
   WebGPUDevice,
   WebGPUTexture,
@@ -36,6 +48,43 @@ export interface XRGPUProjectionLayerInit {
   depthStencilFormat?: WebGPUTextureFormat;
   textureUsage?: number;
   scaleFactor?: number;
+}
+
+export interface XRGPULayerInit {
+  colorFormat: WebGPUTextureFormat;
+  depthStencilFormat?: WebGPUTextureFormat;
+  textureUsage?: number;
+  space: XRSpace;
+  mipLevels?: number;
+  viewPixelWidth: number;
+  viewPixelHeight: number;
+  layout?: XRLayerLayout;
+  isStatic?: boolean;
+}
+
+export interface XRGPUQuadLayerInit extends XRGPULayerInit {
+  transform?: XRRigidTransform | null;
+  width?: number;
+  height?: number;
+}
+
+export interface XRGPUCylinderLayerInit extends XRGPULayerInit {
+  transform?: XRRigidTransform | null;
+  radius?: number;
+  centralAngle?: number;
+  aspectRatio?: number;
+}
+
+export interface XRGPUEquirectLayerInit extends XRGPULayerInit {
+  transform?: XRRigidTransform | null;
+  radius?: number;
+  centralHorizontalAngle?: number;
+  upperVerticalAngle?: number;
+  lowerVerticalAngle?: number;
+}
+
+export interface XRGPUCubeLayerInit extends XRGPULayerInit {
+  orientation?: DOMPointReadOnly | null;
 }
 
 // GPUTextureUsage flags, inlined so this module loads without WebGPU globals.
@@ -58,6 +107,13 @@ const DEPTH_STENCIL_FORMATS: WebGPUTextureFormat[] = [
   'depth32float',
   'depth32float-stencil8',
 ];
+const LAYOUTS: XRLayerLayout[] = [
+  'default',
+  'mono',
+  'stereo',
+  'stereo-left-right',
+  'stereo-top-bottom',
+];
 
 const MIN_SCALE_FACTOR = 0.2;
 
@@ -68,6 +124,119 @@ const VIEW_COUNT = 2;
 const arrayLayer = (eye: XREye) => (eye === XREye.Right ? 1 : 0);
 
 const lostDevices = new WeakSet<WebGPUDevice>();
+
+const notSupported = (message: string) =>
+  new DOMException(message, 'NotSupportedError');
+const invalidState = (message: string) =>
+  new DOMException(message, 'InvalidStateError');
+
+// WebIDL unsigned long: values wrap modulo 2^32 and non-numbers become 0.
+const toUnsignedLong = (value: unknown): number => {
+  const number = Math.trunc(Number(value));
+  return Number.isFinite(number) ? ((number % 2 ** 32) + 2 ** 32) % 2 ** 32 : 0;
+};
+
+// WebIDL float with a dictionary default: non-finite values throw.
+const toFloat = (value: number | undefined, fallback: number): number => {
+  if (value === undefined) {
+    return fallback;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    throw new TypeError('Layer dimensions must be finite numbers.');
+  }
+  return number;
+};
+
+// Missing required members and unknown enum values throw while the init
+// dictionary is converted, before the method runs.
+const readLayerInit = (init: XRGPULayerInit) => {
+  for (const member of [
+    'colorFormat',
+    'space',
+    'viewPixelWidth',
+    'viewPixelHeight',
+  ] as const) {
+    if (init?.[member] === undefined) {
+      throw new TypeError(
+        `The layer init is missing the required '${member}'.`,
+      );
+    }
+  }
+  const layout = init.layout ?? 'mono';
+  if (!LAYOUTS.includes(layout)) {
+    throw new TypeError(`Unknown layer layout '${layout}'.`);
+  }
+  return {
+    colorFormat: init.colorFormat,
+    depthStencilFormat: init.depthStencilFormat ?? undefined,
+    textureUsage:
+      init.textureUsage === undefined
+        ? RENDER_ATTACHMENT
+        : toUnsignedLong(init.textureUsage),
+    space: init.space,
+    mipLevels:
+      init.mipLevels === undefined ? 1 : toUnsignedLong(init.mipLevels),
+    viewPixelWidth: toUnsignedLong(init.viewPixelWidth),
+    viewPixelHeight: toUnsignedLong(init.viewPixelHeight),
+    layout,
+    isStatic: Boolean(init.isStatic),
+  };
+};
+
+// createTexture() reports validation errors asynchronously, so reject what it
+// would refuse up front, as "create an XR GPU texture descriptor" requires.
+const createDescriptor = (
+  device: WebGPUDevice,
+  label: string,
+  width: number,
+  height: number,
+  arrayLayerCount: number,
+  mipLevelCount: number,
+  format: WebGPUTextureFormat,
+  usage: number,
+): GPUTextureDescriptor => {
+  const isDepthStencil = DEPTH_STENCIL_FORMATS.includes(format);
+  const { maxTextureDimension2D, maxTextureArrayLayers = 256 } = device.limits;
+  if (usage === 0 || usage & ~KNOWN_TEXTURE_USAGE) {
+    throw notSupported(`Unsupported textureUsage ${usage}.`);
+  }
+  if (width > maxTextureDimension2D || height > maxTextureDimension2D) {
+    throw notSupported(
+      `${width}x${height} exceeds the device's maxTextureDimension2D.`,
+    );
+  }
+  if (arrayLayerCount > maxTextureArrayLayers) {
+    throw notSupported(
+      `${arrayLayerCount} array layers exceed the device's maxTextureArrayLayers.`,
+    );
+  }
+  if (
+    format === 'depth32float-stencil8' &&
+    !device.features.has('depth32float-stencil8')
+  ) {
+    throw notSupported(
+      "depth32float-stencil8 requires the 'depth32float-stencil8' device feature.",
+    );
+  }
+  if (
+    usage & STORAGE_BINDING &&
+    (isDepthStencil ||
+      (format === 'bgra8unorm' && !device.features.has('bgra8unorm-storage')))
+  ) {
+    throw notSupported('STORAGE_BINDING is not supported for this format.');
+  }
+  return {
+    label,
+    size: [width, height, arrayLayerCount],
+    mipLevelCount,
+    sampleCount: 1,
+    dimension: '2d',
+    format,
+    usage,
+    viewFormats: [],
+  };
+};
 
 export class XRSubImage {
   [P_SUB_IMAGE]: {
@@ -87,17 +256,24 @@ export class XRGPUSubImage extends XRSubImage {
   [P_GPU_SUB_IMAGE]: {
     colorTexture: WebGPUTexture;
     depthStencilTexture: WebGPUTexture | null;
-    viewIndex: number;
+    motionVectorTexture: WebGPUTexture | null;
+    arrayLayerIndex: number;
   };
 
   constructor(
     viewport: XRViewport,
     colorTexture: WebGPUTexture,
     depthStencilTexture: WebGPUTexture | null,
-    viewIndex: number,
+    motionVectorTexture: WebGPUTexture | null,
+    arrayLayerIndex: number,
   ) {
     super(viewport);
-    this[P_GPU_SUB_IMAGE] = { colorTexture, depthStencilTexture, viewIndex };
+    this[P_GPU_SUB_IMAGE] = {
+      colorTexture,
+      depthStencilTexture,
+      motionVectorTexture,
+      arrayLayerIndex,
+    };
   }
 
   get colorTexture(): WebGPUTexture {
@@ -109,7 +285,7 @@ export class XRGPUSubImage extends XRSubImage {
   }
 
   get motionVectorTexture(): WebGPUTexture | null {
-    return null;
+    return this[P_GPU_SUB_IMAGE].motionVectorTexture;
   }
 
   getViewDescriptor(): WebGPUTextureViewDescriptor {
@@ -117,7 +293,7 @@ export class XRGPUSubImage extends XRSubImage {
       dimension: '2d',
       mipLevelCount: 1,
       arrayLayerCount: 1,
-      baseArrayLayer: this[P_GPU_SUB_IMAGE].viewIndex,
+      baseArrayLayer: this[P_GPU_SUB_IMAGE].arrayLayerIndex,
     };
   }
 }
@@ -180,6 +356,36 @@ export class XRGPUDepthInformation {
   }
 }
 
+type LayerInit = ReturnType<typeof readLayerInit>;
+
+// "Determine a WebGPU layer texture layout".
+const layoutSize = ({ viewPixelWidth, viewPixelHeight, layout }: LayerInit) => {
+  switch (layout) {
+    case 'stereo':
+      return [viewPixelWidth, viewPixelHeight, 2] as const;
+    case 'stereo-left-right':
+      return [viewPixelWidth * 2, viewPixelHeight, 1] as const;
+    case 'stereo-top-bottom':
+      return [viewPixelWidth, viewPixelHeight * 2, 1] as const;
+    case 'default':
+      throw new TypeError(
+        'The "default" layout is not valid for layers other than projection layers.',
+      );
+    default:
+      return [viewPixelWidth, viewPixelHeight, 1] as const;
+  }
+};
+
+const copyTransform = (transform: XRRigidTransform | null | undefined) => {
+  if (transform === null || transform === undefined) {
+    return new XRRigidTransform();
+  }
+  if (!(transform instanceof XRRigidTransform)) {
+    throw new TypeError('A layer transform must be an XRRigidTransform.');
+  }
+  return new XRRigidTransform(transform.position, transform.orientation);
+};
+
 export class XRGPUBinding {
   [P_GPU_BINDING]: {
     session: XRSession;
@@ -189,19 +395,15 @@ export class XRGPUBinding {
 
   constructor(session: XRSession, device: WebGPUDevice) {
     if (session[P_SESSION].ended) {
-      throw new DOMException(
-        'XRSession has already ended.',
-        'InvalidStateError',
-      );
+      throw invalidState('XRSession has already ended.');
     }
     if (!session[P_SESSION].hasWebGPU) {
-      throw new DOMException(
+      throw invalidState(
         "XRGPUBinding requires an immersive session with the 'webgpu' feature.",
-        'InvalidStateError',
       );
     }
     if (lostDevices.has(device)) {
-      throw new DOMException('GPUDevice is lost.', 'InvalidStateError');
+      throw invalidState('GPUDevice is lost.');
     }
     device.lost?.then(() => lostDevices.add(device));
     this[P_GPU_BINDING] = { session, device, depthTextures: new WeakMap() };
@@ -227,13 +429,10 @@ export class XRGPUBinding {
     }
     const { session, device } = this[P_GPU_BINDING];
     if (session[P_SESSION].ended) {
-      throw new DOMException(
-        'XRSession has already ended.',
-        'InvalidStateError',
-      );
+      throw invalidState('XRSession has already ended.');
     }
     if (lostDevices.has(device)) {
-      throw new DOMException('GPUDevice is lost.', 'InvalidStateError');
+      throw invalidState('GPUDevice is lost.');
     }
     const {
       colorFormat,
@@ -242,46 +441,14 @@ export class XRGPUBinding {
       scaleFactor = 1.0,
     } = init;
     if (!COLOR_FORMATS.includes(colorFormat)) {
-      throw new DOMException(
-        `Unsupported colorFormat '${colorFormat}'.`,
-        'NotSupportedError',
-      );
+      throw notSupported(`Unsupported colorFormat '${colorFormat}'.`);
     }
     if (
-      depthStencilFormat !== undefined &&
+      depthStencilFormat != null &&
       !DEPTH_STENCIL_FORMATS.includes(depthStencilFormat)
     ) {
-      throw new DOMException(
+      throw notSupported(
         `Unsupported depthStencilFormat '${depthStencilFormat}'.`,
-        'NotSupportedError',
-      );
-    }
-    // createTexture() reports validation errors asynchronously, so reject the
-    // combinations it would refuse up front.
-    if (
-      depthStencilFormat === 'depth32float-stencil8' &&
-      !device.features.has('depth32float-stencil8')
-    ) {
-      throw new DOMException(
-        "depth32float-stencil8 requires the 'depth32float-stencil8' device feature.",
-        'NotSupportedError',
-      );
-    }
-    if (textureUsage & ~KNOWN_TEXTURE_USAGE) {
-      throw new DOMException(
-        `Unsupported textureUsage ${textureUsage}.`,
-        'NotSupportedError',
-      );
-    }
-    if (
-      textureUsage & STORAGE_BINDING &&
-      (depthStencilFormat !== undefined ||
-        (colorFormat === 'bgra8unorm' &&
-          !device.features.has('bgra8unorm-storage')))
-    ) {
-      throw new DOMException(
-        'STORAGE_BINDING is not supported for these layer formats.',
-        'NotSupportedError',
       );
     }
 
@@ -299,77 +466,355 @@ export class XRGPUBinding {
       width = Math.max(1, Math.floor(width * fit));
       height = Math.max(1, Math.floor(height * fit));
     }
-
-    // IWER composites from and clears these textures itself, so they always
-    // need RENDER_ATTACHMENT and TEXTURE_BINDING.
-    const createTexture = (format: WebGPUTextureFormat, label: string) =>
-      device.createTexture({
-        label,
-        size: [width, height, VIEW_COUNT],
-        format,
-        usage: textureUsage | RENDER_ATTACHMENT | TEXTURE_BINDING,
-        dimension: '2d',
-        mipLevelCount: 1,
-        sampleCount: 1,
-      });
-    const colorTexture = createTexture(colorFormat, 'XRProjectionLayer color');
-    const depthStencilTexture = depthStencilFormat
-      ? createTexture(depthStencilFormat, 'XRProjectionLayer depth/stencil')
-      : null;
-    if (depthStencilTexture) {
-      // New textures are zero-filled, but the layer's depth must start at 1.0
-      // like after the per-frame clears. Submitted before any app GPU work.
-      const encoder = device.createCommandEncoder({
-        label: 'IWER layer initial clear',
-      });
-      clearArrayLayers(encoder, colorTexture, depthStencilTexture);
-      device.queue.submit([encoder.finish()]);
-    }
+    const usage = toUnsignedLong(textureUsage);
+    const color = createDescriptor(
+      device,
+      'XRProjectionLayer color',
+      width,
+      height,
+      VIEW_COUNT,
+      1,
+      colorFormat,
+      usage,
+    );
+    const depthStencil =
+      depthStencilFormat != null
+        ? createDescriptor(
+            device,
+            'XRProjectionLayer depth/stencil',
+            width,
+            height,
+            VIEW_COUNT,
+            1,
+            depthStencilFormat,
+            usage,
+          )
+        : null;
     return new XRProjectionLayer(
       session,
-      device,
-      colorTexture,
-      depthStencilTexture,
+      new GPULayerTextures(device, { color, depthStencil, motionVector: null }),
+      true,
+    );
+  }
+
+  createQuadLayer(init: XRGPUQuadLayerInit): XRQuadLayer {
+    const layerInit = readLayerInit(init);
+    const transform = copyTransform(init.transform);
+    const width = toFloat(init.width, 1.0);
+    const height = toFloat(init.height, 1.0);
+    this.validateLayerCreation();
+    const { session, compositionInit } = this.initializeLayer(
+      layerInit,
+      layoutSize(layerInit),
+      'XRQuadLayer',
+    );
+    return new XRQuadLayer(session, compositionInit, {
+      space: layerInit.space,
+      onredraw: null,
+      transform,
+      width,
+      height,
+    });
+  }
+
+  createCylinderLayer(init: XRGPUCylinderLayerInit): XRCylinderLayer {
+    const layerInit = readLayerInit(init);
+    const transform = copyTransform(init.transform);
+    const radius = toFloat(init.radius, 2.0);
+    const centralAngle = toFloat(init.centralAngle, 0.78539);
+    const aspectRatio = toFloat(init.aspectRatio, 2.0);
+    this.validateLayerCreation();
+    const { session, compositionInit } = this.initializeLayer(
+      layerInit,
+      layoutSize(layerInit),
+      'XRCylinderLayer',
+    );
+    return new XRCylinderLayer(session, compositionInit, {
+      space: layerInit.space,
+      onredraw: null,
+      transform,
+      radius,
+      centralAngle,
+      aspectRatio,
+    });
+  }
+
+  createEquirectLayer(init: XRGPUEquirectLayerInit): XREquirectLayer {
+    const layerInit = readLayerInit(init);
+    const transform = copyTransform(init.transform);
+    const radius = toFloat(init.radius, 0);
+    const centralHorizontalAngle = toFloat(
+      init.centralHorizontalAngle,
+      6.28318,
+    );
+    const upperVerticalAngle = toFloat(init.upperVerticalAngle, 1.570795);
+    const lowerVerticalAngle = toFloat(init.lowerVerticalAngle, -1.570795);
+    this.validateLayerCreation();
+    checkLayerSpace(this[P_GPU_BINDING].session, layerInit.space, true);
+    const { session, compositionInit } = this.initializeLayer(
+      layerInit,
+      layoutSize(layerInit),
+      'XREquirectLayer',
+    );
+    return new XREquirectLayer(session, compositionInit, {
+      space: layerInit.space,
+      onredraw: null,
+      transform,
+      radius,
+      centralHorizontalAngle,
+      upperVerticalAngle,
+      lowerVerticalAngle,
+    });
+  }
+
+  createCubeLayer(init: XRGPUCubeLayerInit): XRCubeLayer {
+    const layerInit = readLayerInit(init);
+    const orientation = init.orientation ?? null;
+    if (orientation !== null && !(orientation instanceof DOMPointReadOnly)) {
+      throw new TypeError(
+        'A cube layer orientation must be a DOMPointReadOnly.',
+      );
+    }
+    this.validateLayerCreation();
+    checkLayerSpace(this[P_GPU_BINDING].session, layerInit.space, true);
+    if (layerInit.layout !== 'mono' && layerInit.layout !== 'stereo') {
+      throw new TypeError(
+        'Cube layers must use the "mono" or "stereo" layout.',
+      );
+    }
+    if (layerInit.viewPixelWidth !== layerInit.viewPixelHeight) {
+      throw new TypeError('Cube layer faces must be square.');
+    }
+    const { session, compositionInit } = this.initializeLayer(
+      layerInit,
+      [
+        layerInit.viewPixelWidth,
+        layerInit.viewPixelHeight,
+        layerInit.layout === 'mono' ? 6 : 12,
+      ],
+      'XRCubeLayer',
+      'cube',
+    );
+    return new XRCubeLayer(session, compositionInit, {
+      space: layerInit.space,
+      onredraw: null,
+      orientation: DOMPointReadOnly.fromPoint(
+        orientation ?? { x: 0, y: 0, z: 0, w: 1 },
+      ),
+    });
+  }
+
+  getSubImage(
+    layer: XRCompositionLayer,
+    frame: XRFrame,
+    eye: XREye = XREye.None,
+  ): XRGPUSubImage {
+    if (![XREye.None, XREye.Left, XREye.Right].includes(eye)) {
+      throw new TypeError(`Unknown eye '${eye}'.`);
+    }
+    if (
+      !this[P_GPU_BINDING].session[P_SESSION].enabledFeatures.includes('layers')
+    ) {
+      throw notSupported("getSubImage requires the 'layers' feature.");
+    }
+    this.validateSubImage(layer, frame);
+    if (layer instanceof XRProjectionLayer) {
+      throw new TypeError('Use getViewSubImage for projection layers.');
+    }
+    const eyeIndex = eye === XREye.Right ? 1 : 0;
+    const { layout, textures } = layer[P_COMPOSITION_LAYER];
+    if (layout !== 'mono' && eye === XREye.None) {
+      throw new TypeError(`A "${layout}" layer needs an eye.`);
+    }
+    const current = textures.acquire(frame);
+    const [width, height] = textures.descriptors.color.size as number[];
+    let viewport = new XRViewport(0, 0, width, height);
+    if (layout === 'stereo-left-right') {
+      viewport = new XRViewport((width / 2) * eyeIndex, 0, width / 2, height);
+    } else if (layout === 'stereo-top-bottom') {
+      viewport = new XRViewport(0, (height / 2) * eyeIndex, width, height / 2);
+    }
+    const arrayLayerIndex =
+      layout !== 'stereo'
+        ? 0
+        : layer instanceof XRCubeLayer
+          ? eyeIndex * 6
+          : eyeIndex;
+    return new XRGPUSubImage(
+      viewport,
+      current.color,
+      current.depthStencil,
+      null,
+      arrayLayerIndex,
     );
   }
 
   getViewSubImage(layer: XRProjectionLayer, view: XRView): XRGPUSubImage {
-    const { session, device } = this[P_GPU_BINDING];
+    if (!(layer instanceof XRProjectionLayer)) {
+      throw new TypeError('getViewSubImage needs an XRProjectionLayer.');
+    }
+    const { session } = this[P_GPU_BINDING];
     if (view[P_VIEW].session !== session) {
-      throw new DOMException(
-        "View's session differs from the binding's session.",
-        'InvalidStateError',
-      );
+      throw invalidState("View's session differs from the binding's session.");
+    }
+    // IWER's views don't keep their frame; they're only valid in the active one.
+    const frame = session[P_SESSION].activeFrame;
+    this.validateSubImage(layer, frame);
+    const { textures } = layer[P_COMPOSITION_LAYER];
+    const current = textures.acquire(frame!);
+    const index = arrayLayer(view[P_VIEW].eye);
+    // Like XRWebGLLayer.getViewport: a requested scale takes effect on the
+    // first subimage of the view in a frame, then holds for that frame.
+    const viewportScale = session[P_SESSION].viewportScales.get(
+      view[P_VIEW].eye,
+    )!;
+    if (
+      viewportScale.modifiable &&
+      viewportScale.requested !== viewportScale.current
+    ) {
+      viewportScale.current = viewportScale.requested;
+    }
+    viewportScale.modifiable = false;
+    const scale = viewportScale.current;
+    layer[P_PROJECTION_LAYER].frameViewportScales[index] = scale;
+    const [width, height] = textures.descriptors.color.size as number[];
+    return new XRGPUSubImage(
+      new XRViewport(
+        0,
+        0,
+        Math.max(1, Math.floor(width * scale)),
+        Math.max(1, Math.floor(height * scale)),
+      ),
+      current.color,
+      current.depthStencil,
+      current.motionVector,
+      index,
+    );
+  }
+
+  // "Validate WebGPU layer creation".
+  private validateLayerCreation(): void {
+    const { session, device } = this[P_GPU_BINDING];
+    if (session[P_SESSION].ended) {
+      throw invalidState('XRSession has already ended.');
+    }
+    if (lostDevices.has(device)) {
+      throw invalidState('GPUDevice is lost.');
+    }
+    if (!session[P_SESSION].enabledFeatures.includes('layers')) {
+      throw notSupported("Creating this layer requires the 'layers' feature.");
+    }
+  }
+
+  // "Initialize a WebGPU-backed layer", up to its texture descriptors.
+  private initializeLayer(
+    init: LayerInit,
+    [width, height, arrayLayerCount]: readonly [number, number, number],
+    label: string,
+    viewDimension: 'cube' | '2d-array' = '2d-array',
+  ) {
+    const { session, device } = this[P_GPU_BINDING];
+    if (width === 0 || height === 0) {
+      throw new TypeError('viewPixelWidth and viewPixelHeight must not be 0.');
+    }
+    if (!COLOR_FORMATS.includes(init.colorFormat)) {
+      throw notSupported(`Unsupported colorFormat '${init.colorFormat}'.`);
     }
     if (
-      !(layer instanceof XRProjectionLayer) ||
-      layer[P_COMPOSITION_LAYER].destroyed ||
-      layer[P_COMPOSITION_LAYER].session !== session ||
-      layer[P_PROJECTION_LAYER].device !== device ||
-      lostDevices.has(device)
+      init.depthStencilFormat !== undefined &&
+      !DEPTH_STENCIL_FORMATS.includes(init.depthStencilFormat)
     ) {
-      throw new DOMException(
-        'Layer is not a valid WebGPU layer for this binding.',
-        'InvalidStateError',
+      throw notSupported(
+        `Unsupported depthStencilFormat '${init.depthStencilFormat}'.`,
       );
     }
-    if (session[P_SESSION].activeFrame === null) {
-      throw new DOMException(
-        'getViewSubImage must be called during an XRFrame callback.',
-        'InvalidStateError',
+    if (init.mipLevels < 1) {
+      throw invalidState('mipLevels must be at least 1.');
+    }
+    const mipLevelCount = Math.min(
+      init.mipLevels,
+      Math.floor(Math.log2(Math.max(width, height))) + 1,
+    );
+    const color = createDescriptor(
+      device,
+      `${label} color`,
+      width,
+      height,
+      arrayLayerCount,
+      mipLevelCount,
+      init.colorFormat,
+      init.textureUsage,
+    );
+    const depthStencil =
+      init.depthStencilFormat !== undefined
+        ? createDescriptor(
+            device,
+            `${label} depth/stencil`,
+            width,
+            height,
+            arrayLayerCount,
+            mipLevelCount,
+            init.depthStencilFormat,
+            init.textureUsage,
+          )
+        : null;
+    checkLayerSpace(session, init.space, false);
+    return {
+      session,
+      compositionInit: {
+        layout: init.layout,
+        isStatic: init.isStatic,
+        mipLevels: mipLevelCount,
+        textures: new GPULayerTextures(
+          device,
+          { color, depthStencil, motionVector: null },
+          false,
+          viewDimension,
+        ),
+      },
+    };
+  }
+
+  // "Validate WebGPU subimage creation".
+  private validateSubImage(
+    layer: XRCompositionLayer,
+    frame: XRFrame | null | undefined,
+  ): asserts frame is XRFrame {
+    const { session, device } = this[P_GPU_BINDING];
+    if (!(layer instanceof XRCompositionLayer)) {
+      throw invalidState('The layer is not a WebGPU layer.');
+    }
+    const state = layer[P_COMPOSITION_LAYER];
+    if (state.destroyed) {
+      throw invalidState('The layer has been destroyed.');
+    }
+    if (state.session !== session) {
+      throw invalidState("The layer's session differs from the binding's.");
+    }
+    if (state.textures.device !== device) {
+      throw invalidState('The layer was created with a different GPUDevice.');
+    }
+    if (lostDevices.has(device)) {
+      throw invalidState('GPUDevice is lost.');
+    }
+    if (!frame || frame[P_FRAME].session !== session) {
+      throw invalidState('The frame belongs to a different XRSession.');
+    }
+    if (!frame[P_FRAME].active || !frame[P_FRAME].animationFrame) {
+      throw invalidState(
+        'Subimages are only available during an XRFrame callback.',
       );
     }
     if (!session[P_SESSION].renderState.layers?.includes(layer)) {
-      throw new TypeError("Layer is not in the session's renderState.layers.");
+      throw new TypeError(
+        "The layer is not in the session's renderState.layers.",
+      );
     }
-
-    const { colorTexture, depthStencilTexture } = layer[P_PROJECTION_LAYER];
-    return new XRGPUSubImage(
-      new XRViewport(0, 0, colorTexture.width, colorTexture.height),
-      colorTexture,
-      depthStencilTexture,
-      arrayLayer(view[P_VIEW].eye),
-    );
+    if (state.isStatic && !state.needsRedraw) {
+      throw invalidState(
+        'A static layer can only be drawn while needsRedraw is true.',
+      );
+    }
   }
 
   getDepthInformation(view: XRView): XRGPUDepthInformation | null {

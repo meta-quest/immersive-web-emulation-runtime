@@ -51,13 +51,18 @@ import {
   XRSessionEventHandler,
 } from '../events/XRSessionEvent.js';
 import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
+import { recordSpaceSession } from '../spaces/spaceSessions.js';
 
 import { XREye } from '../views/XRView.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSourceEventHandler } from '../events/XRInputSourceEvent.js';
 import { XRGPUPresenter } from '../layers/XRGPUPresenter.js';
-import type { XRProjectionLayer } from '../layers/XRProjectionLayer.js';
+import {
+  XRCompositionLayer,
+  XRProjectionLayer,
+} from '../layers/XRProjectionLayer.js';
+import { XRLayer, XRWebGLLayer } from '../layers/XRWebGLLayer.js';
 import { mat4 } from 'gl-matrix';
 
 export type XRVisibilityState = 'visible' | 'visible-blurred' | 'hidden';
@@ -69,6 +74,9 @@ export type XRSessionInit = {
   optionalFeatures?: WebXRFeature[];
   depthSensing?: XRDepthStateInit;
 };
+
+// The most layers a render state can hold (XRSession.maxRenderLayers).
+const MAX_RENDER_LAYERS = 16;
 
 // Maps clip-space z from WebGPU's [0, 1] depth range to WebGL's [-1, 1].
 const WEBGPU_TO_WEBGL_DEPTH = mat4.create();
@@ -131,9 +139,16 @@ export class XRSession extends EventTarget {
     renderState: XRRenderState;
     pendingRenderState: XRRenderState | null;
     // WebGPU sessions render into a projection layer instead of a baseLayer
-    getProjectionLayer: () => XRProjectionLayer | null;
-    projectionLayers: Set<XRProjectionLayer>;
+    // Every live layer an XRGPUBinding created for this session.
+    gpuLayers: Set<XRCompositionLayer>;
+    // Each view's requested and current viewport scale. The current scale
+    // can change once per frame, when a subimage of the view is first asked for.
+    viewportScales: Map<
+      XREye,
+      { requested: number; current: number; modifiable: boolean }
+    >;
     gpuPresenter: XRGPUPresenter | null;
+    releaseLayers: (frame: XRFrame) => void;
     // framerate
     nominalFrameRate: number;
     // reference spaces
@@ -207,12 +222,52 @@ export class XRSession extends EventTarget {
         enabledFeatures.includes('webgpu') ? { layers: [] } : {},
       ),
       pendingRenderState: null,
-      // updateRenderState only accepts XRProjectionLayers in WebGPU sessions
-      getProjectionLayer: () =>
-        (this[P_SESSION].renderState.layers?.[0] ??
-          null) as XRProjectionLayer | null,
-      projectionLayers: new Set(),
+      gpuLayers: new Set(),
+      viewportScales: new Map(
+        [XREye.None, XREye.Left, XREye.Right].map((eye) => [
+          eye,
+          { requested: 1, current: 1, modifiable: true },
+        ]),
+      ),
       gpuPresenter: null,
+      // "Release the WebGPU textures" of every layer drawn in this frame.
+      releaseLayers: (frame: XRFrame) => {
+        try {
+          const encoders = new Map<GPUDevice, GPUCommandEncoder>();
+          const released: XRCompositionLayer[] = [];
+          for (const layer of this[P_SESSION].gpuLayers) {
+            const { textures } = layer[P_COMPOSITION_LAYER];
+            if (textures.current?.frame !== frame) {
+              continue;
+            }
+            const device = textures.device as GPUDevice;
+            let encoder = encoders.get(device);
+            if (!encoder) {
+              encoder = device.createCommandEncoder({
+                label: 'IWER layer release',
+              });
+              encoders.set(device, encoder);
+            }
+            textures.release(frame, encoder);
+            released.push(layer);
+          }
+          for (const [device, encoder] of encoders) {
+            device.queue.submit([encoder.finish()]);
+          }
+          for (const layer of released) {
+            const state = layer[P_COMPOSITION_LAYER];
+            state.textures.expire();
+            state.needsRedraw = false;
+            if (layer instanceof XRProjectionLayer) {
+              const projection = layer[P_PROJECTION_LAYER];
+              projection.viewportScales = projection.frameViewportScales;
+              projection.frameViewportScales = [1, 1];
+            }
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      },
       enabledFeatures: enabledFeatures,
       hasAnchors: enabledFeatures.includes('anchors'),
       hasPlanes: enabledFeatures.includes('plane-detection'),
@@ -266,28 +321,33 @@ export class XRSession extends EventTarget {
           this[P_SESSION].device[P_DEVICE].onBaseLayerSet(
             this[P_SESSION].renderState.baseLayer,
           );
-          if (this[P_SESSION].getProjectionLayer()) {
-            if (!this[P_SESSION].gpuPresenter) {
-              this[P_SESSION].gpuPresenter = new XRGPUPresenter(
-                this[P_SESSION].device,
-              );
-            }
+          if (this[P_SESSION].renderState.layers?.length) {
+            this[P_SESSION].gpuPresenter ??= new XRGPUPresenter(
+              this[P_SESSION].device,
+            );
             this[P_SESSION].gpuPresenter.attach();
           }
         }
 
         const baseLayer = this[P_SESSION].renderState.baseLayer;
-        const projectionLayer = this[P_SESSION].getProjectionLayer();
-        this[P_SESSION].gpuPresenter?.setVisible(
-          projectionLayer !== null &&
-            !projectionLayer[P_COMPOSITION_LAYER].destroyed,
+        // "Check the layers state": frames run while a layer can be shown.
+        const layers = (this[P_SESSION].renderState.layers ?? []).filter(
+          (layer) =>
+            !(layer instanceof XRCompositionLayer) ||
+            !layer[P_COMPOSITION_LAYER].destroyed,
         );
-        if (baseLayer === null && projectionLayer === null) {
+        this[P_SESSION].gpuPresenter?.setVisible(layers.length > 0);
+        if (baseLayer === null && layers.length === 0) {
           return;
         }
-        if (projectionLayer) {
-          const projection = projectionLayer[P_PROJECTION_LAYER];
-          projection.frameFixedFoveation = projection.fixedFoveation;
+        for (const viewportScale of this[P_SESSION].viewportScales.values()) {
+          viewportScale.modifiable = true;
+        }
+        for (const layer of layers) {
+          if (layer instanceof XRProjectionLayer) {
+            const projection = layer[P_PROJECTION_LAYER];
+            projection.frameFixedFoveation = projection.fixedFoveation;
+          }
         }
         const context = baseLayer?.context;
 
@@ -447,8 +507,11 @@ export class XRSession extends EventTarget {
         }
         this[P_SESSION].currentFrameCallbacks = null;
 
-        if (projectionLayer && !this[P_SESSION].ended) {
-          this[P_SESSION].gpuPresenter?.present(projectionLayer);
+        // Hand the layers drawn in this frame to the compositor, then show
+        // every layer in the render state.
+        this[P_SESSION].releaseLayers(frame);
+        if (!this[P_SESSION].ended) {
+          this[P_SESSION].gpuPresenter?.present(this, layers);
         }
 
         // WebGPU depth textures are only valid during their frame.
@@ -889,6 +952,10 @@ export class XRSession extends EventTarget {
     return this[P_SESSION].device[P_DEVICE].interactionMode;
   }
 
+  get maxRenderLayers(): number {
+    return MAX_RENDER_LAYERS;
+  }
+
   get depthUsage(): XRDepthUsage {
     return this[P_SESSION].depthSensingUsage;
   }
@@ -906,10 +973,15 @@ export class XRSession extends EventTarget {
     }
 
     if (this[P_SESSION].hasWebGPU && state.baseLayer) {
-      throw new DOMException(
-        'WebGPU sessions must use layers instead of a baseLayer',
-        'InvalidStateError',
-      );
+      throw state.layers
+        ? new DOMException(
+            'A render state cannot have both a baseLayer and layers',
+            'NotSupportedError',
+          )
+        : new DOMException(
+            'WebGPU sessions must use layers instead of a baseLayer',
+            'InvalidStateError',
+          );
     }
 
     if (state.baseLayer && state.baseLayer[P_WEBGL_LAYER].session !== this) {
@@ -930,33 +1002,47 @@ export class XRSession extends EventTarget {
     }
 
     if (this[P_SESSION].hasWebGPU && state.layers) {
-      if (state.layers.length > 1) {
+      // The WebXR Layers checks, in their order.
+      const layers = [...state.layers];
+      if (!layers.every((layer) => layer instanceof XRLayer)) {
+        throw new TypeError('renderState layers must be XRLayer objects');
+      }
+      if (
+        layers.some(
+          (layer) =>
+            layer instanceof XRCompositionLayer &&
+            layer[P_COMPOSITION_LAYER].destroyed,
+        )
+      ) {
+        throw new DOMException('Layer has been destroyed', 'InvalidStateError');
+      }
+      if (
+        layers.length > 1 &&
+        !this[P_SESSION].enabledFeatures.includes('layers')
+      ) {
         throw new DOMException(
           "Multiple layers require the 'layers' feature",
           'NotSupportedError',
         );
       }
-      for (const layer of state.layers) {
-        if (!(P_PROJECTION_LAYER in layer)) {
-          throw new DOMException(
-            'WebGPU sessions only support projection layers from XRGPUBinding',
-            'NotSupportedError',
-          );
-        }
-        const { session, destroyed } = (layer as XRProjectionLayer)[
-          P_COMPOSITION_LAYER
-        ];
+      if (layers.length > MAX_RENDER_LAYERS) {
+        throw new DOMException(
+          `At most ${MAX_RENDER_LAYERS} layers can be shown at once`,
+          'NotSupportedError',
+        );
+      }
+      if (new Set(layers).size !== layers.length) {
+        throw new TypeError('renderState layers must not repeat a layer');
+      }
+      for (const layer of layers) {
+        const session =
+          layer instanceof XRCompositionLayer
+            ? layer[P_COMPOSITION_LAYER].session
+            : layer instanceof XRWebGLLayer
+              ? layer[P_WEBGL_LAYER].session
+              : this;
         if (session !== this) {
-          throw new DOMException(
-            'Layer was created by a different XRSession',
-            'InvalidStateError',
-          );
-        }
-        if (destroyed) {
-          throw new DOMException(
-            'Layer has been destroyed',
-            'InvalidStateError',
-          );
+          throw new TypeError('Layer was created by a different XRSession');
         }
       }
     }
@@ -1066,6 +1152,7 @@ export class XRSession extends EventTarget {
           break;
       }
       this[P_SESSION].referenceSpaces.push(referenceSpace);
+      recordSpaceSession(referenceSpace, this);
       resolve(referenceSpace);
     });
   }
@@ -1143,10 +1230,10 @@ export class XRSession extends EventTarget {
           depthContext?.deleteTexture(this[P_SESSION].depthTexture);
           this[P_SESSION].depthTexture = null;
         }
-        // Stop presenting and release every WebGPU projection layer's textures.
+        // Stop presenting and free every WebGPU layer's textures.
         this[P_SESSION].gpuPresenter?.detach();
         this[P_SESSION].gpuPresenter = null;
-        for (const layer of [...this[P_SESSION].projectionLayers]) {
+        for (const layer of [...this[P_SESSION].gpuLayers]) {
           layer.destroy();
         }
 

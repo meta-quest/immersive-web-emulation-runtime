@@ -38,3 +38,4 @@ export const P_VIEWPORT = Symbol('@iwer/xr-viewport');
 export const P_RAY = Symbol('@iwer/xr-ray');
 export const P_DEPTH_INFO = Symbol('@iwer/xr-depth-info');
 export const P_HIT_TEST = Symbol('@iwer/xr-hit-test');
+export const P_SPACE_LAYER = Symbol('@iwer/xr-space-layer');
