@@ -592,7 +592,17 @@ export class XRGPUPresenter {
       this.surfaces[index] = surface;
       const previous = this.surfaces[index - 1]?.canvas;
       if (previous?.parentElement) {
-        canvas.style.zIndex = previous.style.zIndex;
+        // Stacked over the first canvas, which the device mounts like an app
+        // canvas.
+        Object.assign(canvas.style, {
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: previous.style.zIndex,
+        });
         previous.after(canvas);
       }
     }

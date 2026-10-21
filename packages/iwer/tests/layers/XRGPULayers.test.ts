@@ -928,6 +928,18 @@ describe('WebGPU composition layers', () => {
       ).toEqual([gpu.device, other.device, gpu.device]);
       expect(gpu.compositorPasses()).toHaveLength(2);
       expect(other.compositorPasses()).toHaveLength(1);
+      // The others cover the first, which the device mounts, in order.
+      for (const canvas of canvases.slice(1)) {
+        expect(canvas.style).toMatchObject({
+          position: 'absolute',
+          top: '0px',
+          left: '0px',
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: canvases[0].style.zIndex,
+        });
+      }
 
       // Back to one run: the extra canvases hide, and go when the session ends.
       session.updateRenderState({ layers: [first] });
