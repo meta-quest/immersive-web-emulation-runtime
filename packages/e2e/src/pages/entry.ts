@@ -24,6 +24,7 @@ import { registerXRRigidTransformTests } from '@suites/xr-rigid-transform.spec';
 import { registerXRPoseTests } from '@suites/xr-pose.spec';
 import { registerXRInputSourceTests } from '@suites/xr-input-source.spec';
 import { registerXRLayerTests } from '@suites/xr-layer.spec';
+import { registerXRGPUBindingTests } from '@suites/xr-gpu-binding.spec';
 import { registerXREventsTests } from '@suites/xr-events.spec';
 import { registerXRRayTests } from '@suites/xr-ray.spec';
 import { registerXRHandTrackingTests } from '@suites/xr-hand-tracking.spec';
@@ -51,6 +52,7 @@ function registerAll(harness: TestHarness) {
   registerXRPoseTests(harness);
   registerXRInputSourceTests(harness);
   registerXRLayerTests(harness);
+  registerXRGPUBindingTests(harness);
   registerXREventsTests(harness);
   registerXRRayTests(harness);
   registerXRHandTrackingTests(harness);
