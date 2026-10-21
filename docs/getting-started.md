@@ -89,12 +89,13 @@ IWER's WebGPU types are the standard ones on TypeScript 6. On TypeScript 5, add 
 
 A projection layer's `fixedFoveation` (0 to 1, default 0) lowers the resolution away from the centre of each view when IWER draws it, like fixed foveated rendering on a headset.
 
+With `installRuntime({ polyfillLayers: true })`, the WebXR Layers polyfill keeps handling WebGL sessions, and WebGPU sessions bypass it.
+
 Limitations:
 
 - A session shows a single projection layer. The `'layers'` feature and quad, cylinder, equirect and cube layers are not emulated.
 - Space warp isn't emulated, so `deltaPose` is `null`.
 - WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`. For depth sensing, use `XRFrame.getDepthInformation()` for CPU-optimized depth or `XRGPUBinding.getDepthInformation()` for GPU-optimized depth, a texture of linear depth with one array layer per view: `r32float` meters, or `r16uint` millimeters for `'unsigned-short'`. The session uses the first usage and data format in `depthSensing` that it supports.
-- The WebXR Layers polyfill (`installRuntime({ polyfillLayers: true })`) only supports WebGL, so leave it off for WebGPU apps.
 
 ## Understanding IWER's Global Reference Space
 

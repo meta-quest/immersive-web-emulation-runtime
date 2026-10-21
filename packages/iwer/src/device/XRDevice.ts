@@ -64,7 +64,10 @@ import { XRReferenceSpaceEvent } from '../events/XRReferenceSpaceEvent.js';
 import { XRRenderState } from '../session/XRRenderState.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSessionEvent } from '../events/XRSessionEvent.js';
-import { XRSystem } from '../initialization/XRSystem.js';
+import {
+  XRSystem,
+  bypassLayersPolyfillForWebGPU,
+} from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
 import { XRGazeInput, supportsGazeTracking } from './XRGazeInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
@@ -270,8 +273,6 @@ export class XRDevice {
       object,
       { existed: boolean; descriptor: PropertyDescriptor | undefined }
     > | null;
-    // WebGPU layers aren't offered alongside the WebGL-only layers polyfill.
-    polyfillLayers: boolean;
 
     matrix: mat4;
     globalSpace: GlobalSpace;
@@ -426,7 +427,6 @@ export class XRDevice {
       previousUserAgentDescriptor: null,
       previousGlobals: null,
       previousMakeXRCompatible: null,
-      polyfillLayers: false,
 
       matrix: mat4.create(),
       globalSpace,
@@ -852,15 +852,15 @@ export class XRDevice {
 
     if (polyfillLayers) {
       new WebXRLayerPolyfill();
+      bypassLayersPolyfillForWebGPU(this[P_DEVICE].xrSystem!);
     } else {
       setGlobal('XRMediaBinding', undefined);
-      setGlobal('XRSubImage', XRSubImage);
-      setGlobal('XRCompositionLayer', XRCompositionLayer);
-      setGlobal('XRProjectionLayer', XRProjectionLayer);
-      setGlobal('XRGPUBinding', XRGPUBinding);
-      setGlobal('XRGPUSubImage', XRGPUSubImage);
     }
-    this[P_DEVICE].polyfillLayers = Boolean(polyfillLayers);
+    setGlobal('XRSubImage', XRSubImage);
+    setGlobal('XRCompositionLayer', XRCompositionLayer);
+    setGlobal('XRProjectionLayer', XRProjectionLayer);
+    setGlobal('XRGPUBinding', XRGPUBinding);
+    setGlobal('XRGPUSubImage', XRGPUSubImage);
     setGlobal('XRWebGLBinding', XRWebGLBinding);
   }
 
@@ -884,7 +884,6 @@ export class XRDevice {
         }
       });
     }
-    this[P_DEVICE].polyfillLayers = false;
 
     // Restore navigator.xr.
     const navXrDescriptor = this[P_DEVICE].previousNavigatorXRDescriptor;

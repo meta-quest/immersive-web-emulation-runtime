@@ -279,15 +279,6 @@ describe('XRGPUBinding', () => {
       });
     });
 
-    test('is not granted alongside the WebGL layers polyfill', async () => {
-      xrDevice[P_DEVICE].polyfillLayers = true;
-      const session = await xrSystem.requestSession('immersive-vr', {
-        optionalFeatures: ['webgpu'],
-      });
-      expect(session.enabledFeatures).not.toContain('webgpu');
-      expect(navigator.gpu.requestAdapter).not.toHaveBeenCalled();
-    });
-
     test('a newer WebGPU offer replaces the pending offer right away', async () => {
       Object.defineProperty(navigator, 'gpu', {
         value: {

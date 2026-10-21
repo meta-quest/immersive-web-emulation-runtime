@@ -12,7 +12,7 @@ import {
   XRSessionMode,
 } from '../session/XRSession.js';
 
-import { P_DEVICE, P_SYSTEM } from '../private.js';
+import { P_SESSION, P_SYSTEM } from '../private.js';
 import { findWebGPUDepthConfiguration } from '../depth/XRDepthInformation.js';
 import {
   isGazeTrackingFeature,
@@ -96,12 +96,17 @@ const requestsWebGPU = (mode: XRSessionMode, options: XRSessionInit) =>
     .map(String)
     .includes('webgpu');
 
-// WebGPU layers aren't offered alongside the WebGL-only layers polyfill.
-const canRequestWebGPU = (
-  device: XRDevice,
-  mode: XRSessionMode,
-  options: XRSessionInit,
-) => requestsWebGPU(mode, options) && !device[P_DEVICE].polyfillLayers;
+// IWER's own XRSession members, captured before the WebGL layers polyfill can
+// patch them.
+const sessionMembers = (
+  ['renderState', 'updateRenderState', 'requestAnimationFrame'] as const
+).map(
+  (name) =>
+    [
+      name,
+      Object.getOwnPropertyDescriptor(XRSession.prototype, name)!,
+    ] as const,
+);
 
 export class XRSystem extends EventTarget {
   [P_SYSTEM]: {
@@ -226,11 +231,7 @@ export class XRSystem extends EventTarget {
             return;
           }
 
-          const webgpuAvailable = canRequestWebGPU(
-            this[P_SYSTEM].device,
-            mode,
-            options,
-          )
+          const webgpuAvailable = requestsWebGPU(mode, options)
             ? await probeWebGPU()
             : false;
 
@@ -282,3 +283,52 @@ export class XRSystem extends EventTarget {
     });
   }
 }
+
+/**
+ * The WebXR Layers polyfill only supports WebGL, but it wraps requestSession
+ * and patches XRSession for every session. Routes WebGPU sessions around it:
+ * they're requested without the polyfill's wrapper (which would also drop a
+ * required 'layers' feature) and use IWER's own render state and frame loop.
+ */
+export const bypassLayersPolyfillForWebGPU = (xrSystem: XRSystem) => {
+  const prototype = XRSession.prototype;
+  for (const [name, own] of sessionMembers) {
+    const polyfilled = Object.getOwnPropertyDescriptor(prototype, name);
+    if (
+      !polyfilled ||
+      (polyfilled.get === own.get && polyfilled.value === own.value)
+    ) {
+      continue;
+    }
+    const member = (session: XRSession) =>
+      session[P_SESSION]?.hasWebGPU ? own : polyfilled;
+    Object.defineProperty(
+      prototype,
+      name,
+      own.get
+        ? {
+            configurable: true,
+            get(this: XRSession) {
+              return member(this).get!.call(this);
+            },
+          }
+        : {
+            configurable: true,
+            writable: true,
+            value(this: XRSession, ...args: unknown[]) {
+              return member(this).value.apply(this, args);
+            },
+          },
+    );
+  }
+
+  // The polyfill made requestSession writable but not configurable.
+  const polyfilledRequestSession = xrSystem.requestSession;
+  xrSystem.requestSession = async (
+    mode: XRSessionMode,
+    options: XRSessionInit = {},
+  ) =>
+    requestsWebGPU(mode, options) && (await probeWebGPU())
+      ? XRSystem.prototype.requestSession.call(xrSystem, mode, options)
+      : polyfilledRequestSession.call(xrSystem, mode, options);
+};
