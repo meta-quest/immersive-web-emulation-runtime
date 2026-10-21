@@ -71,6 +71,10 @@ export default defineConfig({
             text: 'XPlat Controls',
             link: '/xplat',
           },
+          {
+            text: 'Scripting Hand Interactions',
+            link: '/scripting-hands',
+          },
         ],
       },
       {

@@ -16,6 +16,7 @@ export {
   KNOWN_METHODS,
   SCREENSHOT_TOOL,
   CATALOG_VERSION,
+  inputSchemaOf,
   type ToolDef,
 } from './contract.js';
 export {

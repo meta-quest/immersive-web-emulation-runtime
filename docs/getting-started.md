@@ -285,6 +285,8 @@ const pinchGestureJob = setInterval(() => {
 }, 25); // Update interval in milliseconds.
 ```
 
+The pinch closes the thumb and index onto each other, relative to the palm; the wrist, the grip and the other fingers keep the pose. The hand selects when the pinch reaches 0.9 and lets go at 0.7. To script whole interactions (a fingertip on a button, timed pinches, pose fades) through remote control, see [Scripting Hand Interactions](./scripting-hands.md).
+
 ## Platform Features
 
 Beyond the fundamental emulation capabilities for XR devices, IWER incorporates several platform features to simulate system actions that occur outside the direct control of WebXR experiences or the browser. These scenarios, often overlooked during development, can lead to unexpected behavior in WebXR applications. Testing with these platform features is crucial for ensuring robust handling of such system-initiated actions within your WebXR projects.

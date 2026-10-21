@@ -13,8 +13,10 @@ import { InputLayer } from '../lib/scene.js';
 function createLayerHarness() {
   const deferred = [];
   const immediate = [];
+  const syncs = [];
   const layer = Object.create(InputLayer.prototype);
   Object.assign(layer, {
+    syncFromDevice: () => syncs.push(layer.isInProgrammaticMode),
     gazeCommitActive: undefined,
     gazeCommitPendingRelease: undefined,
     gazePointerId: null,
@@ -35,7 +37,7 @@ function createLayerHarness() {
       },
     },
   });
-  return { deferred, immediate, layer };
+  return { deferred, immediate, layer, syncs };
 }
 
 test('queues a normal release until after the next frame-start boundary', async () => {
@@ -188,6 +190,21 @@ test('restores cursor gaze after temporary programmatic control', () => {
   assert.equal(layer.currentGazeMode, 'cursor');
   assert.equal(layer.xrDevice.gaze.quaternion, quaternion);
   assert.deepEqual(modes, ['head-locked', 'cursor']);
+});
+
+test('picks up the device pose when programmatic control ends, before going manual', () => {
+  const { layer, syncs } = createLayerHarness();
+  layer.gazeMode = 'off';
+  layer.setProgrammaticMode(false);
+  assert.deepEqual(syncs, []);
+  layer.setProgrammaticMode(true);
+  layer.setProgrammaticMode(true);
+  assert.deepEqual(syncs, []);
+  layer.setProgrammaticMode(false);
+  // Synced once, as manual mode starts (its frames write the handles back
+  // to the device).
+  assert.deepEqual(syncs, [false]);
+  assert.equal(layer.isInProgrammaticMode, false);
 });
 
 test('preserves remote gaze orientation when returning to head-locked manual mode', () => {

@@ -13,7 +13,7 @@ The `XRHandInput` class emulates hand input within WebXR environments. It suppor
 Specifies the current hand pose being emulated, such as `default`, `pinch`, `fist`, or other custom poses defined in the configuration.
 
 - **Type**: `string`
-- Allows dynamic update to the hand pose through a setter. Changing the `poseId` triggers an update in the hand's pose based on the configuration associated with the new pose ID, and clears any finger blends.
+- Allows dynamic update to the hand pose through a setter. Changing the `poseId` triggers an update in the hand's pose based on the configuration associated with the new pose ID, and clears any finger blends. It also ends a pose change in progress (`beginPoseTransition`): the hand snaps to the new pose.
 
 ### `poseIds`
 
@@ -29,9 +29,29 @@ Fingers currently taken from other poses on top of `poseId`, keyed by finger (`t
 - **Type**: `Partial<Record<XRHandFinger, { poseId: string; weight: number }>>`
 - **Readonly**
 
+### `poseTransitionProgress`
+
+How far a pose change begun with `beginPoseTransition` has got, from `0` to `1`, or `null` when no change is in progress. Setting it to `1` or more (or `null`) ends the change.
+
+- **Type**: `number | null`
+
+### `poseTransitionFrom`
+
+The pose a change in progress fades from (the pose set before it), or `null` when no change is in progress.
+
+- **Type**: `string | null`
+- **Readonly**
+
+### `pin`
+
+Where remote control holds the hand (see `setPin`), or `null`.
+
+- **Type**: `HandPin | null` (`{ anchor, target, wristRotation?, graspPinch? }`, GlobalSpace)
+- **Readonly**
+
 ### `pinchValue`
 
-Indicates the current level of the pinch gesture being emulated, with a range from `0` (no pinch) to `1` (full pinch). The hand selects when the pinch reaches `0.9` (gamepad button 0 `pressed`, `selectstart`) and lets go when it falls to `0.7` or below (`select`, then `selectend`); see `pinchThresholds` in [XRHandInputConfig](./config-interfaces.md#xrhandinputconfig).
+Indicates the current level of the pinch gesture being emulated, with a range from `0` (no pinch) to `1` (full pinch). The pinch closes the thumb and index onto each other, relative to the palm; the wrist, the grip and the other fingers keep the pose. The hand selects when the pinch reaches `0.9` (gamepad button 0 `pressed`, `selectstart`) and lets go when it falls to `0.7` or below (`select`, then `selectend`); see `pinchThresholds` in [XRHandInputConfig](./config-interfaces.md#xrhandinputconfig).
 
 - **Type**: `number`
 - **Readonly**
@@ -67,10 +87,55 @@ Provides access to the `XRInputSource` associated with this hand input, integrat
 
 ### `updateHandPose`
 
-Executes the pose update logic, adjusting the virtual hand's current pose based on the active `poseId` and `pinchValue`. This method facilitates the interpolation between different hand poses and pinch gestures for dynamic hand gesture emulation.
+Executes the pose update logic, adjusting the virtual hand's current pose based on the active `poseId`, finger blends, any pose change in progress and `pinchValue`, then re-applies the pin (`setPin`). Runs every frame.
 
 ```typescript
 updateHandPose(): void
+```
+
+### `beginPoseTransition`
+
+Starts a timed change to `poseId` (with optional finger blends): the hand fades from what it shows now, before pinch and mid-change included, as `poseTransitionProgress` goes from `0` to `1`. `poseId` and `fingerPoses` report the new pose right away. Joints blend relative to their parents along the shortest arc, as finger blends do. Returns `false` for an unknown pose. Remote control's `set_hand_pose` with a `duration` drives this.
+
+```typescript
+beginPoseTransition(poseId: string, fingers?: Partial<Record<XRHandFinger, FingerPoseBlend>>): boolean
+```
+
+### `setPin`
+
+Holds a point of the hand at a position from now on: after every shape update (pose, finger blends, pose change, pinch), the target ray moves so that `anchor` sits on `target`. With `wristRotation`, the target ray also turns so the wrist keeps that rotation. Applies right away; pass `null` to let go. Remote control's `anchor` parameter sets pins, and drops them when it lets go of the device.
+
+```typescript
+setPin(pin: HandPin | null): void
+```
+
+- `anchor`: **HandAnchor** - `target-ray`, `wrist`, `grip`, `grasp` (where the thumb and index tips meet in a full pinch), `index-tip`, `thumb-tip`, or any WebXR joint name.
+- `target`: **vec3** - GlobalSpace position.
+- `wristRotation`: **quat** - Optional GlobalSpace wrist rotation.
+- `graspPinch`: **number** - For `grasp`: the pinch value the point is taken at (default `1`).
+
+### `anchorOffset`
+
+An anchor's position in the target-ray frame for the hand as shown now. `grasp` is fixed for the displayed pose (it does not move with the pinch).
+
+```typescript
+anchorOffset(anchor: HandAnchor, out?: vec3, graspPinch?: number): vec3
+```
+
+### `wristRotation`
+
+The wrist's rotation in GlobalSpace for the hand as shown now.
+
+```typescript
+wristRotation(out?: quat): quat
+```
+
+### `handAxes`
+
+The hand's directions in the target-ray frame, from the displayed wrist: `fingers` (wrist −Z), `palm` (wrist −Y, the way the palm faces) and `thumb` (toward the thumb side, on either hand).
+
+```typescript
+handAxes(): { fingers: vec3; palm: vec3; thumb: vec3 }
 ```
 
 ### `setFingerPose`

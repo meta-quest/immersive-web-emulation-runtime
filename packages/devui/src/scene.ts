@@ -363,6 +363,10 @@ export class InputLayer {
     this.isInProgrammaticMode = enabled;
     if (!wasProgrammatic || enabled) return;
 
+    // Take over from where remote control left the device: a hand it holds
+    // by an anchor settles after the last state change the handles followed.
+    this.syncFromDevice();
+
     const gaze = this.xrDevice.gaze;
     const nextGazeMode: GazeMode = gaze?.connected
       ? this.preferredConnectedGazeMode

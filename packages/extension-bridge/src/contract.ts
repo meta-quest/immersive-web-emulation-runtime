@@ -14,7 +14,7 @@
 import { z, type ZodRawShape } from 'zod';
 
 /** Bumped when the catalog shape changes; surfaced in the version handshake. */
-export const CATALOG_VERSION = 2;
+export const CATALOG_VERSION = 3;
 
 // --- Reusable shapes -------------------------------------------------------
 
@@ -114,10 +114,12 @@ const HAND_POSE_GLOSSES = HAND_POSE_IDS.map(
 const fingerPose = z
   .union([
     z.string(),
-    z.object({
-      poseId: z.string(),
-      weight: z.number().min(0).max(1).optional(),
-    }),
+    z
+      .object({
+        poseId: z.string(),
+        weight: z.number().min(0).max(1).optional(),
+      })
+      .strict(),
   ])
   .describe(
     'A pose id, or {poseId, weight} where weight 0-1 blends from the base pose toward it.',
@@ -138,27 +140,86 @@ const vec3 = z
   .object({ x: z.number(), y: z.number(), z: z.number() })
   .describe('A 3D position in metres, XR-origin relative.');
 
-const quat = z.object({
-  x: z.number(),
-  y: z.number(),
-  z: z.number(),
-  w: z.number(),
-});
-const euler = z.object({
-  pitch: z.number().optional(),
-  yaw: z.number().optional(),
-  roll: z.number().optional(),
-});
+const quat = z
+  .object({
+    x: z.number(),
+    y: z.number(),
+    z: z.number(),
+    w: z.number(),
+  })
+  .strict();
+const euler = z
+  .object({
+    pitch: z.number().optional(),
+    yaw: z.number().optional(),
+    roll: z.number().optional(),
+  })
+  .strict();
 const orientation = z
   .union([quat, euler])
   .describe(
     'Orientation as a quaternion {x,y,z,w} or euler degrees {pitch,yaw,roll}.',
   );
 
-const inputState = z.object({
-  connected: z.boolean().optional(),
-  position: vec3.optional(),
-  orientation: orientation.optional(),
+const direction = z
+  .union([
+    z.enum([
+      'up',
+      'down',
+      'forward',
+      'back',
+      'left',
+      'right',
+      'toward-head',
+      'away-from-head',
+    ]),
+    vec3.strict(),
+    z.tuple([z.number(), z.number(), z.number()]),
+  ])
+  .describe(
+    'A direction: a name (up, down, forward, back, left, right, toward-head, away-from-head; forward/left/right follow where the headset faces) or an XR-origin vector (approximate is fine).',
+  );
+
+// Hand directions come before quaternion/euler and every orientation object
+// is strict, so a misspelt hand direction is an error, not an empty euler.
+const handDirections = z
+  .object({
+    fingers: direction,
+    palm: direction.optional(),
+    thumb: direction.optional(),
+  })
+  .strict()
+  .describe(
+    'Hand orientation by direction: where the fingers point plus where the palm faces OR where the thumb side points. A thumbs up is {fingers:"forward", thumb:"up"}.',
+  );
+
+const placementOrientation = z
+  .union([z.literal('auto'), handDirections, quat, euler])
+  .describe(
+    'For hands: {fingers, palm|thumb} directions, or "auto" (a natural reach from the shoulder toward the position). A quaternion {x,y,z,w} or euler degrees {pitch,yaw,roll} sets the device (for hands, the target ray) as before.',
+  );
+
+const handAnchor = z
+  .string()
+  .describe(
+    'Hands: the point of the hand `position` places and keeps there while the hand changes shape: index-tip (press), grasp (where thumb and index tips meet in a full pinch), wrist (gestures), grip, thumb-tip, target-ray (default), or a WebXR joint name.',
+  );
+
+const easing = z
+  .enum(['linear', 'minimum-jerk'])
+  .describe('Time curve; minimum-jerk starts and stops like a human reach.');
+
+const inputState = z
+  .object({
+    connected: z.boolean().optional(),
+    position: vec3.optional(),
+    orientation: orientation.optional(),
+  })
+  .strict();
+
+const handState = inputState.extend({
+  poseId: z.string().optional(),
+  pinchValue: z.number().min(0).max(1).optional(),
 });
 
 const deviceStateSchema = z
@@ -168,15 +229,18 @@ const deviceStateSchema = z
         position: vec3.optional(),
         orientation: orientation.optional(),
       })
+      .strict()
       .optional(),
     inputMode: z.enum(['controller', 'hand']).optional(),
     stereoEnabled: z.boolean().optional(),
     fov: z.number().optional(),
     controllers: z
       .object({ left: inputState.optional(), right: inputState.optional() })
+      .strict()
       .optional(),
     hands: z
-      .object({ left: inputState.optional(), right: inputState.optional() })
+      .object({ left: handState.optional(), right: handState.optional() })
+      .strict()
       .optional(),
     gaze: z
       .object({
@@ -186,7 +250,8 @@ const deviceStateSchema = z
       .strict()
       .optional(),
   })
-  .partial();
+  .partial()
+  .strict();
 
 // --- Tool definition -------------------------------------------------------
 
@@ -212,6 +277,17 @@ export interface ToolDef {
   browserTool?: boolean;
   /** Zod raw shape passed to McpServer.registerTool. */
   inputShape: ZodRawShape;
+  /**
+   * Reject unknown top-level params instead of silently dropping them (see
+   * inputSchemaOf). Set on tools added or changed since catalog version 3.
+   */
+  strictInput?: boolean;
+}
+
+/** The Zod object a tool's arguments are validated against. */
+export function inputSchemaOf(tool: ToolDef) {
+  const schema = z.object(tool.inputShape);
+  return tool.strictInput ? schema.strict() : schema;
 }
 
 export const TOOLS: readonly ToolDef[] = [
@@ -257,12 +333,14 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'set_transform',
     title: 'Set device transform',
     description:
-      'Set a device position and/or orientation immediately. Gaze accepts orientation only; move its origin with the headset. Requires an active session.',
+      'Set a device position and/or orientation immediately (XR-origin). Gaze accepts orientation only; move its origin with the headset. Hands: `anchor` puts that point of the hand at `position` and keeps it there while the hand changes shape (e.g. anchor "index-tip" on a button, "grasp" on an object before pinching); orientation may be hand directions or "auto". Requires an active session.',
     readOnlyHint: false,
+    strictInput: true,
     inputShape: {
       device: poseDeviceEnum,
       position: vec3.optional(),
-      orientation: orientation.optional(),
+      orientation: placementOrientation.optional(),
+      anchor: handAnchor.optional(),
     },
   },
   {
@@ -283,13 +361,16 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'animate_to',
     title: 'Animate device pose',
     description:
-      'Smoothly animate a device to a target position and/or orientation over `duration` seconds (default 0.5). Gaze accepts orientation only. Requires an active, rendering session.',
+      'Animate a device to a target position and/or orientation (XR-origin) over `duration` seconds (default 0.5), from where it is when the animation starts. Gaze accepts orientation only. Hands take `anchor` and hand directions as in xr_set_transform. easing "minimum-jerk" moves like a person (default "linear"). Requires an active, rendering session.',
     readOnlyHint: false,
+    strictInput: true,
     inputShape: {
       device: poseDeviceEnum,
       position: vec3.optional(),
-      orientation: orientation.optional(),
+      orientation: placementOrientation.optional(),
       duration: z.number().positive().optional(),
+      easing: easing.optional(),
+      anchor: handAnchor.optional(),
     },
   },
   // --- Input ---
@@ -324,11 +405,14 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'set_select_value',
     title: 'Set select value',
     description:
-      'Set the select value (trigger/pinch), 0..1. A hand pinch selects at 0.9 and lets go at 0.7; a trigger selects above 0. Use xr_select for a full press+release.',
+      'Set the select value (trigger/pinch), 0..1, optionally ramping from the current value over `duration` seconds (easing default minimum-jerk). A hand pinch selects at 0.9 and lets go at 0.7; a trigger selects above 0. Use xr_select for a full press+release.',
     readOnlyHint: false,
+    strictInput: true,
     inputShape: {
       device: selectableDeviceEnum,
       value: z.number().min(0).max(1),
+      duration: z.number().min(0).optional(),
+      easing: easing.optional(),
     },
   },
   {
@@ -336,7 +420,7 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'select',
     title: 'Select (press + release)',
     description:
-      'Perform a full select gesture: selectstart on press, then select and selectend on release, holding `duration` seconds (default 0.15). Requires an active session.',
+      'Perform a full select gesture: selectstart on press, then select and selectend on release, holding `duration` seconds (default 0.15). A hand closes its pinch over 0.1 s before the hold and opens it over 0.1 s after. Requires an active session.',
     readOnlyHint: false,
     inputShape: {
       device: selectableDeviceEnum,
@@ -381,7 +465,7 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'get_device_state',
     title: 'Get device state',
     description:
-      'Get a full snapshot: headset pose, input mode, controllers, hands, gaze, stereo, and FOV.',
+      'Get a full snapshot: headset pose, input mode, controllers, hands (with poseId and pinchValue), gaze, stereo, and FOV. Positions are XR-origin relative.',
     readOnlyHint: true,
     inputShape: {},
   },
@@ -390,8 +474,9 @@ export const TOOLS: readonly ToolDef[] = [
     wsMethod: 'set_device_state',
     title: 'Set device state',
     description:
-      'Apply a partial device state. Call with no `state` to reset everything to defaults.',
+      'Apply a partial device state (positions XR-origin; hands also take poseId and pinchValue). Call with no `state` to reset everything to defaults.',
     readOnlyHint: false,
+    strictInput: true,
     inputShape: { state: deviceStateSchema.optional() },
   },
   {
@@ -400,12 +485,28 @@ export const TOOLS: readonly ToolDef[] = [
     title: 'Set hand pose',
     description:
       `Set a named hand pose on a hand device. Poses only shape the hand; to pinch (select), use the pinch value (xr_set_select_value). Poses: ${HAND_POSE_GLOSSES}. ` +
-      'Optionally take individual fingers from other poses, e.g. poseId "open" with fingers {"middle":"fist","ring":"fist","pinky":"fist"}, or blend partway with {"poseId":"fist","weight":0.5}. Setting a pose clears earlier finger overrides.',
+      'Optionally take individual fingers from other poses, e.g. poseId "open" with fingers {"middle":"fist","ring":"fist","pinky":"fist"}, or blend partway with {"poseId":"fist","weight":0.5}. Setting a pose clears earlier finger overrides. `duration` fades from the hand as shown (easing default minimum-jerk); a hand placed by an anchor keeps the anchor in place.',
     readOnlyHint: false,
+    strictInput: true,
     inputShape: {
       device: handEnum,
       poseId: z.string(),
       fingers: fingerPoses.optional(),
+      duration: z.number().min(0).optional(),
+      easing: easing.optional(),
+    },
+  },
+  {
+    mcpName: 'xr_get_hand_state',
+    wsMethod: 'get_hand_state',
+    title: 'Get hand state',
+    description:
+      'Read a hand: pose, finger blends, a pose fade in progress, pinch value, whether select is pressed, its anchor pin, and XR-origin positions of the wrist, grip, grasp point, index tip and thumb tip, plus its finger/palm/thumb directions (joints:"all" adds every joint).',
+    readOnlyHint: true,
+    strictInput: true,
+    inputShape: {
+      device: handEnum,
+      joints: z.enum(['key', 'all']).optional(),
     },
   },
   // --- World (SEM) ---

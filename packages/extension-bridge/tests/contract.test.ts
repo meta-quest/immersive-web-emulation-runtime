@@ -13,13 +13,16 @@ import {
   TOOL_BY_MCP_NAME,
   MCP_TO_METHOD,
   KNOWN_METHODS,
+  CATALOG_VERSION,
+  inputSchemaOf,
 } from '../src/contract.js';
 
 describe('tool catalog', () => {
-  it('contains the 20 planned tools with unique names + methods', () => {
-    expect(TOOLS).toHaveLength(20);
-    expect(new Set(TOOLS.map((t) => t.mcpName)).size).toBe(20);
-    expect(new Set(TOOLS.map((t) => t.wsMethod)).size).toBe(20);
+  it('contains the 21 planned tools with unique names + methods', () => {
+    expect(TOOLS).toHaveLength(21);
+    expect(new Set(TOOLS.map((t) => t.mcpName)).size).toBe(21);
+    expect(new Set(TOOLS.map((t) => t.wsMethod)).size).toBe(21);
+    expect(CATALOG_VERSION).toBe(3);
   });
 
   it('maps every mcpName to a wsMethod; device tools are in KNOWN_METHODS, browser tools are not', () => {
@@ -44,6 +47,7 @@ describe('tool catalog', () => {
         'browser_screenshot',
         'xr_get_device_state',
         'xr_get_gamepad_state',
+        'xr_get_hand_state',
         'xr_get_objects',
         'xr_get_select_value',
         'xr_get_session_status',
@@ -191,5 +195,163 @@ describe('tool catalog', () => {
         state: { gaze: { position: { x: 0, y: 0, z: 0 } } },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('hand motion params', () => {
+  const schemaOf = (name: string) => inputSchemaOf(TOOL_BY_MCP_NAME.get(name)!);
+
+  it('keeps anchors, hand directions and easing (nothing stripped)', () => {
+    const placed = schemaOf('xr_set_transform').parse({
+      device: 'hand-right',
+      position: { x: 0, y: 1, z: -0.4 },
+      anchor: 'index-tip',
+      orientation: { fingers: 'forward', thumb: 'up' },
+    });
+    expect(placed).toEqual({
+      device: 'hand-right',
+      position: { x: 0, y: 1, z: -0.4 },
+      anchor: 'index-tip',
+      orientation: { fingers: 'forward', thumb: 'up' },
+    });
+    expect(
+      schemaOf('xr_animate_to').parse({
+        device: 'hand-left',
+        position: { x: 0, y: 1, z: -0.4 },
+        anchor: 'grasp',
+        orientation: { fingers: [0, -1, -1], palm: { x: 0, y: -1, z: 0 } },
+        duration: 0.6,
+        easing: 'minimum-jerk',
+      }),
+    ).toMatchObject({
+      anchor: 'grasp',
+      orientation: { fingers: [0, -1, -1], palm: { x: 0, y: -1, z: 0 } },
+      easing: 'minimum-jerk',
+    });
+    expect(
+      schemaOf('xr_animate_to').parse({
+        device: 'hand-left',
+        position: { x: 0, y: 1, z: -0.4 },
+        orientation: 'auto',
+      }).orientation,
+    ).toBe('auto');
+    expect(
+      schemaOf('xr_set_select_value').parse({
+        device: 'hand-right',
+        value: 1,
+        duration: 0.2,
+        easing: 'linear',
+      }),
+    ).toMatchObject({ duration: 0.2, easing: 'linear' });
+    expect(
+      schemaOf('xr_set_hand_pose').parse({
+        device: 'hand-right',
+        poseId: 'fist',
+        duration: 0.3,
+        easing: 'minimum-jerk',
+      }),
+    ).toMatchObject({ duration: 0.3, easing: 'minimum-jerk' });
+    expect(
+      schemaOf('xr_get_hand_state').parse({
+        device: 'hand-right',
+        joints: 'all',
+      }),
+    ).toEqual({ device: 'hand-right', joints: 'all' });
+  });
+
+  it('still accepts quaternion and euler orientations', () => {
+    expect(
+      schemaOf('xr_set_transform').parse({
+        device: 'headset',
+        orientation: { pitch: -30 },
+      }).orientation,
+    ).toEqual({ pitch: -30 });
+    expect(
+      schemaOf('xr_animate_to').parse({
+        device: 'controller-left',
+        orientation: { x: 0, y: 0, z: 0, w: 1 },
+      }).orientation,
+    ).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+  });
+
+  it('rejects misspelt keys at the top level and inside new shapes', () => {
+    const bad: Array<[string, Record<string, unknown>]> = [
+      // Would otherwise parse as an empty euler.
+      [
+        'xr_set_transform',
+        { device: 'hand-right', orientation: { finger: 'forward' } },
+      ],
+      ['xr_set_transform', { device: 'hand-right', ancor: 'index-tip' }],
+      [
+        'xr_set_transform',
+        {
+          device: 'hand-right',
+          orientation: { fingers: 'forward', palms: 'down' },
+        },
+      ],
+      [
+        'xr_set_transform',
+        { device: 'headset', orientation: { yaw: 90, roll: 0, spin: 1 } },
+      ],
+      ['xr_animate_to', { device: 'hand-right', durration: 1 }],
+      ['xr_animate_to', { device: 'hand-right', easing: 'reach' }],
+      ['xr_set_select_value', { device: 'hand-right', value: 1, time: 0.2 }],
+      ['xr_set_hand_pose', { device: 'hand-right', poseId: 'fist', fade: 0.2 }],
+      [
+        'xr_set_hand_pose',
+        {
+          device: 'hand-right',
+          poseId: 'open',
+          fingers: { index: { poseId: 'fist', wieght: 0.5 } },
+        },
+      ],
+      ['xr_get_hand_state', { device: 'hand-right', joint: 'all' }],
+      ['xr_set_device_state', { state: { hands: { left: { pinch: 1 } } } }],
+      ['xr_set_device_state', { state: { hand: { left: {} } } }],
+      ['xr_set_device_state', { sate: {} }],
+    ];
+    for (const [name, args] of bad) {
+      expect([name, schemaOf(name).safeParse(args).success]).toEqual([
+        name,
+        false,
+      ]);
+    }
+  });
+
+  it('leaves tools this catalog version did not change lenient', () => {
+    const tool = TOOL_BY_MCP_NAME.get('xr_look_at')!;
+    expect(tool.strictInput).toBeUndefined();
+    expect(
+      inputSchemaOf(tool).parse({
+        device: 'headset',
+        target: { x: 0, y: 1, z: -1 },
+        extra: true,
+      }),
+    ).toEqual({ device: 'headset', target: { x: 0, y: 1, z: -1 } });
+  });
+
+  it('round-trips a get_device_state snapshot through set_device_state', () => {
+    const pose = {
+      position: { x: 0, y: 1.3, z: -0.4 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+    };
+    const snapshot = {
+      headset: pose,
+      inputMode: 'hand',
+      controllers: {
+        left: { connected: true, ...pose },
+        right: { connected: true, ...pose },
+      },
+      hands: {
+        left: { connected: true, ...pose, poseId: 'default', pinchValue: 0 },
+        right: { connected: true, ...pose, poseId: 'point', pinchValue: 0.5 },
+      },
+      gaze: { connected: false, orientation: pose.orientation },
+      stereoEnabled: false,
+      fov: 90,
+    };
+    expect(
+      schemaOf('xr_set_device_state').parse({ state: snapshot }).state,
+    ).toEqual(snapshot);
   });
 });

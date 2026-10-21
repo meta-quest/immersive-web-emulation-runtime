@@ -290,8 +290,10 @@ desktop emulation:
   disconnects while a commit is held, the override ends that `select` — but
   leaves any held `squeeze` alone, since squeeze is not part of the
   gaze-plus-commit contract.
-- Positions supplied to `look_at` and `animate_to` are interpreted directly in
-  the native anchor reference space; there is no emulated XR-origin offset.
+- Remote positions, orientations and directions (and the results of
+  `get_transform`, `get_device_state` and `get_hand_state`) are interpreted
+  directly in the native anchor reference space; there is no emulated
+  XR-origin offset. Hands placed by an `anchor` stay pinned in native mode too.
 - `stereoEnabled` and field-of-view updates do not replace the browser's native
   projection matrices.
 - `XRDevice.updateVisibilityState()` cannot force native session visibility;

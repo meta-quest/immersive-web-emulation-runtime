@@ -87,6 +87,7 @@ export const ALLOWED_METHODS: ReadonlySet<string> = new Set([
   'get_device_state',
   'set_device_state',
   'set_hand_pose',
+  'get_hand_state',
   'get_world_state',
   'get_objects',
   // NOTE: browser-host methods (see BROWSER_HOST_METHODS) are intentionally

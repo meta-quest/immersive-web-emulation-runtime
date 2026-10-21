@@ -4360,8 +4360,11 @@ describe('XRNativeOverride', () => {
       device.primaryInputMode = 'hand';
 
       const rightHand = device.hands.right!;
-      const wrist = rightHand.inputSource.hand!.get(IwerHandJoint.Wrist)!;
-      const before = mat4.clone(wrist[P_SPACE].offsetMatrix);
+      // The pinch moves the thumb and index (the wrist stays put).
+      const indexTip = rightHand.inputSource.hand!.get(
+        IwerHandJoint.IndexFingerTip,
+      )!;
+      const before = mat4.clone(indexTip[P_SPACE].offsetMatrix);
       rightHand.updatePinchValue(1);
 
       session.requestAnimationFrame(() => {});
@@ -4371,7 +4374,7 @@ describe('XRNativeOverride', () => {
       // Device state is advanced from the shared device rather than from this
       // session's bindings, so the pinch still applies and the joints move.
       expect(rightHand.pinchValue).toBe(1);
-      expect(Array.from(wrist[P_SPACE].offsetMatrix)).not.toEqual(
+      expect(Array.from(indexTip[P_SPACE].offsetMatrix)).not.toEqual(
         Array.from(before),
       );
       warning.mockRestore();

@@ -5,15 +5,37 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { quat, vec3 } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 
 import type {
   XRDevice,
   SyntheticEnvironmentModule,
 } from '../device/XRDevice.js';
 import type { Vec3, Quat } from '../types/state.js';
-import { P_DEVICE } from '../private.js';
-import { XRHandFinger, handFingerJoints } from '../device/XRHandInput.js';
+import { P_DEVICE, P_GAMEPAD, P_JOINT_SPACE } from '../private.js';
+import {
+  FingerPoseBlend,
+  HandAnchor,
+  HandDirections,
+  XRHandFinger,
+  XRHandInput,
+  handFingerJoints,
+  isHandAnchor,
+  wristRotationFromDirections,
+} from '../device/XRHandInput.js';
+import {
+  BodyFrame,
+  EASINGS,
+  Easing,
+  NAMED_DIRECTIONS,
+  NamedDirection,
+  autoDirections,
+  bodyFrameFromHead,
+  resolveDirection,
+  shoulderPosition,
+} from './hand-motion.js';
+import { XRHandJoint } from '../input/XRHand.js';
+import { Channel, ChannelEngine, ChannelRun } from './channels.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
 import { cancelButton } from '../gamepad/button-edges.js';
 import type {
@@ -22,7 +44,7 @@ import type {
   SelectableDeviceId,
   Action,
   DiscreteAction,
-  DurationAction,
+  TickAction,
   GetTransformParams,
   GetTransformResult,
   SetTransformParams,
@@ -53,6 +75,8 @@ import type {
   SetDeviceStateResult,
   SetHandPoseParams,
   SetHandPoseResult,
+  GetHandStateParams,
+  GetHandStateResult,
   OrientationInput,
 } from './types.js';
 import {
@@ -86,6 +110,9 @@ function normalizeOrientation(orientation: OrientationInput): Quat {
   }
   return orientation;
 }
+
+const quatFromGl = (q: quat): Quat => ({ x: q[0], y: q[1], z: q[2], w: q[3] });
+const vec3FromGl = (v: vec3): Vec3 => ({ x: v[0], y: v[1], z: v[2] });
 
 /**
  * Linear interpolation for numbers
@@ -197,6 +224,9 @@ function resolveDeviceId(id: string): string {
 /** Default duration (seconds) for the high-level `select` action. */
 const DEFAULT_SELECT_DURATION_S = 0.15;
 
+/** Seconds a hand takes to close (and to open) its pinch in `select`. */
+const HAND_PINCH_RAMP_S = 0.1;
+
 function requireSelectableDeviceId(value: unknown): SelectableDeviceId {
   switch (value) {
     case 'controller-left':
@@ -307,9 +337,18 @@ export class RemoteControlInterface {
    */
   readonly ACTION_TIMEOUT_MS = 10000;
   private watchdog: ReturnType<typeof setTimeout> | null = null;
+  /** Per-device channels (transform, pose, pinch) that timed commands run. */
+  private channels = new ChannelEngine();
 
   constructor(device: XRDevice) {
     this.device = device;
+    // Pins, pose fades and ramps only run under programmatic control: however
+    // the device goes back to manual, the hands are let go.
+    device.onControlModeChange((mode) => {
+      if (mode === 'manual') {
+        this.releaseHands();
+      }
+    });
   }
 
   private generateActionId(): string {
@@ -361,30 +400,57 @@ export class RemoteControlInterface {
   }
 
   /**
-   * Enqueue a duration action for processing
+   * Enqueue a timed action: `start` runs on its first frame, `tick` advances
+   * it until it reports the time left over, then it resolves with `result`.
    */
-  private enqueueDuration(
+  private enqueueTick(
     method: string,
     params: Record<string, unknown>,
-    durationMs: number,
-    startState: { position?: Vec3; orientation?: Quat },
-    targetState: { position?: Vec3; orientation?: Quat },
+    spec: Pick<TickAction, 'start' | 'tick' | 'result'>,
   ): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const action: DurationAction = {
-        type: 'duration',
+      const action: TickAction = {
+        type: 'tick',
         id: this.generateActionId(),
         method,
         params,
-        durationMs,
-        elapsedMs: 0,
-        startState,
-        targetState,
+        started: false,
+        ...spec,
         resolve,
         reject,
       };
       this.commandQueue.push(action);
       this.armWatchdog();
+    });
+  }
+
+  /**
+   * Enqueue channels that run together as one timed action. `build` runs when
+   * the action reaches the head of the queue (so channels capture their start
+   * state, and hands are checked, then); the action holds the head until
+   * every channel finishes and resolves with `result(elapsedMs)`. Timed
+   * commands run one channel each; run_sequence and tests drive several.
+   */
+  private enqueueChannels(
+    method: string,
+    params: Record<string, unknown>,
+    build: () => Channel[],
+    result: (elapsedMs: number) => unknown,
+  ): Promise<unknown> {
+    let run!: ChannelRun;
+    return this.enqueueTick(method, params, {
+      start: () => {
+        run = this.channels.run(build());
+      },
+      tick: (deltaMs) => {
+        try {
+          return run.advance(deltaMs);
+        } catch (error) {
+          run.stop();
+          throw error;
+        }
+      },
+      result: () => result(run.elapsedMs),
     });
   }
 
@@ -406,6 +472,7 @@ export class RemoteControlInterface {
       this.commandQueue = [];
       // Nothing can finish what was held; end it without completing it.
       this.cancelHeldInputs();
+      this.releaseHands();
       this.startReleaseTimer();
       for (const action of stalled) {
         action.reject(
@@ -439,6 +506,7 @@ export class RemoteControlInterface {
       this.device.controlMode = 'programmatic';
     }
 
+    let remainingMs = deltaTimeMs;
     // Devices whose buttons were written this frame.
     const written = new Set<unknown>();
     while (this.commandQueue.length > 0) {
@@ -470,31 +538,25 @@ export class RemoteControlInterface {
         }
         // Continue to next action
       } else {
-        // Duration action - lerp by delta time
-        action.elapsedMs += deltaTimeMs;
-
-        if (action.elapsedMs >= action.durationMs) {
-          // Complete - apply final state
-          try {
-            this.applyDurationFinalState(action);
-            action.resolve(this.getDurationResult(action));
-          } catch (error) {
-            action.reject(error as Error);
+        // Timed action: advance it by the time this frame has left. A
+        // finished action passes its leftover time on to the next one.
+        try {
+          if (!action.started) {
+            action.started = true;
+            action.start();
           }
-          this.commandQueue.shift();
-          // Continue to next action
-        } else {
-          // In progress - lerp
-          try {
-            const t = action.elapsedMs / action.durationMs;
-            this.applyDurationLerpState(action, t);
-          } catch (error) {
-            action.reject(error as Error);
-            this.commandQueue.shift();
-            continue;
+          const leftover = action.tick(remainingMs);
+          if (leftover < 0) {
+            break;
           }
-          // Stop processing - wait for next frame
-          break;
+          remainingMs = leftover;
+          action.resolve(action.result());
+        } catch (error) {
+          action.reject(error as Error);
+        }
+        this.commandQueue.shift();
+        if (writes) {
+          written.add(action.params.device);
         }
       }
     }
@@ -503,8 +565,8 @@ export class RemoteControlInterface {
     this.device.notifyStateChange();
     this.armWatchdog();
 
-    // Start release timer if queue is empty
-    if (this.commandQueue.length === 0) {
+    // Start the release timer once nothing is queued or animating.
+    if (this.commandQueue.length === 0 && !this.channels.isActive()) {
       this.startReleaseTimer();
     }
   }
@@ -513,8 +575,9 @@ export class RemoteControlInterface {
     this.cancelReleaseTimer();
     this.releaseTimer = setTimeout(() => {
       this._isCaptured = false;
-      this.device.controlMode = 'manual';
       this.releaseTimer = null;
+      // Going manual lets go of the hands (see the constructor).
+      this.device.controlMode = 'manual';
     }, this.RELEASE_TIMEOUT_MS);
   }
 
@@ -702,32 +765,368 @@ export class RemoteControlInterface {
     }
   }
 
-  /**
-   * Transform a position from XR-origin-relative coordinates to GlobalSpace.
-   * The XR origin is defined by the first reference space requested by the app.
-   * This is necessary because device positions are in GlobalSpace, but positions
-   * from get_object_transform are relative to the XR origin.
-   */
-  private transformXROriginToGlobal(position: Vec3): Vec3 {
-    const session = this.device[P_DEVICE].runtime.getSession();
-    if (!session) {
-      return position;
-    }
+  // =============================================================================
+  // XR origin
+  // =============================================================================
 
-    const offsetMatrix = session.originOffsetMatrix;
+  /**
+   * The XR origin in GlobalSpace: the app's first non-viewer reference space,
+   * or null (identity) without one. Remote positions, orientations and
+   * directions are all relative to it.
+   */
+  private originMatrix(): mat4 | null {
+    const session = this.device[P_DEVICE].runtime.getSession();
+    return session?.originOffsetMatrix ?? null;
+  }
+
+  /** Transform a position from XR-origin coordinates to GlobalSpace. */
+  private transformXROriginToGlobal(position: Vec3): Vec3 {
+    const offsetMatrix = this.originMatrix();
     if (!offsetMatrix) {
       return position;
     }
-
-    // Transform position from XR-origin space to GlobalSpace
     const posVec = vec3.fromValues(position.x, position.y, position.z);
     vec3.transformMat4(posVec, posVec, offsetMatrix);
+    return { x: posVec[0], y: posVec[1], z: posVec[2] };
+  }
 
+  /** Transform a position from GlobalSpace to XR-origin coordinates. */
+  private transformGlobalToXROrigin(position: Vec3): Vec3 {
+    const offsetMatrix = this.originMatrix();
+    if (!offsetMatrix) {
+      return position;
+    }
+    const inverse = mat4.invert(mat4.create(), offsetMatrix) ?? mat4.create();
+    const posVec = vec3.fromValues(position.x, position.y, position.z);
+    vec3.transformMat4(posVec, posVec, inverse);
+    return { x: posVec[0], y: posVec[1], z: posVec[2] };
+  }
+
+  private originRotation(): quat {
+    const offsetMatrix = this.originMatrix();
+    const rotation = quat.create();
+    if (offsetMatrix) {
+      mat4.getRotation(rotation, offsetMatrix);
+      quat.normalize(rotation, rotation);
+    }
+    return rotation;
+  }
+
+  /** Transform an orientation from XR-origin coordinates to GlobalSpace. */
+  private orientationToGlobal(orientation: Quat): Quat {
+    const q = quat.fromValues(
+      orientation.x,
+      orientation.y,
+      orientation.z,
+      orientation.w,
+    );
+    quat.multiply(q, this.originRotation(), q);
+    return quatFromGl(quat.normalize(q, q));
+  }
+
+  /** Transform an orientation from GlobalSpace to XR-origin coordinates. */
+  private orientationToXROrigin(orientation: Quat): Quat {
+    const q = quat.fromValues(
+      orientation.x,
+      orientation.y,
+      orientation.z,
+      orientation.w,
+    );
+    const inverse = quat.invert(quat.create(), this.originRotation());
+    quat.multiply(q, inverse, q);
+    return quatFromGl(quat.normalize(q, q));
+  }
+
+  /** A device transform in XR-origin coordinates. */
+  private getDeviceTransformInOrigin(deviceId: DeviceId): {
+    position: Vec3;
+    orientation: Quat;
+  } {
+    const transform = this.getDeviceTransform(deviceId);
     return {
-      x: posVec[0],
-      y: posVec[1],
-      z: posVec[2],
+      position: this.transformGlobalToXROrigin(transform.position),
+      orientation: this.orientationToXROrigin(transform.orientation),
     };
+  }
+
+  /** Set a device transform given in XR-origin coordinates. */
+  private setDeviceTransformInOrigin(
+    deviceId: DeviceId,
+    position?: Vec3,
+    orientation?: Quat,
+  ): void {
+    if (position) {
+      validatePosition(position);
+    }
+    this.setDeviceTransform(
+      deviceId,
+      position ? this.transformXROriginToGlobal(position) : undefined,
+      orientation
+        ? this.orientationToGlobal(validateAndNormalizeQuat(orientation))
+        : undefined,
+    );
+  }
+
+  // =============================================================================
+  // Hands
+  // =============================================================================
+
+  private handFor(deviceId: string): XRHandInput {
+    const side =
+      deviceId === 'hand-left'
+        ? 'left'
+        : deviceId === 'hand-right'
+          ? 'right'
+          : null;
+    if (!side) {
+      throw new Error(
+        `Expected device 'hand-left' or 'hand-right', got '${deviceId}'.`,
+      );
+    }
+    const hand = this.device.hands[side];
+    if (!hand) {
+      throw new Error(`Hand ${side} not available`);
+    }
+    return hand;
+  }
+
+  /**
+   * Throws unless the hand is what the app currently sees: hand input mode,
+   * connected, and hand tracking enabled on the session.
+   */
+  private requireLiveHand(deviceId: string): XRHandInput {
+    const hand = this.handFor(deviceId);
+    const session = this.device[P_DEVICE].runtime.getSession();
+    if (this.device.primaryInputMode !== 'hand') {
+      throw new Error(
+        `${deviceId} is not live: the input mode is controllers. Call set_input_mode with mode 'hand' first.`,
+      );
+    }
+    if (!hand.connected) {
+      throw new Error(`${deviceId} is disconnected. Call set_connected first.`);
+    }
+    if (
+      session?.enabledFeatures &&
+      session.enabledFeatures.length > 0 &&
+      !session.enabledFeatures.includes('hand-tracking')
+    ) {
+      throw new Error(
+        `${deviceId} is not live: the app's session did not enable 'hand-tracking'.`,
+      );
+    }
+    return hand;
+  }
+
+  /**
+   * Lets go of both hands: every channel (moves, pose fades, pinch ramps)
+   * stops where it is, a pose fade snaps to its pose, and pins are dropped.
+   * Hands stay where they are.
+   */
+  private releaseHands(): void {
+    this.channels.stop();
+    for (const side of ['left', 'right'] as const) {
+      const hand = this.device.hands[side];
+      if (hand) {
+        hand.poseTransitionProgress = null;
+        hand.setPin(null);
+      }
+    }
+  }
+
+  /** The body frame from the headset (its position and yaw), in GlobalSpace. */
+  private bodyFrame(): BodyFrame {
+    return bodyFrameFromHead(
+      this.device.position.vec3,
+      this.device.quaternion.quat,
+    );
+  }
+
+  private toVec3(value: unknown, what: string): vec3 {
+    if (Array.isArray(value)) {
+      if (value.length === 3 && value.every(isFiniteNumber)) {
+        return vec3.fromValues(value[0], value[1], value[2]);
+      }
+    } else if (value && typeof value === 'object') {
+      const v = value as Vec3;
+      if (isFiniteNumber(v.x) && isFiniteNumber(v.y) && isFiniteNumber(v.z)) {
+        return vec3.fromValues(v.x, v.y, v.z);
+      }
+    }
+    throw new Error(
+      `${what} must be {x, y, z} or [x, y, z] with finite numbers (got ${JSON.stringify(value)}).`,
+    );
+  }
+
+  /**
+   * A direction input (XR-origin vector, or a name relative to the headset's
+   * yaw) as a GlobalSpace unit vector. `from` (GlobalSpace) is the point
+   * toward-head / away-from-head start at.
+   */
+  private directionToGlobal(value: unknown, what: string, from?: vec3): vec3 {
+    const body = this.bodyFrame();
+    if (typeof value === 'string') {
+      if (!(NAMED_DIRECTIONS as readonly string[]).includes(value)) {
+        throw new Error(
+          `Unknown direction '${value}' for ${what}. Use a vector or one of: ${NAMED_DIRECTIONS.join(', ')}.`,
+        );
+      }
+      return resolveDirection(value as NamedDirection, body, from);
+    }
+    const v = this.toVec3(value, what);
+    if (vec3.length(v) < 1e-6) {
+      throw new Error(`${what} must not be a zero vector.`);
+    }
+    vec3.transformQuat(v, v, this.originRotation());
+    return vec3.normalize(v, v);
+  }
+
+  /**
+   * Resolves a placement orientation for a hand. Returns the wanted wrist
+   * rotation (hand directions or 'auto'), or the target-ray rotation
+   * (quaternion / euler), in GlobalSpace.
+   */
+  private resolveHandOrientation(
+    hand: XRHandInput,
+    orientation: unknown,
+    targetGlobal: vec3 | null,
+  ): { wristRotation?: quat; rayRotation?: Quat } {
+    if (orientation === undefined) {
+      return {};
+    }
+    if (orientation === 'auto') {
+      if (!targetGlobal) {
+        throw new Error(`orientation 'auto' needs a position to reach toward.`);
+      }
+      const body = this.bodyFrame();
+      const directions = autoDirections(
+        shoulderPosition(body, hand.inputSource.handedness),
+        targetGlobal,
+        hand.inputSource.handedness,
+        body,
+      );
+      return { wristRotation: this.wristFromDirections(hand, directions) };
+    }
+    if (
+      orientation &&
+      typeof orientation === 'object' &&
+      'fingers' in (orientation as object)
+    ) {
+      const input = orientation as {
+        fingers: unknown;
+        palm?: unknown;
+        thumb?: unknown;
+      };
+      const extra = Object.keys(input).filter(
+        (key) => !['fingers', 'palm', 'thumb'].includes(key),
+      );
+      if (extra.length > 0) {
+        throw new Error(`Unknown hand orientation keys: ${extra.join(', ')}.`);
+      }
+      if ((input.palm === undefined) === (input.thumb === undefined)) {
+        throw new Error(
+          'A hand orientation takes fingers plus exactly one of palm or thumb.',
+        );
+      }
+      const from = targetGlobal ?? undefined;
+      const directions: HandDirections = {
+        fingers: this.directionToGlobal(input.fingers, 'fingers', from),
+        palm:
+          input.palm !== undefined
+            ? this.directionToGlobal(input.palm, 'palm', from)
+            : undefined,
+        thumb:
+          input.thumb !== undefined
+            ? this.directionToGlobal(input.thumb, 'thumb', from)
+            : undefined,
+      };
+      return { wristRotation: this.wristFromDirections(hand, directions) };
+    }
+    return {
+      rayRotation: this.orientationToGlobal(
+        validateAndNormalizeQuat(
+          normalizeOrientation(orientation as OrientationInput),
+        ),
+      ),
+    };
+  }
+
+  private wristFromDirections(
+    hand: XRHandInput,
+    directions: HandDirections,
+  ): quat {
+    const rotation = wristRotationFromDirections(
+      directions,
+      hand.inputSource.handedness,
+    );
+    if (!rotation) {
+      throw new Error(
+        'The two hand directions are parallel; give directions at an angle.',
+      );
+    }
+    return rotation;
+  }
+
+  /**
+   * Where an anchor of the hand is now, in GlobalSpace (a grasp point at
+   * `graspPinch`, else at the pin's).
+   */
+  private anchorPosition(
+    hand: XRHandInput,
+    anchor: HandAnchor,
+    graspPinch = hand.pin?.graspPinch,
+  ): vec3 {
+    const offset = hand.anchorOffset(anchor, vec3.create(), graspPinch);
+    vec3.transformQuat(offset, offset, hand.quaternion.quat);
+    return vec3.add(offset, offset, hand.position.vec3);
+  }
+
+  private requireAnchor(anchor: unknown): HandAnchor {
+    if (!isHandAnchor(anchor)) {
+      throw new Error(
+        `Unknown anchor '${String(anchor)}'. Use target-ray, wrist, grip, grasp, index-tip, thumb-tip, or a WebXR joint name.`,
+      );
+    }
+    return anchor;
+  }
+
+  private requireEasing(easing: unknown, fallback: Easing): Easing {
+    if (easing === undefined) {
+      return fallback;
+    }
+    if (!(EASINGS as readonly unknown[]).includes(easing)) {
+      throw new Error(
+        `Unknown easing '${String(easing)}'. Use ${EASINGS.join(' or ')}.`,
+      );
+    }
+    return easing as Easing;
+  }
+
+  private requireDuration(duration: unknown, what: string): number {
+    if (duration === undefined) {
+      return 0;
+    }
+    if (!isFiniteNumber(duration) || duration < 0) {
+      throw new Error(`${what} duration must be a number of seconds ≥ 0.`);
+    }
+    return duration;
+  }
+
+  /** True when a placement for a hand needs the anchor/pin path. */
+  private isHandPlacement(
+    deviceId: string,
+    anchor: unknown,
+    orientation: unknown,
+  ): boolean {
+    if (deviceId !== 'hand-left' && deviceId !== 'hand-right') {
+      return false;
+    }
+    return (
+      (anchor !== undefined && anchor !== 'target-ray') ||
+      orientation === 'auto' ||
+      (!!orientation &&
+        typeof orientation === 'object' &&
+        'fingers' in (orientation as object))
+    );
   }
 
   /**
@@ -881,18 +1280,6 @@ export class RemoteControlInterface {
           params as unknown as SetDeviceStateParams,
         );
 
-      // Internal select sequence actions
-      case '_select_press': {
-        const deviceId = requireSelectableDeviceId(params.device);
-        this.setDeviceSelectValue(deviceId, 1);
-        return undefined;
-      }
-      case '_select_release': {
-        const deviceId = requireSelectableDeviceId(params.device);
-        this.setDeviceSelectValue(deviceId, 0);
-        return undefined;
-      }
-
       default:
         throw new Error(`Unknown method: ${method}`);
     }
@@ -946,7 +1333,7 @@ export class RemoteControlInterface {
 
   private executeGetTransform(params: GetTransformParams): GetTransformResult {
     const { device: deviceId } = params;
-    const transform = this.getDeviceTransform(deviceId);
+    const transform = this.getDeviceTransformInOrigin(deviceId);
     return {
       device: deviceId,
       position: transform.position,
@@ -956,20 +1343,68 @@ export class RemoteControlInterface {
   }
 
   private executeSetTransform(params: SetTransformParams): SetTransformResult {
-    const { device: deviceId, position, orientation } = params;
-
-    const targetOrientation = orientation
-      ? normalizeOrientation(orientation)
-      : undefined;
-
-    this.setDeviceTransform(deviceId, position, targetOrientation);
-
-    const newTransform = this.getDeviceTransform(deviceId);
+    const { device: deviceId, position, orientation, anchor } = params;
+    if (this.isHandPlacement(deviceId, anchor, orientation)) {
+      this.placeHand(deviceId, position, orientation, anchor);
+    } else {
+      if (anchor !== undefined) {
+        this.requireAnchor(anchor);
+      }
+      this.setDeviceTransformInOrigin(
+        deviceId,
+        position,
+        orientation
+          ? normalizeOrientation(orientation as OrientationInput)
+          : undefined,
+      );
+      if (deviceId === 'hand-left' || deviceId === 'hand-right') {
+        // A placement by the target ray (no anchor) lets go of any pin.
+        this.handFor(deviceId).setPin(null);
+      }
+    }
+    const newTransform = this.getDeviceTransformInOrigin(deviceId);
     return {
       device: deviceId,
       position: newTransform.position,
       orientation: newTransform.orientation,
     };
+  }
+
+  /**
+   * Places a hand by an anchor and/or a hand orientation, and pins it there:
+   * the anchor stays put (and the wrist keeps its rotation) while the hand's
+   * shape changes.
+   */
+  private placeHand(
+    deviceId: string,
+    position: Vec3 | undefined,
+    orientation: unknown,
+    anchorInput: unknown,
+  ): void {
+    const hand = this.requireLiveHand(deviceId);
+    const anchor = this.requireAnchor(anchorInput ?? 'target-ray');
+    const target = position
+      ? this.toVec3(this.transformXROriginToGlobal(position), 'position')
+      : this.anchorPosition(hand, anchor);
+    const { wristRotation, rayRotation } = this.resolveHandOrientation(
+      hand,
+      orientation,
+      target,
+    );
+    if (rayRotation) {
+      hand.quaternion.set(
+        rayRotation.x,
+        rayRotation.y,
+        rayRotation.z,
+        rayRotation.w,
+      );
+    }
+    hand.setPin({
+      anchor,
+      target,
+      wristRotation:
+        wristRotation ?? (rayRotation ? undefined : hand.pin?.wristRotation),
+    });
   }
 
   private executeLookAt(params: LookAtParams): LookAtResult {
@@ -1005,9 +1440,13 @@ export class RemoteControlInterface {
       };
     }
 
+    if (deviceId === 'hand-left' || deviceId === 'hand-right') {
+      // look_at aims the target ray; it lets go of any pin.
+      this.handFor(deviceId).setPin(null);
+    }
     this.setDeviceTransform(deviceId, newPosition, lookQuat);
 
-    const newTransform = this.getDeviceTransform(deviceId);
+    const newTransform = this.getDeviceTransformInOrigin(deviceId);
     return {
       device: deviceId,
       position: newTransform.position,
@@ -1021,6 +1460,9 @@ export class RemoteControlInterface {
 
   private executeSetInputMode(params: SetInputModeParams): SetInputModeResult {
     const { mode } = params;
+    if (mode !== this.device.primaryInputMode) {
+      this.releaseHands();
+    }
     this.device.primaryInputMode = mode;
 
     const activeDevices: DeviceId[] = [];
@@ -1049,6 +1491,9 @@ export class RemoteControlInterface {
 
   private executeSetConnected(params: SetConnectedParams): SetConnectedResult {
     const { device: deviceId, connected } = params;
+    if (!connected && (deviceId === 'hand-left' || deviceId === 'hand-right')) {
+      this.handFor(deviceId).setPin(null);
+    }
     this.setDeviceConnected(deviceId, connected);
     return { device: deviceId, connected };
   }
@@ -1070,22 +1515,29 @@ export class RemoteControlInterface {
   }
 
   private executeSetHandPose(params: SetHandPoseParams): SetHandPoseResult {
-    const { device: deviceId, poseId, fingers } = params;
-    const hand =
-      deviceId === 'hand-left'
-        ? 'left'
-        : deviceId === 'hand-right'
-          ? 'right'
-          : null;
-    if (!hand) {
-      throw new Error(
-        `set_hand_pose requires device 'hand-left' or 'hand-right', got '${deviceId}'.`,
+    const handInput = this.handFor(params.device);
+    const { poseId, fingers } = this.parseHandPose(handInput, params);
+    // Setting poseId clears earlier finger blends; then apply the new ones.
+    handInput.poseId = poseId;
+    for (const finger of Object.keys(fingers) as XRHandFinger[]) {
+      handInput.setFingerPose(
+        finger,
+        fingers[finger]!.poseId,
+        fingers[finger]!.weight,
       );
     }
-    const handInput = this.device.hands[hand];
-    if (!handInput) {
-      throw new Error(`Hand ${hand} not available`);
-    }
+    return { device: params.device, poseId, fingers: handInput.fingerPoses };
+  }
+
+  /** Validates set_hand_pose's pose and finger blends against the hand's poses. */
+  private parseHandPose(
+    handInput: XRHandInput,
+    params: SetHandPoseParams,
+  ): {
+    poseId: string;
+    fingers: Partial<Record<XRHandFinger, FingerPoseBlend>>;
+  } {
+    const { poseId, fingers } = params;
     const available = handInput.poseIds;
     const requireKnown = (id: unknown): string => {
       if (typeof id !== 'string' || !available.includes(id)) {
@@ -1105,7 +1557,8 @@ export class RemoteControlInterface {
       throw new Error('fingers must map finger names to poses.');
     }
     const fingerNames = Object.keys(handFingerJoints);
-    const blends = Object.entries(fingers ?? {}).map(([finger, blend]) => {
+    const blends: Partial<Record<XRHandFinger, FingerPoseBlend>> = {};
+    for (const [finger, blend] of Object.entries(fingers ?? {})) {
       if (!fingerNames.includes(finger)) {
         throw new Error(
           `Unknown finger '${finger}'. Fingers: ${fingerNames.join(', ')}.`,
@@ -1121,18 +1574,73 @@ export class RemoteControlInterface {
       if (typeof weight !== 'number' || !(weight >= 0 && weight <= 1)) {
         throw new Error(`Finger weight must be within [0, 1], got ${weight}.`);
       }
-      return {
-        finger: finger as XRHandFinger,
+      blends[finger as XRHandFinger] = {
         poseId: requireKnown(fingerPoseId),
         weight,
       };
-    });
-    // Setting poseId clears earlier finger blends; then apply the new ones.
-    handInput.poseId = poseId;
-    for (const { finger, poseId: fingerPoseId, weight } of blends) {
-      handInput.setFingerPose(finger, fingerPoseId, weight);
     }
-    return { device: deviceId, poseId, fingers: handInput.fingerPoses };
+    return { poseId, fingers: blends };
+  }
+
+  private executeGetHandState(params: GetHandStateParams): GetHandStateResult {
+    const hand = this.handFor(params.device);
+    const toOrigin = (v: vec3) => this.transformGlobalToXROrigin(vec3FromGl(v));
+    const rotateToOrigin = (v: vec3) => {
+      const r = quat.invert(quat.create(), this.originRotation());
+      const out = vec3.transformQuat(
+        vec3.create(),
+        v,
+        quat.multiply(r, r, hand.quaternion.quat),
+      );
+      return vec3FromGl(out);
+    };
+    const anchors = {} as GetHandStateResult['anchors'];
+    for (const name of [
+      'wrist',
+      'grip',
+      'grasp',
+      'index-tip',
+      'thumb-tip',
+    ] as const) {
+      anchors[name] = toOrigin(this.anchorPosition(hand, name));
+    }
+    const axes = hand.handAxes();
+    const transform = this.getDeviceTransformInOrigin(params.device);
+    const pin = hand.pin;
+    const state: GetHandStateResult = {
+      device: params.device,
+      connected: hand.connected,
+      poseId: hand.poseId,
+      fingers: hand.fingerPoses,
+      transition:
+        hand.poseTransitionProgress === null
+          ? null
+          : {
+              from: hand.poseTransitionFrom!,
+              progress: hand.poseTransitionProgress,
+            },
+      pinchValue: hand.pinchValue,
+      pressed: hand.inputSource.gamepad!.buttons[0]!.pressed,
+      position: transform.position,
+      orientation: transform.orientation,
+      pin: pin ? { anchor: pin.anchor, target: toOrigin(pin.target) } : null,
+      anchors,
+      axes: {
+        fingers: rotateToOrigin(axes.fingers),
+        palm: rotateToOrigin(axes.palm),
+        thumb: rotateToOrigin(axes.thumb),
+      },
+    };
+    if (params.joints === 'all') {
+      state.joints = {};
+      for (const jointName of Object.values(XRHandJoint)) {
+        state.joints[jointName] = {
+          position: toOrigin(this.anchorPosition(hand, jointName)),
+          radius: hand.inputSource.hand!.get(jointName)![P_JOINT_SPACE].radius,
+        };
+      }
+    }
+    return state;
   }
 
   // =============================================================================
@@ -1380,67 +1888,39 @@ export class RemoteControlInterface {
   // =============================================================================
 
   private executeGetDeviceState(): RemoteDeviceState {
+    const identity = {
+      position: { x: 0, y: 0, z: 0 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+    };
+    const inOrigin = (deviceId: DeviceId, present: boolean) =>
+      present ? this.getDeviceTransformInOrigin(deviceId) : identity;
+    const controller = (side: 'left' | 'right') => {
+      const input = this.device.controllers[side];
+      return {
+        connected: input?.connected ?? false,
+        ...inOrigin(`controller-${side}`, !!input),
+      };
+    };
+    const hand = (side: 'left' | 'right') => {
+      const input = this.device.hands[side];
+      return {
+        connected: input?.connected ?? false,
+        ...inOrigin(`hand-${side}`, !!input),
+        ...(input
+          ? { poseId: input.poseId, pinchValue: input.pinchValue }
+          : {}),
+      };
+    };
     return {
-      headset: {
-        position: vec3ToObj(this.device.position),
-        orientation: quatToObj(this.device.quaternion),
-      },
+      headset: this.getDeviceTransformInOrigin('headset'),
       inputMode: this.device.primaryInputMode,
-      controllers: {
-        left: {
-          connected: this.device.controllers.left?.connected ?? false,
-          position: vec3ToObj(
-            this.device.controllers.left?.position ?? { x: 0, y: 0, z: 0 },
-          ),
-          orientation: quatToObj(
-            this.device.controllers.left?.quaternion ?? {
-              x: 0,
-              y: 0,
-              z: 0,
-              w: 1,
-            },
-          ),
-        },
-        right: {
-          connected: this.device.controllers.right?.connected ?? false,
-          position: vec3ToObj(
-            this.device.controllers.right?.position ?? { x: 0, y: 0, z: 0 },
-          ),
-          orientation: quatToObj(
-            this.device.controllers.right?.quaternion ?? {
-              x: 0,
-              y: 0,
-              z: 0,
-              w: 1,
-            },
-          ),
-        },
-      },
-      hands: {
-        left: {
-          connected: this.device.hands.left?.connected ?? false,
-          position: vec3ToObj(
-            this.device.hands.left?.position ?? { x: 0, y: 0, z: 0 },
-          ),
-          orientation: quatToObj(
-            this.device.hands.left?.quaternion ?? { x: 0, y: 0, z: 0, w: 1 },
-          ),
-        },
-        right: {
-          connected: this.device.hands.right?.connected ?? false,
-          position: vec3ToObj(
-            this.device.hands.right?.position ?? { x: 0, y: 0, z: 0 },
-          ),
-          orientation: quatToObj(
-            this.device.hands.right?.quaternion ?? { x: 0, y: 0, z: 0, w: 1 },
-          ),
-        },
-      },
+      controllers: { left: controller('left'), right: controller('right') },
+      hands: { left: hand('left'), right: hand('right') },
       ...(this.device.gaze
         ? {
             gaze: {
               connected: this.device.gaze.connected,
-              orientation: this.getDeviceTransform('gaze').orientation,
+              orientation: this.getDeviceTransformInOrigin('gaze').orientation,
             },
           }
         : {}),
@@ -1454,6 +1934,7 @@ export class RemoteControlInterface {
   ): SetDeviceStateResult {
     const { state } = params;
 
+    this.releaseHands();
     if (!state) {
       // Reset to initial state; held buttons are cancelled, not completed.
       this.cancelHeldInputs();
@@ -1490,27 +1971,11 @@ export class RemoteControlInterface {
       // Apply partial state
       if (state.headset) {
         // Validate before applying either component (atomic, no corruption).
-        if (state.headset.position) {
-          validatePosition(state.headset.position);
-        }
-        const headsetOrient = state.headset.orientation
-          ? validateAndNormalizeQuat(state.headset.orientation)
-          : undefined;
-        if (state.headset.position) {
-          this.device.position.set(
-            state.headset.position.x,
-            state.headset.position.y,
-            state.headset.position.z,
-          );
-        }
-        if (headsetOrient) {
-          this.device.quaternion.set(
-            headsetOrient.x,
-            headsetOrient.y,
-            headsetOrient.z,
-            headsetOrient.w,
-          );
-        }
+        this.setDeviceTransformInOrigin(
+          'headset',
+          state.headset.position,
+          state.headset.orientation,
+        );
       }
       if (state.inputMode !== undefined) {
         this.device.primaryInputMode = state.inputMode;
@@ -1526,8 +1991,21 @@ export class RemoteControlInterface {
         this.applyInputState('controller-right', state.controllers.right);
       }
       if (state.hands) {
-        this.applyInputState('hand-left', state.hands.left);
-        this.applyInputState('hand-right', state.hands.right);
+        for (const side of ['left', 'right'] as const) {
+          const handState = state.hands[side];
+          this.applyInputState(`hand-${side}`, handState);
+          const hand = this.device.hands[side];
+          if (hand && handState?.poseId !== undefined) {
+            this.parseHandPose(hand, {
+              device: `hand-${side}`,
+              poseId: handState.poseId,
+            });
+            hand.poseId = handState.poseId;
+          }
+          if (hand && handState?.pinchValue !== undefined) {
+            this.setDeviceSelectValue(`hand-${side}`, handState.pinchValue);
+          }
+        }
       }
       if (state.gaze) {
         this.applyInputState('gaze', state.gaze);
@@ -1547,58 +2025,12 @@ export class RemoteControlInterface {
       this.setDeviceConnected(deviceId, state.connected);
     }
     if (state.position || state.orientation) {
-      this.setDeviceTransform(deviceId, state.position, state.orientation);
-    }
-  }
-
-  // =============================================================================
-  // Duration Action Handling
-  // =============================================================================
-
-  private applyDurationLerpState(action: DurationAction, t: number): void {
-    const { startState, targetState, params } = action;
-    const deviceId = (params as unknown as AnimateToParams).device;
-
-    let newPosition: Vec3 | undefined;
-    let newOrientation: Quat | undefined;
-
-    if (startState.position && targetState.position) {
-      newPosition = lerpVec3(startState.position, targetState.position, t);
-    }
-
-    if (startState.orientation && targetState.orientation) {
-      newOrientation = slerpQuat(
-        startState.orientation,
-        targetState.orientation,
-        t,
+      this.setDeviceTransformInOrigin(
+        deviceId,
+        state.position,
+        state.orientation,
       );
     }
-
-    this.setDeviceTransform(deviceId, newPosition, newOrientation);
-  }
-
-  private applyDurationFinalState(action: DurationAction): void {
-    const { targetState, params } = action;
-    const deviceId = (params as unknown as AnimateToParams).device;
-
-    this.setDeviceTransform(
-      deviceId,
-      targetState.position,
-      targetState.orientation,
-    );
-  }
-
-  private getDurationResult(action: DurationAction): AnimateToResult {
-    const { params, elapsedMs } = action;
-    const deviceId = (params as unknown as AnimateToParams).device;
-    const transform = this.getDeviceTransform(deviceId);
-
-    return {
-      device: deviceId,
-      position: transform.position,
-      orientation: transform.orientation,
-      actualDuration: elapsedMs / 1000,
-    };
   }
 
   // =============================================================================
@@ -1619,6 +2051,7 @@ export class RemoteControlInterface {
     'get_select_value',
     'get_gamepad_state',
     'get_device_state',
+    'get_hand_state',
     // World/scene introspection - reads the synthetic environment (SEM)
     'get_world_state',
     'get_objects',
@@ -1635,13 +2068,14 @@ export class RemoteControlInterface {
 
   /**
    * Queued methods that write a device's buttons. A second write to the same
-   * device waits for the next frame (see update()).
+   * device waits for the next frame, so a press and its release never land
+   * in one frame (see update()).
    */
   private static readonly INPUT_WRITE_METHODS = new Set([
     'set_select_value',
     'set_gamepad_state',
-    '_select_press',
-    '_select_release',
+    'select',
+    '_hand_motion',
   ]);
 
   /**
@@ -1729,42 +2163,29 @@ export class RemoteControlInterface {
       }
     }
 
-    // Handle animate_to specially - it's a duration action
+    // Timed commands hold the head of the queue until they finish.
     if (method === 'animate_to') {
-      const animateParams = normalizedParams as unknown as AnimateToParams;
-      if (animateParams.device === 'gaze' && animateParams.position) {
-        throw new Error(
-          'Gaze position is derived from the headset. Move the headset transform instead.',
-        );
-      }
-      const currentTransform = this.getDeviceTransform(animateParams.device);
-      const durationMs = (animateParams.duration ?? 0.5) * 1000;
-
-      const targetOrientation = animateParams.orientation
-        ? normalizeOrientation(animateParams.orientation)
-        : undefined;
-
-      // Transform target position from XR-origin-relative to GlobalSpace
-      const targetPosition = animateParams.position
-        ? this.transformXROriginToGlobal(animateParams.position)
-        : undefined;
-
-      return this.enqueueDuration(
-        method,
+      return this.enqueueAnimateTo(
+        normalizedParams as unknown as AnimateToParams,
         normalizedParams,
-        durationMs,
-        {
-          position: animateParams.position
-            ? currentTransform.position
-            : undefined,
-          orientation: targetOrientation
-            ? currentTransform.orientation
-            : undefined,
-        },
-        {
-          position: targetPosition,
-          orientation: targetOrientation,
-        },
+      );
+    }
+    if (
+      method === 'set_select_value' &&
+      (normalizedParams as { duration?: unknown }).duration !== undefined
+    ) {
+      return this.enqueueSelectRamp(
+        normalizedParams as unknown as SetSelectValueParams,
+        normalizedParams,
+      );
+    }
+    if (
+      method === 'set_hand_pose' &&
+      (normalizedParams as { duration?: unknown }).duration !== undefined
+    ) {
+      return this.enqueuePoseFade(
+        normalizedParams as unknown as SetHandPoseParams,
+        normalizedParams,
       );
     }
 
@@ -1807,6 +2228,10 @@ export class RemoteControlInterface {
         );
       case 'get_device_state':
         return this.executeGetDeviceState();
+      case 'get_hand_state':
+        return this.executeGetHandState(
+          params as unknown as GetHandStateParams,
+        );
       case 'get_world_state':
         return this.executeGetWorldState();
       case 'get_objects':
@@ -1816,68 +2241,393 @@ export class RemoteControlInterface {
     }
   }
 
+  // =============================================================================
+  // Timed commands
+  // =============================================================================
+
   /**
-   * Execute select action - this directly enqueues the three sub-actions without awaiting
-   * The caller's promise resolves when all sub-actions complete
+   * The select value last written for a device: the one waiting for the next
+   * frame, else the current one.
+   */
+  private latestSelectValue(deviceId: SelectableDeviceId): number {
+    const side = deviceId.endsWith('left') ? 'left' : 'right';
+    const isHand = deviceId.startsWith('hand');
+    const input = isHand
+      ? this.device.hands[side]
+      : this.device.controllers[side];
+    const button =
+      input?.inputSource.gamepad?.[P_GAMEPAD].buttonsMap[
+        isHand ? 'pinch' : 'trigger'
+      ];
+    return (
+      button?.[P_GAMEPAD].pendingValue ?? this.getDeviceSelectValue(deviceId)
+    );
+  }
+
+  /** A pinch (or trigger) ramp from the value it starts at to `value`. */
+  private pinchChannel(
+    deviceId: SelectableDeviceId,
+    value: number,
+    durationMs: number,
+    easing: Easing,
+  ): Channel {
+    let from = 0;
+    return {
+      device: deviceId,
+      kind: 'pinch',
+      durationMs,
+      easing,
+      begin: () => {
+        from = this.latestSelectValue(deviceId);
+      },
+      apply: (progress) => {
+        this.setDeviceSelectValue(deviceId, from + (value - from) * progress);
+      },
+    };
+  }
+
+  /** A pose fade from the hand as shown when it starts. */
+  private poseChannel(
+    hand: XRHandInput,
+    deviceId: string,
+    pose: Pick<SetHandPoseParams, 'poseId' | 'fingers'>,
+    durationMs: number,
+    easing: Easing,
+  ): Channel {
+    return {
+      device: deviceId,
+      kind: 'pose',
+      durationMs,
+      easing,
+      begin: () => {
+        const { poseId, fingers } = this.parseHandPose(hand, {
+          device: deviceId as SetHandPoseParams['device'],
+          ...pose,
+        });
+        hand.beginPoseTransition(poseId, fingers);
+      },
+      apply: (progress) => {
+        // A pose set in the meantime (DevUI, a release) ended the fade.
+        if (hand.poseTransitionProgress !== null) {
+          hand.poseTransitionProgress = progress;
+        }
+      },
+    };
+  }
+
+  /**
+   * The transform channel of animate_to. A hand placed by an anchor or by hand
+   * directions moves its pin (the anchor's path, and the wrist's rotation);
+   * anything else moves the device pose as before. Start and target are
+   * taken when the channel starts.
+   */
+  private moveChannel(
+    params: Pick<
+      AnimateToParams,
+      'device' | 'position' | 'orientation' | 'anchor'
+    >,
+    durationMs: number,
+    easing: Easing,
+  ): Channel {
+    const { device: deviceId, position, orientation, anchor } = params;
+    if (this.isHandPlacement(deviceId, anchor, orientation)) {
+      let hand!: XRHandInput;
+      let handAnchor!: HandAnchor;
+      const fromTarget = vec3.create();
+      const toTarget = vec3.create();
+      const fromWrist = quat.create();
+      let toWrist: quat | undefined;
+      let fromRay: quat | undefined;
+      let toRay: quat | undefined;
+      const target = vec3.create();
+      const rotation = quat.create();
+      return {
+        device: deviceId,
+        kind: 'transform',
+        durationMs,
+        easing,
+        begin: () => {
+          hand = this.requireLiveHand(deviceId);
+          handAnchor = this.requireAnchor(anchor ?? 'target-ray');
+          vec3.copy(fromTarget, this.anchorPosition(hand, handAnchor));
+          vec3.copy(
+            toTarget,
+            position
+              ? this.toVec3(
+                  this.transformXROriginToGlobal(position),
+                  'position',
+                )
+              : fromTarget,
+          );
+          hand.wristRotation(fromWrist);
+          // 'auto' is resolved once, toward where the anchor is going.
+          const resolved = this.resolveHandOrientation(
+            hand,
+            orientation,
+            toTarget,
+          );
+          toWrist = resolved.wristRotation;
+          if (resolved.rayRotation) {
+            fromRay = quat.clone(hand.quaternion.quat);
+            const r = resolved.rayRotation;
+            toRay = quat.fromValues(r.x, r.y, r.z, r.w);
+          } else if (!toWrist && hand.pin?.wristRotation) {
+            toWrist = quat.clone(hand.pin.wristRotation);
+          }
+        },
+        apply: (progress) => {
+          vec3.lerp(target, fromTarget, toTarget, progress);
+          if (fromRay && toRay) {
+            quat.slerp(rotation, fromRay, toRay, progress);
+            hand.quaternion.set(
+              rotation[0],
+              rotation[1],
+              rotation[2],
+              rotation[3],
+            );
+          }
+          if (toWrist) {
+            quat.slerp(rotation, fromWrist, toWrist, progress);
+          }
+          hand.setPin({
+            anchor: handAnchor,
+            target,
+            wristRotation: toWrist ? rotation : undefined,
+          });
+        },
+      };
+    }
+
+    if (anchor !== undefined && anchor !== 'target-ray') {
+      this.requireAnchor(anchor);
+    }
+    let from!: { position: Vec3; orientation: Quat };
+    let toPosition: Vec3 | undefined;
+    let toOrientation: Quat | undefined;
+    return {
+      device: deviceId,
+      kind: 'transform',
+      durationMs,
+      easing,
+      begin: () => {
+        from = this.getDeviceTransform(deviceId);
+        toPosition = position
+          ? this.transformXROriginToGlobal(position)
+          : undefined;
+        toOrientation = orientation
+          ? this.orientationToGlobal(
+              validateAndNormalizeQuat(
+                normalizeOrientation(orientation as OrientationInput),
+              ),
+            )
+          : undefined;
+        if (deviceId === 'hand-left' || deviceId === 'hand-right') {
+          // A move by the target ray lets go of any pin.
+          this.handFor(deviceId).setPin(null);
+        }
+      },
+      apply: (progress) => {
+        this.setDeviceTransform(
+          deviceId,
+          toPosition
+            ? lerpVec3(from.position, toPosition, progress)
+            : undefined,
+          toOrientation
+            ? slerpQuat(from.orientation, toOrientation, progress)
+            : undefined,
+        );
+      },
+    };
+  }
+
+  /** animate_to: one transform channel; the start pose is taken when it starts. */
+  private enqueueAnimateTo(
+    params: AnimateToParams,
+    rawParams: Record<string, unknown>,
+  ): Promise<unknown> {
+    const { device: deviceId, position } = params;
+    if (deviceId === 'gaze' && position) {
+      throw new Error(
+        'Gaze position is derived from the headset. Move the headset transform instead.',
+      );
+    }
+    const durationMs = (params.duration ?? 0.5) * 1000;
+    const easing = this.requireEasing(params.easing, 'linear');
+    const channel = this.moveChannel(params, durationMs, easing);
+    return this.enqueueChannels(
+      'animate_to',
+      rawParams,
+      () => [channel],
+      (elapsedMs): AnimateToResult => {
+        const transform = this.getDeviceTransformInOrigin(deviceId);
+        return {
+          device: deviceId,
+          position: transform.position,
+          orientation: transform.orientation,
+          actualDuration: elapsedMs / 1000,
+        };
+      },
+    );
+  }
+
+  /** set_select_value with a duration: ramps from the current value. */
+  private enqueueSelectRamp(
+    params: SetSelectValueParams,
+    rawParams: Record<string, unknown>,
+  ): Promise<unknown> {
+    const deviceId = requireSelectableDeviceId(params.device);
+    const { value } = params;
+    const durationMs = this.requireDuration(params.duration, 'Select') * 1000;
+    const easing = this.requireEasing(params.easing, 'minimum-jerk');
+    if (typeof value !== 'number' || !(value >= 0 && value <= 1)) {
+      throw new Error(`Select value must be within [0, 1], got ${value}.`);
+    }
+    return this.enqueueChannels(
+      'set_select_value',
+      rawParams,
+      () => {
+        if (deviceId === 'hand-left' || deviceId === 'hand-right') {
+          this.requireLiveHand(deviceId);
+        }
+        return [this.pinchChannel(deviceId, value, durationMs, easing)];
+      },
+      (): SetSelectValueResult => ({ device: deviceId, value }),
+    );
+  }
+
+  /** set_hand_pose with a duration: fades from the hand as shown. */
+  private enqueuePoseFade(
+    params: SetHandPoseParams,
+    rawParams: Record<string, unknown>,
+  ): Promise<unknown> {
+    const hand = this.handFor(params.device);
+    const durationMs = this.requireDuration(params.duration, 'Pose') * 1000;
+    const easing = this.requireEasing(params.easing, 'minimum-jerk');
+    return this.enqueueChannels(
+      'set_hand_pose',
+      rawParams,
+      () => {
+        this.requireLiveHand(params.device);
+        return [
+          this.poseChannel(hand, params.device, params, durationMs, easing),
+        ];
+      },
+      (): SetHandPoseResult => ({
+        device: params.device,
+        poseId: hand.poseId,
+        fingers: hand.fingerPoses,
+      }),
+    );
+  }
+
+  /**
+   * @internal Runs a move, a pose fade and a pinch ramp of one hand together,
+   * as one queued action (each takes the params of animate_to, set_hand_pose
+   * or set_select_value, without the device). Resolves with get_hand_state
+   * once all of them finish. Not a remote method: the channel engine's entry
+   * point for hand sequences and tests.
+   */
+  runHandMotion(
+    deviceId: 'hand-left' | 'hand-right',
+    motion: {
+      move?: Omit<AnimateToParams, 'device'>;
+      pose?: Omit<SetHandPoseParams, 'device'>;
+      pinch?: Omit<SetSelectValueParams, 'device'>;
+    },
+  ): Promise<unknown> {
+    const hand = this.handFor(deviceId);
+    const channels: Channel[] = [];
+    if (motion.move) {
+      channels.push(
+        this.moveChannel(
+          { ...motion.move, device: deviceId },
+          (motion.move.duration ?? 0.5) * 1000,
+          this.requireEasing(motion.move.easing, 'linear'),
+        ),
+      );
+    }
+    if (motion.pose) {
+      channels.push(
+        this.poseChannel(
+          hand,
+          deviceId,
+          motion.pose,
+          this.requireDuration(motion.pose.duration, 'Pose') * 1000,
+          this.requireEasing(motion.pose.easing, 'minimum-jerk'),
+        ),
+      );
+    }
+    if (motion.pinch) {
+      channels.push(
+        this.pinchChannel(
+          deviceId,
+          motion.pinch.value,
+          this.requireDuration(motion.pinch.duration, 'Select') * 1000,
+          this.requireEasing(motion.pinch.easing, 'minimum-jerk'),
+        ),
+      );
+    }
+    return this.enqueueChannels(
+      '_hand_motion',
+      { device: deviceId },
+      () => {
+        this.requireLiveHand(deviceId);
+        return channels;
+      },
+      () => this.executeGetHandState({ device: deviceId }),
+    );
+  }
+
+  /**
+   * Execute select action: press, hold `duration`, release, on the device's
+   * pinch channel. A hand closes its pinch over 0.1 s and opens it over 0.1 s
+   * around the hold; a controller steps its trigger. Each edge lands on its
+   * own frame.
    */
   private executeSelectSequence(params: SelectParams): Promise<SelectResult> {
     const { device: deviceId, duration = DEFAULT_SELECT_DURATION_S } = params;
 
     // Validate device upfront to prevent sub-actions from failing in the frame loop
     this.getDeviceSelectValue(deviceId);
-
-    return new Promise((resolve, reject) => {
-      // Track completion of all three actions
-      let actionsCompleted = 0;
-      const totalActions = 3;
-
-      const checkComplete = () => {
-        actionsCompleted++;
-        if (actionsCompleted === totalActions) {
-          resolve({
-            device: deviceId,
-            duration,
-          });
-        }
-      };
-
-      // Enqueue: set value to 1
-      const action1: DiscreteAction = {
-        type: 'discrete',
-        id: this.generateActionId(),
-        method: '_select_press',
-        params: { device: deviceId },
-        resolve: checkComplete,
-        reject,
-      };
-
-      // Enqueue: wait for duration
-      const action2: DurationAction = {
-        type: 'duration',
-        id: this.generateActionId(),
-        method: '_select_wait',
-        params: { device: deviceId },
-        durationMs: duration * 1000,
-        elapsedMs: 0,
-        startState: {},
-        targetState: {},
-        resolve: checkComplete,
-        reject,
-      };
-
-      // Enqueue: set value to 0
-      const action3: DiscreteAction = {
-        type: 'discrete',
-        id: this.generateActionId(),
-        method: '_select_release',
-        params: { device: deviceId },
-        resolve: checkComplete,
-        reject,
-      };
-
-      this.commandQueue.push(action1, action2, action3);
-      this.armWatchdog();
-    });
+    const holdMs = Math.max(0, duration) * 1000;
+    const isHand = deviceId === 'hand-left' || deviceId === 'hand-right';
+    const rampMs = isHand ? HAND_PINCH_RAMP_S * 1000 : 0;
+    // Close, hold, open.
+    const phases = [
+      () => this.pinchChannel(deviceId, 1, rampMs, 'minimum-jerk'),
+      () => this.pinchChannel(deviceId, 1, holdMs, 'linear'),
+      () => this.pinchChannel(deviceId, 0, rampMs, 'minimum-jerk'),
+    ];
+    let phase = 0;
+    let run!: ChannelRun;
+    return this.enqueueTick(
+      'select',
+      params as unknown as Record<string, unknown>,
+      {
+        start: () => {
+          run = this.channels.run([phases[0]()]);
+        },
+        tick: (deltaMs) => {
+          let leftover = run.advance(deltaMs);
+          while (leftover >= 0) {
+            phase++;
+            if (phase === phases.length) {
+              return leftover;
+            }
+            run = this.channels.run([phases[phase]()]);
+            if (phase === 1) {
+              // The press lands this frame; what is left of it counts toward
+              // the hold, and the release comes on a later frame.
+              run.advance(Math.min(leftover, holdMs));
+              return -1;
+            }
+            leftover = run.advance(leftover);
+          }
+          return -1;
+        },
+        result: () => ({ device: deviceId, duration }),
+      },
+    ) as Promise<SelectResult>;
   }
 
   /**
@@ -1914,6 +2664,7 @@ export class RemoteControlInterface {
     for (const action of pending) {
       action.reject(new Error('The XR session ended.'));
     }
+    this.releaseHands();
     if (this._isCaptured) {
       this.startReleaseTimer();
     }
@@ -1937,8 +2688,9 @@ export class RemoteControlInterface {
     // Cancel any held input on BOTH controllers and hands so an interrupted
     // select/squeeze/thumbstick (or hand pinch) doesn't stay engaged. Held
     // select/squeeze actions end without completing. Poses are intentionally
-    // left where they are.
+    // left where they are; pins and pose fades are let go.
     this.cancelHeldInputs();
+    this.releaseHands();
     for (const hand of ['left', 'right'] as const) {
       this.device.controllers[hand]?.updateAxes('thumbstick', 0, 0);
     }

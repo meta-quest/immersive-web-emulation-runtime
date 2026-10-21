@@ -6,7 +6,12 @@
  */
 
 import type { Vec3, Quat, EulerRotation, InputMode } from '../types/state.js';
-import type { FingerPoseBlend, XRHandFinger } from '../device/XRHandInput.js';
+import type {
+  FingerPoseBlend,
+  HandAnchor,
+  XRHandFinger,
+} from '../device/XRHandInput.js';
+import type { Easing, NamedDirection } from './hand-motion.js';
 
 // =============================================================================
 // Device Identifiers
@@ -69,26 +74,29 @@ export interface DiscreteAction extends BaseAction {
 }
 
 /**
- * Duration action - lerps over multiple frames
+ * Timed action - runs over several frames and holds the head of the queue
+ * until it finishes.
  */
-export interface DurationAction extends BaseAction {
-  type: 'duration';
-  durationMs: number;
-  elapsedMs: number;
-  startState: {
-    position?: Vec3;
-    orientation?: Quat;
-  };
-  targetState: {
-    position?: Vec3;
-    orientation?: Quat;
-  };
+export interface TickAction extends BaseAction {
+  type: 'tick';
+  started: boolean;
+  /** Called on the first frame the action runs (captures start state). */
+  start: () => void;
+  /**
+   * Advances by `deltaMs`; returns the time left over once finished (carried
+   * into the next action), or -1 while still running.
+   */
+  tick: (deltaMs: number) => number;
+  result: () => unknown;
 }
+
+/** @deprecated Timed actions are {@link TickAction}s. */
+export type DurationAction = TickAction;
 
 /**
  * Union of all action types
  */
-export type Action = DiscreteAction | DurationAction;
+export type Action = DiscreteAction | TickAction;
 
 // =============================================================================
 // Tool Parameter Types
@@ -98,6 +106,29 @@ export type Action = DiscreteAction | DurationAction;
  * Orientation can be specified as quaternion or euler angles (partial euler angles allowed, missing default to 0)
  */
 export type OrientationInput = Quat | Partial<EulerRotation>;
+
+/** A direction as `{x, y, z}`, `[x, y, z]`, or a name relative to the body. */
+export type DirectionInput = Vec3 | [number, number, number] | NamedDirection;
+
+/**
+ * A hand orientation by direction (XR-origin): where the fingers point and the
+ * way the palm faces, or the thumb side of the hand. `fingers` is kept exact.
+ */
+export interface HandOrientationInput {
+  fingers: DirectionInput;
+  palm?: DirectionInput;
+  thumb?: DirectionInput;
+}
+
+/**
+ * Orientation for a placement: a quaternion or euler angles for the device
+ * (for hands, the target ray), hand directions, or `'auto'` (hands only: a
+ * natural reach toward the position from the shoulder).
+ */
+export type PlacementOrientationInput =
+  | OrientationInput
+  | HandOrientationInput
+  | 'auto';
 
 /**
  * Parameters for get_transform tool
@@ -122,7 +153,9 @@ export interface GetTransformResult {
 export interface SetTransformParams {
   device: PoseDeviceId;
   position?: Vec3;
-  orientation?: OrientationInput;
+  orientation?: PlacementOrientationInput;
+  /** Hands: the point of the hand `position` places (default `target-ray`). */
+  anchor?: HandAnchor;
 }
 
 /**
@@ -158,8 +191,11 @@ export interface LookAtResult {
 export interface AnimateToParams {
   device: PoseDeviceId;
   position?: Vec3;
-  orientation?: OrientationInput;
+  orientation?: PlacementOrientationInput;
   duration?: number; // seconds, default: 0.5
+  easing?: Easing; // default: 'linear'
+  /** Hands: the point of the hand `position` places (default `target-ray`). */
+  anchor?: HandAnchor;
 }
 
 /**
@@ -224,6 +260,9 @@ export interface GetSelectValueResult {
 export interface SetSelectValueParams {
   device: SelectableDeviceId;
   value: number;
+  /** Seconds to ramp from the current value (default: instant). */
+  duration?: number;
+  easing?: Easing;
 }
 
 /**
@@ -244,6 +283,9 @@ export interface SetHandPoseParams {
   fingers?: Partial<
     Record<XRHandFinger, string | { poseId: string; weight?: number }>
   >;
+  /** Seconds to fade from the hand as shown (default: instant). */
+  duration?: number;
+  easing?: Easing;
 }
 
 /**
@@ -253,6 +295,35 @@ export interface SetHandPoseResult {
   device: 'hand-left' | 'hand-right';
   poseId: string;
   fingers: Partial<Record<XRHandFinger, FingerPoseBlend>>;
+}
+
+/**
+ * Parameters for get_hand_state tool
+ */
+export interface GetHandStateParams {
+  device: 'hand-left' | 'hand-right';
+  /** `'all'` adds every joint's position and radius. */
+  joints?: 'key' | 'all';
+}
+
+/**
+ * Result of get_hand_state tool (positions and orientations XR-origin)
+ */
+export interface GetHandStateResult {
+  device: 'hand-left' | 'hand-right';
+  connected: boolean;
+  poseId: string;
+  fingers: Partial<Record<XRHandFinger, FingerPoseBlend>>;
+  /** A timed pose change in progress: the pose it fades from, and how far. */
+  transition: { from: string; progress: number } | null;
+  pinchValue: number;
+  pressed: boolean;
+  position: Vec3;
+  orientation: Quat;
+  pin: { anchor: HandAnchor; target: Vec3 } | null;
+  anchors: Record<'wrist' | 'grip' | 'grasp' | 'index-tip' | 'thumb-tip', Vec3>;
+  axes: { fingers: Vec3; palm: Vec3; thumb: Vec3 };
+  joints?: Record<string, { position: Vec3; radius: number }>;
 }
 
 /**
@@ -379,6 +450,15 @@ export interface EndSessionResult {
 // Device State Types
 // =============================================================================
 
+/** A hand in get_device_state / set_device_state. */
+export interface RemoteHandState {
+  connected: boolean;
+  position: Vec3;
+  orientation: Quat;
+  poseId?: string;
+  pinchValue?: number;
+}
+
 /**
  * Full device state for get_device_state
  */
@@ -393,8 +473,8 @@ export interface RemoteDeviceState {
     right: { connected: boolean; position: Vec3; orientation: Quat };
   };
   hands: {
-    left: { connected: boolean; position: Vec3; orientation: Quat };
-    right: { connected: boolean; position: Vec3; orientation: Quat };
+    left: RemoteHandState;
+    right: RemoteHandState;
   };
   gaze?: {
     connected: boolean;

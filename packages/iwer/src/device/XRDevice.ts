@@ -664,7 +664,11 @@ export class XRDevice {
           visibilityState?: XRVisibilityState;
           end?: () => void | Promise<void>;
         };
-        const primaryReferenceSpace = sessionState?.referenceSpaces?.[0];
+        // The XR origin is the app's first reference space that isn't the
+        // (moving) viewer space.
+        const primaryReferenceSpace = sessionState?.referenceSpaces?.find(
+          (space) => space[P_REF_SPACE]?.type !== XRReferenceSpaceType.Viewer,
+        );
         return {
           mode: sessionState?.mode ?? structuralSession.mode ?? 'immersive-vr',
           enabledFeatures: structuralSession.enabledFeatures ?? [],

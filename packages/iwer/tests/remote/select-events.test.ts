@@ -66,7 +66,7 @@ describe('select events through remote control', () => {
 
   test('fires selectstart on press, then select and selectend on release', async () => {
     const done = device.remote.dispatch('select', { device: 'hand-right' });
-    for (let i = 0; i < 20; i++) runFrame();
+    for (let i = 0; i < 40; i++) runFrame();
     await done;
     expect(events.map((e) => e.type)).toEqual([
       'selectstart',

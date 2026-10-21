@@ -159,7 +159,7 @@ describe('full chain integration', () => {
 
   it('lists the full tool catalog', async () => {
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(20);
+    expect(tools.length).toBe(21);
     const names = tools.map((t) => t.name);
     expect(names).toContain('xr_accept_session');
     expect(names).toContain('xr_look_at');
@@ -223,6 +223,42 @@ describe('full chain integration', () => {
     expect(image).toBeDefined();
     expect(image?.mimeType).toBe('image/jpeg');
     expect(typeof image?.data).toBe('string');
+  });
+
+  it('forwards hand params intact and rejects a misspelt one', async () => {
+    const before = browser.calls.length;
+    const placed = (await client.callTool({
+      name: 'xr_set_transform',
+      arguments: {
+        device: 'hand-right',
+        position: { x: 0, y: 1, z: -0.4 },
+        anchor: 'index-tip',
+        orientation: { fingers: 'forward', palm: 'down' },
+      },
+    })) as { isError?: boolean };
+    expect(placed.isError).toBeFalsy();
+    expect(browser.calls.at(-1)).toEqual({
+      method: 'set_transform',
+      params: {
+        device: 'hand-right',
+        position: { x: 0, y: 1, z: -0.4 },
+        anchor: 'index-tip',
+        orientation: { fingers: 'forward', palm: 'down' },
+      },
+    });
+
+    let rejected = false;
+    try {
+      const res = (await client.callTool({
+        name: 'xr_set_transform',
+        arguments: { device: 'hand-right', ancor: 'index-tip' },
+      })) as { isError?: boolean };
+      rejected = res.isError === true;
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
+    expect(browser.calls.length).toBe(before + 1);
   });
 
   it('errors cleanly when no browser is connected', async () => {

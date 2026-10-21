@@ -11,7 +11,7 @@
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { TOOLS, type ToolDef } from './contract.js';
+import { TOOLS, inputSchemaOf, type ToolDef } from './contract.js';
 import { BrowserHub, type DispatchResponse } from './hub.js';
 import { createTabTracker, type TabTracker } from './tab-tracker.js';
 import {
@@ -163,7 +163,7 @@ export function buildMcpServer(opts: BuildMcpServerOptions): McpServer {
       {
         title: tool.title,
         description: tool.description,
-        inputSchema: tool.inputShape,
+        inputSchema: inputSchemaOf(tool),
         annotations: { readOnlyHint: tool.readOnlyHint },
       },
       // The SDK infers args from inputSchema; in this generic loop it is a
