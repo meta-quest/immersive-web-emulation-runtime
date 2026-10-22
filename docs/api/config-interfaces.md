@@ -90,3 +90,6 @@ outline: deep
 
 - **`poses`**: **{ default: HandPose; pinch: HandPose; [poseId: string]: HandPose; }**  
   Contains hand pose configurations for default, pinch, and additional customizable poses.
+
+- **`pinchThresholds`**: **{ press: number; release: number; }?**  
+  Pinch levels at which the hand selects and lets go, with `0 < release < press <= 1`. Defaults to `DEFAULT_PINCH_THRESHOLDS` (`press: 0.9`, `release: 0.7`).

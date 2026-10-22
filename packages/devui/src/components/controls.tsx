@@ -58,6 +58,7 @@ export const ControlsUI: React.FC<ControlsProps> = ({
         : Object.entries(xrDevice.hands).map(([handedness, hand]) => (
             <HandUI
               key={`hand-${handedness}`}
+              xrDevice={xrDevice}
               hand={hand}
               handle={
                 inputLayer.transformHandles.get(handedness as 'left' | 'right')!

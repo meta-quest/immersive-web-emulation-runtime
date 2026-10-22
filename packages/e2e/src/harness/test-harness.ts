@@ -15,7 +15,8 @@ export interface TestContext {
 }
 
 type TestFn = (ctx: TestContext) => void | Promise<void>;
-type LifecycleFn = () => void | Promise<void>;
+/** Lifecycle hooks get the same context as tests (most ignore it). */
+type LifecycleFn = (ctx: TestContext) => void | Promise<void>;
 
 interface TestEntry {
   name: string;
@@ -382,7 +383,7 @@ export class TestHarness {
     let beforeAllError: string | undefined;
     try {
       for (const bfn of suite.beforeAll) {
-        await bfn();
+        await bfn(this.ctx);
       }
     } catch (e: any) {
       beforeAllError = e.message || String(e);
@@ -425,7 +426,7 @@ export class TestHarness {
         try {
           const testBody = async () => {
             for (const bfn of suite.beforeEach) {
-              await bfn();
+              await bfn(this.ctx);
             }
             await test.fn(this.ctx);
           };
@@ -458,7 +459,7 @@ export class TestHarness {
           }
           try {
             for (const afn of suite.afterEach) {
-              await afn();
+              await afn(this.ctx);
             }
           } catch (_) {
             // cleanup errors shouldn't mask test failures
@@ -482,7 +483,7 @@ export class TestHarness {
     // Run afterAll hooks
     try {
       for (const afn of suite.afterAll) {
-        await afn();
+        await afn(this.ctx);
       }
     } catch (_) {
       // afterAll errors shouldn't mask test failures

@@ -17,17 +17,18 @@ import React, { useEffect, useState } from 'react';
 
 import { Icon } from './icon.js';
 import { MappedKeyDisplay } from './keys.js';
+import type { XRDevice } from 'iwer';
 import { XRHandInput } from 'iwer/lib/device/XRHandInput.js';
 import { emitPrefsPatch } from '../prefs.js';
+import { poseLabel, stepPoseId } from '../pose-cycle.js';
 import { styled } from 'styled-components';
 
 interface PoseSelectorProps {
+  xrDevice: XRDevice;
   hand: XRHandInput;
   pointerLocked: boolean;
   mappedKey: string;
 }
-
-const poses = ['default', 'pinch', 'point'];
 
 const Row = styled.div`
   display: flex;
@@ -84,20 +85,29 @@ const Value = styled.div`
 `;
 
 export const PoseSelector: React.FC<PoseSelectorProps> = ({
+  xrDevice,
   hand,
   pointerLocked,
   mappedKey,
 }) => {
-  const [poseId, setPoseId] = useState(hand.poseId);
+  const readLabel = () => poseLabel(hand.poseId, hand.fingerPoses);
+  const [label, setLabel] = useState(readLabel);
   const [isKeyPressed, setIsKeyPressed] = useState(false);
 
+  // Follow poses set from outside the panel too (remote control, scripts).
+  useEffect(() => {
+    const refresh = () => setLabel(readLabel());
+    refresh();
+    return xrDevice.onStateChange(refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [xrDevice, hand]);
+
   const handedness = hand.inputSource.handedness;
-  const cyclePose = (delta: number) => {
-    const idx = poses.indexOf(hand.poseId);
-    const next = (idx + poses.length + delta) % poses.length;
-    setPoseId(poses[next]);
-    hand.poseId = poses[next];
-    emitPrefsPatch({ handPoses: { [handedness]: poses[next] } });
+  const cyclePose = (delta: 1 | -1) => {
+    const next = stepPoseId(hand.poseId, hand.poseIds, delta);
+    hand.poseId = next;
+    setLabel(readLabel());
+    emitPrefsPatch({ handPoses: { [handedness]: next } });
   };
 
   useEffect(() => {
@@ -157,7 +167,7 @@ export const PoseSelector: React.FC<PoseSelectorProps> = ({
         <Step type="button" onClick={() => cyclePose(-1)} title="Previous pose">
           <Icon name="chevron-left" size={14} />
         </Step>
-        <Value>{poseId}</Value>
+        <Value>{label}</Value>
         <Step type="button" onClick={() => cyclePose(1)} title="Next pose">
           <Icon name="chevron-right" size={14} />
         </Step>

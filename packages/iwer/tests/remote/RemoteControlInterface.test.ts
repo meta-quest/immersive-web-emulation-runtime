@@ -736,8 +736,10 @@ describe('RemoteControlInterface', () => {
         remote.update(16.67);
         const result = (await promise) as LookAtResult;
 
+        // (0, 1.6, -8) in GlobalSpace, reported relative to the XR origin
+        expect(device.position.y).toBeCloseTo(1.6, 1);
         expect(result.position.x).toBeCloseTo(0, 1);
-        expect(result.position.y).toBeCloseTo(1.6, 1);
+        expect(result.position.y).toBeCloseTo(0, 1);
         expect(result.position.z).toBeCloseTo(-8, 1);
       });
     });
@@ -762,9 +764,12 @@ describe('RemoteControlInterface', () => {
         remote.update(100);
         const result = (await promise) as AnimateToResult;
 
-        // Final position should be transformed to GlobalSpace
-        expect(result.position.x).toBeCloseTo(0, 1);
-        expect(result.position.y).toBeCloseTo(1.6, 1);
+        // The headset moved to (0, 1.6, -2) in GlobalSpace; results are
+        // reported relative to the XR origin.
+        expect(device.position.x).toBeCloseTo(0, 1);
+        expect(device.position.y).toBeCloseTo(1.6, 1);
+        expect(device.position.z).toBeCloseTo(-2, 1);
+        expect(result.position.y).toBeCloseTo(0, 1);
         expect(result.position.z).toBeCloseTo(-2, 1);
       });
 
@@ -1120,13 +1125,117 @@ describe('RemoteControlInterface', () => {
           duration: 0.5,
         });
 
-        remote.update(16.67); // set to 1
-        remote.update(600); // wait > 500ms
-        remote.update(16.67); // set to 0
+        // A hand closes its pinch over 0.1 s, holds, and opens over 0.1 s.
+        remote.update(100); // closed
+        remote.update(600); // held > 500ms, opening starts
+        remote.update(100); // open
 
         const result = (await promise) as SelectResult;
         expect(result.duration).toBe(0.5);
       });
+    });
+  });
+
+  describe('set_hand_pose', () => {
+    beforeEach(() => {
+      mockActiveSession();
+    });
+
+    test('sets a pose and per-finger blends', async () => {
+      const promise = remote.dispatch('set_hand_pose', {
+        device: 'hand-left',
+        poseId: 'open',
+        fingers: {
+          middle: 'fist',
+          ring: { poseId: 'fist' },
+          pinky: { poseId: 'fist', weight: 0.5 },
+        },
+      });
+      remote.update(16.67);
+      const result = (await promise) as {
+        poseId: string;
+        fingers: Record<string, unknown>;
+      };
+
+      expect(result.poseId).toBe('open');
+      expect(device.hands.left!.poseId).toBe('open');
+      expect(device.hands.left!.fingerPoses).toEqual({
+        middle: { poseId: 'fist', weight: 1 },
+        ring: { poseId: 'fist', weight: 1 },
+        pinky: { poseId: 'fist', weight: 0.5 },
+      });
+      expect(result.fingers).toEqual(device.hands.left!.fingerPoses);
+    });
+
+    test('replaces earlier finger blends', async () => {
+      device.hands.left!.setFingerPose('index', 'point');
+      const promise = remote.dispatch('set_hand_pose', {
+        device: 'hand-left',
+        poseId: 'fist',
+      });
+      remote.update(16.67);
+      await promise;
+
+      expect(device.hands.left!.fingerPoses).toEqual({});
+    });
+
+    test('rejects unknown poses and fingers without changing the hand', async () => {
+      const unknownPose = remote.dispatch('set_hand_pose', {
+        device: 'hand-right',
+        poseId: 'relaxed',
+      });
+      remote.update(16.67);
+      await expect(unknownPose).rejects.toThrow(
+        /Unknown hand pose 'relaxed'\. Available poses: default, pinch, point/,
+      );
+
+      const unknownFinger = remote.dispatch('set_hand_pose', {
+        device: 'hand-right',
+        poseId: 'fist',
+        fingers: { elbow: 'open' },
+      });
+      remote.update(16.67);
+      await expect(unknownFinger).rejects.toThrow(/Unknown finger 'elbow'/);
+      expect(device.hands.right!.poseId).toBe('default');
+    });
+
+    test('rejects prototype names, malformed blends and non-numeric weights', async () => {
+      const cases: [Record<string, unknown>, RegExp][] = [
+        [{ poseId: 'constructor' }, /Unknown hand pose 'constructor'/],
+        [
+          { poseId: 'open', fingers: { constructor: 'fist' } },
+          /Unknown finger 'constructor'/,
+        ],
+        [
+          { poseId: 'open', fingers: { index: 'toString' } },
+          /Unknown hand pose 'toString'/,
+        ],
+        [
+          { poseId: 'open', fingers: { index: null } },
+          /Finger 'index' takes a pose id or \{ poseId, weight \}/,
+        ],
+        [
+          {
+            poseId: 'open',
+            fingers: { index: { poseId: 'fist', weight: '1' } },
+          },
+          /Finger weight must be within \[0, 1\], got 1/,
+        ],
+        [
+          { poseId: 'open', fingers: ['fist'] },
+          /fingers must map finger names/,
+        ],
+      ];
+      for (const [params, error] of cases) {
+        const promise = remote.dispatch('set_hand_pose', {
+          device: 'hand-right',
+          ...params,
+        });
+        remote.update(16.67);
+        await expect(promise).rejects.toThrow(error);
+      }
+      expect(device.hands.right!.poseId).toBe('default');
+      expect(device.hands.right!.fingerPoses).toEqual({});
     });
   });
 
@@ -1565,14 +1674,14 @@ describe('RemoteControlInterface', () => {
           device: 'controller-right',
         });
 
-        // Process _select_press
+        // Press
         remote.update(16.67);
         expect(device.controllers.right!.getButtonValue('trigger')).toBe(1);
 
-        // Process _select_wait (complete the duration)
+        // Hold (complete the duration)
         remote.update(200);
 
-        // Process _select_release
+        // Release
         remote.update(16.67);
         expect(device.controllers.right!.getButtonValue('trigger')).toBe(0);
 
@@ -1580,17 +1689,12 @@ describe('RemoteControlInterface', () => {
         expect(result.device).toBe('controller-right');
       });
 
-      test.each(['_select_press', '_select_release'])(
-        'should reject %s when an invalid gaze device reaches the internal queue',
-        (method) => {
-          expect(() =>
-            (remote as any).executeDiscreteAction({
-              method,
-              params: { device: 'gaze' },
-            }),
-          ).toThrow('Unsupported select device: gaze');
-        },
-      );
+      test('should reject select for a gaze device before queueing anything', async () => {
+        await expect(
+          remote.dispatch('select', { device: 'gaze' }),
+        ).rejects.toThrow('Unknown input device: gaze');
+        expect(remote.queueLength).toBe(0);
+      });
     });
 
     describe('get_select_value with actual assertions (fix #8)', () => {
@@ -1625,12 +1729,16 @@ describe('RemoteControlInterface', () => {
           duration: 0.1,
         });
 
-        // Corrupt the action's params to simulate an invalid device in the queue
-        const action = (remote as any).commandQueue[0];
-        action.params.device = 'bogus-device';
+        // Make applying the animation fail, as an invalid device would
+        const failure = jest
+          .spyOn(remote as any, 'setDeviceTransform')
+          .mockImplementation(() => {
+            throw new Error('Unknown device: bogus-device');
+          });
 
         // Process the duration action - should reject, not loop forever
         remote.update(200);
+        failure.mockRestore();
 
         await expect(promise).rejects.toThrow('Unknown device');
         expect(remote.queueLength).toBe(0);
@@ -1643,11 +1751,15 @@ describe('RemoteControlInterface', () => {
           duration: 0.1,
         });
 
-        // Corrupt device to trigger error path
-        const action = (remote as any).commandQueue[0];
-        action.params.device = 'bogus-device';
+        // Make applying the animation fail to trigger the error path
+        const failure = jest
+          .spyOn(remote as any, 'setDeviceTransform')
+          .mockImplementation(() => {
+            throw new Error('Unknown device: bogus-device');
+          });
 
         remote.update(200);
+        failure.mockRestore();
         await expect(badPromise).rejects.toThrow('Unknown device');
 
         // Queue should be empty, subsequent commands should work
@@ -1668,12 +1780,16 @@ describe('RemoteControlInterface', () => {
           duration: 0.2,
         });
 
-        // Corrupt device mid-animation to trigger lerp error
-        const action = (remote as any).commandQueue[0];
-        action.params.device = 'bogus-device';
+        // Fail mid-animation to trigger the lerp error path
+        const failure = jest
+          .spyOn(remote as any, 'setDeviceTransform')
+          .mockImplementation(() => {
+            throw new Error('Unknown device: bogus-device');
+          });
 
         // Update with time less than duration -> hits lerp path
         remote.update(50);
+        failure.mockRestore();
 
         await expect(promise).rejects.toThrow('Unknown device');
         expect(remote.queueLength).toBe(0);

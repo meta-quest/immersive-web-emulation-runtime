@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { BUILTIN_HAND_POSE_IDS } from 'iwer/lib/device/configs/hand/ids.js';
+
 import { MSG, PREFS_CHANNEL } from './protocol.js';
 import {
   DEVICE_CATALOG,
@@ -22,7 +24,7 @@ export interface PrefsRuntimeMessage {
 }
 
 const HANDEDNESSES = ['left', 'right'] as const;
-const HAND_POSES = ['default', 'pinch', 'point'] as const;
+const HAND_POSES = BUILTIN_HAND_POSE_IDS;
 const TRIGGER_MODES = ['slow', 'normal', 'fast', 'turbo'] as const;
 const GAZE_MODES = ['off', 'cursor', 'head-locked'] as const;
 

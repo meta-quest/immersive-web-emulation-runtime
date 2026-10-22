@@ -28,6 +28,8 @@ import { registerXRGPUBindingTests } from '@suites/xr-gpu-binding.spec';
 import { registerXREventsTests } from '@suites/xr-events.spec';
 import { registerXRRayTests } from '@suites/xr-ray.spec';
 import { registerXRHandTrackingTests } from '@suites/xr-hand-tracking.spec';
+import { registerXRHandSequenceTests } from '@suites/xr-hand-sequence.spec';
+import { registerXRHandMicrogestureTests } from '@suites/xr-hand-microgesture.spec';
 import { registerXRAnchorsTests } from '@suites/xr-anchors.spec';
 import { registerXRHitTestTests } from '@suites/xr-hit-test.spec';
 import { registerXRPlanesTests } from '@suites/xr-planes.spec';
@@ -56,6 +58,8 @@ function registerAll(harness: TestHarness) {
   registerXREventsTests(harness);
   registerXRRayTests(harness);
   registerXRHandTrackingTests(harness);
+  registerXRHandSequenceTests(harness);
+  registerXRHandMicrogestureTests(harness);
   registerXRAnchorsTests(harness);
   registerXRHitTestTests(harness);
   registerXRPlanesTests(harness);

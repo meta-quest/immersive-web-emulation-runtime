@@ -6,6 +6,8 @@
  */
 
 import { GlobalSpace, XRSpace } from '../spaces/XRSpace.js';
+import { GamepadButton } from '../gamepad/Gamepad.js';
+import { resetButton } from '../gamepad/button-edges.js';
 import {
   P_DEVICE,
   P_REF_SPACE,
@@ -221,6 +223,9 @@ export interface RuntimeOptions {
    */
   forceInstall?: boolean;
 }
+
+/** Longest frame delta remote control advances by in one frame. */
+export const MAX_REMOTE_FRAME_MS = 100;
 
 const Z_INDEX_SEM_CANVAS = 1;
 const Z_INDEX_APP_CANVAS = 2;
@@ -565,7 +570,20 @@ export class XRDevice {
         );
       },
       onSessionEnd: () => {
+        this[P_DEVICE].remote?.onSessionEnd();
         this[P_DEVICE].devui?.onSessionEnd?.();
+        // Nothing carries into the next session: buttons held now (or with a
+        // cancel still to report) start the next session released.
+        for (const input of [
+          ...Object.values(this[P_DEVICE].controllers),
+          ...Object.values(this[P_DEVICE].hands),
+        ]) {
+          for (const button of input.inputSource.gamepad?.buttons ?? []) {
+            if (button instanceof GamepadButton) {
+              resetButton(button);
+            }
+          }
+        }
         if (this[P_DEVICE].canvasData) {
           const { canvas, parent, width, height, zIndex } =
             this[P_DEVICE].canvasData;
@@ -599,11 +617,13 @@ export class XRDevice {
         }
       },
       updateRemote: () => {
-        // Calculate delta time for remote control
+        // Calculate delta time for remote control, capped so one stalled
+        // frame (a background tab, a debugger pause) can't run several timed
+        // actions at once.
         const now = performance.now();
         const deltaTimeMs =
           this[P_DEVICE].lastFrameTime > 0
-            ? now - this[P_DEVICE].lastFrameTime
+            ? Math.min(now - this[P_DEVICE].lastFrameTime, MAX_REMOTE_FRAME_MS)
             : 16.67; // Default to ~60fps
         this[P_DEVICE].lastFrameTime = now;
 
@@ -690,7 +710,11 @@ export class XRDevice {
           visibilityState?: XRVisibilityState;
           end?: () => void | Promise<void>;
         };
-        const primaryReferenceSpace = sessionState?.referenceSpaces?.[0];
+        // The XR origin is the app's first reference space that isn't the
+        // (moving) viewer space.
+        const primaryReferenceSpace = sessionState?.referenceSpaces?.find(
+          (space) => space[P_REF_SPACE]?.type !== XRReferenceSpaceType.Viewer,
+        );
         return {
           mode: sessionState?.mode ?? structuralSession.mode ?? 'immersive-vr',
           enabledFeatures: structuralSession.enabledFeatures ?? [],

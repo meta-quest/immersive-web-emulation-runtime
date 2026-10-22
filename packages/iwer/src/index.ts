@@ -39,7 +39,7 @@ export { GamepadMappingType } from './gamepad/Gamepad.js';
 export type { GamepadConfig, Button, Axis } from './gamepad/Gamepad.js';
 
 // Remote Control Interface
-export { RemoteControlInterface } from './remote/index.js';
+export { RemoteControlInterface, MICROGESTURES } from './remote/index.js';
 export type {
   DeviceId,
   PoseDeviceId,
@@ -49,8 +49,12 @@ export type {
   ControllerId,
   Action,
   DiscreteAction,
+  TickAction,
   DurationAction,
   OrientationInput,
+  DirectionInput,
+  HandOrientationInput,
+  PlacementOrientationInput,
   GetTransformParams,
   GetTransformResult,
   SetTransformParams,
@@ -67,6 +71,26 @@ export type {
   GetSelectValueResult,
   SetSelectValueParams,
   SetSelectValueResult,
+  SetHandPoseParams,
+  SetHandPoseResult,
+  GetHandStateParams,
+  GetHandStateResult,
+  MicrogestureParams,
+  MicrogestureResult,
+  Microgesture,
+  SequencePosition,
+  SequenceTarget,
+  TargetFace,
+  TargetIntent,
+  ResolvedTarget,
+  TargetResolver,
+  TimedInput,
+  SequenceStep,
+  RunSequenceParams,
+  SequenceResult,
+  SequencePlan,
+  CancelSequenceResult,
+  ListTargetsResult,
   SelectParams,
   SelectResult,
   GamepadButtonInfo,
@@ -81,8 +105,11 @@ export type {
   AcceptSessionResult,
   EndSessionResult,
   RemoteDeviceState,
+  RemoteHandState,
   SetDeviceStateParams,
   SetDeviceStateResult,
+  Easing,
+  NamedDirection,
 } from './remote/index.js';
 
 // Control Types
@@ -156,6 +183,17 @@ export { XRJointPose } from './pose/XRJointPose.js';
 // Input
 export { XRInputSource, XRInputSourceArray } from './input/XRInputSource.js';
 export { XRHand } from './input/XRHand.js';
+export { BUILTIN_HAND_POSE_IDS } from './device/configs/hand/ids.js';
+export type { BuiltinHandPoseId } from './device/configs/hand/ids.js';
+export type {
+  FingerPoseBlend,
+  HandAnchor,
+  HandDirections,
+  HandGestureButton,
+  HandPin,
+  ThumbMotion,
+  XRHandFinger,
+} from './device/XRHandInput.js';
 export {
   XRGazeInput,
   GAZE_TRACKING_FEATURES,

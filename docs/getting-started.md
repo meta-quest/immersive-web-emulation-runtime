@@ -300,14 +300,41 @@ xrDevice.hands['right'].quaternion.copy(quat);
 
 ### Pose Control
 
-Hand poses present a unique challenge for emulation, given the variability in hand shapes and the differences in hand tracking implementations across platforms. To address this, IWER includes several preset hand poses, derived from obfuscated hand tracking data captured on a Meta Quest 3 device. These presets offer a universal starting point for hand pose emulation, though for optimal accuracy, capturing and using your own hand tracking data is recommended. The following example demonstrates how to apply these preset poses:
+Hand poses present a unique challenge for emulation, given the variability in hand shapes and the differences in hand tracking implementations across platforms. IWER ships a library of base hand poses for development. `default`, `pinch` and `point` were captured on a Meta Quest 3; the rest are built on the skeleton of the captured `default` pose:
+
+| Group         | Poses                                                                       |
+| ------------- | --------------------------------------------------------------------------- |
+| Neutral       | `default`, `open`, `flat`, `fist`                                           |
+| Pinches       | `pinch`, `pinch-middle`, `pinch-ring`, `pinch-pinky`, `tripod`, `key-pinch` |
+| Pointing      | `point`, `finger-gun`                                                       |
+| Gestures      | `thumbs-up`, `peace`, `three`, `four`, `ok`, `rock`, `call`                 |
+| Grasps        | `grip`, `claw`, `hook`, `cup`                                               |
+| Microgestures | `microgesture` (fingers loosely curled, the thumb by the index)             |
 
 ```javascript
-// Setting the pose of the left hand to a "relaxed" state:
-xrDevice.hands['left'].poseId = 'relaxed';
+// Setting the pose of the left hand:
+xrDevice.hands['left'].poseId = 'open';
 
-// Using the "default" pose for the right hand:
-xrDevice.hands['right'].poseId = 'default'; // "default" and "pinch" are essential poses for configuring emulated hands.
+// Every pose this hand can take:
+console.log(xrDevice.hands['left'].poseIds);
+```
+
+You can also take individual fingers from other poses. A borrowed finger keeps its source pose's spread as well as its curl, so take straight fingers from `flat` when they should lie together and from `open` when they should fan out. Setting `poseId` clears these finger blends:
+
+```javascript
+const hand = xrDevice.hands['right'];
+hand.poseId = 'open';
+// Curl three fingers to make a finger gun from an open hand:
+hand.setFingerPose('middle', 'fist');
+hand.setFingerPose('ring', 'fist');
+hand.setFingerPose('pinky', 'fist');
+// Blend the index halfway toward a fist:
+hand.setFingerPose('index', 'fist', 0.5);
+hand.clearFingerPoses('index');
+
+// Point from a fist, with the index straight and in line with the hand:
+hand.poseId = 'fist';
+hand.setFingerPose('index', 'flat');
 ```
 
 ### Pinch Control
@@ -326,6 +353,20 @@ const pinchGestureJob = setInterval(() => {
   }
   leftHand.updatePinchValue(pinchVal);
 }, 25); // Update interval in milliseconds.
+```
+
+The pinch closes the thumb and index onto each other, relative to the palm; the wrist, the grip and the other fingers keep the pose. The hand selects when the pinch reaches 0.9 and lets go at 0.7. To script whole interactions (a fingertip on a button, timed pinches, pose fades) through remote control, see [Scripting Hand Interactions](./scripting-hands.md).
+
+### Microgestures
+
+Each hand has a gamepad laid out as Quest Browser reports it: mapping `xr-standard`, the pinch on button 0, the menu gesture on button 4 and Quest's thumb microgestures on buttons 5 to 9 (swipe left, right, forward and backward along the curled index finger, and a thumb tap). Only the pinch fires session events; read the others from `inputSource.gamepad.buttons`. Remote control's `microgesture` command makes one with the thumb motion and a 35 ms press, as on Quest (see [Microgestures](./scripting-hands.md#microgestures)); `updateGestureButton()` writes a button directly:
+
+```javascript
+await xrDevice.remote.dispatch('microgesture', {
+  device: 'hand-right',
+  gesture: 'swipe-left',
+});
+// The app sees inputSource.gamepad.buttons[5].pressed for 35 ms.
 ```
 
 ## Platform Features

@@ -5,10 +5,52 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { XRHandInput, oculusHandConfig } from '../../src/device/XRHandInput';
+import {
+  HandPose,
+  XRHandInput,
+  handFingerJoints,
+  oculusHandConfig,
+} from '../../src/device/XRHandInput';
+import { XRHandJoint } from '../../src/input/XRHand';
 import { XRHandedness } from '../../src/input/XRInputSource';
 import { GlobalSpace } from '../../src/spaces/XRSpace';
 import { XRFrame } from '../../src/frameloop/XRFrame';
+import { BUILTIN_HAND_POSE_IDS } from '../../src/device/configs/hand/ids';
+import {
+  handPoseAngles,
+  libraryHandPoses,
+  microgestureThumbPoses,
+} from '../../src/device/configs/hand/library';
+import { GamepadButton } from '../../src/gamepad/Gamepad';
+import { P_SPACE } from '../../src/private';
+import { mat4, vec3 } from 'gl-matrix';
+
+const jointPosition = (matrix: mat4) =>
+  mat4.getTranslation(vec3.create(), matrix);
+const poseJoint = (poseId: string, joint: XRHandJoint) =>
+  oculusHandConfig.poses[poseId].jointTransforms[joint].offsetMatrix;
+const distance = (a: mat4, b: mat4) =>
+  vec3.distance(jointPosition(a), jointPosition(b));
+const expectMatrixClose = (actual: mat4, expected: mat4, digits = 5) => {
+  for (let i = 0; i < 16; i++) {
+    expect(actual[i]).toBeCloseTo(expected[i], digits);
+  }
+};
+const clonePose = (pose: HandPose): HandPose => {
+  const clone = { jointTransforms: {} } as HandPose;
+  for (const [joint, transform] of Object.entries(pose.jointTransforms)) {
+    clone.jointTransforms[joint as XRHandJoint] = {
+      offsetMatrix: mat4.clone(transform.offsetMatrix),
+      radius: transform.radius,
+    };
+  }
+  clone.gripOffsetMatrix = pose.gripOffsetMatrix;
+  return clone;
+};
+const configWith = (poses: Record<string, HandPose>) => ({
+  ...oculusHandConfig,
+  poses: { ...oculusHandConfig.poses, ...poses },
+});
 
 // Mock console.warn
 const originalWarn = console.warn;
@@ -79,6 +121,33 @@ describe('XRHandInput', () => {
     expect(() => {
       new XRHandInput(invalidConfig, XRHandedness.Left, globalSpace);
     }).toThrow('"default" and "pinch" hand pose configs are required');
+  });
+
+  test('rejects pinch thresholds outside 0 < release < press <= 1', () => {
+    for (const pinchThresholds of [
+      { press: 0.7, release: 0.9 },
+      { press: 0.8, release: 0.8 },
+      { press: 0.9, release: 0 },
+      { press: 1.2, release: 0.7 },
+      { press: Number.NaN, release: 0.7 },
+    ]) {
+      expect(
+        () =>
+          new XRHandInput(
+            { ...oculusHandConfig, pinchThresholds },
+            XRHandedness.Left,
+            globalSpace,
+          ),
+      ).toThrow('pinchThresholds need 0 < release < press <= 1');
+    }
+    const custom = new XRHandInput(
+      { ...oculusHandConfig, pinchThresholds: { press: 1, release: 0.5 } },
+      XRHandedness.Left,
+      globalSpace,
+    );
+    custom.updatePinchValue(0.95);
+    custom.onFrameStart(mockFrame);
+    expect(custom.inputSource.gamepad!.buttons[0]!.pressed).toBe(false);
   });
 
   test('should throw error for missing pinch pose config', () => {
@@ -238,5 +307,580 @@ describe('XRHandInput', () => {
 
     // Update hand pose to apply changes
     expect(() => xrHandInput.updateHandPose()).not.toThrow();
+  });
+
+  describe('built-in pose library', () => {
+    test('lists every built-in pose', () => {
+      xrHandInput = new XRHandInput(
+        oculusHandConfig,
+        XRHandedness.Left,
+        globalSpace,
+      );
+      expect(xrHandInput.poseIds).toEqual([...BUILTIN_HAND_POSE_IDS]);
+    });
+
+    test('builds every library pose on the captured skeleton', () => {
+      const rest = oculusHandConfig.poses.default;
+      for (const poseId of Object.keys(handPoseAngles)) {
+        const pose = oculusHandConfig.poses[poseId];
+        for (const joints of Object.values(handFingerJoints)) {
+          for (let i = 1; i < joints.length; i++) {
+            expect(
+              distance(
+                pose.jointTransforms[joints[i - 1]].offsetMatrix,
+                pose.jointTransforms[joints[i]].offsetMatrix,
+              ),
+            ).toBeCloseTo(
+              distance(
+                rest.jointTransforms[joints[i - 1]].offsetMatrix,
+                rest.jointTransforms[joints[i]].offsetMatrix,
+              ),
+              6,
+            );
+          }
+        }
+      }
+    });
+
+    test('closes the pinch poses on the named fingertip', () => {
+      const tips: Record<string, XRHandJoint> = {
+        ok: XRHandJoint.IndexFingerTip,
+        'pinch-middle': XRHandJoint.MiddleFingerTip,
+        'pinch-ring': XRHandJoint.RingFingerTip,
+        'pinch-pinky': XRHandJoint.PinkyFingerTip,
+        tripod: XRHandJoint.IndexFingerTip,
+      };
+      for (const [poseId, tip] of Object.entries(tips)) {
+        expect(
+          distance(
+            poseJoint(poseId, XRHandJoint.ThumbTip),
+            poseJoint(poseId, tip),
+          ),
+        ).toBeLessThan(0.015);
+      }
+      // An open hand keeps the thumb far from every fingertip.
+      expect(
+        distance(
+          poseJoint('open', XRHandJoint.ThumbTip),
+          poseJoint('open', XRHandJoint.IndexFingerTip),
+        ),
+      ).toBeGreaterThan(0.08);
+    });
+  });
+
+  describe('finger blending', () => {
+    const jointMatrix = (input: XRHandInput, joint: XRHandJoint) =>
+      input.inputSource.hand!.get(joint)![P_SPACE].offsetMatrix;
+
+    beforeEach(() => {
+      xrHandInput = new XRHandInput(
+        oculusHandConfig,
+        XRHandedness.Left,
+        globalSpace,
+      );
+    });
+
+    test('takes whole fingers from another pose', () => {
+      xrHandInput.poseId = 'open';
+      for (const finger of ['middle', 'ring', 'pinky'] as const) {
+        xrHandInput.setFingerPose(finger, 'fist');
+      }
+      xrHandInput.updateHandPose();
+
+      // Library poses share the wrist, so blended fingers match the source.
+      for (const finger of ['middle', 'ring', 'pinky'] as const) {
+        for (const joint of handFingerJoints[finger]) {
+          expectMatrixClose(
+            jointMatrix(xrHandInput, joint),
+            poseJoint('fist', joint),
+          );
+        }
+      }
+      for (const finger of ['thumb', 'index'] as const) {
+        for (const joint of handFingerJoints[finger]) {
+          expectMatrixClose(
+            jointMatrix(xrHandInput, joint),
+            poseJoint('open', joint),
+          );
+        }
+      }
+    });
+
+    test('attaches blended fingers to the base pose wrist', () => {
+      // The captured point pose places the wrist differently from open.
+      xrHandInput.poseId = 'point';
+      xrHandInput.setFingerPose('index', 'open');
+      xrHandInput.updateHandPose();
+
+      const local = (wrist: mat4, joint: mat4) => {
+        const out = mat4.create();
+        mat4.invert(out, wrist);
+        return mat4.multiply(out, out, joint);
+      };
+      for (const joint of handFingerJoints.index) {
+        expectMatrixClose(
+          local(
+            jointMatrix(xrHandInput, XRHandJoint.Wrist),
+            jointMatrix(xrHandInput, joint),
+          ),
+          local(poseJoint('open', XRHandJoint.Wrist), poseJoint('open', joint)),
+        );
+      }
+    });
+
+    test('keeps bone lengths through partial weights', () => {
+      xrHandInput.poseId = 'open';
+      xrHandInput.setFingerPose('index', 'fist', 0.5);
+      xrHandInput.updateHandPose();
+
+      const joints = handFingerJoints.index;
+      for (let i = 1; i < joints.length; i++) {
+        expect(
+          distance(
+            jointMatrix(xrHandInput, joints[i - 1]),
+            jointMatrix(xrHandInput, joints[i]),
+          ),
+        ).toBeCloseTo(
+          distance(
+            poseJoint('open', joints[i - 1]),
+            poseJoint('open', joints[i]),
+          ),
+          4,
+        );
+      }
+      const tip = jointPosition(
+        jointMatrix(xrHandInput, XRHandJoint.IndexFingerTip),
+      );
+      expect(
+        vec3.distance(
+          tip,
+          jointPosition(poseJoint('open', XRHandJoint.IndexFingerTip)),
+        ),
+      ).toBeGreaterThan(0.02);
+      expect(
+        vec3.distance(
+          tip,
+          jointPosition(poseJoint('fist', XRHandJoint.IndexFingerTip)),
+        ),
+      ).toBeGreaterThan(0.02);
+    });
+
+    test('keeps bone lengths between two captured skeletons', () => {
+      // The captured pinch and point poses come from different captures, so
+      // their index bones differ slightly in length and parent orientation.
+      xrHandInput.poseId = 'pinch';
+      xrHandInput.setFingerPose('index', 'point', 0.5);
+      xrHandInput.updateHandPose();
+
+      const joints = [XRHandJoint.Wrist, ...handFingerJoints.index];
+      for (let i = 1; i < joints.length; i++) {
+        const bone = (poseId: string) =>
+          distance(
+            poseJoint(poseId, joints[i - 1]),
+            poseJoint(poseId, joints[i]),
+          );
+        expect(
+          distance(
+            jointMatrix(xrHandInput, joints[i - 1]),
+            jointMatrix(xrHandInput, joints[i]),
+          ),
+        ).toBeCloseTo((bone('pinch') + bone('point')) / 2, 6);
+      }
+    });
+
+    test('keeps bone lengths when parent frames are oriented differently', () => {
+      // Same skeleton as open, but the index metacarpal's frame is turned 90
+      // degrees, so the proximal bone points another way in its parent frame.
+      const twisted = clonePose(oculusHandConfig.poses.open);
+      const metacarpal =
+        twisted.jointTransforms[XRHandJoint.IndexFingerMetacarpal].offsetMatrix;
+      mat4.rotateX(metacarpal, metacarpal, Math.PI / 2);
+      const input = new XRHandInput(
+        configWith({ twisted }),
+        XRHandedness.Left,
+        globalSpace,
+      );
+      input.poseId = 'open';
+      input.setFingerPose('index', 'twisted', 0.5);
+      input.updateHandPose();
+
+      const joints = [XRHandJoint.Wrist, ...handFingerJoints.index];
+      for (let i = 1; i < joints.length; i++) {
+        expect(
+          distance(
+            jointMatrix(input, joints[i - 1]),
+            jointMatrix(input, joints[i]),
+          ),
+        ).toBeCloseTo(
+          distance(
+            poseJoint('open', joints[i - 1]),
+            poseJoint('open', joints[i]),
+          ),
+          6,
+        );
+      }
+    });
+
+    test('keeps bone lengths when a bone points the opposite way', () => {
+      // Same skeleton as open, but the rest of the index finger is turned 180
+      // degrees about the metacarpal joint, so the proximal bone points the
+      // opposite way in its parent frame and a lerp would collapse it.
+      const reversed = clonePose(oculusHandConfig.poses.open);
+      const metacarpal =
+        reversed.jointTransforms[XRHandJoint.IndexFingerMetacarpal]
+          .offsetMatrix;
+      const toMetacarpal = mat4.invert(mat4.create(), metacarpal)!;
+      const bone = mat4.getTranslation(
+        vec3.create(),
+        mat4.multiply(
+          mat4.create(),
+          toMetacarpal,
+          reversed.jointTransforms[XRHandJoint.IndexFingerPhalanxProximal]
+            .offsetMatrix,
+        ),
+      );
+      const axis = vec3.normalize(
+        vec3.create(),
+        vec3.cross(vec3.create(), bone, [1, 0, 0]),
+      );
+      const turn = mat4.multiply(
+        mat4.create(),
+        metacarpal,
+        mat4.fromRotation(mat4.create(), Math.PI, axis),
+      );
+      mat4.multiply(turn, turn, toMetacarpal);
+      for (const joint of handFingerJoints.index.slice(1)) {
+        const matrix = reversed.jointTransforms[joint].offsetMatrix;
+        mat4.multiply(matrix, turn, matrix);
+      }
+      const input = new XRHandInput(
+        configWith({ reversed }),
+        XRHandedness.Left,
+        globalSpace,
+      );
+      input.poseId = 'open';
+      input.setFingerPose('index', 'reversed', 0.5);
+      input.updateHandPose();
+
+      const joints = handFingerJoints.index;
+      for (let i = 1; i < joints.length; i++) {
+        expect(
+          distance(
+            jointMatrix(input, joints[i - 1]),
+            jointMatrix(input, joints[i]),
+          ),
+        ).toBeCloseTo(
+          distance(
+            poseJoint('open', joints[i - 1]),
+            poseJoint('open', joints[i]),
+          ),
+          6,
+        );
+      }
+
+      // The finger swings smoothly through the halfway point instead of
+      // jumping to an arbitrary direction there.
+      const proximalAt = (weight: number) => {
+        input.setFingerPose('index', 'reversed', weight);
+        input.updateHandPose();
+        return mat4.clone(
+          jointMatrix(input, XRHandJoint.IndexFingerPhalanxProximal),
+        );
+      };
+      const [before, halfway, after] = [0.49, 0.5, 0.51].map(proximalAt);
+      expect(distance(before, halfway)).toBeLessThan(0.005);
+      expect(distance(halfway, after)).toBeLessThan(0.005);
+    });
+
+    test('rebuilds blended fingers only when the pose or blends change', () => {
+      const fist = clonePose(oculusHandConfig.poses.fist);
+      const input = new XRHandInput(
+        configWith({ fist }),
+        XRHandedness.Left,
+        globalSpace,
+      );
+      input.poseId = 'open';
+      input.setFingerPose('index', 'fist');
+      input.updateHandPose();
+      const tip = () => jointMatrix(input, XRHandJoint.IndexFingerTip);
+      const before = mat4.clone(tip());
+
+      // An in-place edit of a source pose shows on the next blend change.
+      const fistTip = fist.jointTransforms[XRHandJoint.IndexFingerTip];
+      mat4.translate(fistTip.offsetMatrix, fistTip.offsetMatrix, [0, 0.01, 0]);
+      input.updateHandPose();
+      expectMatrixClose(tip(), before);
+
+      input.setFingerPose('index', 'fist');
+      input.updateHandPose();
+      expect(distance(tip(), before)).toBeCloseTo(0.01, 6);
+    });
+
+    test('returns copies of the finger blends', () => {
+      xrHandInput.setFingerPose('index', 'fist');
+      const fingerPoses = xrHandInput.fingerPoses as Record<string, any>;
+      fingerPoses.index.poseId = 'missing-pose';
+      fingerPoses.middle = { poseId: 'missing-pose', weight: 1 };
+
+      expect(xrHandInput.fingerPoses).toEqual({
+        index: { poseId: 'fist', weight: 1 },
+      });
+      expect(() => xrHandInput.updateHandPose()).not.toThrow();
+    });
+
+    test('mirrors blended fingers onto the right hand', () => {
+      const right = new XRHandInput(
+        oculusHandConfig,
+        XRHandedness.Right,
+        globalSpace,
+      );
+      for (const input of [xrHandInput, right]) {
+        input.poseId = 'open';
+        input.setFingerPose('ring', 'fist');
+        input.updateHandPose();
+      }
+      const leftTip = jointPosition(
+        jointMatrix(xrHandInput, XRHandJoint.RingFingerTip),
+      );
+      const rightTip = jointPosition(
+        jointMatrix(right, XRHandJoint.RingFingerTip),
+      );
+      expect(rightTip[0]).toBeCloseTo(-leftTip[0], 6);
+      expect(rightTip[1]).toBeCloseTo(leftTip[1], 6);
+      expect(rightTip[2]).toBeCloseTo(leftTip[2], 6);
+    });
+
+    test('clears finger blends when the pose changes', () => {
+      xrHandInput.setFingerPose('thumb', 'thumbs-up');
+      expect(xrHandInput.fingerPoses).toEqual({
+        thumb: { poseId: 'thumbs-up', weight: 1 },
+      });
+      xrHandInput.poseId = 'fist';
+      expect(xrHandInput.fingerPoses).toEqual({});
+      xrHandInput.updateHandPose();
+      for (const joint of handFingerJoints.thumb) {
+        expectMatrixClose(
+          jointMatrix(xrHandInput, joint),
+          poseJoint('fist', joint),
+        );
+      }
+    });
+
+    test('clears one finger or all of them', () => {
+      xrHandInput.setFingerPose('index', 'point');
+      xrHandInput.setFingerPose('middle', 'fist');
+      xrHandInput.clearFingerPoses('index');
+      expect(Object.keys(xrHandInput.fingerPoses)).toEqual(['middle']);
+      xrHandInput.clearFingerPoses();
+      expect(xrHandInput.fingerPoses).toEqual({});
+    });
+
+    test('ignores unknown fingers, poses and out-of-range weights', () => {
+      xrHandInput.setFingerPose('elbow' as any, 'fist');
+      xrHandInput.setFingerPose('index', 'missing-pose');
+      xrHandInput.setFingerPose('index', 'fist', 1.5);
+      expect(xrHandInput.fingerPoses).toEqual({});
+      expect(console.warn).toHaveBeenCalledWith('Unknown finger elbow');
+      expect(console.warn).toHaveBeenCalledWith(
+        'Pose config missing-pose not found',
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        'Out-of-range weight 1.5 provided for index',
+      );
+    });
+
+    test('ignores object prototype names and non-numeric weights', () => {
+      xrHandInput.poseId = 'constructor';
+      xrHandInput.setFingerPose('constructor' as any, 'fist');
+      xrHandInput.setFingerPose('index', 'toString');
+      xrHandInput.setFingerPose('index', 'fist', '0.5' as any);
+      xrHandInput.clearFingerPoses('hasOwnProperty' as any);
+
+      expect(xrHandInput.poseId).toBe('default');
+      expect(xrHandInput.fingerPoses).toEqual({});
+      expect(console.warn).toHaveBeenCalledWith(
+        'Pose config constructor not found',
+      );
+      expect(console.warn).toHaveBeenCalledWith('Unknown finger constructor');
+      expect(console.warn).toHaveBeenCalledWith(
+        'Pose config toString not found',
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        'Out-of-range weight 0.5 provided for index',
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        'Unknown finger hasOwnProperty',
+      );
+      expect(() => xrHandInput.updateHandPose()).not.toThrow();
+    });
+  });
+
+  describe('hand gamepad', () => {
+    beforeEach(() => {
+      xrHandInput = new XRHandInput(
+        oculusHandConfig,
+        XRHandedness.Right,
+        globalSpace,
+      );
+    });
+
+    test('is laid out as Quest Browser reports it: xr-standard, pinch on 0, menu on 4, microgestures on 5 to 9', () => {
+      const gamepad = xrHandInput.inputSource.gamepad!;
+      expect(gamepad.mapping).toBe('xr-standard');
+      expect(gamepad.buttons).toHaveLength(10);
+      expect(gamepad.axes).toHaveLength(0);
+      // Buttons 1 to 3 are empty slots.
+      for (const i of [1, 2, 3]) {
+        expect(gamepad.buttons[i]).not.toBeInstanceOf(GamepadButton);
+        expect(gamepad.buttons[i]!.pressed).toBe(false);
+      }
+      xrHandInput.updatePinchValue(1);
+      xrHandInput.onFrameStart(mockFrame);
+      expect(gamepad.buttons[0]!.value).toBe(1);
+      xrHandInput.updatePinchValue(0);
+      const ids = [
+        'menu',
+        'swipe-left',
+        'swipe-right',
+        'swipe-forward',
+        'swipe-backward',
+        'tap',
+      ] as const;
+      ids.forEach((id, i) => {
+        xrHandInput.updateGestureButton(id, 1);
+        xrHandInput.onFrameStart(mockFrame);
+        const pressed = gamepad.buttons.flatMap((button, index) =>
+          button!.pressed ? [index] : [],
+        );
+        expect([id, pressed]).toEqual([id, [4 + i]]);
+        xrHandInput.updateGestureButton(id, 0);
+        xrHandInput.onFrameStart(mockFrame);
+        expect(gamepad.buttons[4 + i]!.pressed).toBe(false);
+      });
+    });
+
+    test('gesture buttons fire no session events; the pinch still selects', () => {
+      const dispatch = mockFrame.session.dispatchEvent as jest.Mock;
+      xrHandInput.updateGestureButton('tap', 1);
+      xrHandInput.onFrameStart(mockFrame);
+      xrHandInput.updateGestureButton('tap', 0);
+      xrHandInput.onFrameStart(mockFrame);
+      expect(dispatch).not.toHaveBeenCalled();
+      xrHandInput.updatePinchValue(1);
+      xrHandInput.onFrameStart(mockFrame);
+      expect(dispatch.mock.calls.map((call) => call[0].type)).toEqual([
+        'selectstart',
+      ]);
+    });
+
+    test('updateGestureButton writes only gesture buttons, and only 0 or 1', () => {
+      const gamepad = xrHandInput.inputSource.gamepad!;
+      xrHandInput.updateGestureButton('pinch' as any, 1);
+      xrHandInput.updateGestureButton('constructor' as any, 1);
+      xrHandInput.updateGestureButton('tap', 0.5 as any);
+      xrHandInput.onFrameStart(mockFrame);
+      expect(gamepad.buttons.some((button) => button!.pressed)).toBe(false);
+      expect(gamepad.buttons[0]!.value).toBe(0);
+      expect(console.warn).toHaveBeenCalledWith(
+        'Invalid value 1 provided for gesture button pinch',
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        'Invalid value 0.5 provided for gesture button tap',
+      );
+    });
+  });
+
+  describe('thumb motion', () => {
+    const local = (joint: XRHandJoint) =>
+      jointPosition(
+        xrHandInput.inputSource.hand!.get(joint)![P_SPACE].offsetMatrix,
+      );
+
+    beforeEach(() => {
+      xrHandInput = new XRHandInput(
+        oculusHandConfig,
+        XRHandedness.Right,
+        globalSpace,
+      );
+      xrHandInput.poseId = 'microgesture';
+      xrHandInput.updateHandPose();
+    });
+
+    test("moves only the thumb, from one pose's thumb toward another's, and stops when cleared", () => {
+      const others = Object.values(XRHandJoint).filter(
+        (joint) => !handFingerJoints.thumb.includes(joint),
+      );
+      const before = others.map(local);
+      const restTip = local(XRHandJoint.ThumbTip);
+      const grip = mat4.clone(
+        xrHandInput.inputSource.gripSpace![P_SPACE].offsetMatrix,
+      );
+      xrHandInput.thumbMotion = {
+        from: libraryHandPoses.microgesture,
+        to: microgestureThumbPoses.tip,
+        weight: 1,
+      };
+      expect(xrHandInput.thumbMotion!.weight).toBe(1);
+      xrHandInput.updateHandPose();
+      expect(
+        vec3.distance(local(XRHandJoint.ThumbTip), restTip),
+      ).toBeGreaterThan(0.01);
+      others.forEach((joint, i) => {
+        expect([joint, vec3.distance(local(joint), before[i])]).toEqual([
+          joint,
+          0,
+        ]);
+      });
+      expectMatrixClose(
+        xrHandInput.inputSource.gripSpace![P_SPACE].offsetMatrix,
+        grip,
+      );
+      // Halfway lies between the two.
+      xrHandInput.thumbMotion = {
+        from: libraryHandPoses.microgesture,
+        to: microgestureThumbPoses.tip,
+        weight: 0.5,
+      };
+      xrHandInput.updateHandPose();
+      const half = vec3.distance(local(XRHandJoint.ThumbTip), restTip);
+      expect(half).toBeGreaterThan(0.003);
+      xrHandInput.thumbMotion = null;
+      xrHandInput.updateHandPose();
+      expect(vec3.distance(local(XRHandJoint.ThumbTip), restTip)).toBeLessThan(
+        1e-9,
+      );
+    });
+
+    test('a hand pinned by its grasp point stays where it is while the thumb moves', () => {
+      xrHandInput.setPin({
+        anchor: 'grasp',
+        target: vec3.fromValues(0, 1, -0.4),
+      });
+      const ray = vec3.clone(xrHandInput.position.vec3);
+      xrHandInput.thumbMotion = {
+        from: libraryHandPoses.microgesture,
+        to: microgestureThumbPoses.forward,
+        weight: 1,
+      };
+      xrHandInput.updateHandPose();
+      expect(vec3.distance(xrHandInput.position.vec3, ray)).toBeLessThan(1e-9);
+    });
+
+    test('every keyframe keeps the microgesture pose outside the thumb', () => {
+      const rest = libraryHandPoses.microgesture;
+      for (const [id, pose] of Object.entries(microgestureThumbPoses)) {
+        for (const joint of Object.values(XRHandJoint)) {
+          if (handFingerJoints.thumb.includes(joint)) continue;
+          expect([
+            id,
+            joint,
+            distance(
+              pose.jointTransforms[joint].offsetMatrix,
+              rest.jointTransforms[joint].offsetMatrix,
+            ),
+          ]).toEqual([id, joint, 0]);
+        }
+      }
+    });
   });
 });

@@ -40,7 +40,7 @@ test('panel MCP catalog is generated from @iwer/extension-bridge contract', () =
       readOnly: tool.readOnlyHint,
     })),
   );
-  assert.equal(generated.tools.length, 20);
+  assert.equal(generated.tools.length, 25);
   // Per-client install targets were dropped — the panel shows a single config
   // snippet the user pastes themselves, so the catalog carries no `targets`.
   assert.equal(generated.targets, undefined);

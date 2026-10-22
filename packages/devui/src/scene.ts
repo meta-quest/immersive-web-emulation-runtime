@@ -363,6 +363,10 @@ export class InputLayer {
     this.isInProgrammaticMode = enabled;
     if (!wasProgrammatic || enabled) return;
 
+    // Take over from where remote control left the device: a hand it holds
+    // by an anchor settles after the last state change the handles followed.
+    this.syncFromDevice();
+
     const gaze = this.xrDevice.gaze;
     const nextGazeMode: GazeMode = gaze?.connected
       ? this.preferredConnectedGazeMode
@@ -476,9 +480,12 @@ export class InputLayer {
     }
 
     if (forceImmediate) {
+      const queued = this.gazeCommitPendingRelease?.queuedForFrame;
       this.gazeCommitPendingRelease = undefined;
-      if (pendingRelease) {
-        this.writeGazeCommitValue(pendingRelease, 0, true);
+      // The user already let go: that release completes the click, so it
+      // stays a release (queued for the next frame) rather than a cancel.
+      if (pendingRelease && !queued) {
+        this.writeGazeCommitValue(pendingRelease, 0, false);
       }
       if (active && active !== pendingRelease) {
         this.writeGazeCommitValue(active, 0, true);

@@ -159,7 +159,7 @@ describe('full chain integration', () => {
 
   it('lists the full tool catalog', async () => {
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(20);
+    expect(tools.length).toBe(25);
     const names = tools.map((t) => t.name);
     expect(names).toContain('xr_accept_session');
     expect(names).toContain('xr_look_at');
@@ -223,6 +223,102 @@ describe('full chain integration', () => {
     expect(image).toBeDefined();
     expect(image?.mimeType).toBe('image/jpeg');
     expect(typeof image?.data).toBe('string');
+  });
+
+  it('forwards hand params intact and rejects a misspelt one', async () => {
+    const before = browser.calls.length;
+    const placed = (await client.callTool({
+      name: 'xr_set_transform',
+      arguments: {
+        device: 'hand-right',
+        position: { x: 0, y: 1, z: -0.4 },
+        anchor: 'index-tip',
+        orientation: { fingers: 'forward', palm: 'down' },
+      },
+    })) as { isError?: boolean };
+    expect(placed.isError).toBeFalsy();
+    expect(browser.calls.at(-1)).toEqual({
+      method: 'set_transform',
+      params: {
+        device: 'hand-right',
+        position: { x: 0, y: 1, z: -0.4 },
+        anchor: 'index-tip',
+        orientation: { fingers: 'forward', palm: 'down' },
+      },
+    });
+
+    let rejected = false;
+    try {
+      const res = (await client.callTool({
+        name: 'xr_set_transform',
+        arguments: { device: 'hand-right', ancor: 'index-tip' },
+      })) as { isError?: boolean };
+      rejected = res.isError === true;
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
+    expect(browser.calls.length).toBe(before + 1);
+  });
+
+  it('forwards a run_sequence intact and rejects a misspelt nested key', async () => {
+    const before = browser.calls.length;
+    const params = {
+      device: 'hand-right',
+      steps: [
+        { label: 'press', target: 'button', press: { depth: 0.01 } },
+        { target: 'piece', pinch: { value: 1, at: 'arrival' } },
+      ],
+      dryRun: true,
+    };
+    const sent = (await client.callTool({
+      name: 'xr_run_sequence',
+      arguments: params,
+    })) as { isError?: boolean };
+    expect(sent.isError).toBeFalsy();
+    expect(browser.calls.at(-1)).toEqual({ method: 'run_sequence', params });
+
+    let rejected = false;
+    try {
+      const res = (await client.callTool({
+        name: 'xr_run_sequence',
+        arguments: {
+          device: 'hand-right',
+          steps: [{ target: 'button', press: { deep: 0.01 } }],
+        },
+      })) as { isError?: boolean };
+      rejected = res.isError === true;
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
+    expect(browser.calls.length).toBe(before + 1);
+  });
+
+  it('forwards a microgesture intact and rejects an unknown gesture', async () => {
+    const before = browser.calls.length;
+    const sent = (await client.callTool({
+      name: 'xr_microgesture',
+      arguments: { device: 'hand-left', gesture: 'swipe-forward' },
+    })) as { isError?: boolean };
+    expect(sent.isError).toBeFalsy();
+    expect(browser.calls.at(-1)).toEqual({
+      method: 'microgesture',
+      params: { device: 'hand-left', gesture: 'swipe-forward' },
+    });
+
+    let rejected = false;
+    try {
+      const res = (await client.callTool({
+        name: 'xr_microgesture',
+        arguments: { device: 'hand-left', gesture: 'wave' },
+      })) as { isError?: boolean };
+      rejected = res.isError === true;
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
+    expect(browser.calls.length).toBe(before + 1);
   });
 
   it('errors cleanly when no browser is connected', async () => {

@@ -20,7 +20,9 @@ import {
   XRRenderStateInit,
 } from '../../src/session/XRRenderState';
 
+import { GamepadButton } from '../../src/gamepad/Gamepad';
 import { XRFrame } from '../../src/frameloop/XRFrame';
+import { advanceButton } from '../../src/gamepad/button-edges';
 import { XRInputSourceArray } from '../../src/input/XRInputSource';
 import { XRSystem } from '../../src/initialization/XRSystem';
 import { XRViewerPose } from '../../src/pose/XRViewerPose';
@@ -431,6 +433,91 @@ describe('XRSession', () => {
     expect(mockOnSqueeze).toHaveBeenCalled();
     expect(mockOnSqueezeStart).toHaveBeenCalled();
     expect(mockOnSqueezeEnd).toHaveBeenCalled();
+  });
+
+  test('select events follow WebXR order: selectstart on press, select then selectend on release', async () => {
+    const order: string[] = [];
+    for (const type of ['selectstart', 'select', 'selectend']) {
+      xrSession.addEventListener(type, () => order.push(type));
+    }
+    let frameId = 0;
+    const onFrame = () => {
+      frameId++;
+      if (frameId == 2) {
+        xrDevice.controllers.right!.updateButtonValue('trigger', 1);
+      } else if (frameId == 4) {
+        expect(order).toEqual(['selectstart']);
+        xrDevice.controllers.right!.updateButtonValue('trigger', 0);
+      } else if (frameId == 6) {
+        xrSession.end();
+        return;
+      }
+      xrSession.requestAnimationFrame(onFrame);
+    };
+    xrSession.requestAnimationFrame(onFrame);
+    jest.runAllTimers();
+    expect(order).toEqual(['selectstart', 'select', 'selectend']);
+  });
+
+  test('an input source removed mid-press ends its select without completing it, before inputsourceschange', async () => {
+    const order: string[] = [];
+    for (const type of ['selectstart', 'select', 'selectend']) {
+      xrSession.addEventListener(type, () => order.push(type));
+    }
+    xrSession.addEventListener('inputsourceschange', (event) => {
+      if ((event as unknown as { removed: unknown[] }).removed.length) {
+        order.push('inputsourceschange:removed');
+      }
+    });
+    let frameId = 0;
+    const onFrame = () => {
+      frameId++;
+      if (frameId == 2) {
+        xrDevice.controllers.right!.updateButtonValue('trigger', 1);
+      } else if (frameId == 4) {
+        xrDevice.controllers.right!.connected = false;
+      } else if (frameId == 6) {
+        xrDevice.controllers.right!.connected = true;
+      } else if (frameId == 8) {
+        xrSession.end();
+        return;
+      }
+      xrSession.requestAnimationFrame(onFrame);
+    };
+    xrSession.requestAnimationFrame(onFrame);
+    jest.runAllTimers();
+    expect(order).toEqual([
+      'selectstart',
+      'selectend',
+      'inputsourceschange:removed',
+    ]);
+    // Reconnected released: no stale press.
+    expect(
+      xrDevice.controllers.right!.inputSource.gamepad!.buttons[0]!.pressed,
+    ).toBe(false);
+  });
+
+  test('a button held when the session ends starts the next session released', async () => {
+    const trigger =
+      xrDevice.controllers.right!.inputSource.gamepad!.buttons[0]!;
+    let frameId = 0;
+    const onFrame = () => {
+      frameId++;
+      if (frameId == 2) {
+        xrDevice.controllers.right!.updateButtonValue('trigger', 1);
+      } else if (frameId == 4) {
+        expect(trigger.pressed).toBe(true);
+        xrSession.end();
+        return;
+      }
+      xrSession.requestAnimationFrame(onFrame);
+    };
+    xrSession.requestAnimationFrame(onFrame);
+    jest.runAllTimers();
+    expect(trigger.pressed).toBe(false);
+    expect(trigger.value).toBe(0);
+    // Nothing is left to report in the next session: no press, no cancel.
+    expect(advanceButton(trigger as GamepadButton)).toBeNull();
   });
 
   test('XRSession.environmentBlendMode returns the correct value', async () => {

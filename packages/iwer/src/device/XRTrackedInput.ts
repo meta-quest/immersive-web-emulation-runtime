@@ -9,6 +9,8 @@ import { P_GAMEPAD, P_SPACE, P_TRACKED_INPUT } from '../private.js';
 import { Quaternion, Vector3 } from '../utils/Math.js';
 import { XRHandedness, XRInputSource } from '../input/XRInputSource.js';
 
+import { advanceButton, edgeEventTypes } from '../gamepad/button-edges.js';
+
 import { GamepadButton } from '../gamepad/Gamepad.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSourceEvent } from '../events/XRInputSourceEvent.js';
@@ -88,43 +90,15 @@ export class XRTrackedInput {
     this.updateTargetRaySpace();
 
     const session = frame.session;
-    this[P_TRACKED_INPUT].inputSource.gamepad?.buttons.forEach((button) => {
+    const inputSource = this[P_TRACKED_INPUT].inputSource;
+    inputSource.gamepad?.buttons.forEach((button) => {
       if (button instanceof GamepadButton) {
-        // apply pending values and record last frame values
-        button[P_GAMEPAD].lastFrameValue =
-          button[P_GAMEPAD].immediateTransitionFrom ?? button[P_GAMEPAD].value;
-        button[P_GAMEPAD].immediateTransitionFrom = null;
-        if (button[P_GAMEPAD].pendingValue != null) {
-          button[P_GAMEPAD].value = button[P_GAMEPAD].pendingValue;
-          button[P_GAMEPAD].pendingValue = null;
-        }
-        // trigger input source events
-        if (button[P_GAMEPAD].eventTrigger != null) {
-          if (
-            button[P_GAMEPAD].lastFrameValue === 0 &&
-            button[P_GAMEPAD].value > 0
-          ) {
+        const edge = advanceButton(button);
+        const trigger = button[P_GAMEPAD].eventTrigger;
+        if (edge && trigger) {
+          for (const type of edgeEventTypes(edge, trigger)) {
             session.dispatchEvent(
-              new XRInputSourceEvent(button[P_GAMEPAD].eventTrigger, {
-                frame,
-                inputSource: this[P_TRACKED_INPUT].inputSource,
-              }),
-            );
-            session.dispatchEvent(
-              new XRInputSourceEvent(button[P_GAMEPAD].eventTrigger + 'start', {
-                frame,
-                inputSource: this[P_TRACKED_INPUT].inputSource,
-              }),
-            );
-          } else if (
-            button[P_GAMEPAD].lastFrameValue > 0 &&
-            button[P_GAMEPAD].value === 0
-          ) {
-            session.dispatchEvent(
-              new XRInputSourceEvent(button[P_GAMEPAD].eventTrigger + 'end', {
-                frame,
-                inputSource: this[P_TRACKED_INPUT].inputSource,
-              }),
+              new XRInputSourceEvent(type, { frame, inputSource }),
             );
           }
         }

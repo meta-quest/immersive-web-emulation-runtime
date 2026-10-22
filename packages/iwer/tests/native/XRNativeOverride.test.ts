@@ -12,6 +12,10 @@ import {
   type CompressedRecording,
 } from '../../src/action/ActionPlayer.js';
 import type { InputSchema } from '../../src/action/ActionRecorder.js';
+import type {
+  MicrogestureResult,
+  SequenceResult,
+} from '../../src/remote/types.js';
 import {
   metaQuest3,
   metaQuestPro,
@@ -1570,6 +1574,39 @@ describe('XRNativeOverride', () => {
     expect(events).toEqual(['selectstart', 'selectend']);
   });
 
+  test('completes a released select but only ends a cancelled one', async () => {
+    const device = new XRDevice(metaQuest3);
+    const nativeXR = new MockXRSystem();
+    override = installNativeOverride(device, {
+      xrSystem: nativeXR as unknown as XRSystem,
+      globalObject: makeNativeGlobal(),
+      onUnsupported: 'throw',
+    });
+    const session = await nativeXR.requestSession('immersive-vr');
+    publishInitialInputSources(session);
+    const events: string[] = [];
+    for (const type of ['selectstart', 'select', 'selectend']) {
+      session.addEventListener(type, () => events.push(type));
+    }
+    const frame = (time: number) => {
+      session.requestAnimationFrame(() => {});
+      session.fireFrame(time);
+    };
+
+    device.controllers.right!.updateButtonValue('trigger', 1);
+    frame(80);
+    device.controllers.right!.updateButtonValue('trigger', 0);
+    frame(81);
+    expect(events).toEqual(['selectstart', 'select', 'selectend']);
+
+    events.length = 0;
+    device.controllers.right!.updateButtonValue('trigger', 1);
+    frame(82);
+    device.remote.forceRelease();
+    frame(83);
+    expect(events).toEqual(['selectstart', 'selectend']);
+  });
+
   test('always invokes the application callback when frame preparation throws', async () => {
     const device = new XRDevice(metaQuest3);
     const nativeXR = new MockXRSystem();
@@ -2918,6 +2955,105 @@ describe('XRNativeOverride', () => {
         'Native hand input requires the "hand-tracking" feature on the browser session; no synthetic hand input sources are published while hand mode is selected.',
       );
       warning.mockRestore();
+    });
+
+    test('run_sequence drives a native hand and reports the select events the session saw', async () => {
+      const device = new XRDevice(metaQuest3);
+      const nativeXR = new MockXRSystem(HAND_FEATURES);
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr');
+      device.primaryInputMode = 'hand';
+      const events: string[] = [];
+      for (const type of ['selectstart', 'select', 'selectend']) {
+        session.addEventListener(type, () => events.push(type));
+      }
+      let time = 10;
+      const frame = () => {
+        session.requestAnimationFrame(() => {});
+        session.fireFrame(time);
+        time += 16;
+      };
+      frame();
+      let result: SequenceResult | undefined;
+      void device.remote
+        .runSequence({
+          device: 'hand-right',
+          idleHand: 'keep',
+          steps: [
+            { position: [0.2, 1.2, -0.4], anchor: 'grasp', duration: 0.2 },
+            { pinch: 1, duration: 0.15 },
+            { duration: 0.1 },
+            { pinch: 0, duration: 0.15 },
+          ],
+        })
+        .then((value) => (result = value as SequenceResult));
+      for (let i = 0; i < 200 && !result; i++) {
+        frame();
+        for (let j = 0; j < 5; j++) await Promise.resolve();
+      }
+      expect(result?.completed).toBe(true);
+      expect(events).toEqual(['selectstart', 'select', 'selectend']);
+      expect(result!.events.map((event) => event.type)).toEqual(events);
+      expect(result!.final!.anchors.grasp.x).toBeCloseTo(0.2, 3);
+      // Letting go lifts the hand 3.5 cm off what it held.
+      expect(result!.final!.anchors.grasp.y).toBeCloseTo(1.235, 3);
+    });
+
+    test("a microgesture moves a native hand's thumb; hand sources publish no gamepad, so its button is not visible", async () => {
+      const device = new XRDevice(metaQuest3);
+      const nativeXR = new MockXRSystem(HAND_FEATURES);
+      override = installNativeOverride(device, {
+        xrSystem: nativeXR as unknown as XRSystem,
+        globalObject: makeNativeGlobal(),
+        onUnsupported: 'throw',
+      });
+      const session = await nativeXR.requestSession('immersive-vr');
+      device.primaryInputMode = 'hand';
+      const events: string[] = [];
+      for (const type of ['selectstart', 'select', 'selectend']) {
+        session.addEventListener(type, () => events.push(type));
+      }
+      let time = 10;
+      const frame = () => {
+        session.requestAnimationFrame(() => {});
+        session.fireFrame(time);
+        time += 16;
+      };
+      frame();
+      const thumb = () =>
+        mat4.getTranslation(
+          vec3.create(),
+          device.hands.right!.inputSource.hand!.get(IwerHandJoint.ThumbTip)![
+            P_SPACE
+          ].offsetMatrix,
+        );
+      const rest = thumb();
+      let moved = 0;
+      let result: MicrogestureResult | undefined;
+      void device.remote
+        .dispatch('microgesture', { device: 'hand-right', gesture: 'tap' })
+        .then((value) => (result = value as MicrogestureResult));
+      for (let i = 0; i < 100 && !result; i++) {
+        frame();
+        moved = Math.max(moved, vec3.distance(thumb(), rest));
+        for (let j = 0; j < 5; j++) await Promise.resolve();
+      }
+      expect(result).toEqual({
+        device: 'hand-right',
+        gesture: 'tap',
+        button: 9,
+        registeredAtMs: expect.any(Number),
+      });
+      expect(moved).toBeGreaterThan(0.005);
+      expect(events).toEqual([]);
+      const rightHand = session.inputSources.find(
+        (source) => (source as XRInputSource).handedness === 'right',
+      ) as XRInputSource;
+      expect(rightHand.gamepad).toBeNull();
     });
 
     test('publishes stable XRHand-shaped facades over every joint', async () => {
@@ -4327,8 +4463,11 @@ describe('XRNativeOverride', () => {
       device.primaryInputMode = 'hand';
 
       const rightHand = device.hands.right!;
-      const wrist = rightHand.inputSource.hand!.get(IwerHandJoint.Wrist)!;
-      const before = mat4.clone(wrist[P_SPACE].offsetMatrix);
+      // The pinch moves the thumb and index (the wrist stays put).
+      const indexTip = rightHand.inputSource.hand!.get(
+        IwerHandJoint.IndexFingerTip,
+      )!;
+      const before = mat4.clone(indexTip[P_SPACE].offsetMatrix);
       rightHand.updatePinchValue(1);
 
       session.requestAnimationFrame(() => {});
@@ -4338,7 +4477,7 @@ describe('XRNativeOverride', () => {
       // Device state is advanced from the shared device rather than from this
       // session's bindings, so the pinch still applies and the joints move.
       expect(rightHand.pinchValue).toBe(1);
-      expect(Array.from(wrist[P_SPACE].offsetMatrix)).not.toEqual(
+      expect(Array.from(indexTip[P_SPACE].offsetMatrix)).not.toEqual(
         Array.from(before),
       );
       warning.mockRestore();

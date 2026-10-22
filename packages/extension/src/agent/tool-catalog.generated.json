@@ -1,5 +1,5 @@
 {
-  "mcpVersion": "2.5.0",
+  "mcpVersion": "2.7.0",
   "tools": [
     {
       "name": "xr_get_session_status",
@@ -28,7 +28,7 @@
     {
       "name": "xr_set_transform",
       "title": "Set device transform",
-      "description": "Set a device position and/or orientation immediately. Gaze accepts orientation only; move its origin with the headset. Requires an active session.",
+      "description": "Set a device position and/or orientation immediately (XR-origin). Gaze accepts orientation only; move its origin with the headset. Hands: `anchor` puts that point of the hand at `position` and keeps it there while the hand changes shape (e.g. anchor \"index-tip\" on a button, \"grasp\" on an object before pinching); orientation may be hand directions or \"auto\". Requires an active session.",
       "readOnly": false
     },
     {
@@ -40,7 +40,7 @@
     {
       "name": "xr_animate_to",
       "title": "Animate device pose",
-      "description": "Smoothly animate a device to a target position and/or orientation over `duration` seconds (default 0.5). Gaze accepts orientation only. Requires an active, rendering session.",
+      "description": "Animate a device to a target position and/or orientation (XR-origin) over `duration` seconds (default 0.5), from where it is when the animation starts. Gaze accepts orientation only. Hands take `anchor` and hand directions as in xr_set_transform. easing \"minimum-jerk\" moves like a person (default \"linear\"). For multi-step hand interactions (press, grab, carry, gestures) prefer xr_run_sequence. Requires an active, rendering session.",
       "readOnly": false
     },
     {
@@ -64,13 +64,13 @@
     {
       "name": "xr_set_select_value",
       "title": "Set select value",
-      "description": "Set the select value (trigger/pinch), 0..1. Use xr_select for a full press+release.",
+      "description": "Set the select value (trigger/pinch), 0..1, optionally ramping from the current value over `duration` seconds (easing default minimum-jerk). A hand pinch selects at 0.9 and lets go at 0.7; a trigger selects above 0. Use xr_select for a full press+release.",
       "readOnly": false
     },
     {
       "name": "xr_select",
       "title": "Select (press + release)",
-      "description": "Perform a full select gesture (fires selectstart → select → selectend) over `duration` seconds (default 0.15). Requires an active session.",
+      "description": "Perform a full select gesture: selectstart on press, then select and selectend on release, holding `duration` seconds (default 0.15). A hand closes its pinch over 0.1 s before the hold and opens it over 0.1 s after. Requires an active session.",
       "readOnly": false
     },
     {
@@ -88,20 +88,50 @@
     {
       "name": "xr_get_device_state",
       "title": "Get device state",
-      "description": "Get a full snapshot: headset pose, input mode, controllers, hands, gaze, stereo, and FOV.",
+      "description": "Get a full snapshot: headset pose, input mode, controllers, hands (with poseId and pinchValue), gaze, stereo, and FOV. Positions are XR-origin relative.",
       "readOnly": true
     },
     {
       "name": "xr_set_device_state",
       "title": "Set device state",
-      "description": "Apply a partial device state. Call with no `state` to reset everything to defaults.",
+      "description": "Apply a partial device state (positions XR-origin; hands also take poseId and pinchValue). Call with no `state` to reset everything to defaults.",
       "readOnly": false
     },
     {
       "name": "xr_set_hand_pose",
       "title": "Set hand pose",
-      "description": "Set a named hand pose (e.g. \"relaxed\", \"point\", \"pinch\") on a hand device.",
+      "description": "Set a named hand pose on a hand device. Poses only shape the hand; to pinch (select), use the pinch value (xr_set_select_value). Poses: default (relaxed), pinch (thumb and index touching), point (index extended), open (high five), flat (fingers together, blade), fist (closed fist), thumbs-up (fist with thumb up), finger-gun (index and thumb out), peace (V sign), three (index, middle, ring up), four (four fingers up, thumb folded), ok (thumb-index circle), rock (index and pinky out), call (thumb and pinky out), pinch-middle (thumb to middle tip), pinch-ring (thumb to ring tip), pinch-pinky (thumb to pinky tip), tripod (thumb, index, middle tips together), key-pinch (thumb against side of index), microgesture (loose curl, thumb by the side of the index), grip (wrapped around a handle), claw (holding a ball), hook (carrying a bag handle), cup (scooping water). Optionally take individual fingers from other poses, e.g. poseId \"open\" with fingers {\"middle\":\"fist\",\"ring\":\"fist\",\"pinky\":\"fist\"}, or blend partway with {\"poseId\":\"fist\",\"weight\":0.5}. Setting a pose clears earlier finger overrides. `duration` fades from the hand as shown (easing default minimum-jerk); a hand placed by an anchor keeps the anchor in place.",
       "readOnly": false
+    },
+    {
+      "name": "xr_microgesture",
+      "title": "Make a microgesture",
+      "description": "Swipe or tap the thumb on the side of the curled index finger, as on Quest. The app sees the hand gamepad (xr-standard) button pressed for 35 ms when the gesture completes: 5 swipe-left, 6 swipe-right, 7 swipe-forward, 8 swipe-backward, 9 tap; no select events. A hand not in the \"microgesture\" pose takes it first (0.25 s); a hand that is selecting must let go first. Raise the hand side-on in view first, e.g. xr_set_transform with anchor \"wrist\" and orientation {fingers:[0,-0.6,-0.8],palm:\"left\"} (right hand; \"right\" for the left). Requires an active session and hand input.",
+      "readOnly": false
+    },
+    {
+      "name": "xr_get_hand_state",
+      "title": "Get hand state",
+      "description": "Read a hand: pose, finger blends, a pose fade in progress, pinch value, whether select is pressed, its anchor pin, and XR-origin positions of the wrist, grip, grasp point, index tip and thumb tip, plus its finger/palm/thumb directions (joints:\"all\" adds every joint).",
+      "readOnly": true
+    },
+    {
+      "name": "xr_run_sequence",
+      "title": "Run a hand sequence",
+      "description": "Run a whole hand interaction in one call with natural motion: one smooth arc per move, the head turning to each target first, the body leaning or stepping closer when needed, the other hand resting by the hip. Steps run in order and each step's properties animate together. Positions are XR-origin metres; -Z is forward, +Y up. Resolves when done with the select events the app saw, step times, press contact times, warnings and the final hand state. Rules: press buttons with `press`, not a pinch. To pick something up, target it with `pinch:{value:1,at:\"arrival\"}` (the grasp point, between thumb and index, goes on the target). While holding, targeting a surface sets the object down on it; let go with pinch 0. The anchor carries over to later steps. A thumbs up is poseId \"thumbs-up\" with orientation {fingers:\"forward\",thumb:\"up\"} at a head-relative position. A microgesture is a step of its own, {\"microgesture\":\"swipe-left\"}, with the hand raised in view and the pinch open (see xr_microgesture). Get names from xr_list_targets and check a plan with dryRun:true first. Example: {\"device\":\"hand-right\",\"steps\":[{\"label\":\"reach\",\"target\":\"button\",\"press\":{}},{\"label\":\"grab\",\"target\":\"piece\",\"approach\":{\"distance\":0.06},\"pinch\":{\"value\":1,\"at\":\"arrival\"}},{\"label\":\"carry\",\"target\":\"tray\",\"depart\":{\"distance\":0.08},\"approach\":{\"distance\":0.06}},{\"label\":\"release\",\"pinch\":0,\"duration\":0.15},{\"label\":\"thumbs up\",\"position\":{\"relativeTo\":\"head\",\"x\":0.12,\"y\":-0.35,\"z\":-0.35},\"anchor\":\"wrist\",\"orientation\":{\"fingers\":\"forward\",\"thumb\":\"up\"},\"poseId\":\"thumbs-up\"},{\"label\":\"hold\",\"duration\":1}]}",
+      "readOnly": false
+    },
+    {
+      "name": "xr_cancel_sequence",
+      "title": "Cancel a hand sequence",
+      "description": "Stop the running xr_run_sequence where it is; that call returns with cancelled: true and the steps done. The pinch is left as it is (no select events).",
+      "readOnly": false
+    },
+    {
+      "name": "xr_list_targets",
+      "title": "List sequence targets",
+      "description": "List the named targets xr_run_sequence steps can use, from the page's target resolver: name, box centre and size (XR-origin). resolver:false means the page has none; use positions.",
+      "readOnly": true
     },
     {
       "name": "xr_get_world_state",

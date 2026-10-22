@@ -252,22 +252,24 @@ describe('XRTrackedInput', () => {
 
       trackedInput.onFrameStart(mockFrame);
 
-      // Should dispatch select and selectstart events
-      expect(mockSession.dispatchEvent).toHaveBeenCalledTimes(2);
-      expect(XRInputSourceEvent).toHaveBeenCalledWith('select', {
-        frame: mockFrame,
-        inputSource: mockInputSource,
-      });
+      // A press dispatches selectstart only; select waits for the release
+      expect(mockSession.dispatchEvent).toHaveBeenCalledTimes(1);
       expect(XRInputSourceEvent).toHaveBeenCalledWith('selectstart', {
         frame: mockFrame,
         inputSource: mockInputSource,
       });
+      expect(XRInputSourceEvent).not.toHaveBeenCalledWith(
+        'select',
+        expect.anything(),
+      );
     });
 
     it('should trigger button release events', () => {
       const mockButton = new GamepadButton('analog', 'select');
-      mockButton[P_GAMEPAD].lastFrameValue = 0; // Will be set to current value
-      mockButton[P_GAMEPAD].value = 1; // Current value that will become lastFrameValue
+      // Held last frame
+      mockButton[P_GAMEPAD].value = 1;
+      mockButton[P_GAMEPAD].pressed = true;
+      mockButton[P_GAMEPAD].lastFramePressed = true;
       mockButton[P_GAMEPAD].pendingValue = 0; // Will become new value
 
       Object.defineProperty(mockGamepad, 'buttons', {
@@ -276,14 +278,16 @@ describe('XRTrackedInput', () => {
         configurable: true,
       });
 
+      (XRInputSourceEvent as unknown as jest.Mock).mockClear();
       trackedInput.onFrameStart(mockFrame);
 
-      // Should dispatch selectend event
-      expect(mockSession.dispatchEvent).toHaveBeenCalledTimes(1);
-      expect(XRInputSourceEvent).toHaveBeenCalledWith('selectend', {
-        frame: mockFrame,
-        inputSource: mockInputSource,
-      });
+      // A release completes the action: select, then selectend
+      expect(mockSession.dispatchEvent).toHaveBeenCalledTimes(2);
+      expect(
+        (XRInputSourceEvent as unknown as jest.Mock).mock.calls.map(
+          (c) => c[0],
+        ),
+      ).toEqual(['select', 'selectend']);
     });
 
     it('should not trigger events when button has no eventTrigger', () => {
@@ -350,8 +354,10 @@ describe('XRTrackedInput', () => {
       button1[P_GAMEPAD].pendingValue = 1;
 
       const button2 = new GamepadButton('analog', 'squeeze');
-      button2[P_GAMEPAD].lastFrameValue = 0; // Will be set to current value
-      button2[P_GAMEPAD].value = 1; // Current value that will become lastFrameValue
+      // Held last frame
+      button2[P_GAMEPAD].value = 1;
+      button2[P_GAMEPAD].pressed = true;
+      button2[P_GAMEPAD].lastFramePressed = true;
       button2[P_GAMEPAD].pendingValue = 0; // Will become new value
 
       Object.defineProperty(mockGamepad, 'buttons', {
@@ -366,7 +372,7 @@ describe('XRTrackedInput', () => {
       expect(button1[P_GAMEPAD].value).toBe(1);
       expect(button2[P_GAMEPAD].lastFrameValue).toBe(1);
       expect(button2[P_GAMEPAD].value).toBe(0);
-      expect(mockSession.dispatchEvent).toHaveBeenCalledTimes(3); // select, selectstart, squeezeend
+      expect(mockSession.dispatchEvent).toHaveBeenCalledTimes(3); // selectstart, squeeze, squeezeend
     });
   });
 
