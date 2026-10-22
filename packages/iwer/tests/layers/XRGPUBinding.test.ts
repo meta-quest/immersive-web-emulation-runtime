@@ -176,7 +176,7 @@ describe('XRGPUBinding', () => {
       const pending = xrSystem.requestSession('immersive-vr', {
         optionalFeatures: ['webgpu'],
       });
-      await jest.advanceTimersByTimeAsync(2000);
+      await jest.advanceTimersByTimeAsync(10000);
       const hung = await pending;
       expect(hung.enabledFeatures).not.toContain('webgpu');
       await hung.end();
@@ -193,7 +193,8 @@ describe('XRGPUBinding', () => {
         value: {
           getPreferredCanvasFormat: () => 'bgra8unorm',
           requestAdapter: jest.fn(
-            () => new Promise((resolve) => setTimeout(() => resolve({}), 2500)),
+            () =>
+              new Promise((resolve) => setTimeout(() => resolve({}), 10500)),
           ),
         },
         configurable: true,
@@ -201,7 +202,7 @@ describe('XRGPUBinding', () => {
       const pending = xrSystem.requestSession('immersive-vr', {
         optionalFeatures: ['webgpu'],
       });
-      await jest.advanceTimersByTimeAsync(2000);
+      await jest.advanceTimersByTimeAsync(10000);
       const early = await pending;
       expect(early.enabledFeatures).not.toContain('webgpu');
       await early.end();
@@ -212,6 +213,24 @@ describe('XRGPUBinding', () => {
       });
       expect(later.enabledFeatures).toContain('webgpu');
       expect(navigator.gpu.requestAdapter).toHaveBeenCalledTimes(1);
+    });
+
+    test('waits for an adapter that takes a few seconds to answer', async () => {
+      Object.defineProperty(navigator, 'gpu', {
+        value: {
+          getPreferredCanvasFormat: () => 'bgra8unorm',
+          requestAdapter: jest.fn(
+            () => new Promise((resolve) => setTimeout(() => resolve({}), 5000)),
+          ),
+        },
+        configurable: true,
+      });
+      const pending = xrSystem.requestSession('immersive-vr', {
+        optionalFeatures: ['webgpu'],
+      });
+      await jest.advanceTimersByTimeAsync(5000);
+      const session = await pending;
+      expect(session.enabledFeatures).toContain('webgpu');
     });
 
     test('probes for an XR-compatible adapter like WebXR apps do', async () => {

@@ -28,7 +28,7 @@ type SessionGrantConfig = {
   webgpuAvailable?: boolean;
 };
 
-const WEBGPU_PROBE_TIMEOUT_MS = 2000;
+const WEBGPU_PROBE_TIMEOUT_MS = 10000;
 
 type WebGPUProbe = {
   check: Promise<boolean>;
@@ -43,7 +43,9 @@ const webgpuProbes = new WeakMap<GPU, WebGPUProbe>();
 // check runs once per GPU object and its real result is kept when it arrives.
 // Each session request waits for it at most WEBGPU_PROBE_TIMEOUT_MS, because
 // requestAdapter() can hang in some headless environments, and only the first
-// request pays that wait while the check is still pending.
+// request pays that wait while the check is still pending. The limit is
+// generous because a busy software adapter (headless SwiftShader in CI) can
+// take several seconds to answer.
 const probeWebGPU = (): Promise<boolean> => {
   const gpu = globalThis.navigator?.gpu;
   if (!gpu) {
