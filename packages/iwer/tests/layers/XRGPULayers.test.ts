@@ -881,13 +881,17 @@ describe('WebGPU composition layers', () => {
       const mipped = binding.createQuadLayer(init({ mipLevels: 4 }));
       const text = binding.createQuadLayer(init());
       text.quality = 'text-optimized';
-      show([mipped, text]);
+      const plain = binding.createQuadLayer(init());
+      show([mipped, text, plain]);
       const samplers = gpu.device.createSampler.mock.calls.map(
         ([descriptor]: any[]) => descriptor,
       );
+      // A single mip level still filters linearly between mips when the
+      // sampler is anisotropic, since WebGPU requires it.
       expect(samplers).toEqual([
         expect.objectContaining({ mipmapFilter: 'linear', maxAnisotropy: 1 }),
-        expect.objectContaining({ mipmapFilter: 'nearest', maxAnisotropy: 16 }),
+        expect.objectContaining({ mipmapFilter: 'linear', maxAnisotropy: 16 }),
+        expect.objectContaining({ mipmapFilter: 'nearest', maxAnisotropy: 1 }),
       ]);
       // The release copies every mip level.
       expect(

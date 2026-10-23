@@ -367,47 +367,52 @@ export function registerXRGPUBindingTests(harness: TestHarness): void {
       await assertNoGPUErrors();
     });
 
-    harness.it(
-      "[iwer] 'layers' shows a quad over the projection layer",
-      async (ctx) => {
-        harness.skipIf(ctx.mode !== 'iwer', 'Reads back what IWER draws');
-        const s = await start(['layers']);
-        const binding = new XRGPUBinding(s, device!);
-        const format = binding.getPreferredColorFormat();
-        const space = await s.requestReferenceSpace('local');
-        const projection = binding.createProjectionLayer({
-          colorFormat: format,
-        });
-        const quad = binding.createQuadLayer({
-          colorFormat: format,
-          space,
-          viewPixelWidth: 64,
-          viewPixelHeight: 32,
-          transform: new XRRigidTransform({ x: 0, y: 0, z: -2, w: 1 }),
-        });
-        s.updateRenderState({ layers: [projection, quad] });
-        await withFrame(s, (_t, frame) => {
-          for (const view of frame.getViewerPose(space)!.views) {
-            fill(
-              device!,
-              binding.getViewSubImage(projection, view),
-              [0, 0, 1, 1],
-            );
-          }
-          const subImage = binding.getSubImage(quad, frame);
-          harness.assertEqual(subImage.colorTexture.width, 64);
-          harness.assertEqual(subImage.colorTexture.height, 32);
-          fill(device!, subImage, [1, 0, 0, 1]);
-        });
-        const [quadPixel, corner] = await shownPixels(ctx.xrDevice!, [
-          [0.25, 0.5],
-          [0.01, 0.01],
-        ]);
-        harness.assertEqual(quadPixel, '255,0,0', 'the quad');
-        harness.assertEqual(corner, '0,0,255', 'the projection layer');
-        await assertNoGPUErrors();
-      },
-    );
+    // Non-default quality layers sample anisotropically, which WebGPU only
+    // accepts with linear filters.
+    for (const quality of ['default', 'text-optimized'] as const) {
+      harness.it(
+        `[iwer] 'layers' shows a ${quality} quad over the projection layer`,
+        async (ctx) => {
+          harness.skipIf(ctx.mode !== 'iwer', 'Reads back what IWER draws');
+          const s = await start(['layers']);
+          const binding = new XRGPUBinding(s, device!);
+          const format = binding.getPreferredColorFormat();
+          const space = await s.requestReferenceSpace('local');
+          const projection = binding.createProjectionLayer({
+            colorFormat: format,
+          });
+          const quad = binding.createQuadLayer({
+            colorFormat: format,
+            space,
+            viewPixelWidth: 64,
+            viewPixelHeight: 32,
+            transform: new XRRigidTransform({ x: 0, y: 0, z: -2, w: 1 }),
+          });
+          quad.quality = quality;
+          s.updateRenderState({ layers: [projection, quad] });
+          await withFrame(s, (_t, frame) => {
+            for (const view of frame.getViewerPose(space)!.views) {
+              fill(
+                device!,
+                binding.getViewSubImage(projection, view),
+                [0, 0, 1, 1],
+              );
+            }
+            const subImage = binding.getSubImage(quad, frame);
+            harness.assertEqual(subImage.colorTexture.width, 64);
+            harness.assertEqual(subImage.colorTexture.height, 32);
+            fill(device!, subImage, [1, 0, 0, 1]);
+          });
+          const [quadPixel, corner] = await shownPixels(ctx.xrDevice!, [
+            [0.25, 0.5],
+            [0.01, 0.01],
+          ]);
+          harness.assertEqual(quadPixel, '255,0,0', 'the quad');
+          harness.assertEqual(corner, '0,0,255', 'the projection layer');
+          await assertNoGPUErrors();
+        },
+      );
+    }
 
     harness.it(
       "'space-warp' adds motion vectors and synthesizes frames",

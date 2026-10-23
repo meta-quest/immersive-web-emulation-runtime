@@ -301,10 +301,11 @@ const getPipeline = (
 
 const getSampler = (device: GPUDevice, layer: XRCompositionLayer) => {
   const { mipLevels, quality } = layer[P_COMPOSITION_LAYER];
-  const mipmapFilter: GPUMipmapFilterMode =
-    mipLevels > 1 ? 'linear' : 'nearest';
-  // Text- and graphics-optimized layers get anisotropic filtering.
+  // Text- and graphics-optimized layers get anisotropic filtering, which
+  // WebGPU only allows with linear filters, the mip filter included.
   const maxAnisotropy = quality === 'default' ? 1 : 16;
+  const mipmapFilter: GPUMipmapFilterMode =
+    mipLevels > 1 || maxAnisotropy > 1 ? 'linear' : 'nearest';
   const key = `${mipmapFilter} ${maxAnisotropy}`;
   const entry = getResources(device);
   let sampler = entry.samplers.get(key);

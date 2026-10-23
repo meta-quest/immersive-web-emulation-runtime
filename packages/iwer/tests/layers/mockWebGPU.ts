@@ -66,7 +66,16 @@ export const createMockGPUDevice = () => {
     createBindGroupLayout: jest.fn((descriptor: any) => ({ descriptor })),
     createPipelineLayout: jest.fn((descriptor: any) => ({ descriptor })),
     createRenderPipeline: jest.fn((descriptor: any) => ({ descriptor })),
-    createSampler: jest.fn((descriptor: any) => ({ descriptor })),
+    createSampler: jest.fn((descriptor: any) => {
+      // WebGPU rejects anisotropic samplers unless every filter is linear.
+      const linear = ['magFilter', 'minFilter', 'mipmapFilter'].every(
+        (filter) => descriptor[filter] === 'linear',
+      );
+      if ((descriptor.maxAnisotropy ?? 1) > 1 && !linear) {
+        throw new Error('maxAnisotropy > 1 needs linear filters');
+      }
+      return { descriptor };
+    }),
     createBuffer: jest.fn((descriptor: any) => ({
       ...descriptor,
       destroy: jest.fn(),
