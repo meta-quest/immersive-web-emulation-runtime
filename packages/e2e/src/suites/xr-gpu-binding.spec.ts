@@ -22,6 +22,8 @@ const COLOR_FORMATS = ['rgba8unorm', 'bgra8unorm', 'rgba16float'];
 const FRAME_USAGE = 0x11;
 const READBACK_USAGE = 0x09;
 const MAP_READ = 0x01;
+// GPUTextureUsage RENDER_ATTACHMENT | COPY_DST, for layers a test writes to.
+const WRITABLE_USAGE = 0x12;
 
 // Fills a subimage's view of its color texture with one color.
 function fill(
@@ -43,6 +45,67 @@ function fill(
     })
     .end();
   device.queue.submit([encoder.finish()]);
+}
+
+// Clears a subimage's depth and motion vectors, as an app rendering for space
+// warp does.
+function fillMotion(
+  device: GPUDevice,
+  subImage: XRGPUSubImage,
+  motion: number[],
+  depth: number,
+): void {
+  const view = subImage.getViewDescriptor();
+  const encoder = device.createCommandEncoder();
+  encoder
+    .beginRenderPass({
+      colorAttachments: [
+        {
+          view: subImage.motionVectorTexture!.createView(view),
+          clearValue: motion,
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+      depthStencilAttachment: {
+        view: subImage.depthStencilTexture!.createView(view),
+        depthClearValue: depth,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    })
+    .end();
+  device.queue.submit([encoder.finish()]);
+}
+
+// Writes a subimage's view as quadrants: red and green on top, blue and white
+// below. Its layer needs WRITABLE_USAGE.
+function fillQuadrants(device: GPUDevice, subImage: XRGPUSubImage): void {
+  const { x, y, width, height } = subImage.viewport;
+  const bgra = subImage.colorTexture.format.startsWith('bgra');
+  const colors = [
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+    [255, 255, 255],
+  ].map(([r, g, b]) => (bgra ? [b, g, r, 255] : [r, g, b, 255]));
+  const data = new Uint8Array(width * height * 4);
+  for (let row = 0; row < height; row++) {
+    for (let column = 0; column < width; column++) {
+      const quadrant =
+        (row < height / 2 ? 0 : 2) + (column < width / 2 ? 0 : 1);
+      data.set(colors[quadrant], (row * width + column) * 4);
+    }
+  }
+  device.queue.writeTexture(
+    {
+      texture: subImage.colorTexture,
+      origin: [x, y, subImage.getViewDescriptor().baseArrayLayer ?? 0],
+    },
+    data,
+    { bytesPerRow: width * 4, rowsPerImage: height },
+    [width, height, 1],
+  );
 }
 
 /**
@@ -442,6 +505,7 @@ export function registerXRGPUBindingTests(harness: TestHarness): void {
               subImage.depthStencilTexture!.height,
             );
             fill(device!, subImage, [0, 1, 0, 1]);
+            fillMotion(device!, subImage, [0, 0, 0, 0], 0.5);
           }
         });
         if (ctx.mode === 'iwer') {
@@ -452,6 +516,71 @@ export function registerXRGPUBindingTests(harness: TestHarness): void {
           const [shown] = await shownPixels(ctx.xrDevice!, [[0.25, 0.5]]);
           harness.assertEqual(shown, '0,255,0', 'the synthesized frame');
         }
+        await assertNoGPUErrors();
+      },
+    );
+
+    harness.it(
+      "[iwer] 'space-warp' runs at full rate when the app draws only color",
+      async (ctx) => {
+        harness.skipIf(ctx.mode !== 'iwer', 'Checks when IWER synthesizes');
+        const s = await start(['space-warp']);
+        const binding = new XRGPUBinding(s, device!);
+        const layer = binding.createProjectionLayer({
+          colorFormat: binding.getPreferredColorFormat(),
+          depthStencilFormat: 'depth24plus',
+        });
+        s.updateRenderState({ layers: [layer] });
+        const space = await s.requestReferenceSpace('local');
+        await withFrame(s, (_t, frame) => {
+          for (const view of frame.getViewerPose(space)!.views) {
+            fill(device!, binding.getViewSubImage(layer, view), [0, 1, 0, 1]);
+          }
+        });
+        let frames = 0;
+        s.requestAnimationFrame(() => frames++);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        harness.assertEqual(frames, 1, 'the app should get the next frame');
+        await assertNoGPUErrors();
+      },
+    );
+
+    harness.it(
+      '[iwer] synthesized frames move pixels along their motion vectors',
+      async (ctx) => {
+        harness.skipIf(ctx.mode !== 'iwer', 'Reads back what IWER draws');
+        const s = await start(['space-warp']);
+        const binding = new XRGPUBinding(s, device!);
+        const layer = binding.createProjectionLayer({
+          colorFormat: binding.getPreferredColorFormat(),
+          depthStencilFormat: 'depth24plus',
+          textureUsage: WRITABLE_USAGE,
+        });
+        s.updateRenderState({ layers: [layer] });
+        const space = await s.requestReferenceSpace('local');
+        await withFrame(s, (_t, frame) => {
+          for (const view of frame.getViewerPose(space)!.views) {
+            const subImage = binding.getViewSubImage(layer, view);
+            fillQuadrants(device!, subImage);
+            // Up and to the right, in NDC.
+            fillMotion(device!, subImage, [0.4, 0.4, 0, 0], 0.5);
+          }
+        });
+        // IWER extrapolates part of a frame interval, so the synthesized frame
+        // moves the image by 0.06 to 0.2 of a view. The left view is the left
+        // half of the canvas.
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const [rightOfEdge, aboveEdge, topLeft, bottomRight] =
+          await shownPixels(ctx.xrDevice!, [
+            [0.265, 0.25],
+            [0.125, 0.47],
+            [0.125, 0.25],
+            [0.375, 0.75],
+          ]);
+        harness.assertEqual(rightOfEdge, '255,0,0', 'red should move right');
+        harness.assertEqual(aboveEdge, '0,0,255', 'blue should move up');
+        harness.assertEqual(topLeft, '255,0,0', 'top-left stays red');
+        harness.assertEqual(bottomRight, '255,255,255', 'bottom-right stays');
         await assertNoGPUErrors();
       },
     );

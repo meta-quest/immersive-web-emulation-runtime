@@ -555,14 +555,14 @@ export class XRSession extends EventTarget {
         this[P_SESSION].releaseLayers(frame);
         if (!this[P_SESSION].ended) {
           this[P_SESSION].gpuPresenter?.present(this, layers);
-          // After a frame that submits motion vectors, IWER synthesizes the
-          // next device frame from it. Other frames run as if space warp was
-          // off, as the spec requires.
+          // After a frame where the app drew motion vectors and depth, IWER
+          // synthesizes the next device frame from it. Other frames run as if
+          // space warp was off, as the spec requires.
           const submitted = layers.some(
             (layer) =>
               layer instanceof XRProjectionLayer &&
               layer[P_COMPOSITION_LAYER].textures.releasedFrame === frame &&
-              layer[P_COMPOSITION_LAYER].textures.descriptors.motionVector,
+              layer[P_COMPOSITION_LAYER].textures.releasedMotion,
           );
           this[P_SESSION].spaceWarpFrame = submitted ? frame : null;
         }

@@ -123,6 +123,12 @@ describe('WebGPU space warp', () => {
     session.updateRenderState({ layers: [layer] });
     return layer;
   };
+  // What an app does to render into a subimage: make a view of each texture.
+  const draw = (subImage: XRGPUSubImage) => {
+    subImage.colorTexture.createView();
+    subImage.depthStencilTexture?.createView();
+    subImage.motionVectorTexture?.createView();
+  };
   // Runs a frame in which the app draws the layer, plus `callback`.
   const drawFrame = (
     layer: XRProjectionLayer,
@@ -130,7 +136,7 @@ describe('WebGPU space warp', () => {
   ) =>
     runFrame(session, (frame) => {
       for (const view of frame.getViewerPose(space)!.views) {
-        binding.getViewSubImage(layer, view);
+        draw(binding.getViewSubImage(layer, view));
       }
       callback(frame);
     });
@@ -372,6 +378,7 @@ describe('WebGPU space warp', () => {
           layer,
           frame.getViewerPose(space)!.views[0],
         );
+        draw(subImage);
         subImage.depthStencilTexture!.destroy();
         subImage.motionVectorTexture!.destroy();
       });
@@ -432,7 +439,7 @@ describe('WebGPU space warp', () => {
         frames++;
         session.requestAnimationFrame(onFrame);
         for (const view of frame.getViewerPose(space)!.views) {
-          binding.getViewSubImage(layer, view);
+          draw(binding.getViewSubImage(layer, view));
         }
       });
       for (let i = 0; i < 10; i++) {
@@ -442,6 +449,34 @@ describe('WebGPU space warp', () => {
       expect(gpu.warpPasses()).toHaveLength(5);
       expect(gpu.compositorPasses()).toHaveLength(10);
     });
+
+    test.each([
+      ['color only', []],
+      ['depth but no motion vectors', ['depthStencilTexture']],
+      ['motion vectors but no depth', ['motionVectorTexture']],
+    ] as const)(
+      'runs the app at full rate when it draws %s',
+      (_name, drawn) => {
+        const layer = showLayer();
+        let frames = 0;
+        session.requestAnimationFrame(function onFrame(_time, frame) {
+          frames++;
+          session.requestAnimationFrame(onFrame);
+          for (const view of frame.getViewerPose(space)!.views) {
+            const subImage = binding.getViewSubImage(layer, view);
+            subImage.colorTexture.createView();
+            for (const key of drawn) {
+              subImage[key]!.createView();
+            }
+          }
+        });
+        for (let i = 0; i < 10; i++) {
+          tick();
+        }
+        expect(frames).toBe(10);
+        expect(gpu.warpPasses()).toHaveLength(0);
+      },
+    );
 
     test('frames that do not draw the layer run as if space warp was off', () => {
       showLayer();
@@ -591,7 +626,7 @@ describe('WebGPU space warp', () => {
       runFrame(session, (frame) => {
         for (const view of frame.getViewerPose(space)!.views) {
           view.requestViewportScale(0.5);
-          binding.getViewSubImage(layer, view);
+          draw(binding.getViewSubImage(layer, view));
         }
       });
       tick();
@@ -799,7 +834,7 @@ describe('WebGPU space warp', () => {
       session.updateRenderState({ layers: [projection, quad] });
       runFrame(session, (frame) => {
         for (const view of frame.getViewerPose(space)!.views) {
-          binding.getViewSubImage(projection, view);
+          draw(binding.getViewSubImage(projection, view));
         }
         binding.getSubImage(quad, frame);
       });

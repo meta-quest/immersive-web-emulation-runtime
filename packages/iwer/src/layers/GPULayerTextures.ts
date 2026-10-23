@@ -66,6 +66,12 @@ export class GPULayerTextures {
     null;
   // Current textures the app destroyed, after IWER copied them.
   private kept = new WeakSet<WebGPUTexture>();
+  // Current depth and motion vector textures the app made a view of, which it
+  // needs to render into them.
+  private drawn = new WeakSet<WebGPUTexture>();
+  // Whether the app drew depth and motion vectors in the released frame. Space
+  // warp only synthesizes from those frames; others run as if it was off.
+  releasedMotion = false;
 
   constructor(
     device: WebGPUDevice,
@@ -112,6 +118,11 @@ export class GPULayerTextures {
         this.keepOnDestroy(key, this.current[key]);
       }
     }
+    // Watch depth and motion vectors only after IWER's own depth clear above.
+    if (this.current.motionVector) {
+      this.watchViews(this.current.depthStencil);
+      this.watchViews(this.current.motionVector);
+    }
     return this.current;
   }
 
@@ -133,6 +144,11 @@ export class GPULayerTextures {
     }
     this.released = this.compositorTextures;
     this.releasedFrame = frame;
+    this.releasedMotion =
+      !!current.depthStencil &&
+      !!current.motionVector &&
+      this.drawn.has(current.depthStencil) &&
+      this.drawn.has(current.motionVector);
     return true;
   }
 
@@ -183,6 +199,19 @@ export class GPULayerTextures {
    * binding says that leaves the layer's image alone. IWER's current textures
    * are that image, so it copies what was drawn for the compositor first.
    */
+  // Notes when the app makes a view of a current texture, which it needs to
+  // render into it.
+  private watchViews(texture: WebGPUTexture | null): void {
+    if (!texture) {
+      return;
+    }
+    const createView = texture.createView.bind(texture);
+    texture.createView = (...args: Parameters<typeof createView>) => {
+      this.drawn.add(texture);
+      return createView(...args);
+    };
+  }
+
   private keepOnDestroy(
     key: (typeof COPIED)[number],
     texture: WebGPUTexture | null,
