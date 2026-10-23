@@ -969,6 +969,22 @@ describe('XRGPUBinding', () => {
         );
       });
 
+      test('getViewSubImage rejects a view from an earlier frame', () => {
+        let stale: XRView | undefined;
+        runFrame(session, (frame) => {
+          stale = views(frame)[0];
+        });
+        let error: unknown;
+        runFrame(session, () => {
+          try {
+            binding.getViewSubImage(layer, stale!);
+          } catch (e) {
+            error = e;
+          }
+        });
+        expect(error).toEqual(invalidState);
+      });
+
       test('getViewSubImage validates the layer', () => {
         const otherLayer = binding.createProjectionLayer({
           colorFormat: 'bgra8unorm',
@@ -1359,6 +1375,23 @@ describe('XRGPUBinding', () => {
       }
       expect(textures[0]).not.toBe(textures[1]);
       expect(textures[0].destroy).toHaveBeenCalled();
+    });
+
+    test('rejects a view from an earlier frame', async () => {
+      await startSession(['gpu-optimized']);
+      let stale: XRView | undefined;
+      runFrame(session, (frame) => {
+        stale = views(frame)[0];
+      });
+      let error: unknown;
+      runFrame(session, () => {
+        try {
+          binding.getDepthInformation(stale!);
+        } catch (e) {
+          error = e;
+        }
+      });
+      expect(error).toEqual(invalidState);
     });
 
     test('returns null when there is no depth data', async () => {

@@ -164,6 +164,7 @@ export class XRFrame {
         new Float32Array(projectionMatrix),
         viewPose.transform,
         session,
+        this,
       );
       views.push(view);
     });

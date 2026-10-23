@@ -707,8 +707,8 @@ export class XRGPUBinding {
     if (view[P_VIEW].session !== session) {
       throw invalidState("View's session differs from the binding's session.");
     }
-    // IWER's views don't keep their frame; they're only valid in the active one.
-    const frame = session[P_SESSION].activeFrame;
+    // A view is only valid while the frame it came from is active.
+    const frame = view[P_VIEW].frame ?? session[P_SESSION].activeFrame;
     this.validateSubImage(layer, frame);
     const { textures } = layer[P_COMPOSITION_LAYER];
     const current = textures.acquire(frame!);
@@ -893,7 +893,7 @@ export class XRGPUBinding {
     if (lostDevices.has(device)) {
       throw new DOMException('GPUDevice is lost.', 'InvalidStateError');
     }
-    const frame = session[P_SESSION].activeFrame;
+    const frame = view[P_VIEW].frame ?? session[P_SESSION].activeFrame;
     if (!frame?.[P_FRAME].active || !frame[P_FRAME].animationFrame) {
       throw new DOMException(
         'getDepthInformation must be called during an XRFrame callback.',
