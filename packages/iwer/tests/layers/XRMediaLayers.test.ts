@@ -412,6 +412,44 @@ describe('WebGPU media layers', () => {
       expect(textures(layer).released).toBeNull();
     });
 
+    test('gets a new device after losing its own', async () => {
+      session.updateRenderState({ layers: [quad()] });
+      await settle();
+      runFrame(session);
+      expect(iwerGPU.compositorPasses()).toHaveLength(1);
+
+      const lostGPU = iwerGPU;
+      iwerGPU = createMockGPUDevice();
+      adapter.requestDevice.mockImplementation(async () => iwerGPU.device);
+      lostGPU.lose();
+      await settle();
+      // The next composite asks for a device, and the one after uses it.
+      runFrame(session);
+      await settle();
+      runFrame(session);
+      expect(adapter.requestDevice).toHaveBeenCalledTimes(2);
+      expect(
+        iwerGPU.device.queue.copyExternalImageToTexture,
+      ).toHaveBeenCalled();
+      expect(iwerGPU.compositorPasses()).toHaveLength(1);
+    });
+
+    test('a later layer asks again after a failed device request', async () => {
+      adapter.requestDevice.mockImplementationOnce(async () => {
+        throw new Error('no device');
+      });
+      session.updateRenderState({ layers: [quad()] });
+      await settle();
+      runFrame(session);
+      expect(iwerGPU.compositorPasses()).toHaveLength(0);
+
+      session.updateRenderState({ layers: [quad()] });
+      await settle();
+      runFrame(session);
+      expect(adapter.requestDevice).toHaveBeenCalledTimes(2);
+      expect(iwerGPU.compositorPasses()).toHaveLength(1);
+    });
+
     test('shows nothing until its device is ready', () => {
       session.updateRenderState({ layers: [quad()] });
       runFrame(session);

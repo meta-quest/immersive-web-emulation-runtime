@@ -25,7 +25,7 @@ const requestCompositorDevice = (): Promise<WebGPUDevice | null> => {
   }
   let device = compositorDevices.get(gpu);
   if (!device) {
-    device = Promise.resolve()
+    const request: Promise<WebGPUDevice | null> = Promise.resolve()
       .then(() => gpu.requestAdapter())
       // Systems that only support compatibility mode have no core adapter.
       .then(
@@ -36,7 +36,22 @@ const requestCompositorDevice = (): Promise<WebGPUDevice | null> => {
           } as GPURequestAdapterOptions),
       )
       .then((adapter) => adapter?.requestDevice() ?? null)
-      .catch(() => null);
+      .catch(() => null)
+      .then((created) => {
+        // Later requests try again after a failure or once the device is lost.
+        const forget = () => {
+          if (compositorDevices.get(gpu) === request) {
+            compositorDevices.delete(gpu);
+          }
+        };
+        if (created) {
+          created.lost.then(forget);
+        } else {
+          forget();
+        }
+        return created;
+      });
+    device = request;
     compositorDevices.set(gpu, device);
   }
   return device;
@@ -57,12 +72,30 @@ export class GPUMediaTextures {
   destroyed = false;
   private texture: WebGPUTexture | null = null;
   private warned = false;
+  // Whether the device was lost and a new one is needed.
+  private lost = false;
 
   constructor(video: HTMLVideoElement, invertStereo: boolean) {
     this.video = video;
     this.invertStereo = invertStereo;
+    this.requestDevice();
+  }
+
+  private requestDevice(): void {
+    this.lost = false;
     requestCompositorDevice().then((device) => {
+      if (this.destroyed) {
+        return;
+      }
       this.device = device;
+      device?.lost.then(() => {
+        if (this.device === device) {
+          this.device = null;
+          this.texture = null;
+          this.released = null;
+          this.lost = true;
+        }
+      });
     });
   }
 
@@ -71,6 +104,9 @@ export class GPUMediaTextures {
    * to show leaves the layer transparent, as the Layers spec describes.
    */
   update(): void {
+    if (this.lost && !this.destroyed) {
+      this.requestDevice();
+    }
     const { device, video } = this;
     this.released = null;
     if (
