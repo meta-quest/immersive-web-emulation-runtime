@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { vec4 } from 'gl-matrix';
 import { XRDevice, XRDeviceConfig } from '../../src/device/XRDevice.js';
 import {
   XREnvironmentBlendMode,
@@ -701,6 +702,27 @@ describe('WebGPU composition layers', () => {
         .setPipeline.mock.calls.map(
           ([pipeline]: any[]) => pipeline.descriptor.label,
         );
+
+    test("doesn't clip layers to the app's depth range", () => {
+      session.updateRenderState({ depthNear: 1, depthFar: 10 });
+      const at = (z: number) =>
+        binding.createQuadLayer({
+          ...init(),
+          transform: new XRRigidTransform({ x: 0, y: 0, z }),
+        });
+      show([at(-25), at(-0.5)]);
+      // Each quad's centre is inside WebGPU's clip volume (one mono view).
+      expect(
+        gpu.draws().map(({ matrix }) => {
+          const [, , z, w] = vec4.transformMat4(
+            vec4.create(),
+            [0, 0, 0, 1],
+            matrix as any,
+          );
+          return w > 0 && z >= 0 && z <= w;
+        }),
+      ).toEqual([true, true]);
+    });
 
     test('draws the layers in render state order with their pipelines', () => {
       const projection = binding.createProjectionLayer({

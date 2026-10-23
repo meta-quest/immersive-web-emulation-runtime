@@ -364,6 +364,8 @@ type ViewRegion = {
   x: number;
   width: number;
   projection: mat4;
+  // What quad, cylinder and equirect layers are drawn with.
+  layerProjection: mat4;
   // The view from the global space, with and without translation.
   view: mat4;
   rotation: mat4;
@@ -390,6 +392,15 @@ type FramePoses = {
 
 const scratchModel = mat4.create();
 const scratchRotation = quat.create();
+
+// The view's field of view with WebGPU's [0, 1] depth, a near plane of 1 cm
+// and no far plane, so the app's depthNear and depthFar don't clip layers.
+const layerProjection = (projection: mat4) => {
+  const out = mat4.clone(projection);
+  out[10] = -1;
+  out[14] = -0.01;
+  return out;
+};
 
 const rotationOnly = (out: mat4, matrix: mat4) => {
   mat4.copy(out, matrix);
@@ -633,12 +644,14 @@ export class XRGPUPresenter {
           mat4.create(),
           XRSpaceUtils.calculateGlobalOffsetMatrix(xrDevice.viewSpaces[eye]),
         ) ?? mat4.create();
+      const projection = session[P_SESSION].getProjectionMatrix(eye);
       return {
         eye,
         eyeIndex,
         x: stereo ? (eyeIndex * width) / 2 : 0,
         width: stereo ? width / 2 : width,
-        projection: session[P_SESSION].getProjectionMatrix(eye),
+        projection,
+        layerProjection: layerProjection(projection),
         view,
         rotation: rotationOnly(mat4.create(), view),
       };
@@ -915,7 +928,7 @@ export class XRGPUPresenter {
     }
     mat4.multiply(
       matrix,
-      region.projection,
+      region.layerProjection,
       mat4.multiply(mat4.create(), view, model),
     );
     uints[24] = columns;
