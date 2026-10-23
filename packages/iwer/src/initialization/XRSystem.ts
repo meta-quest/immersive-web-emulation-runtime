@@ -12,7 +12,9 @@ import {
   XRSessionMode,
 } from '../session/XRSession.js';
 
-import { P_SYSTEM } from '../private.js';
+import { P_SESSION, P_SYSTEM } from '../private.js';
+import { findWebGPUDepthConfiguration } from '../depth/XRDepthInformation.js';
+import { defineMediaBinding } from '../layers/XRMediaBinding.js';
 import {
   isGazeTrackingFeature,
   supportsGazeTracking,
@@ -23,7 +25,101 @@ type SessionGrantConfig = {
   reject: (reason?: any) => void;
   mode: XRSessionMode;
   options: XRSessionInit;
+  webgpuAvailable?: boolean;
 };
+
+const WEBGPU_PROBE_TIMEOUT_MS = 10000;
+
+type WebGPUProbe = {
+  check: Promise<boolean>;
+  result: boolean | null;
+  timedOut: boolean;
+};
+const webgpuProbes = new WeakMap<GPU, WebGPUProbe>();
+
+// Some browsers expose navigator.gpu but can't provide an adapter (blocklisted
+// GPUs, hardware acceleration off), and WebGPU apps then fall back to WebGL.
+// Only advertise 'webgpu' when an adapter is actually available. The adapter
+// check runs once per GPU object and its real result is kept when it arrives.
+// Each session request waits for it at most WEBGPU_PROBE_TIMEOUT_MS, because
+// requestAdapter() can hang in some headless environments, and only the first
+// request pays that wait while the check is still pending. The limit is
+// generous because a busy software adapter (headless SwiftShader in CI) can
+// take several seconds to answer.
+const probeWebGPU = (): Promise<boolean> => {
+  const gpu = globalThis.navigator?.gpu;
+  if (!gpu) {
+    return Promise.resolve(false);
+  }
+  let probe = webgpuProbes.get(gpu);
+  if (!probe) {
+    const created: WebGPUProbe = {
+      check: Promise.resolve()
+        .then(() =>
+          gpu.requestAdapter({
+            xrCompatible: true,
+          } as GPURequestAdapterOptions),
+        )
+        // Systems that only support WebGPU's compatibility mode have no core
+        // adapter, but apps can still render with a compatibility one.
+        .then(
+          (adapter) =>
+            adapter ??
+            gpu.requestAdapter({
+              xrCompatible: true,
+              featureLevel: 'compatibility',
+            } as GPURequestAdapterOptions),
+        )
+        .then(
+          (adapter) => Boolean(adapter),
+          () => false,
+        )
+        .then((available) => {
+          created.result = available;
+          return available;
+        }),
+      result: null,
+      timedOut: false,
+    };
+    probe = created;
+    webgpuProbes.set(gpu, probe);
+  }
+  if (probe.result !== null) {
+    return Promise.resolve(probe.result);
+  }
+  if (probe.timedOut) {
+    return Promise.resolve(false);
+  }
+  const pending = probe;
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      pending.timedOut = true;
+      resolve(false);
+    }, WEBGPU_PROBE_TIMEOUT_MS);
+    pending.check.then((available) => {
+      clearTimeout(timer);
+      resolve(available);
+    });
+  });
+};
+
+const requestsWebGPU = (mode: XRSessionMode, options: XRSessionInit) =>
+  mode !== 'inline' &&
+  [...(options.requiredFeatures ?? []), ...(options.optionalFeatures ?? [])]
+    .map(String)
+    .includes('webgpu');
+
+// IWER's own XRSession members, captured before the WebGL layers polyfill can
+// patch them.
+const sessionMembers = (
+  ['renderState', 'updateRenderState', 'requestAnimationFrame'] as const
+).map(
+  (name) =>
+    [
+      name,
+      Object.getOwnPropertyDescriptor(XRSession.prototype, name)!,
+    ] as const,
+);
 
 export class XRSystem extends EventTarget {
   [P_SYSTEM]: {
@@ -37,7 +133,7 @@ export class XRSystem extends EventTarget {
     super();
     this[P_SYSTEM] = {
       device,
-      grantSession: ({ resolve, reject, mode, options }) => {
+      grantSession: ({ resolve, reject, mode, options, webgpuAvailable }) => {
         // Check for active sessions and other constraints here
         if (this[P_SYSTEM].activeSession) {
           reject(
@@ -52,10 +148,32 @@ export class XRSystem extends EventTarget {
         // Handle required and optional features
         const { requiredFeatures = [], optionalFeatures = [] } = options;
         const { supportedFeatures } = this[P_SYSTEM].device;
-        const isFeatureSupported = (feature: WebXRFeature): boolean =>
-          isGazeTrackingFeature(feature)
+        const webgpuSession =
+          requestsWebGPU(mode, options) && webgpuAvailable === true;
+        const isFeatureSupported = (feature: WebXRFeature): boolean => {
+          if (feature === 'webgpu') {
+            // A host browser capability rather than part of the device profile.
+            return mode !== 'inline' && webgpuAvailable === true;
+          }
+          if (
+            feature === 'depth-sensing' &&
+            webgpuSession &&
+            !findWebGPUDepthConfiguration(options.depthSensing)
+          ) {
+            return false;
+          }
+          if (
+            (feature === 'layers' || feature === 'space-warp') &&
+            webgpuSession
+          ) {
+            // IWER emulates the WebXR Layers API, space warp included, for
+            // WebGPU sessions.
+            return true;
+          }
+          return isGazeTrackingFeature(feature)
             ? supportsGazeTracking(supportedFeatures)
             : supportedFeatures.includes(feature);
+        };
 
         // Check if all required features are supported
         const allRequiredSupported = requiredFeatures.every(isFeatureSupported);
@@ -100,6 +218,14 @@ export class XRSystem extends EventTarget {
           { once: true },
         );
 
+        // Media layers (XRMediaBinding) are only IWER's to draw in WebGPU
+        // sessions with layers.
+        if (webgpuSession && enabledFeatures.includes('layers')) {
+          session.addEventListener('end', defineMediaBinding(), {
+            once: true,
+          });
+        }
+
         resolve(session);
       },
     };
@@ -123,7 +249,7 @@ export class XRSystem extends EventTarget {
   ): Promise<XRSession> {
     return new Promise<XRSession>((resolve, reject) => {
       this.isSessionSupported(mode)
-        .then((isSupported) => {
+        .then(async (isSupported) => {
           if (!isSupported) {
             reject(
               new DOMException(
@@ -134,11 +260,16 @@ export class XRSystem extends EventTarget {
             return;
           }
 
+          const webgpuAvailable = requestsWebGPU(mode, options)
+            ? await probeWebGPU()
+            : false;
+
           const sessionGrantConfig = {
             resolve,
             reject,
             mode,
             options,
+            webgpuAvailable,
           };
 
           this[P_SYSTEM].grantSession(sessionGrantConfig);
@@ -181,3 +312,52 @@ export class XRSystem extends EventTarget {
     });
   }
 }
+
+/**
+ * The WebXR Layers polyfill only supports WebGL, but it wraps requestSession
+ * and patches XRSession for every session. Routes WebGPU sessions around it:
+ * they're requested without the polyfill's wrapper (which would also drop a
+ * required 'layers' feature) and use IWER's own render state and frame loop.
+ */
+export const bypassLayersPolyfillForWebGPU = (xrSystem: XRSystem) => {
+  const prototype = XRSession.prototype;
+  for (const [name, own] of sessionMembers) {
+    const polyfilled = Object.getOwnPropertyDescriptor(prototype, name);
+    if (
+      !polyfilled ||
+      (polyfilled.get === own.get && polyfilled.value === own.value)
+    ) {
+      continue;
+    }
+    const member = (session: XRSession) =>
+      session[P_SESSION]?.hasWebGPU ? own : polyfilled;
+    Object.defineProperty(
+      prototype,
+      name,
+      own.get
+        ? {
+            configurable: true,
+            get(this: XRSession) {
+              return member(this).get!.call(this);
+            },
+          }
+        : {
+            configurable: true,
+            writable: true,
+            value(this: XRSession, ...args: unknown[]) {
+              return member(this).value.apply(this, args);
+            },
+          },
+    );
+  }
+
+  // The polyfill made requestSession writable but not configurable.
+  const polyfilledRequestSession = xrSystem.requestSession;
+  xrSystem.requestSession = async (
+    mode: XRSessionMode,
+    options: XRSessionInit = {},
+  ) =>
+    requestsWebGPU(mode, options) && (await probeWebGPU())
+      ? XRSystem.prototype.requestSession.call(xrSystem, mode, options)
+      : polyfilledRequestSession.call(xrSystem, mode, options);
+};

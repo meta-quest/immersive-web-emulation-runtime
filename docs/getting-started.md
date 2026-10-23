@@ -70,6 +70,75 @@ Ensure this initialization occurs before any rendering or WebXR logic within you
 > [!NOTE]
 > If you're integrating IWER into a production build, it's crucial to first check for native WebXR support. In environments where native WebXR is available, you may prefer not to inject IWER's runtime to avoid overriding the native implementation. This is particularly relevant for platforms like the Meta Quest Browser, which already supports WebXR natively.
 
+## WebGPU Applications
+
+IWER emulates the [WebXR/WebGPU binding](https://immersive-web.github.io/webxr-webgpu-binding/), so WebGPU apps such as three.js `WebGPURenderer` can enter XR in browsers that support WebGPU but don't provide `XRGPUBinding`. Immersive sessions can request the `'webgpu'` feature when the browser can provide a WebGPU adapter. The app renders into a projection layer, and IWER draws the layer to a canvas over the page, with the two views side by side when stereo rendering is on:
+
+```javascript
+const session = await navigator.xr.requestSession('immersive-vr', {
+  requiredFeatures: ['webgpu'],
+});
+const binding = new XRGPUBinding(session, gpuDevice);
+const layer = binding.createProjectionLayer({
+  colorFormat: binding.getPreferredColorFormat(),
+});
+session.updateRenderState({ layers: [layer] });
+```
+
+With the `'layers'` feature, WebGPU sessions can also show quad, cylinder, equirect and cube layers, up to `session.maxRenderLayers` (16) at once. IWER draws them in `renderState.layers` order, each blended over the ones before it:
+
+```javascript
+const session = await navigator.xr.requestSession('immersive-vr', {
+  requiredFeatures: ['webgpu', 'layers'],
+});
+const quad = binding.createQuadLayer({
+  colorFormat: binding.getPreferredColorFormat(),
+  space: await session.requestReferenceSpace('local'),
+  viewPixelWidth: 512,
+  viewPixelHeight: 512,
+  transform: new XRRigidTransform({ x: 0, y: 0, z: -2, w: 1 }),
+});
+session.updateRenderState({ layers: [projectionLayer, quad] });
+// In each frame, binding.getSubImage(quad, frame) gives the texture to draw.
+```
+
+As the binding describes, the textures a layer gives out in a frame start cleared and are destroyed when the frame ends. IWER keeps showing the last frame each layer was drawn in, so a layer created with `isStatic: true` only needs drawing while `needsRedraw` is `true`.
+
+With `'layers'`, `XRMediaBinding` also creates quad, cylinder and equirect layers that show a video. IWER copies the video's current frame each time it draws, on a `GPUDevice` of its own, so these layers work without an `XRGPUBinding`. As with any WebGPU upload, the video must be same-origin or served with CORS. IWER defines `XRMediaBinding` only while such a session runs, so a WebXR Layers polyfill that an app loads for WebGL sessions still installs.
+
+```javascript
+const media = new XRMediaBinding(session);
+const screen = media.createQuadLayer(video, {
+  space: await session.requestReferenceSpace('local'),
+  transform: new XRRigidTransform({ x: 0, y: 0, z: -2, w: 1 }),
+  width: 1.6, // The height follows the video's aspect ratio.
+});
+session.updateRenderState({ layers: [projectionLayer, screen] });
+```
+
+IWER's WebGPU types are the standard ones on TypeScript 6. On TypeScript 5, add `@webgpu/types` to get them; without it, WebGPU values are typed loosely.
+
+A projection layer's `fixedFoveation` (0 to 1, default 0) lowers the resolution away from the centre of each view when IWER draws it, like fixed foveated rendering on a headset.
+
+With the `'space-warp'` feature, a projection layer created with a depth format other than `'stencil8'` also gives out a `motionVectorTexture` (`rgba16float`), and its depth/stencil texture uses the motion vectors' lower resolution, about a quarter of the view's in each direction. As on a Quest, the app then runs at half the frame rate: after each frame that draws the layer's motion vectors and depth, IWER synthesizes the next one by moving every pixel along its motion vector and reprojecting it with depth to the latest head pose. Motion vectors are the pixel's NDC position in the current frame minus its position in the previous frame, camera motion included, so missing or wrong motion vectors show up as stutter or wobble, as they would on a headset. Frames that don't draw both run at the full rate, as the spec requires.
+
+```javascript
+const session = await navigator.xr.requestSession('immersive-vr', {
+  requiredFeatures: ['webgpu', 'space-warp'],
+});
+const layer = binding.createProjectionLayer({
+  colorFormat: binding.getPreferredColorFormat(),
+  depthStencilFormat: 'depth24plus',
+});
+// In each frame, render color into subImage.colorTexture, then depth and
+// motion vectors over the whole of subImage.depthStencilTexture and
+// subImage.motionVectorTexture.
+```
+
+With `installRuntime({ polyfillLayers: true })`, the WebXR Layers polyfill keeps handling WebGL sessions, and WebGPU sessions bypass it.
+
+As the binding requires, WebGPU sessions can't use `XRWebGLLayer` or `XRWebGLBinding`. For depth sensing, use `XRFrame.getDepthInformation()` for CPU-optimized depth or `XRGPUBinding.getDepthInformation()` for GPU-optimized depth, a texture of linear depth with one array layer per view: `r32float` meters, or `r16uint` millimeters for `'unsigned-short'`. The session uses the first usage and data format in `depthSensing` that it supports.
+
 ## Understanding IWER's Global Reference Space
 
 IWER creates a simple but effective space to simulate how you move and interact in XR. Think of it as the stage where all your virtual actions happen. This stage, or "global reference space," is like the room you're in, with the starting point right under where the headset would be on the ground.

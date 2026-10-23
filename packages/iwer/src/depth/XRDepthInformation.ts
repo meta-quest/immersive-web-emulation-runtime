@@ -9,7 +9,10 @@ import { P_DEPTH_INFO } from '../private.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 
 export type XRDepthUsage = 'cpu-optimized' | 'gpu-optimized';
-export type XRDepthDataFormat = 'luminance-alpha' | 'float32';
+export type XRDepthDataFormat =
+  | 'luminance-alpha'
+  | 'float32'
+  | 'unsigned-short';
 
 export interface XRDepthStateInit {
   usagePreference: XRDepthUsage[];
@@ -22,6 +25,57 @@ export interface DepthSensingData {
   height: number;
   rawValueToMeters: number;
 }
+
+// Depth configurations offered to WebGPU sessions, in IWER's preferred order.
+// GPU-optimized luminance-alpha depth isn't allowed in WebGPU sessions.
+const WEBGPU_DEPTH_FORMATS: Record<XRDepthUsage, XRDepthDataFormat[]> = {
+  'cpu-optimized': ['float32', 'unsigned-short', 'luminance-alpha'],
+  'gpu-optimized': ['float32', 'unsigned-short'],
+};
+
+/**
+ * Picks the first supported usage and data format from the app's preferences,
+ * usage first, or null when none of them is supported.
+ */
+export const findWebGPUDepthConfiguration = (
+  init: XRDepthStateInit | undefined,
+): { usage: XRDepthUsage; dataFormat: XRDepthDataFormat } | null => {
+  const usages: XRDepthUsage[] = init?.usagePreference?.length
+    ? init.usagePreference
+    : ['cpu-optimized', 'gpu-optimized'];
+  for (const usage of usages) {
+    const supported = WEBGPU_DEPTH_FORMATS[usage] ?? [];
+    const formats = init?.dataFormatPreference?.length
+      ? init.dataFormatPreference
+      : supported;
+    const dataFormat = formats.find((format) => supported.includes(format));
+    if (dataFormat) {
+      return { usage, dataFormat };
+    }
+  }
+  return null;
+};
+
+// 16-bit millimeters, the layout of both 'unsigned-short' and
+// 'luminance-alpha' depth.
+export const toMillimeterDepth = (
+  depth: DepthSensingData,
+): DepthSensingData => {
+  const meters = new Float32Array(depth.data);
+  const millimeters = new Uint16Array(meters.length);
+  for (let i = 0; i < meters.length; i++) {
+    millimeters[i] = Math.min(
+      0xffff,
+      Math.max(0, Math.round(meters[i] * depth.rawValueToMeters * 1000)),
+    );
+  }
+  return {
+    data: millimeters.buffer,
+    width: depth.width,
+    height: depth.height,
+    rawValueToMeters: 0.001,
+  };
+};
 
 export class XRCPUDepthInformation {
   [P_DEPTH_INFO]: {
@@ -96,7 +150,7 @@ export class XRCPUDepthInformation {
       const index = row * width + col;
       return floatView[index] * rawValueToMeters;
     } else {
-      // luminance-alpha: 16-bit unsigned int packed as two bytes
+      // luminance-alpha and unsigned-short: 16-bit unsigned int in two bytes
       const byteView = view as Uint8Array;
       const index = (row * width + col) * 2;
       const rawValue = byteView[index] + byteView[index + 1] * 256;

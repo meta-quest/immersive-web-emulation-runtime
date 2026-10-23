@@ -21,6 +21,9 @@ export default defineConfig({
       args: [
         '--use-gl=swiftshader',
         '--enable-unsafe-swiftshader',
+        // Headless Chromium then offers SwiftShader's WebGPU adapter, which
+        // the WebGPU binding tests need.
+        '--enable-unsafe-webgpu',
         '--no-sandbox',
       ],
     },

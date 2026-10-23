@@ -35,6 +35,22 @@ import {
 } from '../input/XRInputSource.js';
 import { XRLayer, XRWebGLLayer } from '../layers/XRWebGLLayer.js';
 import {
+  XRCompositionLayer,
+  XRProjectionLayer,
+} from '../layers/XRProjectionLayer.js';
+import {
+  XRGPUBinding,
+  XRGPUSubImage,
+  XRSubImage,
+} from '../layers/XRGPUBinding.js';
+import {
+  XRCubeLayer,
+  XRCylinderLayer,
+  XREquirectLayer,
+  XRQuadLayer,
+} from '../layers/XRSpaceLayers.js';
+import { XRLayerEvent } from '../events/XRLayerEvent.js';
+import {
   XRReferenceSpace,
   XRReferenceSpaceType,
 } from '../spaces/XRReferenceSpace.js';
@@ -57,7 +73,10 @@ import { XRReferenceSpaceEvent } from '../events/XRReferenceSpaceEvent.js';
 import { XRRenderState } from '../session/XRRenderState.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSessionEvent } from '../events/XRSessionEvent.js';
-import { XRSystem } from '../initialization/XRSystem.js';
+import {
+  XRSystem,
+  bypassLayersPolyfillForWebGPU,
+} from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
 import { XRGazeInput, supportsGazeTracking } from './XRGazeInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
@@ -88,7 +107,10 @@ export type WebXRFeature =
   | 'hand-tracking'
   | 'gaze-tracking'
   | 'eye-tracking'
-  | 'depth-sensing';
+  | 'depth-sensing'
+  | 'webgpu'
+  | 'layers'
+  | 'space-warp';
 
 export interface XRDeviceConfig {
   name: string;
@@ -282,10 +304,16 @@ export class XRDevice {
 
     getViewport: (layer: XRWebGLLayer, view: XRView) => XRViewport;
     viewportCache: { [key in XREye]?: XRViewport };
+    getRecommendedViewResolution: () => { width: number; height: number };
     updateViews: () => void;
+    mountCanvas: (canvas: HTMLCanvasElement) => void;
     onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => void;
     onSessionEnd: () => void;
     onFrameStart: (frame: XRFrame) => void;
+    // A frame IWER synthesizes with space warp: tracking moves on, but the
+    // app gets no frame.
+    onSynthesizedFrame: () => void;
+    updateRemote: () => void;
 
     // action playback
     actionPlayer?: ActionPlayer;
@@ -471,6 +499,13 @@ export class XRDevice {
         return viewport;
       },
       viewportCache: {},
+      // The app canvas is sized to the window during a session.
+      getRecommendedViewResolution: () => ({
+        width: this[P_DEVICE].stereoEnabled
+          ? Math.floor(window.innerWidth / 2)
+          : window.innerWidth,
+        height: window.innerHeight,
+      }),
       updateViews: () => {
         // update viewerSpace
         const viewerSpace = this[P_DEVICE].viewerSpace;
@@ -492,11 +527,8 @@ export class XRDevice {
           rightViewOffsetScratch,
         );
       },
-      onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => {
-        if (!baseLayer) return;
-
+      mountCanvas: (canvas: HTMLCanvasElement) => {
         // backup canvas data
-        const canvas = baseLayer.context.canvas as HTMLCanvasElement;
         if (canvas.parentElement !== this[P_DEVICE].canvasContainer) {
           const devui = this[P_DEVICE].devui;
           if (devui) {
@@ -530,6 +562,12 @@ export class XRDevice {
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+      },
+      onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => {
+        if (!baseLayer) return;
+        this[P_DEVICE].mountCanvas(
+          baseLayer.context.canvas as HTMLCanvasElement,
+        );
       },
       onSessionEnd: () => {
         this[P_DEVICE].remote?.onSessionEnd();
@@ -578,7 +616,7 @@ export class XRDevice {
           window.dispatchEvent(new Event('resize'));
         }
       },
-      onFrameStart: (frame: XRFrame) => {
+      updateRemote: () => {
         // Calculate delta time for remote control, capped so one stalled
         // frame (a background tab, a debugger pause) can't run several timed
         // actions at once.
@@ -593,6 +631,14 @@ export class XRDevice {
         if (this[P_DEVICE].remote) {
           this[P_DEVICE].remote.update(deltaTimeMs);
         }
+      },
+      onSynthesizedFrame: () => {
+        this[P_DEVICE].updateRemote();
+        this[P_DEVICE].updateViews();
+        this.drawVisibilityMask();
+      },
+      onFrameStart: (frame: XRFrame) => {
+        this[P_DEVICE].updateRemote();
 
         if (this[P_DEVICE].actionPlayer?.playing) {
           this[P_DEVICE].actionPlayer.playFrame();
@@ -851,9 +897,20 @@ export class XRDevice {
 
     if (polyfillLayers) {
       new WebXRLayerPolyfill();
+      bypassLayersPolyfillForWebGPU(this[P_DEVICE].xrSystem!);
     } else {
       setGlobal('XRMediaBinding', undefined);
     }
+    setGlobal('XRSubImage', XRSubImage);
+    setGlobal('XRCompositionLayer', XRCompositionLayer);
+    setGlobal('XRProjectionLayer', XRProjectionLayer);
+    setGlobal('XRGPUBinding', XRGPUBinding);
+    setGlobal('XRGPUSubImage', XRGPUSubImage);
+    setGlobal('XRQuadLayer', XRQuadLayer);
+    setGlobal('XRCylinderLayer', XRCylinderLayer);
+    setGlobal('XREquirectLayer', XREquirectLayer);
+    setGlobal('XRCubeLayer', XRCubeLayer);
+    setGlobal('XRLayerEvent', XRLayerEvent);
     setGlobal('XRWebGLBinding', XRWebGLBinding);
   }
 

@@ -204,6 +204,35 @@ export type { GazeTrackingFeature } from './device/XRGazeInput.js';
 
 // Layers
 export { XRWebGLLayer, XRLayer } from './layers/XRWebGLLayer.js';
+export {
+  XRCompositionLayer,
+  XRProjectionLayer,
+} from './layers/XRProjectionLayer.js';
+export {
+  XRQuadLayer,
+  XRCylinderLayer,
+  XREquirectLayer,
+  XRCubeLayer,
+} from './layers/XRSpaceLayers.js';
+export {
+  XRGPUBinding,
+  XRGPUDepthInformation,
+  XRGPUSubImage,
+  XRSubImage,
+  type XRGPUProjectionLayerInit,
+  type XRGPULayerInit,
+  type XRGPUQuadLayerInit,
+  type XRGPUCylinderLayerInit,
+  type XRGPUEquirectLayerInit,
+  type XRGPUCubeLayerInit,
+} from './layers/XRGPUBinding.js';
+export {
+  XRMediaBinding,
+  type XRMediaLayerInit,
+  type XRMediaQuadLayerInit,
+  type XRMediaCylinderLayerInit,
+  type XRMediaEquirectLayerInit,
+} from './layers/XRMediaBinding.js';
 
 // Planes
 export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';
@@ -228,6 +257,7 @@ export { XRRay } from './hittest/XRRay.js';
 
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';
+export { XRLayerEvent } from './events/XRLayerEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';
 export { XRInputSourcesChangeEvent } from './events/XRInputSourcesChangeEvent.js';
 export { XRReferenceSpaceEvent } from './events/XRReferenceSpaceEvent.js';

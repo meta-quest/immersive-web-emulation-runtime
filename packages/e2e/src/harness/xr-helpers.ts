@@ -7,6 +7,7 @@
 
 import type { RuntimeMode } from './runtime-detect.js';
 import type { XRDevice } from 'iwer';
+import { SkipError } from './test-harness.js';
 import {
   createWebGLContext,
   makeXRCompatible,
@@ -114,6 +115,29 @@ export async function startSessionRaw(
   const session = await navigator.xr!.requestSession(mode, options);
 
   return { session, gl, canvas };
+}
+
+/**
+ * Request an immersive session that renders with WebGPU, with `features`
+ * required as well. A native runtime that doesn't offer them skips the test.
+ */
+export async function startWebGPUSession(
+  mode: XRSessionMode,
+  features: string[] = [],
+): Promise<XRSession> {
+  await ensureUserActivation(mode);
+  try {
+    return await navigator.xr!.requestSession(mode, {
+      requiredFeatures: ['webgpu', ...features],
+    });
+  } catch (error) {
+    if ((globalThis as any).__IWER_INJECTED__) {
+      throw error;
+    }
+    throw new SkipError(
+      `The runtime doesn't offer ${['webgpu', ...features].join(', ')}`,
+    );
+  }
 }
 
 /**

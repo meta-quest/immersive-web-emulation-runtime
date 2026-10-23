@@ -5,7 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { P_VIEW } from '../private.js';
+import type { XRFrame } from '../frameloop/XRFrame.js';
+import { P_SESSION, P_VIEW } from '../private.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSession } from '../session/XRSession.js';
 
@@ -23,6 +24,8 @@ export class XRView {
     recommendedViewportScale: number | null;
     requestedViewportScale: number;
     session: XRSession;
+    // The frame the view came from; views are only valid while it's active.
+    frame: XRFrame | null;
   };
 
   constructor(
@@ -30,6 +33,7 @@ export class XRView {
     projectionMatrix: Float32Array,
     transform: XRRigidTransform,
     session: XRSession,
+    frame: XRFrame | null = null,
   ) {
     this[P_VIEW] = {
       eye,
@@ -38,6 +42,7 @@ export class XRView {
       recommendedViewportScale: null,
       requestedViewportScale: 1.0,
       session,
+      frame,
     };
   }
 
@@ -63,5 +68,12 @@ export class XRView {
       return;
     }
     this[P_VIEW].requestedViewportScale = scale;
+    // The request lasts until the app changes it, like the view it's for.
+    const viewportScale = this[P_VIEW].session[P_SESSION].viewportScales.get(
+      this[P_VIEW].eye,
+    );
+    if (viewportScale) {
+      viewportScale.requested = scale;
+    }
   }
 }

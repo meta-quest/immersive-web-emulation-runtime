@@ -9,12 +9,14 @@ import { NativeMesh, XRMesh } from '../meshes/XRMesh.js';
 import { NativePlane, XRPlane, planeOrientation } from '../planes/XRPlane.js';
 import {
   P_ANCHOR,
+  P_COMPOSITION_LAYER,
   P_DEVICE,
   P_FRAME,
   P_GAMEPAD,
   P_HIT_TEST,
   P_MESH,
   P_PLANE,
+  P_PROJECTION_LAYER,
   P_SESSION,
   P_SPACE,
   P_WEBGL_LAYER,
@@ -24,6 +26,8 @@ import {
   XRDepthDataFormat,
   XRDepthStateInit,
   XRDepthUsage,
+  findWebGPUDepthConfiguration,
+  toMillimeterDepth,
 } from '../depth/XRDepthInformation.js';
 import { XRWebGLDepthInformation } from '../depth/XRWebGLBinding.js';
 import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
@@ -48,6 +52,7 @@ import {
   XRSessionEventHandler,
 } from '../events/XRSessionEvent.js';
 import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
+import { recordSpaceSession } from '../spaces/spaceSessions.js';
 
 import { XREye } from '../views/XRView.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
@@ -58,6 +63,13 @@ import {
 } from '../events/XRInputSourceEvent.js';
 import { edgeEventTypes, resetButton } from '../gamepad/button-edges.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
+import { GPULayerTextures } from '../layers/GPULayerTextures.js';
+import { XRGPUPresenter } from '../layers/XRGPUPresenter.js';
+import {
+  XRCompositionLayer,
+  XRProjectionLayer,
+} from '../layers/XRProjectionLayer.js';
+import { XRLayer, XRWebGLLayer } from '../layers/XRWebGLLayer.js';
 import { mat4 } from 'gl-matrix';
 
 export type XRVisibilityState = 'visible' | 'visible-blurred' | 'hidden';
@@ -69,6 +81,14 @@ export type XRSessionInit = {
   optionalFeatures?: WebXRFeature[];
   depthSensing?: XRDepthStateInit;
 };
+
+// The most layers a render state can hold (XRSession.maxRenderLayers).
+const MAX_RENDER_LAYERS = 16;
+
+// Maps clip-space z from WebGPU's [0, 1] depth range to WebGL's [-1, 1].
+const WEBGPU_TO_WEBGL_DEPTH = mat4.create();
+WEBGPU_TO_WEBGL_DEPTH[10] = 2;
+WEBGPU_TO_WEBGL_DEPTH[14] = -1;
 
 export enum XREnvironmentBlendMode {
   Opaque = 'opaque',
@@ -103,6 +123,7 @@ export class XRSession extends EventTarget {
     hasDepth: boolean;
     hasHitTest: boolean;
     hasGazeTracking: boolean;
+    hasWebGPU: boolean;
     // cached immutable copy of device.supportedFrameRates
     supportedFrameRates: Float32Array;
     isSystemKeyboardSupported: boolean;
@@ -124,6 +145,22 @@ export class XRSession extends EventTarget {
     // render state
     renderState: XRRenderState;
     pendingRenderState: XRRenderState | null;
+    // WebGPU sessions render into a projection layer instead of a baseLayer
+    // Every live layer an XRGPUBinding created for this session.
+    gpuLayers: Set<XRCompositionLayer>;
+    // Each view's requested and current viewport scale. The current scale
+    // can change once per frame, when a subimage of the view is first asked for.
+    viewportScales: Map<
+      XREye,
+      { requested: number; current: number; modifiable: boolean }
+    >;
+    gpuPresenter: XRGPUPresenter | null;
+    releaseLayers: (frame: XRFrame) => void;
+    // With space warp, a frame that submitted motion vectors; IWER
+    // synthesizes the next device frame from it.
+    spaceWarpFrame: XRFrame | null;
+    synthesizeFrame: (frame: XRFrame) => void;
+    updateProjectionMatrices: () => void;
     // framerate
     nominalFrameRate: number;
     // reference spaces
@@ -185,11 +222,120 @@ export class XRSession extends EventTarget {
     _depthSensing?: XRDepthStateInit,
   ) {
     super();
+    // WebGPU sessions negotiate their depth configuration from the app's
+    // preferences.
+    const webgpuDepth = enabledFeatures.includes('webgpu')
+      ? findWebGPUDepthConfiguration(_depthSensing)
+      : null;
     this[P_SESSION] = {
       device,
       mode,
-      renderState: new XRRenderState(),
+      renderState: new XRRenderState(
+        enabledFeatures.includes('webgpu') ? { layers: [] } : {},
+      ),
       pendingRenderState: null,
+      gpuLayers: new Set(),
+      viewportScales: new Map(
+        [XREye.None, XREye.Left, XREye.Right].map((eye) => [
+          eye,
+          { requested: 1, current: 1, modifiable: true },
+        ]),
+      ),
+      gpuPresenter: null,
+      // "Release the WebGPU textures" of every layer drawn in this frame.
+      releaseLayers: (frame: XRFrame) => {
+        try {
+          const encoders = new Map<GPUDevice, GPUCommandEncoder>();
+          const released: [XRCompositionLayer, GPULayerTextures][] = [];
+          for (const layer of this[P_SESSION].gpuLayers) {
+            const { textures } = layer[P_COMPOSITION_LAYER];
+            // Media layers have nothing for the app to draw.
+            if (
+              !(textures instanceof GPULayerTextures) ||
+              textures.current?.frame !== frame
+            ) {
+              continue;
+            }
+            const device = textures.device as GPUDevice;
+            let encoder = encoders.get(device);
+            if (!encoder) {
+              encoder = device.createCommandEncoder({
+                label: 'IWER layer release',
+              });
+              encoders.set(device, encoder);
+            }
+            textures.release(frame, encoder);
+            released.push([layer, textures]);
+          }
+          for (const [device, encoder] of encoders) {
+            device.queue.submit([encoder.finish()]);
+          }
+          for (const [layer, textures] of released) {
+            textures.expire();
+            layer[P_COMPOSITION_LAYER].needsRedraw = false;
+            if (layer instanceof XRProjectionLayer) {
+              const projection = layer[P_PROJECTION_LAYER];
+              projection.viewportScales = projection.frameViewportScales;
+              projection.frameViewportScales = [1, 1];
+            }
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      },
+      spaceWarpFrame: null,
+      synthesizeFrame: (frame: XRFrame) => {
+        const now = performance.now();
+        this[P_SESSION].updateProjectionMatrices();
+        const device = this[P_SESSION].device[P_DEVICE];
+        device.devui?.render(now);
+        if (this[P_SESSION].mode === 'immersive-ar') {
+          device.sem?.render(now);
+        }
+        device.onSynthesizedFrame();
+        this[P_SESSION].gpuPresenter?.present(
+          this,
+          this[P_SESSION].renderState.layers ?? [],
+          frame,
+        );
+      },
+      updateProjectionMatrices: () => {
+        const { depthNear, depthFar } = this[P_SESSION].renderState;
+        const context = this[P_SESSION].renderState.baseLayer?.context;
+        const { width, height } = context?.canvas ?? {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        };
+        if (this[P_SESSION].mode !== 'inline') {
+          const aspect =
+            (width * (this[P_SESSION].device.stereoEnabled ? 0.5 : 1.0)) /
+            height;
+          // WebGPU clip space has a [0, 1] depth range
+          const perspective = this[P_SESSION].hasWebGPU
+            ? mat4.perspectiveZO
+            : mat4.perspective;
+          perspective(
+            this[P_SESSION].projectionMatrices[XREye.Left],
+            this[P_SESSION].device.fovy,
+            aspect,
+            depthNear,
+            depthFar,
+          );
+          mat4.copy(
+            this[P_SESSION].projectionMatrices[XREye.Right],
+            this[P_SESSION].projectionMatrices[XREye.Left],
+          );
+        } else {
+          const aspect = width / height;
+          mat4.perspective(
+            this[P_SESSION].projectionMatrices[XREye.None],
+            this[P_SESSION].renderState.inlineVerticalFieldOfView!,
+            aspect,
+            depthNear,
+            depthFar,
+          );
+        }
+      },
       enabledFeatures: enabledFeatures,
       hasAnchors: enabledFeatures.includes('anchors'),
       hasPlanes: enabledFeatures.includes('plane-detection'),
@@ -199,6 +345,7 @@ export class XRSession extends EventTarget {
       hasGazeTracking:
         enabledFeatures.includes('gaze-tracking') ||
         enabledFeatures.includes('eye-tracking'),
+      hasWebGPU: enabledFeatures.includes('webgpu'),
       supportedFrameRates: new Float32Array(device.supportedFrameRates),
       isSystemKeyboardSupported: false,
       ended: false,
@@ -236,20 +383,49 @@ export class XRSession extends EventTarget {
           this[P_SESSION].onDeviceFrame,
         );
 
+        // Space warp: the app skips this frame and IWER synthesizes it.
+        const synthesizeFrom = this[P_SESSION].spaceWarpFrame;
+        if (synthesizeFrom) {
+          this[P_SESSION].spaceWarpFrame = null;
+          this[P_SESSION].synthesizeFrame(synthesizeFrom);
+          return;
+        }
+
         if (this[P_SESSION].pendingRenderState != null) {
           this[P_SESSION].renderState = this[P_SESSION].pendingRenderState;
           this[P_SESSION].pendingRenderState = null;
           this[P_SESSION].device[P_DEVICE].onBaseLayerSet(
             this[P_SESSION].renderState.baseLayer,
           );
+          if (this[P_SESSION].renderState.layers?.length) {
+            this[P_SESSION].gpuPresenter ??= new XRGPUPresenter(
+              this[P_SESSION].device,
+            );
+            this[P_SESSION].gpuPresenter.attach();
+          }
         }
 
         const baseLayer = this[P_SESSION].renderState.baseLayer;
-        if (baseLayer === null) {
+        // "Check the layers state": frames run while a layer can be shown.
+        const layers = (this[P_SESSION].renderState.layers ?? []).filter(
+          (layer) =>
+            !(layer instanceof XRCompositionLayer) ||
+            !layer[P_COMPOSITION_LAYER].destroyed,
+        );
+        this[P_SESSION].gpuPresenter?.setVisible(layers.length > 0);
+        if (baseLayer === null && layers.length === 0) {
           return;
         }
-        const context = baseLayer.context;
-        const canvas = context.canvas;
+        for (const viewportScale of this[P_SESSION].viewportScales.values()) {
+          viewportScale.modifiable = true;
+        }
+        for (const layer of layers) {
+          if (layer instanceof XRProjectionLayer) {
+            const projection = layer[P_PROJECTION_LAYER];
+            projection.frameFixedFoveation = projection.fixedFoveation;
+          }
+        }
+        const context = baseLayer?.context;
 
         /**
          * This code snippet is designed to clear the buffers attached to an opaque framebuffer
@@ -279,7 +455,7 @@ export class XRSession extends EventTarget {
          * prevent rendering artifacts from past frames. It ensures that each new frame starts
          * with a clean slate.
          */
-        if (this[P_SESSION].mode != 'inline') {
+        if (context && this[P_SESSION].mode != 'inline') {
           const currentClearColor = context.getParameter(
             context.COLOR_CLEAR_VALUE,
           );
@@ -308,33 +484,7 @@ export class XRSession extends EventTarget {
         }
 
         // Calculate projection matrices
-        const { depthNear, depthFar } = this[P_SESSION].renderState;
-        const { width, height } = canvas;
-        if (this[P_SESSION].mode !== 'inline') {
-          const aspect =
-            (width * (this[P_SESSION].device.stereoEnabled ? 0.5 : 1.0)) /
-            height;
-          mat4.perspective(
-            this[P_SESSION].projectionMatrices[XREye.Left],
-            this[P_SESSION].device.fovy,
-            aspect,
-            depthNear,
-            depthFar,
-          );
-          mat4.copy(
-            this[P_SESSION].projectionMatrices[XREye.Right],
-            this[P_SESSION].projectionMatrices[XREye.Left],
-          );
-        } else {
-          const aspect = width / height;
-          mat4.perspective(
-            this[P_SESSION].projectionMatrices[XREye.None],
-            this[P_SESSION].renderState.inlineVerticalFieldOfView!,
-            aspect,
-            depthNear,
-            depthFar,
-          );
-        }
+        this[P_SESSION].updateProjectionMatrices();
 
         const now = performance.now();
         const frame = new XRFrame(
@@ -399,6 +549,29 @@ export class XRSession extends EventTarget {
           }
         }
         this[P_SESSION].currentFrameCallbacks = null;
+
+        // Hand the layers drawn in this frame to the compositor, then show
+        // every layer in the render state.
+        this[P_SESSION].releaseLayers(frame);
+        if (!this[P_SESSION].ended) {
+          this[P_SESSION].gpuPresenter?.present(this, layers);
+          // After a frame where the app drew motion vectors and depth, IWER
+          // synthesizes the next device frame from it. Other frames run as if
+          // space warp was off, as the spec requires.
+          const submitted = layers.some(
+            (layer) =>
+              layer instanceof XRProjectionLayer &&
+              layer[P_COMPOSITION_LAYER].textures.releasedFrame === frame &&
+              layer[P_COMPOSITION_LAYER].textures.releasedMotion,
+          );
+          this[P_SESSION].spaceWarpFrame = submitted ? frame : null;
+        }
+
+        // WebGPU depth textures are only valid during their frame.
+        for (const texture of frame[P_FRAME].webgpuDepthTextures) {
+          texture.destroy();
+        }
+        frame[P_FRAME].webgpuDepthTextures.length = 0;
 
         // - Set frame’s active boolean to false.
         frame[P_FRAME].active = false;
@@ -577,9 +750,10 @@ export class XRSession extends EventTarget {
           frame[P_FRAME].detectedMeshes.add(xrMesh);
         });
       },
-      depthSensingUsage: (_depthSensing?.usagePreference?.[0] ??
+      depthSensingUsage: (webgpuDepth?.usage ??
+        _depthSensing?.usagePreference?.[0] ??
         'cpu-optimized') as XRDepthUsage,
-      depthSensingDataFormat: 'float32' as XRDepthDataFormat,
+      depthSensingDataFormat: webgpuDepth?.dataFormat ?? 'float32',
       depthTexture: null,
       depthTextureWidth: 0,
       depthTextureHeight: 0,
@@ -592,8 +766,11 @@ export class XRSession extends EventTarget {
 
         const { depthNear, depthFar } = this[P_SESSION].renderState;
         const baseLayer = this[P_SESSION].renderState.baseLayer;
-        if (!baseLayer) return;
-        const canvas = baseLayer.context.canvas;
+        // WebGPU sessions have no baseLayer; their views fill the window.
+        const canvas = baseLayer?.context.canvas ?? {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        };
         const depthWidth = Math.max(1, Math.floor(canvas.width / 4));
         const depthHeight = Math.max(1, Math.floor(canvas.height / 4));
 
@@ -603,10 +780,19 @@ export class XRSession extends EventTarget {
             : [XREye.Left, XREye.Right];
 
         const isGpuOptimized =
+          baseLayer !== null &&
           this[P_SESSION].depthSensingUsage === 'gpu-optimized';
 
         for (const eye of eyes) {
-          const projectionMatrix = this[P_SESSION].getProjectionMatrix(eye);
+          let projectionMatrix = this[P_SESSION].getProjectionMatrix(eye);
+          if (this[P_SESSION].hasWebGPU) {
+            // SEM renders depth with WebGL, which uses a [-1, 1] depth range.
+            projectionMatrix = mat4.multiply(
+              mat4.create(),
+              WEBGPU_TO_WEBGL_DEPTH,
+              projectionMatrix,
+            );
+          }
           const viewSpace = this[P_SESSION].device.viewSpaces[eye];
           const viewGlobalMatrix =
             XRSpaceUtils.calculateGlobalOffsetMatrix(viewSpace);
@@ -622,7 +808,18 @@ export class XRSession extends EventTarget {
             depthFar,
           );
           if (result) {
-            if (isGpuOptimized) {
+            // SEM renders float32 meters; the 16-bit formats take millimeters.
+            const depth =
+              this[P_SESSION].depthSensingDataFormat === 'float32'
+                ? result
+                : toMillimeterDepth(result);
+            if (
+              this[P_SESSION].hasWebGPU &&
+              this[P_SESSION].depthSensingUsage === 'gpu-optimized'
+            ) {
+              // XRGPUBinding uploads it on the app's device when asked.
+              frame[P_FRAME].webgpuDepthDataMap.set(eye, depth);
+            } else if (isGpuOptimized) {
               // Provide GPU depth data (inverse depth in texture)
               const gl = baseLayer.context as WebGL2RenderingContext;
               const { width: dw, height: dh } = result;
@@ -740,11 +937,11 @@ export class XRSession extends EventTarget {
             } else {
               // Provide CPU depth data.
               const cpuDepthInfo = new XRCPUDepthInformation(
-                result.data,
-                result.width,
-                result.height,
+                depth.data,
+                depth.width,
+                depth.height,
                 new XRRigidTransform(),
-                result.rawValueToMeters,
+                depth.rawValueToMeters,
                 this[P_SESSION].depthSensingDataFormat,
               );
               frame[P_FRAME].depthDataMap.set(eye, cpuDepthInfo);
@@ -838,6 +1035,10 @@ export class XRSession extends EventTarget {
     return this[P_SESSION].device[P_DEVICE].interactionMode;
   }
 
+  get maxRenderLayers(): number {
+    return MAX_RENDER_LAYERS;
+  }
+
   get depthUsage(): XRDepthUsage {
     return this[P_SESSION].depthSensingUsage;
   }
@@ -852,6 +1053,18 @@ export class XRSession extends EventTarget {
         'XRSession has already ended.',
         'InvalidStateError',
       );
+    }
+
+    if (this[P_SESSION].hasWebGPU && state.baseLayer) {
+      throw state.layers
+        ? new DOMException(
+            'A render state cannot have both a baseLayer and layers',
+            'NotSupportedError',
+          )
+        : new DOMException(
+            'WebGPU sessions must use layers instead of a baseLayer',
+            'InvalidStateError',
+          );
     }
 
     if (state.baseLayer && state.baseLayer[P_WEBGL_LAYER].session !== this) {
@@ -869,6 +1082,52 @@ export class XRSession extends EventTarget {
         'InlineVerticalFieldOfView must not be set for an immersive session',
         'InvalidStateError',
       );
+    }
+
+    if (this[P_SESSION].hasWebGPU && state.layers) {
+      // The WebXR Layers checks, in their order.
+      const layers = [...state.layers];
+      if (!layers.every((layer) => layer instanceof XRLayer)) {
+        throw new TypeError('renderState layers must be XRLayer objects');
+      }
+      if (
+        layers.some(
+          (layer) =>
+            layer instanceof XRCompositionLayer &&
+            layer[P_COMPOSITION_LAYER].destroyed,
+        )
+      ) {
+        throw new DOMException('Layer has been destroyed', 'InvalidStateError');
+      }
+      if (
+        layers.length > 1 &&
+        !this[P_SESSION].enabledFeatures.includes('layers')
+      ) {
+        throw new DOMException(
+          "Multiple layers require the 'layers' feature",
+          'NotSupportedError',
+        );
+      }
+      if (layers.length > MAX_RENDER_LAYERS) {
+        throw new DOMException(
+          `At most ${MAX_RENDER_LAYERS} layers can be shown at once`,
+          'NotSupportedError',
+        );
+      }
+      if (new Set(layers).size !== layers.length) {
+        throw new TypeError('renderState layers must not repeat a layer');
+      }
+      for (const layer of layers) {
+        const session =
+          layer instanceof XRCompositionLayer
+            ? layer[P_COMPOSITION_LAYER].session
+            : layer instanceof XRWebGLLayer
+              ? layer[P_WEBGL_LAYER].session
+              : this;
+        if (session !== this) {
+          throw new TypeError('Layer was created by a different XRSession');
+        }
+      }
     }
 
     const compoundStateInit: XRRenderStateInit = {
@@ -890,6 +1149,12 @@ export class XRSession extends EventTarget {
         state.inlineVerticalFieldOfView ??
         this[P_SESSION].pendingRenderState?.inlineVerticalFieldOfView ??
         undefined,
+      // Sessions without the 'webgpu' feature keep ignoring layers.
+      layers: this[P_SESSION].hasWebGPU
+        ? (state.layers ??
+          this[P_SESSION].pendingRenderState?.layers ??
+          undefined)
+        : undefined,
     };
 
     this[P_SESSION].pendingRenderState = new XRRenderState(
@@ -970,6 +1235,7 @@ export class XRSession extends EventTarget {
           break;
       }
       this[P_SESSION].referenceSpaces.push(referenceSpace);
+      recordSpaceSession(referenceSpace, this);
       resolve(referenceSpace);
     });
   }
@@ -1046,6 +1312,12 @@ export class XRSession extends EventTarget {
           const depthContext = this[P_SESSION].renderState.baseLayer?.context;
           depthContext?.deleteTexture(this[P_SESSION].depthTexture);
           this[P_SESSION].depthTexture = null;
+        }
+        // Stop presenting and free every WebGPU layer's textures.
+        this[P_SESSION].gpuPresenter?.detach();
+        this[P_SESSION].gpuPresenter = null;
+        for (const layer of [...this[P_SESSION].gpuLayers]) {
+          layer.destroy();
         }
 
         this.dispatchEvent(new XRSessionEvent('end', { session: this }));
