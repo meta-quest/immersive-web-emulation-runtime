@@ -62,6 +62,10 @@ export class GPULayerTextures {
   releasedFrame: XRFrame | null = null;
   destroyed = false;
   private compositorTextures: GPULayerTextureSet | null = null;
+  // A stereo cube layer's right-eye faces. Compatibility-mode devices only
+  // allow a cube view of a texture with exactly six layers, so each eye's
+  // faces get their own texture; compositorTextures.color holds the left's.
+  private rightCubeFaces: WebGPUTexture | null = null;
   private synthesis: { color: WebGPUTexture; depth: WebGPUTexture } | null =
     null;
   // Current textures the app destroyed, after IWER copied them.
@@ -83,6 +87,21 @@ export class GPULayerTextures {
     this.descriptors = descriptors;
     this.releaseDepth = releaseDepth;
     this.compositorViewDimension = compositorViewDimension;
+  }
+
+  // Whether the compositor keeps a stereo cube's eyes in separate textures.
+  private get splitsCube(): boolean {
+    return (
+      this.compositorViewDimension === 'cube' &&
+      textureSize(this.descriptors.color).layers === 12
+    );
+  }
+
+  /** The compositor's texture with an eye's six cube faces, from layer 0. */
+  cubeFaces(eyeIndex: number): WebGPUTexture {
+    return eyeIndex === 1 && this.rightCubeFaces
+      ? this.rightCubeFaces
+      : this.released!.color;
   }
 
   acquire(frame: XRFrame): GPULayerTextureSet & { frame: XRFrame } {
@@ -241,7 +260,17 @@ export class GPULayerTextures {
     encoder: WebGPUCommandEncoder,
   ): void {
     const target = this.compositorTextures![key];
-    if (target) {
+    if (key === 'color' && this.rightCubeFaces) {
+      copyAllMips(encoder, source, target!, this.descriptors.color, 0, 6);
+      copyAllMips(
+        encoder,
+        source,
+        this.rightCubeFaces,
+        this.descriptors.color,
+        6,
+        6,
+      );
+    } else if (target) {
       copyAllMips(encoder, source, target, this.descriptors[key]!);
     }
   }
@@ -256,6 +285,8 @@ export class GPULayerTextures {
     target?.color.destroy();
     target?.depthStencil?.destroy();
     target?.motionVector?.destroy();
+    this.rightCubeFaces?.destroy();
+    this.rightCubeFaces = null;
     this.synthesis?.color.destroy();
     this.synthesis?.depth.destroy();
     this.compositorTextures = null;
@@ -272,6 +303,12 @@ export class GPULayerTextures {
         usage: TEXTURE_BINDING | COPY_DST,
         textureBindingViewDimension: this.compositorViewDimension,
       } as GPUTextureDescriptor);
+    if (this.splitsCube) {
+      const { width, height } = textureSize(color);
+      const faces = { ...color, size: [width, height, 6] };
+      this.rightCubeFaces = create(faces);
+      return { color: create(faces), depthStencil: null, motionVector: null };
+    }
     return {
       color: create(color),
       depthStencil:
@@ -282,18 +319,24 @@ export class GPULayerTextures {
   }
 }
 
+// Copies every mip of `count` array layers from `first` on into a texture's
+// layers from 0 on (all layers by default).
 const copyAllMips = (
   encoder: WebGPUCommandEncoder,
   source: WebGPUTexture,
   destination: WebGPUTexture,
   descriptor: GPUTextureDescriptor,
+  first = 0,
+  count = textureSize(descriptor).layers,
 ) => {
-  const { width, height, layers } = textureSize(descriptor);
+  const { width, height } = textureSize(descriptor);
   for (let mip = 0; mip < (descriptor.mipLevelCount ?? 1); mip++) {
     encoder.copyTextureToTexture(
-      { texture: source, mipLevel: mip },
+      first
+        ? { texture: source, mipLevel: mip, origin: [0, 0, first] }
+        : { texture: source, mipLevel: mip },
       { texture: destination, mipLevel: mip },
-      [Math.max(1, width >> mip), Math.max(1, height >> mip), layers],
+      [Math.max(1, width >> mip), Math.max(1, height >> mip), count],
     );
   }
 };

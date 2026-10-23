@@ -240,6 +240,19 @@ describe('XRGPUBinding', () => {
       });
     });
 
+    test('falls back to a compatibility-mode adapter', async () => {
+      (navigator.gpu.requestAdapter as jest.Mock).mockImplementation(
+        async (options?: { featureLevel?: string }) =>
+          options?.featureLevel === 'compatibility' ? {} : null,
+      );
+      const session = await requestWebGPUSession();
+      expect(session.enabledFeatures).toContain('webgpu');
+      expect(navigator.gpu.requestAdapter).toHaveBeenLastCalledWith({
+        xrCompatible: true,
+        featureLevel: 'compatibility',
+      });
+    });
+
     test('a newer WebGPU offer replaces the pending offer right away', async () => {
       Object.defineProperty(navigator, 'gpu', {
         value: {

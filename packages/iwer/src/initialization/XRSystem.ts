@@ -60,6 +60,16 @@ const probeWebGPU = (): Promise<boolean> => {
             xrCompatible: true,
           } as GPURequestAdapterOptions),
         )
+        // Systems that only support WebGPU's compatibility mode have no core
+        // adapter, but apps can still render with a compatibility one.
+        .then(
+          (adapter) =>
+            adapter ??
+            gpu.requestAdapter({
+              xrCompatible: true,
+              featureLevel: 'compatibility',
+            } as GPURequestAdapterOptions),
+        )
         .then(
           (adapter) => Boolean(adapter),
           () => false,

@@ -27,6 +27,14 @@ const requestCompositorDevice = (): Promise<WebGPUDevice | null> => {
   if (!device) {
     device = Promise.resolve()
       .then(() => gpu.requestAdapter())
+      // Systems that only support compatibility mode have no core adapter.
+      .then(
+        (adapter) =>
+          adapter ??
+          gpu.requestAdapter({
+            featureLevel: 'compatibility',
+          } as GPURequestAdapterOptions),
+      )
       .then((adapter) => adapter?.requestDevice() ?? null)
       .catch(() => null);
     compositorDevices.set(gpu, device);

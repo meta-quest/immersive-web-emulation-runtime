@@ -24,6 +24,7 @@ import {
   XRQuadLayer,
 } from './XRSpaceLayers.js';
 import { GPUMediaTextures } from './GPUMediaTextures.js';
+import type { GPULayerTextures } from './GPULayerTextures.js';
 import { synthesizeFrame } from './GPUSpaceWarp.js';
 import { XRSpaceUtils } from '../spaces/XRSpace.js';
 import { XREye } from '../views/XRView.js';
@@ -830,18 +831,16 @@ export class XRGPUPresenter {
         mat4.multiply(mat4.create(), region.rotation, model),
       );
       matrix.set(mat4.invert(mat4.create(), clipFromLayer) ?? mat4.create());
-      const stereo = state.layout === 'stereo';
+      const faces = (state.textures as GPULayerTextures).cubeFaces(
+        state.layout === 'stereo' ? eyeIndex : 0,
+      ) as GPUTexture;
       return {
         pipeline: getPipeline(device, this.format, 'cube'),
         textureGroup: getTextureBindGroup(
           device,
-          texture,
+          faces,
           sampler,
-          {
-            dimension: 'cube',
-            baseArrayLayer: stereo ? eyeIndex * 6 : 0,
-            arrayLayerCount: 6,
-          },
+          { dimension: 'cube', baseArrayLayer: 0, arrayLayerCount: 6 },
           entry.cubeLayout,
         ),
         vertexCount: 3,

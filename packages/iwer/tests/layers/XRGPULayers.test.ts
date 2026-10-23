@@ -866,16 +866,34 @@ describe('WebGPU composition layers', () => {
         init({ viewPixelWidth: 64, layout: 'stereo' }),
       );
       show([cube]);
-      const compositorTexture = cube[P_COMPOSITION_LAYER].textures.released!
-        .color as any;
-      expect(compositorTexture.descriptor.textureBindingViewDimension).toBe(
-        'cube',
-      );
+      // Each eye's faces get a six-layer texture, the only size a cube view
+      // allows on compatibility-mode devices.
+      const textures = cube[P_COMPOSITION_LAYER].textures as any;
+      const faces = [0, 1].map((eye) => textures.cubeFaces(eye) as any);
+      expect(faces[0]).not.toBe(faces[1]);
+      for (const texture of faces) {
+        expect(texture.descriptor).toMatchObject({
+          size: [64, 64, 6],
+          textureBindingViewDimension: 'cube',
+        });
+        expect(
+          texture.createView.mock.calls.map(([view]: any[]) => view),
+        ).toEqual([
+          { dimension: 'cube', baseArrayLayer: 0, arrayLayerCount: 6 },
+        ]);
+      }
+      // The release copies the right eye's faces from layer 6 on.
       expect(
-        compositorTexture.createView.mock.calls.map(([view]: any[]) => view),
+        gpu.copies
+          .filter(({ destination }: any) => faces.includes(destination.texture))
+          .map(({ source, destination, size }: any) => [
+            faces.indexOf(destination.texture),
+            source.origin ?? [0, 0, 0],
+            size,
+          ]),
       ).toEqual([
-        { dimension: 'cube', baseArrayLayer: 0, arrayLayerCount: 6 },
-        { dimension: 'cube', baseArrayLayer: 6, arrayLayerCount: 6 },
+        [0, [0, 0, 0], [64, 64, 6]],
+        [1, [0, 0, 6], [64, 64, 6]],
       ]);
     });
 
