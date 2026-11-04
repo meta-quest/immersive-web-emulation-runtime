@@ -61,6 +61,12 @@ outline: deep
   `true` when mask data exists and remains `false` for profiles without mask
   data.
 
+- **`frameClearEnabled`**: **boolean**
+  Whether immersive sessions clear the base layer at the start of every frame,
+  as WebXR requires. Defaults to `true`. Set it to `false` only for apps that
+  clear before they draw (three.js does by default) and that sometimes skip
+  drawing on purpose; see [`XRDevice.frameClearEnabled`](./xr-device.md#frameclearenabled).
+
 ## XRControllerConfig
 
 - **`profileId`**: **string**  

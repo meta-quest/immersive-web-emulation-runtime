@@ -134,6 +134,11 @@ export interface XRDeviceOptions {
   /** Whether a configured visibility mask starts enabled. */
   visibilityMaskEnabled: boolean;
   /**
+   * Whether immersive sessions clear the base layer at the start of every
+   * frame. Defaults to `true`. See {@link XRDeviceBase.frameClearEnabled}.
+   */
+  frameClearEnabled: boolean;
+  /**
    * Host mode (see host/types.ts): a native host drives frames through
    * runHostFrame and backs layers with its swapchain. IWER then touches no
    * DOM and emulates no headset pose.
@@ -147,6 +152,7 @@ const DEFAULTS = {
   headsetPosition: new Vector3(0, 1.6, 0),
   headsetQuaternion: new Quaternion(),
   stereoEnabled: false,
+  frameClearEnabled: true,
 };
 
 // DevUI and SEM are written against the full entry's XRDevice, the only
@@ -287,6 +293,7 @@ export class XRDeviceBase {
     stereoEnabled: boolean;
     ipd: number;
     fovy: number;
+    frameClearEnabled: boolean;
     visibilityMask?: XRVisibilityMask;
     visibilityMaskEnabled: boolean;
     visibilityMaskCanvas?: HTMLCanvasElement;
@@ -455,6 +462,8 @@ export class XRDeviceBase {
       quaternion:
         deviceOptions.headsetQuaternion ?? DEFAULTS.headsetQuaternion.clone(),
       stereoEnabled: deviceOptions.stereoEnabled ?? DEFAULTS.stereoEnabled,
+      frameClearEnabled:
+        deviceOptions.frameClearEnabled ?? DEFAULTS.frameClearEnabled,
       ipd: deviceOptions.ipd ?? DEFAULTS.ipd,
       fovy: deviceOptions.fovy ?? DEFAULTS.fovy,
       visibilityMask,
@@ -1092,6 +1101,31 @@ export class XRDeviceBase {
 
   set stereoEnabled(value: boolean) {
     this[P_DEVICE].stereoEnabled = value;
+  }
+
+  /**
+   * Whether immersive sessions clear the base layer's color, depth and stencil
+   * buffers at the start of every frame, as the WebXR opaque framebuffer
+   * requires. Defaults to `true`; changes apply from the next frame.
+   *
+   * Turning it off is for automation hosts that skip drawing on purpose (for
+   * example a headless browser that renders on demand under software GL),
+   * where clearing a canvas nobody draws to is the dominant per-frame cost.
+   * It is safe for apps that clear before they draw, such as three.js with
+   * `renderer.autoClear` (the default): every drawn frame starts clean anyway.
+   * When a frame is not drawn, the page keeps showing the last drawn image;
+   * the drawing buffer itself is not readable later unless the context uses
+   * `preserveDrawingBuffer`, so capture at page level or in the same task as
+   * the draw. Inline sessions never clear, whatever this is set to. The
+   * setting is owned by the host page and is not part of remote-control
+   * device state.
+   */
+  get frameClearEnabled() {
+    return this[P_DEVICE].frameClearEnabled;
+  }
+
+  set frameClearEnabled(value: boolean) {
+    this[P_DEVICE].frameClearEnabled = value;
   }
 
   get ipd() {

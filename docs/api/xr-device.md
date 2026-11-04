@@ -73,6 +73,28 @@ The Field of View on the Y-axis, controlling how wide the visible area is in the
 
 - **Type**: `number`
 
+### `frameClearEnabled`
+
+Controls whether immersive sessions clear the base layer's color, depth and
+stencil buffers at the start of every frame, as the WebXR opaque framebuffer
+requires. It defaults to `true`, and a change applies from the next frame.
+Inline sessions never clear.
+
+Turn it off for automation that skips drawing on purpose, such as a headless
+browser that renders on demand under software GL, where clearing a canvas that
+nothing draws to becomes the main per-frame cost. This is safe for apps that
+clear before they draw, such as three.js with `renderer.autoClear` (the
+default). When the app skips a frame, the canvas is not re-presented, so the
+page keeps showing the last drawn image, much as a headset compositor keeps
+showing the last submitted frame. The WebGL drawing buffer is still undefined
+after compositing unless the context was created with
+`preserveDrawingBuffer: true`, so capture at the compositor level (for example
+a page screenshot) or read pixels in the same task as the draw. Remote-control
+device state does not include this setting; the host that renders on demand
+owns it.
+
+- **Type**: `boolean`
+
 ### `visibilityMask`
 
 The optional per-eye angular visibility mask supplied by the selected device

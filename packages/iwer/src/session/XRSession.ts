@@ -346,8 +346,14 @@ export class XRSession extends EventTarget {
          * This clearing process is crucial for some XR devices to function correctly and to
          * prevent rendering artifacts from past frames. It ensures that each new frame starts
          * with a clean slate.
+         *
+         * Hosts that render on demand can turn it off with `XRDevice.frameClearEnabled`; see
+         * that property for when this is safe.
          */
-        if (this[P_SESSION].mode != 'inline') {
+        if (
+          this[P_SESSION].mode != 'inline' &&
+          this[P_SESSION].device.frameClearEnabled
+        ) {
           const currentClearColor = context.getParameter(
             context.COLOR_CLEAR_VALUE,
           );
