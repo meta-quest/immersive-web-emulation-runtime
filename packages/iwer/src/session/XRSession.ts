@@ -64,6 +64,7 @@ import {
 import { edgeEventTypes, resetButton } from '../gamepad/button-edges.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
 import { XRHostSession } from '../host/XRHostSession.js';
+import { truncateArray } from '../utils/arrays.js';
 import { XRCompositionLayer } from '../layers/XRProjectionLayer.js';
 import { mat4 } from 'gl-matrix';
 
@@ -98,6 +99,62 @@ type CallbackData = {
   callback: XRFrameRequestCallback;
   cancelled: boolean;
 };
+
+/**
+ * Brings `activeInputSources` in line with the device's input sources and
+ * reports what changed (WebXR "update the input sources").
+ */
+function diffActiveInputSources(session: XRSession): void {
+  const handTrackingOn =
+    session[P_SESSION].enabledFeatures.includes('hand-tracking');
+  const gazeTrackingOn = session[P_SESSION].hasGazeTracking;
+  const prevInputs = session[P_SESSION].activeInputSources;
+  const currInputs = session[P_SESSION].device.inputSources.filter(
+    (inputSource) =>
+      (!inputSource.hand || handTrackingOn) &&
+      (inputSource.targetRayMode !== 'gaze' || gazeTrackingOn),
+  );
+
+  const added = currInputs.filter((item) => !prevInputs.includes(item));
+  const removed = prevInputs.filter((item) => !currInputs.includes(item));
+
+  session[P_SESSION].activeInputSources = currInputs;
+
+  // A source that goes away mid-press ends its action without
+  // completing it (`selectend`/`squeezeend` alone), on this frame and
+  // before the source change is announced. Sources hidden by a
+  // visibility change are cleared silently instead, as the native
+  // override does, so becoming visible again can't produce a click.
+  const visible =
+    session[P_SESSION].device[P_DEVICE].visibilityState === 'visible';
+  for (const inputSource of removed) {
+    for (const button of inputSource.gamepad?.buttons ?? []) {
+      if (!(button instanceof GamepadButton)) {
+        continue;
+      }
+      const trigger = button[P_GAMEPAD].eventTrigger;
+      const frame = session[P_SESSION].activeFrame;
+      if (visible && trigger && frame && button[P_GAMEPAD].lastFramePressed) {
+        for (const type of edgeEventTypes('cancel', trigger)) {
+          session.dispatchEvent(
+            new XRInputSourceEvent(type, { frame, inputSource }),
+          );
+        }
+      }
+      resetButton(button);
+    }
+  }
+
+  if (added.length > 0 || removed.length > 0) {
+    session.dispatchEvent(
+      new XRInputSourcesChangeEvent('inputsourceschange', {
+        session,
+        added,
+        removed,
+      }),
+    );
+  }
+}
 
 export class XRSession extends EventTarget {
   [P_SESSION]: {
@@ -426,60 +483,10 @@ export class XRSession extends EventTarget {
         if (hostInput && hostInput[P_HOST_INPUT].unchangedFor(this)) {
           return;
         }
-        const handTrackingOn =
-          this[P_SESSION].enabledFeatures.includes('hand-tracking');
-        const gazeTrackingOn = this[P_SESSION].hasGazeTracking;
-        const prevInputs = this[P_SESSION].activeInputSources;
-        const currInputs = this[P_SESSION].device.inputSources.filter(
-          (inputSource) =>
-            (!inputSource.hand || handTrackingOn) &&
-            (inputSource.targetRayMode !== 'gaze' || gazeTrackingOn),
-        );
-
-        const added = currInputs.filter((item) => !prevInputs.includes(item));
-        const removed = prevInputs.filter((item) => !currInputs.includes(item));
-
-        this[P_SESSION].activeInputSources = currInputs;
-
-        // A source that goes away mid-press ends its action without
-        // completing it (`selectend`/`squeezeend` alone), on this frame and
-        // before the source change is announced. Sources hidden by a
-        // visibility change are cleared silently instead, as the native
-        // override does, so becoming visible again can't produce a click.
-        const visible =
-          this[P_SESSION].device[P_DEVICE].visibilityState === 'visible';
-        for (const inputSource of removed) {
-          for (const button of inputSource.gamepad?.buttons ?? []) {
-            if (!(button instanceof GamepadButton)) {
-              continue;
-            }
-            const trigger = button[P_GAMEPAD].eventTrigger;
-            const frame = this[P_SESSION].activeFrame;
-            if (
-              visible &&
-              trigger &&
-              frame &&
-              button[P_GAMEPAD].lastFramePressed
-            ) {
-              for (const type of edgeEventTypes('cancel', trigger)) {
-                this.dispatchEvent(
-                  new XRInputSourceEvent(type, { frame, inputSource }),
-                );
-              }
-            }
-            resetButton(button);
-          }
-        }
-
-        if (added.length > 0 || removed.length > 0) {
-          this.dispatchEvent(
-            new XRInputSourcesChangeEvent('inputsourceschange', {
-              session: this,
-              added,
-              removed,
-            }),
-          );
-        }
+        // The diff lives in its own function: its filter callbacks capture
+        // locals, and V8 allocates the context for captured locals on entry
+        // to the function that declares them, early return or not.
+        diffActiveInputSources(this);
       },
       trackedAnchors: new XRAnchorSet(),
       persistentAnchors: new Map(),
@@ -871,14 +878,22 @@ export class XRSession extends EventTarget {
   }
 
   get inputSources(): XRInputSourceArray {
-    // use the same array object
-    this[P_SESSION].inputSourceArray.length = 0;
-    if (!this[P_SESSION].ended && this[P_SESSION].mode !== 'inline') {
-      this[P_SESSION].inputSourceArray.push(
-        ...this[P_SESSION].activeInputSources,
-      );
+    // [SameObject]: one array, refilled on every read, without allocating:
+    // an index loop rather than push(...list) (spreading allocates an
+    // argument list), and truncateArray rather than `length = 0`.
+    const state = this[P_SESSION];
+    const array = state.inputSourceArray;
+    if (state.ended || state.mode === 'inline') {
+      truncateArray(array, 0);
+      return array;
     }
-    return this[P_SESSION].inputSourceArray;
+    const active = state.activeInputSources;
+    const count = active.length;
+    for (let i = 0; i < count; i++) {
+      array[i] = active[i];
+    }
+    truncateArray(array, count);
+    return array;
   }
 
   // all tracked sources (the input sources here: one per hand)

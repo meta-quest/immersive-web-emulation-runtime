@@ -171,8 +171,11 @@ export class XRFrame {
     const eyes =
       session[P_SESSION].mode === 'inline' ? INLINE_EYES : STEREO_EYES;
 
+    // index loops, no closures: a closure capturing locals makes V8 allocate
+    // a context on every call of this method, the host path included
     const views: XRView[] = [];
-    eyes.forEach((eye) => {
+    for (let i = 0; i < eyes.length; i++) {
+      const eye = eyes[i];
       const viewSpace = device.viewSpaces[eye];
       const viewPose = this.getPose(viewSpace, referenceSpace)!;
       const projectionMatrix = session[P_SESSION].getProjectionMatrix(eye);
@@ -183,7 +186,7 @@ export class XRFrame {
         session,
       );
       views.push(view);
-    });
+    }
 
     return new XRViewerPose(pose.transform, views, false);
   }
@@ -207,8 +210,11 @@ export class XRFrame {
   }
 
   fillJointRadii(jointSpaces: XRJointSpace[], radii: Float32Array) {
-    // converting from sequence type to array
-    jointSpaces = Array.from(jointSpaces);
+    // converting from sequence type to array; an array is only read, so it
+    // is used as it is (no copy per call)
+    if (!Array.isArray(jointSpaces)) {
+      jointSpaces = Array.from(jointSpaces);
+    }
     if (!this[P_FRAME].active) {
       throw new DOMException(
         'XRFrame access outside the callback that produced it is invalid.',
@@ -272,15 +278,17 @@ export class XRFrame {
     }
     let allValid = true;
     const baseUntracked = isUntracked(baseSpace);
-    spaces.forEach((space, i) => {
+    const tempMat4 = this[P_FRAME].tempMat4;
+    for (let i = 0; i < spaces.length; i++) {
+      const space = spaces[i];
       if (baseUntracked || isUntracked(space)) {
         transforms.fill(NaN, i * 16, i * 16 + 16);
         allValid = false;
-        return;
+        continue;
       }
-      getOffsetMatrix(this[P_FRAME].tempMat4, space, baseSpace);
-      transforms.set(this[P_FRAME].tempMat4, i * 16);
-    });
+      getOffsetMatrix(tempMat4, space, baseSpace);
+      transforms.set(tempMat4, i * 16);
+    }
     return allValid;
   }
 

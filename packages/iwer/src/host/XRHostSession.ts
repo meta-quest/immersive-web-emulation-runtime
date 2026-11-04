@@ -13,6 +13,7 @@ import type {
   XRHostFrame,
   XRHostSwapchain,
 } from './types.js';
+import { invalidateHostPoses } from './frame.js';
 import { XRHostFrameLoop, XRHostFrameRequest } from './frame-loop.js';
 import { XRHostFrameRate } from './frame-rate.js';
 import { XRHostLayerRequest, XRHostOutput } from './output.js';
@@ -69,8 +70,11 @@ export class XRHostSession {
   private closed = false;
   private endWaiters: Array<() => void> = [];
 
+  // Made once: an arrow function written inside runFrame would make V8
+  // allocate a context for `this` on every frame.
   private readonly reportCallbackError = (error: unknown) =>
     this.report(error, 'xr-frame-callback');
+  private readonly closeAfterFrame = () => this.close(false);
 
   constructor(session: XRSession, backend: XRHostBackend) {
     this.session = session;
@@ -192,13 +196,15 @@ export class XRHostSession {
       const visible = device.visibilityState !== 'hidden';
       const baseLayer = renderState.baseLayer as XRWebGLLayer | null;
       if (visible) {
-        this.views.writeProjections(
-          frame,
-          renderState.depthNear,
-          renderState.depthFar,
-        );
+        this.views.writeProjections(frame, renderState);
         if (baseLayer) {
-          this.guard(() => baseLayer.hostBindFrame(frame.colorTexture));
+          // try/catch in place: a guard taking a closure would allocate the
+          // closure every frame
+          try {
+            baseLayer.hostBindFrame(frame.colorTexture);
+          } catch (error) {
+            this.report(error, 'layer');
+          }
         }
         const xrFrame = this.loop.frameFor(frameId, time);
         // a host list that cannot be read leaves the scene as it was
@@ -219,12 +225,16 @@ export class XRHostSession {
           }
         }
         // input sources must reflect this frame before any callback runs
+        invalidateHostPoses();
         this.loop.activate(xrFrame);
         try {
           device.onHostFrameStart(xrFrame);
         } catch (error) {
           this.report(error, 'host-hook');
         }
+        // input event handlers ran while sources were still being updated:
+        // nothing they cached may outlive the update (see host/frame.ts)
+        invalidateHostPoses();
         s.updateActiveInputSources();
         this.loop.runCallbacks(xrFrame, time, this.reportCallbackError);
       }
@@ -240,7 +250,11 @@ export class XRHostSession {
       }
 
       if (visible && baseLayer && !s.ended) {
-        this.guard(() => baseLayer.hostEndFrame());
+        try {
+          baseLayer.hostEndFrame();
+        } catch (error) {
+          this.report(error, 'layer');
+        }
       }
     } finally {
       this.current = null;
@@ -248,15 +262,7 @@ export class XRHostSession {
 
     if (this.endAfterFrame) {
       this.endAfterFrame = false;
-      this.afterFrame(() => this.close(false));
-    }
-  }
-
-  private guard(step: () => void): void {
-    try {
-      step();
-    } catch (error) {
-      this.report(error, 'layer');
+      this.afterFrame(this.closeAfterFrame);
     }
   }
 

@@ -24,24 +24,51 @@ export interface ButtonThresholds {
  */
 export type ButtonEdge = 'press' | 'release' | 'cancel' | null;
 
+/** Event type lists for one trigger, made once and frozen (shared). */
+interface EdgeEventTypes {
+  press: readonly string[];
+  release: readonly string[];
+  cancel: readonly string[];
+}
+
+const edgeLists = (trigger: string): EdgeEventTypes =>
+  Object.freeze({
+    press: Object.freeze([`${trigger}start`]),
+    release: Object.freeze([trigger, `${trigger}end`]),
+    cancel: Object.freeze([`${trigger}end`]),
+  });
+
+const SELECT_EVENT_TYPES = edgeLists('select');
+const SQUEEZE_EVENT_TYPES = edgeLists('squeeze');
+const NO_EVENT_TYPES: readonly string[] = Object.freeze([]);
+
 /**
  * The input source events for an edge, in WebXR order: `<trigger>start` on
  * press, `<trigger>` then `<trigger>end` on release, and `<trigger>end` alone
- * when the action is cancelled.
+ * when the action is cancelled. For select and squeeze the lists are shared,
+ * frozen constants (callers only iterate them), so an edge allocates nothing
+ * here; any other trigger (outside the declared type, from untyped callers)
+ * gets fresh lists of the same form.
  */
 export const edgeEventTypes = (
   edge: ButtonEdge,
   trigger: 'select' | 'squeeze',
-): string[] => {
+): readonly string[] => {
+  const lists =
+    trigger === 'select'
+      ? SELECT_EVENT_TYPES
+      : trigger === 'squeeze'
+        ? SQUEEZE_EVENT_TYPES
+        : null;
   switch (edge) {
     case 'press':
-      return [`${trigger}start`];
+      return lists ? lists.press : [`${trigger}start`];
     case 'release':
-      return [trigger, `${trigger}end`];
+      return lists ? lists.release : [trigger, `${trigger}end`];
     case 'cancel':
-      return [`${trigger}end`];
+      return lists ? lists.cancel : [`${trigger}end`];
     default:
-      return [];
+      return NO_EVENT_TYPES;
   }
 };
 

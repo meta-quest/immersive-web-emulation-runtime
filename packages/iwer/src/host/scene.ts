@@ -47,19 +47,21 @@ export class XRHostScene {
     this.meshes = meshes;
   }
 
-  /** Brings the session's planes up to date and fills `frame.detectedPlanes`. */
+  /** Brings the session's planes and `frame.detectedPlanes` up to date. */
   syncPlanes(frame: XRFrame, source: Source<NativePlane>): void {
     this.begin(frame);
     this.visit(source, this.visitPlane);
     this.planes.forEach(this.prunePlane);
+    frame[P_FRAME].detectedPlanes.forEach(this.unlistPlane);
     this.frame = null;
   }
 
-  /** Brings the session's meshes up to date and fills `frame.detectedMeshes`. */
+  /** Brings the session's meshes and `frame.detectedMeshes` up to date. */
   syncMeshes(frame: XRFrame, source: Source<NativeMesh>): void {
     this.begin(frame);
     this.visit(source, this.visitMesh);
     this.meshes.forEach(this.pruneMesh);
+    frame[P_FRAME].detectedMeshes.forEach(this.unlistMesh);
     this.frame = null;
   }
 
@@ -70,6 +72,7 @@ export class XRHostScene {
   keepPlanes(frame: XRFrame): void {
     this.frame = null;
     const detected = frame[P_FRAME].detectedPlanes;
+    detected.clear();
     this.planes.forEach((plane) => {
       plane[P_PLANE].frame = frame;
       detected.add(plane);
@@ -80,6 +83,7 @@ export class XRHostScene {
   keepMeshes(frame: XRFrame): void {
     this.frame = null;
     const detected = frame[P_FRAME].detectedMeshes;
+    detected.clear();
     this.meshes.forEach((mesh) => {
       mesh[P_MESH].frame = frame;
       detected.add(mesh);
@@ -152,6 +156,16 @@ export class XRHostScene {
     }
   };
 
+  // The frame's set is brought up to date in place rather than cleared and
+  // refilled: V8 gives a Set a new table on clear() and grows it again on
+  // the adds, while a steady room changes nothing here. (Deleting during
+  // Set.prototype.forEach is well defined.)
+  private readonly unlistPlane = (plane: XRPlane) => {
+    if (this.listedIn.get(plane) !== this.frameId) {
+      this.frame![P_FRAME].detectedPlanes.delete(plane);
+    }
+  };
+
   private readonly visitMesh = (native: NativeMesh) => {
     const frame = this.frame!;
     let mesh = this.meshes.get(native);
@@ -193,6 +207,12 @@ export class XRHostScene {
   private readonly pruneMesh = (mesh: XRMesh, native: NativeMesh) => {
     if (this.listedIn.get(mesh) !== this.frameId) {
       this.meshes.delete(native);
+    }
+  };
+
+  private readonly unlistMesh = (mesh: XRMesh) => {
+    if (this.listedIn.get(mesh) !== this.frameId) {
+      this.frame![P_FRAME].detectedMeshes.delete(mesh);
     }
   };
 }

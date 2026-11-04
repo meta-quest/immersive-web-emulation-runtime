@@ -45,9 +45,12 @@ export const dispatchButtonEdge = (
   const edge = advanceButton(button);
   const trigger = button[P_GAMEPAD].eventTrigger;
   if (edge && trigger) {
-    for (const type of edgeEventTypes(edge, trigger)) {
+    // an index loop: for-of over the shared (frozen) list would allocate
+    // an iterator
+    const types = edgeEventTypes(edge, trigger);
+    for (let i = 0; i < types.length; i++) {
       session.dispatchEvent(
-        new XRInputSourceEvent(type, { frame, inputSource }),
+        new XRInputSourceEvent(types[i], { frame, inputSource }),
       );
     }
   }

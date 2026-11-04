@@ -8,6 +8,7 @@
 import { P_FRAME, P_SESSION } from '../private.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import type { XRSession } from '../session/XRSession.js';
+import { truncateArray } from '../utils/arrays.js';
 
 /** An `XRSession.requestAnimationFrame` registration. */
 export type XRHostFrameRequest = {
@@ -71,14 +72,9 @@ export class XRHostFrameLoop {
     const state = frame[P_FRAME];
     state.id = frameId;
     state.predictedDisplayTime = time;
-    // guarded: V8's Set.prototype.clear allocates a new table even when the
-    // set is already empty, and these stay empty without plane/mesh detection
-    if (state.detectedPlanes.size > 0) {
-      state.detectedPlanes.clear();
-    }
-    if (state.detectedMeshes.size > 0) {
-      state.detectedMeshes.clear();
-    }
+    // detectedPlanes / detectedMeshes still hold what this object showed two
+    // frames ago: the scene sync brings them up to date in place (no
+    // clear-and-refill), and without plane/mesh detection they stay empty
     return frame;
   }
 
@@ -110,7 +106,7 @@ export class XRHostFrameLoop {
     for (let i = 0; i < pending.length; i++) {
       running.push(pending[i]);
     }
-    pending.length = 0;
+    truncateArray(pending, 0);
     // cancelAnimationFrame looks here for callbacks of the frame being run
     s.currentFrameCallbacks = running;
     try {
@@ -133,7 +129,7 @@ export class XRHostFrameLoop {
         running[i].callback = idle;
         this.freeRequests.push(running[i]);
       }
-      running.length = 0;
+      truncateArray(running, 0);
     }
   }
 }

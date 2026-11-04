@@ -61,6 +61,7 @@ import { XRSessionEvent } from '../events/XRSessionEvent.js';
 import { XRSystem } from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
 import { XRHostInput, XRHostInputOptions } from './XRHostInput.js';
+import { runHostInputFrame } from './host-input-frame.js';
 import { XRGazeInput, supportsGazeTracking } from './XRGazeInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
@@ -667,11 +668,16 @@ export class XRDeviceBase {
               new XRSessionEvent('visibilitychange', { session }),
             );
           }
-          this[P_DEVICE].hostInput?.[P_HOST_INPUT].sync(frame);
+          const hostInput = this[P_DEVICE].hostInput;
+          hostInput?.[P_HOST_INPUT].sync(frame);
           if (this[P_DEVICE].visibilityState === 'visible') {
-            const activeInputs = this.activeInputs;
-            for (let i = 0; i < activeInputs.length; i++) {
-              activeInputs[i].onFrameStart(frame);
+            if (hostInput) {
+              runHostInputFrame(this.activeInputs, frame);
+            } else {
+              const activeInputs = this.activeInputs;
+              for (let i = 0; i < activeInputs.length; i++) {
+                activeInputs[i].onFrameStart(frame);
+              }
             }
           }
 
@@ -711,19 +717,31 @@ export class XRDeviceBase {
 
       host,
       onHostFrameStart: (frame: XRFrame) => {
-        const now = performance.now();
-        const deltaTimeMs =
-          this[P_DEVICE].lastFrameTime > 0
-            ? Math.min(now - this[P_DEVICE].lastFrameTime, MAX_REMOTE_FRAME_MS)
-            : 16.67;
-        this[P_DEVICE].lastFrameTime = now;
-        this[P_DEVICE].remote?.update(deltaTimeMs);
+        const state = this[P_DEVICE];
+        // the clock is only read for remote control (absent from iwer/host)
+        const remote = state.remote;
+        if (remote) {
+          const now = performance.now();
+          const deltaTimeMs =
+            state.lastFrameTime > 0
+              ? Math.min(now - state.lastFrameTime, MAX_REMOTE_FRAME_MS)
+              : 16.67;
+          state.lastFrameTime = now;
+          remote.update(deltaTimeMs);
+        }
         // real tracking (HOST-INPUT.md) replaces the emulated inputs
-        this[P_DEVICE].hostInput?.[P_HOST_INPUT].sync(frame);
-        if (this[P_DEVICE].visibilityState === 'visible') {
-          const inputs = this.activeInputs;
-          for (let i = 0; i < inputs.length; i++) {
-            inputs[i].onFrameStart(frame);
+        const hostInput = state.hostInput;
+        if (hostInput) {
+          hostInput[P_HOST_INPUT].sync(frame);
+        }
+        if (state.visibilityState === 'visible') {
+          if (hostInput) {
+            runHostInputFrame(this.activeInputs, frame);
+          } else {
+            const inputs = this.activeInputs;
+            for (let i = 0; i < inputs.length; i++) {
+              inputs[i].onFrameStart(frame);
+            }
           }
         }
       },

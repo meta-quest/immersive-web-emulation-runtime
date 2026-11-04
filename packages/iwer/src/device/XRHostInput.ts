@@ -40,6 +40,8 @@ import { XRJointSpace } from '../spaces/XRJointSpace.js';
 import type { XRSession } from '../session/XRSession.js';
 import type { mat4 } from 'gl-matrix';
 import { oculusTouchV3 } from './configs/controller/meta.js';
+import { truncateArray } from '../utils/arrays.js';
+import { deferEdges } from './host-input-frame.js';
 
 /** Which input source a hand shows. */
 export enum XRHostInputMode {
@@ -264,6 +266,10 @@ abstract class XRHostSource extends XRTrackedInput {
   }
 
   protected applyEdges(frame: XRFrame) {
+    // during runHostInputFrame, events wait until every source is written
+    if (deferEdges(this)) {
+      return;
+    }
     const buttons = this.buttons;
     if (!this.primed) {
       for (let i = 0; i < buttons.length; i++) {
@@ -553,8 +559,8 @@ export class XRHostInput {
           }
         }
         if (changed) {
-          internal.activeInputs.length = 0;
-          internal.inputSources.length = 0;
+          truncateArray(internal.activeInputs, 0);
+          truncateArray(internal.inputSources, 0);
           for (const source of internal.listed) {
             if (source) {
               internal.activeInputs.push(source);
@@ -579,8 +585,8 @@ export class XRHostInput {
           }
           internal.listed[i] = null;
         }
-        internal.activeInputs.length = 0;
-        internal.inputSources.length = 0;
+        truncateArray(internal.activeInputs, 0);
+        truncateArray(internal.inputSources, 0);
         internal.session = null;
         internal.version++;
       },

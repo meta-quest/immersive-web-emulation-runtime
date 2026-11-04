@@ -271,7 +271,7 @@ export class Gamepad {
     );
     // Precompute axis resolvers and a reusable axes array (values written in
     // place on each read).
-    this[P_GAMEPAD].axesResolvers = this[P_GAMEPAD].axesSequence.map((id) =>
+    const resolvers = this[P_GAMEPAD].axesSequence.map((id) =>
       id === null
         ? null
         : {
@@ -279,7 +279,15 @@ export class Gamepad {
             isY: id.substring(id.length - 6) === 'y-axis',
           },
     );
-    this[P_GAMEPAD].axesView = this[P_GAMEPAD].axesResolvers.map(() => null);
+    this[P_GAMEPAD].axesResolvers = resolvers;
+    // Without empty slots the array holds only numbers, so V8 keeps it as
+    // unboxed doubles and writing a fractional axis value allocates nothing;
+    // with a null slot it holds tagged values and every write of a
+    // non-integer boxes a fresh heap number. (Filled from 0.5 so V8 creates
+    // it as a double array from the start, then zeroed.)
+    this[P_GAMEPAD].axesView = resolvers.includes(null)
+      ? resolvers.map(() => null)
+      : resolvers.map(() => 0.5).fill(0);
   }
 
   get id() {
@@ -309,6 +317,7 @@ export class Gamepad {
       if (resolver === null) {
         axesView[i] = null;
       } else {
+        // looked up on every read: axesMap entries may be replaced
         const axis = axesMap[resolver.axisId];
         // manual axes fall through to the x value, matching the prior behavior
         axesView[i] = resolver.isY ? axis.y : axis.x;

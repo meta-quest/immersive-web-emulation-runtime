@@ -19,6 +19,7 @@
     "format": "prettier --write ./src/**/*",
     "test": "jest --watchman=false",
     "test:coverage": "jest --watchman=false --coverage",
+    "bench": "node bench/run.mjs",
     "prepublishOnly": "pnpm run build"
   },
   "repository": {

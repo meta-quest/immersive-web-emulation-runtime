@@ -25,12 +25,16 @@ export class XRSpace extends EventTarget {
 
   constructor(parentSpace?: XRSpace, offsetMatrix?: mat4) {
     super();
-    this[P_SPACE] = {
+    const state = {
       parentSpace,
       offsetMatrix: offsetMatrix ? mat4.clone(offsetMatrix) : mat4.create(),
       emulated: true,
       tracked: true,
+      // host mode's per-frame pose cache (host/frame.ts), made on first use;
+      // present from the start so every space record keeps one shape
+      hostPose: null,
     };
+    this[P_SPACE] = state;
   }
 }
 

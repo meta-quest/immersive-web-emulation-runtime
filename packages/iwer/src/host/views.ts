@@ -9,9 +9,11 @@ import { mat4 } from 'gl-matrix';
 
 import { P_DEVICE, P_SPACE } from '../private.js';
 import { HOST_VIEW_STRIDE, hostPerspective, hostPoseMatrix } from './math.js';
+import { invertAffine, multiplyInto } from './affine.js';
 import type { XRDeviceBase as XRDevice } from '../device/XRDeviceBase.js';
 import { XREye } from '../views/XRView.js';
 import type { XRHostFrame } from './types.js';
+import type { XRRenderState } from '../session/XRRenderState.js';
 
 // FOV angles sit after position (3) and orientation (4) in each view record
 const FOV_OFFSET = 7;
@@ -38,6 +40,17 @@ export class XRHostViews {
   ];
   /** The head (viewer) pose in the base space. */
   readonly head = mat4.create();
+  /**
+   * The inputs each projection was last built from (4 FOV angles, near,
+   * far per view) and the result. The FOV rarely changes during a session,
+   * so most frames copy the stored matrix instead of rebuilding it; the
+   * copy still runs every frame so the handed-out arrays are always fresh.
+   */
+  private readonly projectionInputs = new Float64Array(12).fill(NaN);
+  private readonly projectionBuilt: [Float32Array, Float32Array] = [
+    new Float32Array(16),
+    new Float32Array(16),
+  ];
 
   /**
    * Reads the eye poses from the host frame and writes them into IWER's
@@ -68,13 +81,14 @@ export class XRHostViews {
 
     const state = device[P_DEVICE];
     mat4.copy(state.viewerSpace[P_SPACE].offsetMatrix, head);
-    mat4.invert(headInverse, head);
+    // eye spaces relative to the head (all affine: see affine.ts)
+    invertAffine(headInverse, head);
     const eyeSpaces = state.viewSpaces;
     const leftOffset = eyeSpaces[XREye.Left][P_SPACE].offsetMatrix;
     const rightOffset = eyeSpaces[XREye.Right][P_SPACE].offsetMatrix;
-    mat4.multiply(leftOffset, headInverse, this.world[0]);
+    multiplyInto(leftOffset, 0, headInverse, this.world[0]);
     if (count === 2) {
-      mat4.multiply(rightOffset, headInverse, this.world[1]);
+      multiplyInto(rightOffset, 0, headInverse, this.world[1]);
     } else {
       // mono: every eye space sits where the single view is
       mat4.copy(rightOffset, leftOffset);
@@ -82,20 +96,49 @@ export class XRHostViews {
     mat4.copy(eyeSpaces[XREye.None][P_SPACE].offsetMatrix, leftOffset);
   }
 
-  /** Rebuilds each view's projection from its FOV angles and the clip planes. */
-  writeProjections(frame: XRHostFrame, near: number, far: number): void {
+  /**
+   * Writes each view's projection for its FOV angles and the render state's
+   * clip planes, rebuilding it only when one of them changed.
+   */
+  writeProjections(frame: XRHostFrame, renderState: XRRenderState): void {
     const data = frame.views;
+    const near = renderState.depthNear;
+    const far = renderState.depthFar;
+    const inputs = this.projectionInputs;
     for (let view = 0; view < this.count; view++) {
       const at = view * HOST_VIEW_STRIDE + FOV_OFFSET;
-      hostPerspective(
-        this.projection[view] as unknown as mat4,
-        data[at],
-        data[at + 1],
-        data[at + 2],
-        data[at + 3],
-        near,
-        far,
-      );
+      const angleLeft = data[at];
+      const angleRight = data[at + 1];
+      const angleUp = data[at + 2];
+      const angleDown = data[at + 3];
+      const out = this.projectionBuilt[view];
+      const memo = view * 6;
+      if (
+        inputs[memo] !== angleLeft ||
+        inputs[memo + 1] !== angleRight ||
+        inputs[memo + 2] !== angleUp ||
+        inputs[memo + 3] !== angleDown ||
+        inputs[memo + 4] !== near ||
+        inputs[memo + 5] !== far
+      ) {
+        inputs[memo] = angleLeft;
+        inputs[memo + 1] = angleRight;
+        inputs[memo + 2] = angleUp;
+        inputs[memo + 3] = angleDown;
+        inputs[memo + 4] = near;
+        inputs[memo + 5] = far;
+        // only when something changed, so the boxed arguments do not matter
+        hostPerspective(
+          out as unknown as mat4,
+          angleLeft,
+          angleRight,
+          angleUp,
+          angleDown,
+          near,
+          far,
+        );
+      }
+      this.projection[view].set(out);
     }
   }
 }
