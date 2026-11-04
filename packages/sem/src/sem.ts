@@ -179,7 +179,18 @@ export class SyntheticEnvironmentModule extends EventTarget {
     this.meshes.visible = visible;
   }
 
+  /** Update the environment for a frame, then draw it. */
   render(time: number) {
+    this.update(time);
+    this.draw();
+  }
+
+  /**
+   * Update the environment for a frame without drawing: scene logic, the
+   * camera and world matrices, which hit tests read. IWER calls this every
+   * immersive-ar frame and {@link draw} only on frames the host draws.
+   */
+  update(time: number) {
     const environment = this.sceneEnvironment;
     if (environment) {
       // Clamped: time can also jump backwards, e.g. across XR sessions.
@@ -235,6 +246,14 @@ export class SyntheticEnvironmentModule extends EventTarget {
     if (cameraMatrixNeedsUpdate) {
       this.camera.updateProjectionMatrix();
     }
+    // What renderer.render() would do first; hit tests read these matrices
+    // on frames that are not drawn.
+    this.scene.updateMatrixWorld();
+    this.camera.updateMatrixWorld();
+  }
+
+  /** Draw the environment as of the last {@link update}. */
+  draw() {
     this.renderer.render(this.scene, this.camera);
   }
 

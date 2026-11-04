@@ -95,6 +95,36 @@ owns it.
 
 - **Type**: `boolean`
 
+### `shouldDrawEnvironment`
+
+Decides whether the synthetic environment is drawn in an immersive-ar frame.
+IWER calls it once per frame, after the app's frame callbacks, and skips that
+frame's environment draw when it returns `false`. The environment still updates
+every frame, so its scene logic, tracked planes and meshes, hit tests and depth
+sensing are unaffected. It defaults to `null`, which draws every frame. If it
+throws, the environment is drawn and the error is logged.
+
+This is the environment's counterpart to `frameClearEnabled`, for hosts that
+render on demand. Return whether the app drew this frame, and the room behind
+the app's canvas is drawn exactly when the app is, from the same pose. A skipped
+frame leaves the last drawn room on the page. It applies to environment modules
+that implement `update()` and `draw()`, as `@iwer/sem` does; a module with only
+`render()` renders every frame. Remote-control device state does not include
+this setting; the host that renders on demand owns it.
+
+```js
+let drawnFrames = 0;
+let lastDrawnFrames = 0;
+// ...increment drawnFrames whenever the app draws a frame...
+xrDevice.shouldDrawEnvironment = () => {
+  const drew = drawnFrames !== lastDrawnFrames;
+  lastDrawnFrames = drawnFrames;
+  return drew;
+};
+```
+
+- **Type**: `(() => boolean) | null`
+
 ### `visibilityMask`
 
 The optional per-eye angular visibility mask supplied by the selected device

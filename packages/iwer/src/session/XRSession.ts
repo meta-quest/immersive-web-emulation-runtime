@@ -184,6 +184,7 @@ export class XRSession extends EventTarget {
     currentFrameCallbacks: CallbackData[] | null;
     // actual frameloop of the device this is running on
     onDeviceFrame: () => void;
+    shouldDrawEnvironment: () => boolean;
     deviceFrameHandle?: number;
     // render state
     renderState: XRRenderState;
@@ -424,9 +425,19 @@ export class XRSession extends EventTarget {
           devui.render(now);
         }
 
-        if (this[P_SESSION].mode === 'immersive-ar') {
-          const sem = this[P_SESSION].device[P_DEVICE].sem;
-          if (sem) {
+        // The synthetic environment updates before the app's callbacks, which
+        // read its planes, meshes, hit tests and depth. A module that can draw
+        // separately is drawn after them, so the host can skip the draw on
+        // frames the app does not draw (XRDevice.shouldDrawEnvironment).
+        const sem =
+          this[P_SESSION].mode === 'immersive-ar'
+            ? this[P_SESSION].device[P_DEVICE].sem
+            : undefined;
+        const drawSemAfterCallbacks = !!sem?.update && !!sem.draw;
+        if (sem) {
+          if (drawSemAfterCallbacks) {
+            sem.update!(now);
+          } else {
             sem.render(now);
           }
         }
@@ -474,9 +485,29 @@ export class XRSession extends EventTarget {
         }
         this[P_SESSION].currentFrameCallbacks = null;
 
+        if (drawSemAfterCallbacks && this[P_SESSION].shouldDrawEnvironment()) {
+          sem!.draw!();
+        }
+
         // - Set frame’s active boolean to false.
         frame[P_FRAME].active = false;
         this[P_SESSION].activeFrame = null;
+      },
+      shouldDrawEnvironment: () => {
+        // A callback that ended the session has no environment left to show.
+        if (this[P_SESSION].ended) {
+          return false;
+        }
+        const shouldDraw = this[P_SESSION].device.shouldDrawEnvironment;
+        if (!shouldDraw) {
+          return true;
+        }
+        try {
+          return shouldDraw() !== false;
+        } catch (err) {
+          console.error(err);
+          return true;
+        }
       },
       nominalFrameRate: device.internalNominalFrameRate,
       referenceSpaces: [],

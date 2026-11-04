@@ -139,6 +139,12 @@ export interface XRDeviceOptions {
    */
   frameClearEnabled: boolean;
   /**
+   * Decides, once per immersive-ar frame, whether the synthetic environment is
+   * drawn. Defaults to `null` (always drawn). See
+   * {@link XRDeviceBase.shouldDrawEnvironment}.
+   */
+  shouldDrawEnvironment: (() => boolean) | null;
+  /**
    * Host mode (see host/types.ts): a native host drives frames through
    * runHostFrame and backs layers with its swapchain. IWER then touches no
    * DOM and emulates no headset pose.
@@ -153,6 +159,7 @@ const DEFAULTS = {
   headsetQuaternion: new Quaternion(),
   stereoEnabled: false,
   frameClearEnabled: true,
+  shouldDrawEnvironment: null,
 };
 
 // DevUI and SEM are written against the full entry's XRDevice, the only
@@ -176,7 +183,18 @@ export interface SEMConstructor {
 }
 export interface SyntheticEnvironmentModule {
   version: string;
+  /** Update the environment for a frame, then draw it. */
   render(time: number): void;
+  // Optional, so older or custom modules that only render() still fit.
+  /**
+   * Update the environment for a frame without drawing: scene logic, world
+   * matrices (read by hit tests) and the camera. Modules with both `update`
+   * and `draw` are drawn separately, after the app's frame callbacks, so a
+   * host can skip draws with {@link XRDeviceBase.shouldDrawEnvironment}.
+   */
+  update?(time: number): void;
+  /** Draw the environment as of the last {@link update}. */
+  draw?(): void;
   // The concrete environment schema (`SceneFile`) is defined in the `sem`
   // package, which depends on `iwer`; importing it here would create a
   // circular dependency. The SEM implementation casts this to its schema.
@@ -294,6 +312,7 @@ export class XRDeviceBase {
     ipd: number;
     fovy: number;
     frameClearEnabled: boolean;
+    shouldDrawEnvironment: (() => boolean) | null;
     visibilityMask?: XRVisibilityMask;
     visibilityMaskEnabled: boolean;
     visibilityMaskCanvas?: HTMLCanvasElement;
@@ -464,6 +483,8 @@ export class XRDeviceBase {
       stereoEnabled: deviceOptions.stereoEnabled ?? DEFAULTS.stereoEnabled,
       frameClearEnabled:
         deviceOptions.frameClearEnabled ?? DEFAULTS.frameClearEnabled,
+      shouldDrawEnvironment:
+        deviceOptions.shouldDrawEnvironment ?? DEFAULTS.shouldDrawEnvironment,
       ipd: deviceOptions.ipd ?? DEFAULTS.ipd,
       fovy: deviceOptions.fovy ?? DEFAULTS.fovy,
       visibilityMask,
@@ -1126,6 +1147,30 @@ export class XRDeviceBase {
 
   set frameClearEnabled(value: boolean) {
     this[P_DEVICE].frameClearEnabled = value;
+  }
+
+  /**
+   * Decides whether the synthetic environment (SEM) is drawn in an
+   * immersive-ar frame. Called once per frame, after the app's frame
+   * callbacks; returning `false` skips that frame's environment draw. The
+   * environment still updates every frame, so scene logic, tracked planes and
+   * meshes, hit tests and depth sensing are unaffected. Defaults to `null`,
+   * which draws every frame. If the function throws, the environment is drawn.
+   *
+   * This is the environment's counterpart to {@link frameClearEnabled}, for
+   * hosts that render on demand: answer whether the app drew this frame, and
+   * the room behind the app's canvas is drawn exactly when the app is, from
+   * the same pose. A skipped frame leaves the last drawn room on the page. It
+   * only applies to modules that implement `update` and `draw` (`@iwer/sem`
+   * does); others render every frame. Like {@link frameClearEnabled}, it is
+   * owned by the host page and is not part of remote-control device state.
+   */
+  get shouldDrawEnvironment(): (() => boolean) | null {
+    return this[P_DEVICE].shouldDrawEnvironment;
+  }
+
+  set shouldDrawEnvironment(value: (() => boolean) | null) {
+    this[P_DEVICE].shouldDrawEnvironment = value;
   }
 
   get ipd() {

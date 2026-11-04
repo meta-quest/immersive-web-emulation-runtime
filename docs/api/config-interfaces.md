@@ -67,6 +67,11 @@ outline: deep
   clear before they draw (three.js does by default) and that sometimes skip
   drawing on purpose; see [`XRDevice.frameClearEnabled`](./xr-device.md#frameclearenabled).
 
+- **`shouldDrawEnvironment`**: **`(() => boolean) | null`**
+  Called once per immersive-ar frame, after the app's frame callbacks; returning
+  `false` skips that frame's synthetic environment draw. Defaults to `null`
+  (always drawn); see [`XRDevice.shouldDrawEnvironment`](./xr-device.md#shoulddrawenvironment).
+
 ## XRControllerConfig
 
 - **`profileId`**: **string**  
