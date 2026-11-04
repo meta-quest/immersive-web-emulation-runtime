@@ -24,6 +24,24 @@ export type {
 } from './device/XRVisibilityMask.js';
 export { calculateVisibilityMaskBounds } from './device/XRVisibilityMask.js';
 
+// Host input (real tracking driving the input sources; see HOST-INPUT.md)
+export {
+  XRHostInput,
+  XRHostInputState,
+  XRHostInputMode,
+  XRHostController,
+  XRHostHand,
+  HOST_INPUT_BUTTONS,
+  HOST_INPUT_JOINTS,
+  HOST_INPUT_JOINT_STRIDE,
+  HOST_INPUT_POSE_STRIDE,
+} from './device/XRHostInput.js';
+export type {
+  XRHostInputOptions,
+  XRHostHapticCallback,
+  XRHostHandedness,
+} from './device/XRHostInput.js';
+
 // Controller Configs
 export {
   oculusTouchV2,
@@ -36,7 +54,15 @@ export { generic } from './device/configs/controller/generic.js';
 // Controller / Gamepad Config Types
 export type { XRControllerConfig } from './device/XRController.js';
 export { GamepadMappingType } from './gamepad/Gamepad.js';
-export type { GamepadConfig, Button, Axis } from './gamepad/Gamepad.js';
+export type {
+  GamepadConfig,
+  Button,
+  Axis,
+  GamepadEffectParameters,
+  GamepadHapticEffectType,
+  GamepadHapticPulseHook,
+  GamepadHapticsResult,
+} from './gamepad/Gamepad.js';
 
 // Remote Control Interface
 export { RemoteControlInterface, MICROGESTURES } from './remote/index.js';

@@ -13,6 +13,7 @@ import {
   P_FRAME,
   P_GAMEPAD,
   P_HIT_TEST,
+  P_HOST_INPUT,
   P_MESH,
   P_PLANE,
   P_SESSION,
@@ -409,6 +410,12 @@ export class XRSession extends EventTarget {
       inputSourceArray: [],
       activeInputSources: [],
       updateActiveInputSources: () => {
+        // Host input lists sources in a stable array and bumps a version when
+        // they change; skip the diff (and its arrays) while it is unchanged.
+        const hostInput = this[P_SESSION].device[P_DEVICE].hostInput;
+        if (hostInput && hostInput[P_HOST_INPUT].unchangedFor(this)) {
+          return;
+        }
         const handTrackingOn =
           this[P_SESSION].enabledFeatures.includes('hand-tracking');
         const gazeTrackingOn = this[P_SESSION].hasGazeTracking;

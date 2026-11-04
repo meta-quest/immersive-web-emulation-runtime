@@ -162,7 +162,7 @@ export type HandGestureButton = (typeof HAND_GESTURE_BUTTONS)[number];
  * only one that fires events), buttons 1 to 3 empty, then the gesture
  * buttons on 4 to 9.
  */
-const XRHandGamepadConfig: GamepadConfig = {
+export const XRHandGamepadConfig: GamepadConfig = {
   mapping: GamepadMappingType.XRStandard,
   buttons: [
     { id: 'pinch', type: 'analog', eventTrigger: 'select' },

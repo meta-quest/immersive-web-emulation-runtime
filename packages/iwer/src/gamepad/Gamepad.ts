@@ -95,6 +95,28 @@ export class EmptyGamepadButton {
 
 export type GamepadHapticActuatorType = 'vibration' | 'dual-rumble';
 
+export type GamepadHapticEffectType = 'dual-rumble' | 'trigger-rumble';
+
+export interface GamepadEffectParameters {
+  duration?: number;
+  startDelay?: number;
+  strongMagnitude?: number;
+  weakMagnitude?: number;
+  leftTrigger?: number;
+  rightTrigger?: number;
+}
+
+export type GamepadHapticsResult = 'complete' | 'preempted';
+
+/**
+ * Receives a pulse for real hardware (host input): intensity 0..1 and
+ * duration in milliseconds. A returned promise becomes the pulse's result.
+ */
+export type GamepadHapticPulseHook = (
+  intensity: number,
+  durationMs: number,
+) => void | Promise<boolean>;
+
 export class GamepadHapticActuator {
   [P_GAMEPAD]: {
     type: GamepadHapticActuatorType;
@@ -103,12 +125,14 @@ export class GamepadHapticActuator {
       duration: number;
       startTime: DOMHighResTimeStamp;
     } | null;
+    onPulse: GamepadHapticPulseHook | null;
   };
 
   constructor(type: GamepadHapticActuatorType = 'vibration') {
     this[P_GAMEPAD] = {
       type,
       lastPulse: null,
+      onPulse: null,
     };
   }
 
@@ -122,7 +146,52 @@ export class GamepadHapticActuator {
       duration,
       startTime: performance.now(),
     };
-    return Promise.resolve(true);
+    const hook = this[P_GAMEPAD].onPulse;
+    if (!hook) {
+      return Promise.resolve(true);
+    }
+    const strength = Number(value);
+    const length = Number(duration);
+    const outcome = hook(
+      strength >= 1 ? 1 : strength > 0 ? strength : 0,
+      length > 0 ? length : 0,
+    );
+    return outcome ?? Promise.resolve(true);
+  }
+
+  /**
+   * Gamepad haptics `playEffect`. Both effect types become one pulse; its
+   * strength is the stronger of the two rumble magnitudes, or full strength
+   * when the page gives neither.
+   */
+  playEffect(
+    type: GamepadHapticEffectType,
+    params: GamepadEffectParameters = {},
+  ): Promise<GamepadHapticsResult> {
+    if (type !== 'dual-rumble' && type !== 'trigger-rumble') {
+      return Promise.reject(
+        new DOMException(
+          `'${type}' is not a haptic effect this actuator can play.`,
+          'NotSupportedError',
+        ),
+      );
+    }
+    const { strongMagnitude, weakMagnitude } = params;
+    const strength =
+      strongMagnitude === undefined && weakMagnitude === undefined
+        ? 1
+        : Math.max(strongMagnitude ?? 0, weakMagnitude ?? 0);
+    const done: GamepadHapticsResult = 'complete';
+    return this.pulse(strength, params.duration ?? 0).then(() => done);
+  }
+
+  /** Stops any effect: a zero-length, zero-strength pulse to the hook. */
+  reset(): Promise<GamepadHapticsResult> {
+    const hook = this[P_GAMEPAD].onPulse;
+    if (hook) {
+      hook(0, 0);
+    }
+    return Promise.resolve<GamepadHapticsResult>('complete');
   }
 }
 

@@ -55,6 +55,10 @@ const getOffsetMatrix = (
   mat4.multiply(offsetMatrix, baseSpaceGlobalMatrixInverse, spaceGlobalMatrix);
 };
 
+// A space that cannot be located this frame (a host-driven input that lost
+// tracking). Spaces without the flag, including test doubles, count as tracked.
+const isUntracked = (space: XRSpace) => space[P_SPACE]?.tracked === false;
+
 export class XRFrame {
   [P_FRAME]: {
     session: XRSession;
@@ -102,12 +106,15 @@ export class XRFrame {
     return this[P_FRAME].predictedDisplayTime;
   }
 
-  getPose(space: XRSpace, baseSpace: XRSpace) {
+  getPose(space: XRSpace, baseSpace: XRSpace): XRPose | null {
     if (!this[P_FRAME].active) {
       throw new DOMException(
         'XRFrame access outside the callback that produced it is invalid.',
         'InvalidStateError',
       );
+    }
+    if (isUntracked(space) || isUntracked(baseSpace)) {
+      return null;
     }
     getOffsetMatrix(this[P_FRAME].tempMat4, space, baseSpace);
     mat4.getTranslation(scratchPosition, this[P_FRAME].tempMat4);
@@ -140,14 +147,14 @@ export class XRFrame {
     }
     const session = this[P_FRAME].session;
     const device = session[P_SESSION].device;
-    const pose = this.getPose(device.viewerSpace, referenceSpace);
+    const pose = this.getPose(device.viewerSpace, referenceSpace)!;
     const eyes =
       session[P_SESSION].mode === 'inline' ? INLINE_EYES : STEREO_EYES;
 
     const views: XRView[] = [];
     eyes.forEach((eye) => {
       const viewSpace = device.viewSpaces[eye];
-      const viewPose = this.getPose(viewSpace, referenceSpace);
+      const viewPose = this.getPose(viewSpace, referenceSpace)!;
       const projectionMatrix = session[P_SESSION].getProjectionMatrix(eye);
       const view = new XRView(
         eye,
@@ -161,8 +168,11 @@ export class XRFrame {
     return new XRViewerPose(pose.transform, views, false);
   }
 
-  getJointPose(joint: XRJointSpace, baseSpace: XRSpace) {
+  getJointPose(joint: XRJointSpace, baseSpace: XRSpace): XRJointPose | null {
     const xrPose = this.getPose(joint, baseSpace);
+    if (!xrPose) {
+      return null;
+    }
     const radius = joint[P_JOINT_SPACE].radius;
     return new XRJointPose(xrPose.transform, radius, false);
   }
@@ -184,7 +194,10 @@ export class XRFrame {
     }
     let allValid = true;
     for (let offset = 0; offset < jointSpaces.length; offset++) {
-      if (!jointSpaces[offset][P_JOINT_SPACE].radius) {
+      if (
+        !jointSpaces[offset][P_JOINT_SPACE].radius ||
+        isUntracked(jointSpaces[offset])
+      ) {
         radii[offset] = NaN;
         allValid = false;
       } else {
@@ -209,11 +222,18 @@ export class XRFrame {
         'TypeError',
       );
     }
+    let allValid = true;
+    const baseUntracked = isUntracked(baseSpace);
     spaces.forEach((space, i) => {
+      if (baseUntracked || isUntracked(space)) {
+        transforms.fill(NaN, i * 16, i * 16 + 16);
+        allValid = false;
+        return;
+      }
       getOffsetMatrix(this[P_FRAME].tempMat4, space, baseSpace);
       transforms.set(this[P_FRAME].tempMat4, i * 16);
     });
-    return true;
+    return allValid;
   }
 
   get detectedPlanes() {

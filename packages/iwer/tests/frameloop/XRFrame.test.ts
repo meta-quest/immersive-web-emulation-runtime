@@ -168,7 +168,7 @@ describe('XRFrame', () => {
       const pose = activeFrame.getPose(mockSpace, mockReferenceSpace);
 
       expect(pose).toBeDefined();
-      expect(pose.transform).toBeDefined();
+      expect(pose!.transform).toBeDefined();
       // emulated property is internal
     });
 
@@ -250,8 +250,8 @@ describe('XRFrame', () => {
       );
 
       expect(jointPose).toBeDefined();
-      expect(jointPose.transform).toBeDefined();
-      expect(jointPose.radius).toBeCloseTo(0.01);
+      expect(jointPose!.transform).toBeDefined();
+      expect(jointPose!.radius).toBeCloseTo(0.01);
       // emulated property is internal
     });
 
@@ -271,7 +271,7 @@ describe('XRFrame', () => {
       );
 
       expect(jointPose).toBeDefined();
-      expect(jointPose.radius).toBeCloseTo(0.05);
+      expect(jointPose!.radius).toBeCloseTo(0.05);
     });
   });
 

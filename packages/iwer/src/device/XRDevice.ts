@@ -10,6 +10,7 @@ import { GamepadButton } from '../gamepad/Gamepad.js';
 import { resetButton } from '../gamepad/button-edges.js';
 import {
   P_DEVICE,
+  P_HOST_INPUT,
   P_REF_SPACE,
   P_SESSION,
   P_SPACE,
@@ -59,6 +60,7 @@ import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSessionEvent } from '../events/XRSessionEvent.js';
 import { XRSystem } from '../initialization/XRSystem.js';
 import { XRTrackedInput } from './XRTrackedInput.js';
+import { XRHostInput, XRHostInputOptions } from './XRHostInput.js';
 import { XRGazeInput, supportsGazeTracking } from './XRGazeInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
@@ -250,6 +252,8 @@ export class XRDevice {
     hands: { [key in XRHandedness]?: XRHandInput };
     gaze?: XRGazeInput;
     primaryInputMode: 'controller' | 'hand';
+    // Real tracking driving the input sources instead of the emulated ones.
+    hostInput: XRHostInput | null;
     pendingReferenceSpaceReset: boolean;
     visibilityState: XRVisibilityState;
     pendingVisibilityState: XRVisibilityState | null;
@@ -407,6 +411,7 @@ export class XRDevice {
       hands,
       gaze,
       primaryInputMode: 'controller',
+      hostInput: null,
       pendingReferenceSpaceReset: false,
       visibilityState: 'visible',
       pendingVisibilityState: null,
@@ -533,6 +538,7 @@ export class XRDevice {
       },
       onSessionEnd: () => {
         this[P_DEVICE].remote?.onSessionEnd();
+        this[P_DEVICE].hostInput?.[P_HOST_INPUT].endSession();
         this[P_DEVICE].devui?.onSessionEnd?.();
         // Nothing carries into the next session: buttons held now (or with a
         // cancel still to report) start the next session released.
@@ -607,6 +613,7 @@ export class XRDevice {
               new XRSessionEvent('visibilitychange', { session }),
             );
           }
+          this[P_DEVICE].hostInput?.[P_HOST_INPUT].sync(frame);
           if (this[P_DEVICE].visibilityState === 'visible') {
             this.activeInputs.forEach((activeInput) => {
               activeInput.onFrameStart(frame);
@@ -1036,7 +1043,44 @@ export class XRDevice {
     this[P_DEVICE].primaryInputMode = mode;
   }
 
+  /**
+   * Drives the input sources from real tracking (see HOST-INPUT.md): the
+   * returned object holds one state per hand that the host rewrites every
+   * frame. Calling it again returns the same object (a new `onHaptic`
+   * replaces the old one).
+   */
+  enableHostInput(options: XRHostInputOptions = {}): XRHostInput {
+    let hostInput = this[P_DEVICE].hostInput;
+    if (!hostInput) {
+      hostInput = new XRHostInput(this, options);
+      this[P_DEVICE].hostInput = hostInput;
+    } else if (options.onHaptic !== undefined) {
+      hostInput.onHaptic = options.onHaptic;
+    }
+    return hostInput;
+  }
+
+  /** Returns the device to its emulated controllers and hands. */
+  disableHostInput() {
+    const hostInput = this[P_DEVICE].hostInput;
+    if (!hostInput) {
+      return;
+    }
+    for (const input of hostInput[P_HOST_INPUT].activeInputs) {
+      input.connected = false;
+    }
+    this[P_DEVICE].hostInput = null;
+  }
+
+  get hostInput(): XRHostInput | null {
+    return this[P_DEVICE].hostInput;
+  }
+
   get activeInputs(): XRTrackedInput[] {
+    const hostInput = this[P_DEVICE].hostInput;
+    if (hostInput) {
+      return hostInput[P_HOST_INPUT].activeInputs;
+    }
     if (this[P_DEVICE].visibilityState !== 'visible') {
       return [];
     }
@@ -1051,6 +1095,10 @@ export class XRDevice {
   }
 
   get inputSources(): XRInputSource[] {
+    const hostInput = this[P_DEVICE].hostInput;
+    if (hostInput) {
+      return hostInput[P_HOST_INPUT].inputSources;
+    }
     if (this[P_DEVICE].actionPlayer?.playing) {
       return this[P_DEVICE].actionPlayer.inputSources;
     } else {

@@ -18,6 +18,9 @@ export class XRSpace extends EventTarget {
     parentSpace: XRSpace | undefined;
     offsetMatrix: mat4;
     emulated: boolean;
+    // False while the space cannot be located (a host-driven input whose
+    // tracking is lost); XRFrame then reports no pose for it.
+    tracked: boolean;
   };
 
   constructor(parentSpace?: XRSpace, offsetMatrix?: mat4) {
@@ -26,6 +29,7 @@ export class XRSpace extends EventTarget {
       parentSpace,
       offsetMatrix: offsetMatrix ? mat4.clone(offsetMatrix) : mat4.create(),
       emulated: true,
+      tracked: true,
     };
   }
 }

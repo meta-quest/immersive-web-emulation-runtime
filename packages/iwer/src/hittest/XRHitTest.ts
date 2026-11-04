@@ -55,9 +55,9 @@ export class XRHitTestResult {
   }
 
   getPose(baseSpace: XRSpace): XRPose | undefined {
-    return this[P_HIT_TEST].frame.getPose(
-      this[P_HIT_TEST].offsetSpace,
-      baseSpace,
+    return (
+      this[P_HIT_TEST].frame.getPose(this[P_HIT_TEST].offsetSpace, baseSpace) ??
+      undefined
     );
   }
 

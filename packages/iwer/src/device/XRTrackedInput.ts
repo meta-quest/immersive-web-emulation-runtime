@@ -14,6 +14,7 @@ import { advanceButton, edgeEventTypes } from '../gamepad/button-edges.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
 import { XRFrame } from '../frameloop/XRFrame.js';
 import { XRInputSourceEvent } from '../events/XRInputSourceEvent.js';
+import type { XRSession } from '../session/XRSession.js';
 import { mat4 } from 'gl-matrix';
 
 const DEFAULT_TRANSFORM = {
@@ -29,6 +30,27 @@ const DEFAULT_TRANSFORM = {
     position: new Vector3(0.25, 1.5, -0.4),
     quaternion: new Quaternion(),
   },
+};
+
+/**
+ * Advances a button by one frame and dispatches the input source events for
+ * its edge, if the button has an event trigger.
+ */
+export const dispatchButtonEdge = (
+  session: XRSession,
+  frame: XRFrame,
+  inputSource: XRInputSource,
+  button: GamepadButton,
+) => {
+  const edge = advanceButton(button);
+  const trigger = button[P_GAMEPAD].eventTrigger;
+  if (edge && trigger) {
+    for (const type of edgeEventTypes(edge, trigger)) {
+      session.dispatchEvent(
+        new XRInputSourceEvent(type, { frame, inputSource }),
+      );
+    }
+  }
 };
 
 export class XRTrackedInput {
@@ -91,19 +113,16 @@ export class XRTrackedInput {
 
     const session = frame.session;
     const inputSource = this[P_TRACKED_INPUT].inputSource;
-    inputSource.gamepad?.buttons.forEach((button) => {
-      if (button instanceof GamepadButton) {
-        const edge = advanceButton(button);
-        const trigger = button[P_GAMEPAD].eventTrigger;
-        if (edge && trigger) {
-          for (const type of edgeEventTypes(edge, trigger)) {
-            session.dispatchEvent(
-              new XRInputSourceEvent(type, { frame, inputSource }),
-            );
-          }
+    const buttons = inputSource.gamepad?.buttons;
+    if (buttons) {
+      // An index loop, so the per-frame update creates no closure.
+      for (let i = 0; i < buttons.length; i++) {
+        const button = buttons[i];
+        if (button instanceof GamepadButton) {
+          dispatchButtonEdge(session, frame, inputSource, button);
         }
       }
-    });
+    }
 
     this[P_TRACKED_INPUT].inputSourceChanged =
       this.connected !== this[P_TRACKED_INPUT].lastFrameConnected;
