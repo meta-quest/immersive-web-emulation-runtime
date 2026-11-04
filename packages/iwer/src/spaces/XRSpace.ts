@@ -87,4 +87,28 @@ export class XRSpaceUtils {
     }
     return globalOffset;
   }
+
+  /**
+   * Host mode: the global offset matrix into `out`, folding ancestors in from
+   * the space upwards (no chain array). False when the space or an ancestor
+   * is untracked this frame.
+   */
+  static calculateTrackedGlobalOffsetMatrix(
+    space: XRSpace,
+    out: mat4,
+  ): boolean {
+    if (space[P_SPACE].tracked === false) {
+      return false;
+    }
+    mat4.copy(out, space[P_SPACE].offsetMatrix);
+    let current = space[P_SPACE].parentSpace;
+    while (current) {
+      if (current[P_SPACE].tracked === false) {
+        return false;
+      }
+      mat4.multiply(out, current[P_SPACE].offsetMatrix, out);
+      current = current[P_SPACE].parentSpace;
+    }
+    return true;
+  }
 }

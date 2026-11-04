@@ -7,6 +7,7 @@
 
 import { P_REF_SPACE } from '../private.js';
 import { XRReferenceSpaceEventHandler } from '../events/XRReferenceSpaceEvent.js';
+import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSpace } from './XRSpace.js';
 import { mat4 } from 'gl-matrix';
 
@@ -22,9 +23,12 @@ export class XRReferenceSpace extends XRSpace {
   [P_REF_SPACE]: {
     type: XRReferenceSpaceType;
     onreset: XRReferenceSpaceEventHandler | null;
+    // Told about every offset space derived from this one (host mode only).
+    onOffsetSpace: ((offsetSpace: XRReferenceSpace) => void) | null;
   } = {
     type: null as any,
     onreset: null,
+    onOffsetSpace: null,
   };
 
   constructor(
@@ -54,9 +58,38 @@ export class XRReferenceSpace extends XRSpace {
   }
 
   // Create a new XRReferenceSpace with an offset from the current space
-  getOffsetReferenceSpace(originOffset: mat4): XRReferenceSpace {
+  getOffsetReferenceSpace(
+    originOffset: XRRigidTransform | mat4,
+  ): XRReferenceSpace {
     // Create a new XRReferenceSpace with the originOffset as its offsetMatrix
-    // The new space's parent is set to 'this' (the current XRReferenceSpace)
-    return new XRReferenceSpace(this[P_REF_SPACE].type, this, originOffset);
+    // The new space's parent is set to 'this' (the current XRReferenceSpace).
+    // The spec passes an XRRigidTransform; a raw mat4 is kept for callers
+    // that relied on the earlier signature.
+    const offsetMatrix =
+      originOffset instanceof XRRigidTransform
+        ? originOffset.matrix
+        : originOffset;
+    return linkOffsetSpace(
+      this,
+      new XRReferenceSpace(this[P_REF_SPACE].type, this, offsetMatrix),
+    );
   }
+}
+
+/**
+ * Hands a space made by getOffsetReferenceSpace to its parent's
+ * `onOffsetSpace` watcher, if any, and passes the watcher on so offsets of
+ * offsets are seen too. Host mode uses this to send `reset` events to offset
+ * spaces; without a watcher nothing happens.
+ */
+export function linkOffsetSpace<T extends XRReferenceSpace>(
+  parent: XRReferenceSpace,
+  offsetSpace: T,
+): T {
+  const watcher = parent[P_REF_SPACE].onOffsetSpace;
+  if (watcher) {
+    offsetSpace[P_REF_SPACE].onOffsetSpace = watcher;
+    watcher(offsetSpace);
+  }
+  return offsetSpace;
 }

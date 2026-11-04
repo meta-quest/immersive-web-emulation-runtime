@@ -69,6 +69,14 @@ import { NativeMesh } from '../meshes/XRMesh.js';
 import type { DepthSensingData } from '../depth/XRDepthInformation.js';
 import { XRWebGLBinding } from '../depth/XRWebGLBinding.js';
 import type { XRRuntimeAdapter } from '../types/runtime-session.js';
+import type { XRHostBackend, XRHostEvent, XRHostFrame } from '../host/types.js';
+import { XRHostWebGLBinding } from '../host/XRHostWebGLBinding.js';
+import { XRBoundedReferenceSpace } from '../spaces/XRBoundedReferenceSpace.js';
+import {
+  XRCompositionLayer,
+  XRProjectionLayer,
+  XRWebGLSubImage,
+} from '../layers/XRProjectionLayer.js';
 import {
   calculateVisibilityMaskBounds,
   type XRVisibilityMask,
@@ -90,7 +98,12 @@ export type WebXRFeature =
   | 'hand-tracking'
   | 'gaze-tracking'
   | 'eye-tracking'
-  | 'depth-sensing';
+  | 'depth-sensing'
+  // WebXR Layers and Quest Browser's startup foveation levels (host mode)
+  | 'layers'
+  | 'high-fixed-foveation-level'
+  | 'medium-fixed-foveation-level'
+  | 'low-fixed-foveation-level';
 
 export interface XRDeviceConfig {
   name: string;
@@ -120,6 +133,12 @@ export interface XRDeviceOptions {
   visibilityMask: XRVisibilityMask | null;
   /** Whether a configured visibility mask starts enabled. */
   visibilityMaskEnabled: boolean;
+  /**
+   * Host mode (see host/types.ts): a native host drives frames through
+   * runHostFrame and backs layers with its swapchain. IWER then touches no
+   * DOM and emulates no headset pose.
+   */
+  host: XRHostBackend;
 }
 
 const DEFAULTS = {
@@ -310,6 +329,11 @@ export class XRDevice {
 
     // frame timing for remote update
     lastFrameTime: number;
+
+    // host mode backend, null when emulating
+    host: XRHostBackend | null;
+    // host mode's onFrameStart: inputs only, poses come from the host
+    onHostFrameStart: (frame: XRFrame) => void;
   };
 
   constructor(
@@ -354,21 +378,27 @@ export class XRDevice {
     const gaze = supportsGazeTracking(deviceConfig.supportedFeatures)
       ? new XRGazeInput(viewerSpace)
       : undefined;
-    const canvasContainer =
-      deviceOptions.canvasContainer ?? document.createElement('div');
-    canvasContainer.dataset.webxr_runtime = `Immersive Web Emulation Runtime v${VERSION}`;
-    canvasContainer.style.position = 'fixed';
-    canvasContainer.style.width = '100%';
-    canvasContainer.style.height = '100%';
-    canvasContainer.style.top = '0';
-    canvasContainer.style.left = '0';
-    canvasContainer.style.display = 'flex';
-    canvasContainer.style.justifyContent = 'center';
-    canvasContainer.style.alignItems = 'center';
-    canvasContainer.style.overflow = 'hidden';
-    canvasContainer.style.zIndex = '999';
+    const host = deviceOptions.host ?? null;
+    // Host mode renders nothing itself, so it creates no DOM: the container
+    // is never read there (onBaseLayerSet/onSessionEnd skip it).
+    const canvasContainer = host
+      ? (undefined as unknown as HTMLDivElement)
+      : (deviceOptions.canvasContainer ?? document.createElement('div'));
+    if (!host) {
+      canvasContainer.dataset.webxr_runtime = `Immersive Web Emulation Runtime v${VERSION}`;
+      canvasContainer.style.position = 'fixed';
+      canvasContainer.style.width = '100%';
+      canvasContainer.style.height = '100%';
+      canvasContainer.style.top = '0';
+      canvasContainer.style.left = '0';
+      canvasContainer.style.display = 'flex';
+      canvasContainer.style.justifyContent = 'center';
+      canvasContainer.style.alignItems = 'center';
+      canvasContainer.style.overflow = 'hidden';
+      canvasContainer.style.zIndex = '999';
+    }
     const visibilityMask =
-      deviceOptions.visibilityMask === null
+      deviceOptions.visibilityMask === null || host
         ? undefined
         : (deviceOptions.visibilityMask ?? deviceConfig.visibilityMask);
     const visibilityMaskCanvas = visibilityMask
@@ -498,7 +528,7 @@ export class XRDevice {
         );
       },
       onBaseLayerSet: (baseLayer: XRWebGLLayer | null) => {
-        if (!baseLayer) return;
+        if (!baseLayer || this[P_DEVICE].host) return;
 
         // backup canvas data
         const canvas = baseLayer.context.canvas as HTMLCanvasElement;
@@ -615,9 +645,10 @@ export class XRDevice {
           }
           this[P_DEVICE].hostInput?.[P_HOST_INPUT].sync(frame);
           if (this[P_DEVICE].visibilityState === 'visible') {
-            this.activeInputs.forEach((activeInput) => {
-              activeInput.onFrameStart(frame);
-            });
+            const activeInputs = this.activeInputs;
+            for (let i = 0; i < activeInputs.length; i++) {
+              activeInputs[i].onFrameStart(frame);
+            }
           }
 
           if (this[P_DEVICE].pendingReferenceSpaceReset) {
@@ -652,6 +683,25 @@ export class XRDevice {
 
       // frame timing for remote update
       lastFrameTime: 0,
+
+      host,
+      onHostFrameStart: (frame: XRFrame) => {
+        const now = performance.now();
+        const deltaTimeMs =
+          this[P_DEVICE].lastFrameTime > 0
+            ? Math.min(now - this[P_DEVICE].lastFrameTime, MAX_REMOTE_FRAME_MS)
+            : 16.67;
+        this[P_DEVICE].lastFrameTime = now;
+        this[P_DEVICE].remote?.update(deltaTimeMs);
+        // real tracking (HOST-INPUT.md) replaces the emulated inputs
+        this[P_DEVICE].hostInput?.[P_HOST_INPUT].sync(frame);
+        if (this[P_DEVICE].visibilityState === 'visible') {
+          const inputs = this.activeInputs;
+          for (let i = 0; i < inputs.length; i++) {
+            inputs[i].onFrameStart(frame);
+          }
+        }
+      },
     };
 
     // Initialize remote control interface
@@ -797,7 +847,10 @@ export class XRDevice {
         configurable: true,
       });
     };
-    defineMakeXRCompatible(WebGL2RenderingContext.prototype);
+    defineMakeXRCompatible(
+      (globalThis as { WebGL2RenderingContext?: { prototype: object } })
+        .WebGL2RenderingContext?.prototype,
+    );
     // Also patch WebGL1 contexts, which can request XR compatibility too.
     defineMakeXRCompatible(
       (globalThis as { WebGLRenderingContext?: { prototype: object } })
@@ -818,12 +871,15 @@ export class XRDevice {
       configurable: true,
     });
     // userAgent is configurable so uninstallRuntime can restore the original.
-    Object.defineProperty(navigator, 'userAgent', {
-      value: this[P_DEVICE].userAgent,
-      writable: false,
-      configurable: true,
-      enumerable: true,
-    });
+    // A host keeps its own user agent: it is the real device.
+    if (!this[P_DEVICE].host) {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: this[P_DEVICE].userAgent,
+        writable: false,
+        configurable: true,
+        enumerable: true,
+      });
+    }
 
     const setGlobal = (name: string, value: unknown) => {
       previousGlobals.set(name, {
@@ -856,12 +912,41 @@ export class XRDevice {
     setGlobal('XRInputSourcesChangeEvent', XRInputSourcesChangeEvent);
     setGlobal('XRReferenceSpaceEvent', XRReferenceSpaceEvent);
 
+    if (this[P_DEVICE].host) {
+      // host mode has real projection layers; three.js looks for
+      // createProjectionLayer on XRWebGLBinding.prototype to use them
+      setGlobal('XRWebGLBinding', XRHostWebGLBinding);
+      setGlobal('XRCompositionLayer', XRCompositionLayer);
+      setGlobal('XRProjectionLayer', XRProjectionLayer);
+      setGlobal('XRBoundedReferenceSpace', XRBoundedReferenceSpace);
+      setGlobal('XRWebGLSubImage', XRWebGLSubImage);
+      return;
+    }
     if (polyfillLayers) {
       new WebXRLayerPolyfill();
     } else {
       setGlobal('XRMediaBinding', undefined);
     }
     setGlobal('XRWebGLBinding', XRWebGLBinding);
+  }
+
+  /** The host backend in host mode, undefined when emulating. */
+  get hostBackend(): XRHostBackend | undefined {
+    return this[P_DEVICE].host ?? undefined;
+  }
+
+  /**
+   * Host mode: runs one XR frame of the active session (see host/types.ts).
+   * Call it between xrBeginFrame and xrEndFrame; it returns once the page's
+   * animation frame callbacks (and the window's) have run.
+   */
+  runHostFrame(frame: XRHostFrame): void {
+    this.activeSession?.[P_SESSION].host?.runFrame(frame);
+  }
+
+  /** Host mode: forwards a runtime event to the active session. */
+  dispatchHostEvent(event: XRHostEvent): void {
+    this.activeSession?.[P_SESSION].host?.onEvent(event);
   }
 
   /**

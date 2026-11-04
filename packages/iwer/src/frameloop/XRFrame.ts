@@ -30,6 +30,12 @@ import { XRReferenceSpace } from '../spaces/XRReferenceSpace.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 import { XRSession } from '../session/XRSession.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
+import {
+  hostFillPoses,
+  hostGetJointPose,
+  hostGetPose,
+  hostGetViewerPose,
+} from '../host/frame.js';
 
 const spaceGlobalMatrix = mat4.create();
 const baseSpaceGlobalMatrix = mat4.create();
@@ -113,6 +119,9 @@ export class XRFrame {
         'InvalidStateError',
       );
     }
+    if (this[P_FRAME].session[P_SESSION].host) {
+      return hostGetPose(this, space, baseSpace);
+    }
     if (isUntracked(space) || isUntracked(baseSpace)) {
       return null;
     }
@@ -138,7 +147,9 @@ export class XRFrame {
     );
   }
 
-  getViewerPose(referenceSpace: XRReferenceSpace) {
+  // Host mode answers null when the viewer pose is unknown this frame; the
+  // declared type stays non-null for existing callers.
+  getViewerPose(referenceSpace: XRReferenceSpace): XRViewerPose {
     if (!this[P_FRAME].animationFrame) {
       throw new DOMException(
         'getViewerPose can only be called on XRFrame objects passed to XRSession.requestAnimationFrame callbacks.',
@@ -146,6 +157,15 @@ export class XRFrame {
       );
     }
     const session = this[P_FRAME].session;
+    if (session[P_SESSION].host) {
+      if (!this[P_FRAME].active) {
+        throw new DOMException(
+          'XRFrame access outside the callback that produced it is invalid.',
+          'InvalidStateError',
+        );
+      }
+      return hostGetViewerPose(this, referenceSpace) as XRViewerPose;
+    }
     const device = session[P_SESSION].device;
     const pose = this.getPose(device.viewerSpace, referenceSpace)!;
     const eyes =
@@ -169,6 +189,15 @@ export class XRFrame {
   }
 
   getJointPose(joint: XRJointSpace, baseSpace: XRSpace): XRJointPose | null {
+    if (this[P_FRAME].session[P_SESSION].host) {
+      if (!this[P_FRAME].active) {
+        throw new DOMException(
+          'XRFrame access outside the callback that produced it is invalid.',
+          'InvalidStateError',
+        );
+      }
+      return hostGetJointPose(this, joint, baseSpace);
+    }
     const xrPose = this.getPose(joint, baseSpace);
     if (!xrPose) {
       return null;
@@ -208,6 +237,22 @@ export class XRFrame {
   }
 
   fillPoses(spaces: XRSpace[], baseSpace: XRSpace, transforms: Float32Array) {
+    if (this[P_FRAME].session[P_SESSION].host && Array.isArray(spaces)) {
+      // host mode: no sequence copy per call
+      if (!this[P_FRAME].active) {
+        throw new DOMException(
+          'XRFrame access outside the callback that produced it is invalid.',
+          'InvalidStateError',
+        );
+      }
+      if (spaces.length * 16 > transforms.length) {
+        throw new DOMException(
+          'The length of spaces multiplied by 16 is larger than the number of elements in transforms',
+          'TypeError',
+        );
+      }
+      return hostFillPoses(spaces, baseSpace, transforms);
+    }
     // converting from sequence type to array
     spaces = Array.from(spaces);
     if (!this[P_FRAME].active) {
@@ -221,6 +266,9 @@ export class XRFrame {
         'The length of spaces multiplied by 16 is larger than the number of elements in transforms',
         'TypeError',
       );
+    }
+    if (this[P_FRAME].session[P_SESSION].host) {
+      return hostFillPoses(spaces, baseSpace, transforms);
     }
     let allValid = true;
     const baseUntracked = isUntracked(baseSpace);

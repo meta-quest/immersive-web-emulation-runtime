@@ -9,6 +9,7 @@ import { NativeMesh, XRMesh } from '../meshes/XRMesh.js';
 import { NativePlane, XRPlane, planeOrientation } from '../planes/XRPlane.js';
 import {
   P_ANCHOR,
+  P_COMPOSITION_LAYER,
   P_DEVICE,
   P_FRAME,
   P_GAMEPAD,
@@ -59,6 +60,8 @@ import {
 } from '../events/XRInputSourceEvent.js';
 import { edgeEventTypes, resetButton } from '../gamepad/button-edges.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
+import { XRHostSession } from '../host/XRHostSession.js';
+import { XRCompositionLayer } from '../layers/XRProjectionLayer.js';
 import { mat4 } from 'gl-matrix';
 
 export type XRVisibilityState = 'visible' | 'visible-blurred' | 'hidden';
@@ -166,6 +169,10 @@ export class XRSession extends EventTarget {
     depthFlipScratchSize: number;
     computeDepthSensing: (frame: XRFrame) => void;
     activeFrame: XRFrame | null;
+    // host mode (host/types.ts): the host drives frames; null when emulating
+    host: XRHostSession | null;
+    // per-session teardown shared by end() and a host-initiated end
+    teardown: () => void;
     // event handlers
     onend: XRSessionEventHandler | null;
     oninputsourceschange: XRInputSourcesChangeEventHandler | null;
@@ -407,7 +414,7 @@ export class XRSession extends EventTarget {
       },
       nominalFrameRate: device.internalNominalFrameRate,
       referenceSpaces: [],
-      inputSourceArray: [],
+      inputSourceArray: new XRInputSourceArray(),
       activeInputSources: [],
       updateActiveInputSources: () => {
         // Host input lists sources in a stable array and bumps a version when
@@ -790,7 +797,47 @@ export class XRSession extends EventTarget {
       onsqueezeend: null,
       onvisibilitychange: null,
       onframeratechange: null,
+      host: null,
+      teardown: () => {
+        const session = this[P_SESSION];
+        session.device[P_DEVICE].onSessionEnd();
+        // Tear down per-session state so it doesn't dangle after end.
+        session.frameCallbacks.length = 0;
+        session.currentFrameCallbacks = null;
+        session.activeFrame = null;
+        session.referenceSpaces.length = 0;
+        session.hitTestSources.clear();
+        session.trackedPlanes.clear();
+        session.trackedMeshes.clear();
+        // Per-session tracked anchors only; persistentAnchors survive by design.
+        session.trackedAnchors.clear();
+        session.frameTrackedAnchors.clear();
+        // Reject any pending anchor-creation promises so they don't dangle.
+        session.newAnchors.forEach(({ reject: rejectAnchor }) => {
+          rejectAnchor(
+            new DOMException(
+              'XRSession has ended before the anchor was resolved.',
+              'InvalidStateError',
+            ),
+          );
+        });
+        session.newAnchors.clear();
+        // Release the depth texture via the base layer context, if any.
+        if (session.depthTexture) {
+          const depthContext = session.renderState.baseLayer?.context;
+          depthContext?.deleteTexture(session.depthTexture);
+          session.depthTexture = null;
+        }
+      },
     };
+
+    const hostBackend = device[P_DEVICE].host;
+    if (hostBackend) {
+      // host mode: the host pushes frames through XRDevice.runHostFrame
+      this[P_SESSION].host = new XRHostSession(this, hostBackend);
+      this[P_SESSION].renderState = new XRRenderState({ layers: [] });
+      return;
+    }
 
     XRAnchorUtils.recoverPersistentAnchorsFromStorage(this);
 
@@ -803,11 +850,17 @@ export class XRSession extends EventTarget {
   }
 
   get frameRate(): number | undefined {
+    const host = this[P_SESSION].host;
+    if (host) {
+      return host.frameRate > 0 ? host.frameRate : undefined;
+    }
     return this[P_SESSION].nominalFrameRate;
   }
 
   get supportedFrameRates(): Float32Array | undefined {
-    return this[P_SESSION].supportedFrameRates;
+    return this[P_SESSION].host
+      ? this[P_SESSION].host.supportedFrameRates
+      : this[P_SESSION].supportedFrameRates;
   }
 
   get renderState(): XRRenderState {
@@ -823,6 +876,11 @@ export class XRSession extends EventTarget {
       );
     }
     return this[P_SESSION].inputSourceArray;
+  }
+
+  // all tracked sources (the input sources here: one per hand)
+  get trackedSources(): XRInputSourceArray {
+    return this.inputSources;
   }
 
   get enabledFeatures(): Array<string> {
@@ -878,6 +936,11 @@ export class XRSession extends EventTarget {
       );
     }
 
+    if (this[P_SESSION].host) {
+      this.updateHostRenderState(state);
+      return;
+    }
+
     const compoundStateInit: XRRenderStateInit = {
       // Use nullish coalescing so legitimate 0 values (e.g.
       // inlineVerticalFieldOfView=0) are preserved instead of being dropped.
@@ -905,9 +968,58 @@ export class XRSession extends EventTarget {
     );
   }
 
+  // Host mode. Checks the WebXR Layers rules for `layers`, then queues the
+  // new state on top of any state already queued; it becomes the active
+  // render state when the next host frame starts.
+  private updateHostRenderState(state: XRRenderStateInit) {
+    const requestedLayers = state.layers;
+    if (requestedLayers != null) {
+      if (state.baseLayer) {
+        throw new TypeError(
+          'updateRenderState: set either baseLayer or layers, not both.',
+        );
+      }
+      for (let i = 0; i < requestedLayers.length; i++) {
+        const candidate = requestedLayers[i];
+        if (!(candidate instanceof XRCompositionLayer)) {
+          throw new TypeError(
+            `updateRenderState: layers[${i}] is not an XRCompositionLayer.`,
+          );
+        }
+        if (candidate[P_COMPOSITION_LAYER].session !== this) {
+          throw new DOMException(
+            `updateRenderState: layers[${i}] belongs to another XRSession.`,
+            'InvalidStateError',
+          );
+        }
+      }
+    }
+    const queued: XRRenderStateInit = {
+      depthNear: state.depthNear,
+      depthFar: state.depthFar,
+    };
+    if (state.passthroughFullyObscured !== undefined) {
+      queued.passthroughFullyObscured = !!state.passthroughFullyObscured;
+    }
+    if (requestedLayers !== undefined) {
+      // null means "no layers"
+      queued.layers = requestedLayers || [];
+    }
+    if (state.baseLayer !== undefined) {
+      queued.baseLayer = state.baseLayer;
+    }
+    this[P_SESSION].pendingRenderState = new XRRenderState(
+      queued,
+      this[P_SESSION].pendingRenderState ?? this[P_SESSION].renderState,
+    );
+  }
+
   // the nominal frame rate updates are emulated, no actual update to the
   // display frame rate of the device will be executed
   async updateTargetFrameRate(rate: number): Promise<void> {
+    if (this[P_SESSION].host) {
+      return this[P_SESSION].host.updateTargetFrameRate(rate);
+    }
     return new Promise<void>((resolve, reject) => {
       if (this[P_SESSION].ended) {
         reject(
@@ -954,6 +1066,22 @@ export class XRSession extends EventTarget {
         return;
       }
       let referenceSpace: XRReferenceSpace;
+      const host = this[P_SESSION].host;
+      if (host) {
+        const hostSpace = host.createReferenceSpace(type);
+        if (!hostSpace) {
+          reject(
+            new DOMException(
+              'The requested reference space type is not supported.',
+              'NotSupportedError',
+            ),
+          );
+          return;
+        }
+        this[P_SESSION].referenceSpaces.push(hostSpace);
+        resolve(hostSpace);
+        return;
+      }
       switch (type) {
         case XRReferenceSpaceType.Viewer:
           referenceSpace = this[P_SESSION].device.viewerSpace;
@@ -986,11 +1114,17 @@ export class XRSession extends EventTarget {
       return 0;
     }
     const frameHandle = ++this[P_SESSION].frameHandle;
-    this[P_SESSION].frameCallbacks.push({
-      handle: frameHandle,
-      callback,
-      cancelled: false,
-    });
+    const host = this[P_SESSION].host;
+    this[P_SESSION].frameCallbacks.push(
+      host
+        ? // host mode recycles registrations, so steady frames allocate nothing
+          host.frameRequest(frameHandle, callback)
+        : {
+            handle: frameHandle,
+            callback,
+            cancelled: false,
+          },
+    );
     return frameHandle;
   }
 
@@ -1015,6 +1149,9 @@ export class XRSession extends EventTarget {
   }
 
   async end(): Promise<void> {
+    if (this[P_SESSION].host) {
+      return this[P_SESSION].host.end();
+    }
     return new Promise((resolve, reject) => {
       if (this[P_SESSION].ended) {
         reject(
@@ -1026,34 +1163,7 @@ export class XRSession extends EventTarget {
         this[P_SESSION].ended = true;
         globalThis.cancelAnimationFrame(this[P_SESSION].deviceFrameHandle!);
         this[P_SESSION].deviceFrameHandle = undefined;
-        this[P_SESSION].device[P_DEVICE].onSessionEnd();
-
-        // Tear down per-session state so it doesn't dangle after end.
-        this[P_SESSION].frameCallbacks.length = 0;
-        this[P_SESSION].currentFrameCallbacks = null;
-        this[P_SESSION].referenceSpaces.length = 0;
-        this[P_SESSION].hitTestSources.clear();
-        this[P_SESSION].trackedPlanes.clear();
-        this[P_SESSION].trackedMeshes.clear();
-        // Per-session tracked anchors only; persistentAnchors survive by design.
-        this[P_SESSION].trackedAnchors.clear();
-        this[P_SESSION].frameTrackedAnchors.clear();
-        // Reject any pending anchor-creation promises so they don't dangle.
-        this[P_SESSION].newAnchors.forEach(({ reject: rejectAnchor }) => {
-          rejectAnchor(
-            new DOMException(
-              'XRSession has ended before the anchor was resolved.',
-              'InvalidStateError',
-            ),
-          );
-        });
-        this[P_SESSION].newAnchors.clear();
-        // Release the depth texture via the base layer context, if any.
-        if (this[P_SESSION].depthTexture) {
-          const depthContext = this[P_SESSION].renderState.baseLayer?.context;
-          depthContext?.deleteTexture(this[P_SESSION].depthTexture);
-          this[P_SESSION].depthTexture = null;
-        }
+        this[P_SESSION].teardown();
 
         this.dispatchEvent(new XRSessionEvent('end', { session: this }));
         resolve();

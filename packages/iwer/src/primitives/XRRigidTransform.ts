@@ -17,6 +17,14 @@ export class XRRigidTransform {
     positionPoint: DOMPointReadOnly;
     orientationPoint: DOMPointReadOnly;
     inverse: XRRigidTransform | null;
+    // Version of `matrix`. It only moves when IWER rewrites the matrix of a
+    // reused transform (overwriteTransformMatrix); each derived value below
+    // records the version it was computed from and is recomputed on read
+    // when that version is behind.
+    version: number;
+    positionVersion: number;
+    orientationVersion: number;
+    inverseVersion: number;
   };
 
   constructor(position?: DOMPointInit, orientation?: DOMPointInit) {
@@ -56,6 +64,10 @@ export class XRRigidTransform {
         resolvedOrientation[3],
       ),
       inverse: null,
+      version: 0,
+      positionVersion: 0,
+      orientationVersion: 0,
+      inverseVersion: 0,
     };
 
     this.updateMatrix();
@@ -74,17 +86,43 @@ export class XRRigidTransform {
   }
 
   get position(): DOMPointReadOnly {
-    return this[P_RIGID_TRANSFORM].positionPoint;
+    const state = this[P_RIGID_TRANSFORM];
+    if (state.positionVersion !== state.version) {
+      const p = mat4.getTranslation(state.position, state.matrix);
+      state.positionPoint = new DOMPointReadOnly(p[0], p[1], p[2], 1);
+      state.positionVersion = state.version;
+    }
+    return state.positionPoint;
   }
 
   get orientation(): DOMPointReadOnly {
-    return this[P_RIGID_TRANSFORM].orientationPoint;
+    const state = this[P_RIGID_TRANSFORM];
+    if (state.orientationVersion !== state.version) {
+      const q = mat4.getRotation(state.orientation, state.matrix);
+      state.orientationPoint = new DOMPointReadOnly(q[0], q[1], q[2], q[3]);
+      state.orientationVersion = state.version;
+    }
+    return state.orientationPoint;
   }
 
   get inverse(): XRRigidTransform {
-    if (!this[P_RIGID_TRANSFORM].inverse) {
+    const state = this[P_RIGID_TRANSFORM];
+    if (state.inverse && state.inverseVersion !== state.version) {
+      // This transform was rewritten after its inverse was made: rewrite the
+      // same inverse object rather than creating another one.
+      const target = state.inverse;
+      if (!mat4.invert(target[P_RIGID_TRANSFORM].matrix, state.matrix)) {
+        throw new Error('Matrix is not invertible.');
+      }
+      const targetState = target[P_RIGID_TRANSFORM];
+      targetState.version++;
+      // the inverse's own inverse is this transform, which is current
+      targetState.inverseVersion = targetState.version;
+      state.inverseVersion = state.version;
+    }
+    if (!state.inverse) {
       const invMatrix = mat4.create();
-      if (!mat4.invert(invMatrix, this[P_RIGID_TRANSFORM].matrix)) {
+      if (!mat4.invert(invMatrix, state.matrix)) {
         throw new Error('Matrix is not invertible.');
       }
 
@@ -96,7 +134,7 @@ export class XRRigidTransform {
       mat4.getRotation(invOrientation, invMatrix);
 
       // Creating a new XRRigidTransform for the inverse
-      this[P_RIGID_TRANSFORM].inverse = new XRRigidTransform(
+      state.inverse = new XRRigidTransform(
         new DOMPointReadOnly(invPosition[0], invPosition[1], invPosition[2], 1),
         new DOMPointReadOnly(
           invOrientation[0],
@@ -107,9 +145,30 @@ export class XRRigidTransform {
       );
 
       // Setting the inverse of the inverse to be this transform
-      this[P_RIGID_TRANSFORM].inverse[P_RIGID_TRANSFORM].inverse = this;
+      state.inverse[P_RIGID_TRANSFORM].inverse = this;
+      state.inverseVersion = state.version;
     }
 
-    return this[P_RIGID_TRANSFORM].inverse;
+    return state.inverse;
   }
+}
+
+/**
+ * Replaces the matrix of an existing transform with 16 column-major numbers
+ * (a rigid transform is assumed, nothing is validated). Used by host mode,
+ * which keeps a few pose objects alive and rewrites them instead of
+ * allocating new ones every frame. Reading `matrix` afterwards allocates
+ * nothing; `position`, `orientation` and `inverse` are brought up to date the
+ * next time they are read.
+ */
+export function overwriteTransformMatrix(
+  transform: XRRigidTransform,
+  source: ArrayLike<number>,
+): void {
+  const state = transform[P_RIGID_TRANSFORM];
+  const target = state.matrix;
+  for (let i = 0; i < 16; i++) {
+    target[i] = source[i];
+  }
+  state.version++;
 }

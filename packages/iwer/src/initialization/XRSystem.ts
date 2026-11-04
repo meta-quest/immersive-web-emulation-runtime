@@ -12,7 +12,7 @@ import {
   XRSessionMode,
 } from '../session/XRSession.js';
 
-import { P_SYSTEM } from '../private.js';
+import { P_DEVICE, P_SYSTEM } from '../private.js';
 import {
   isGazeTrackingFeature,
   supportsGazeTracking,
@@ -61,8 +61,9 @@ export class XRSystem extends EventTarget {
         const allRequiredSupported = requiredFeatures.every(isFeatureSupported);
         if (!allRequiredSupported) {
           reject(
-            new Error(
+            new DOMException(
               'One or more required features are not supported by the device.',
+              'NotSupportedError',
             ),
           );
           return;
@@ -109,7 +110,12 @@ export class XRSystem extends EventTarget {
   isSessionSupported(mode: XRSessionMode): Promise<boolean> {
     return new Promise<boolean>((resolve, _reject) => {
       if (mode === 'inline') {
-        resolve(true);
+        // a host only offers inline sessions its config lists
+        const device = this[P_SYSTEM].device;
+        resolve(
+          !device[P_DEVICE].host ||
+            device.supportedSessionModes.includes('inline'),
+        );
       } else {
         // Check for spatial tracking permission if necessary
         resolve(this[P_SYSTEM].device.supportedSessionModes.includes(mode));
@@ -176,6 +182,10 @@ export class XRSystem extends EventTarget {
             mode,
             options,
           };
+          // A host that enters XR on launch grants the offer right away.
+          if (this[P_SYSTEM].device[P_DEVICE].host?.autoGrantOfferedSession) {
+            this[P_SYSTEM].device.grantOfferedSession();
+          }
         })
         .catch(reject);
     });

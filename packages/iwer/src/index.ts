@@ -179,6 +179,22 @@ export type {
   NativeSessionInfo,
 } from './native/index.js';
 
+// Host mode: a native host drives frames and backs layers (host/types.ts)
+export type {
+  XRHostBackend,
+  XRHostErrorSource,
+  XRHostEvent,
+  XRHostFrame,
+  XRHostSwapchain,
+  XRHostSwapchainOptions,
+} from './host/types.js';
+export { XRHostWebGLBinding } from './host/XRHostWebGLBinding.js';
+export {
+  XRCompositionLayer,
+  XRProjectionLayer,
+  XRWebGLSubImage,
+} from './layers/XRProjectionLayer.js';
+
 // Session
 export { XRRenderState } from './session/XRRenderState.js';
 export { XRSession } from './session/XRSession.js';
@@ -193,6 +209,7 @@ export {
   XRReferenceSpaceType,
 } from './spaces/XRReferenceSpace.js';
 export { XRJointSpace } from './spaces/XRJointSpace.js';
+export { XRBoundedReferenceSpace } from './spaces/XRBoundedReferenceSpace.js';
 
 // Views
 export { XRView } from './views/XRView.js';
