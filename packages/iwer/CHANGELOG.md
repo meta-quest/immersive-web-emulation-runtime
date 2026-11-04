@@ -1,5 +1,28 @@
 # iwer
 
+## 2.8.0
+
+### Minor Changes
+
+- Add `XRDevice.frameClearEnabled` (also an `XRDeviceOptions` field) to turn off the per-frame base-layer clear in immersive sessions. It defaults to `true`, so behavior is unchanged unless a host opts out, for example a headless automation browser that draws only on demand.
+- Add `XRDevice.shouldDrawEnvironment` (also an `XRDeviceOptions` field) so a host can skip drawing the synthetic environment on frames it does not need. IWER calls it once per immersive-ar frame, after the app's frame callbacks; returning `false` skips that frame's environment draw while the environment keeps updating. It defaults to `null`, which draws every frame. `@iwer/sem` now splits `render()` into `update()` and `draw()`, which IWER calls before and after the app's callbacks; `render()` still does both.
+- New `iwer/host` entry point for native hosts: the WebXR implementation and the host contract without the modules only an emulator in a browser needs (RemoteControlInterface, ActionRecorder / ActionPlayer, the native WebXR override and the WebXR Layers polyfill). Its `XRDevice` is the shared device model (`XRDeviceBase`): `device.remote` is null, `createActionPlayer` throws `NotSupportedError` and `installRuntime({ polyfillLayers: true })` only warns. Import it as `iwer/host` from bundlers and TypeScript; under Node's ESM loader import `iwer/lib/host.js`. Prebuilt bundles: `build/iwer-host.module.js` and `.min.js`. The main `iwer` entry is unchanged.
+- Host input: a native host can drive IWER's input sources from real tracking. `device.enableHostInput(options)` returns an `XRHostInput` with one `XRHostInputState` per hand (typed arrays the host rewrites before every frame: mode, target ray, grip, palm, buttons, axes, 25 hand joints). IWER derives the `XRInputSource`s, gamepads, hand joints, `inputsourceschange` and select/squeeze events from it; `disableHostInput()` returns to the emulated controllers and hands. See `HOST-INPUT.md` for the contract.
+  - `XRFrame.getPose` and `getJointPose` return `null` for a space that is not tracked (as in the WebXR IDL); `fillPoses` and `fillJointRadii` write NaN for it and return `false`. `getPose` is now typed `XRPose | null`.
+  - Gamepad haptics: `GamepadHapticActuator.pulse` reaches the host through `onHaptic`; `playEffect('dual-rumble' | 'trigger-rumble')` and `reset()` are added.
+
+- Host mode: `new XRDevice(config, { host })` with an `XRHostBackend` lets a native XR runtime drive IWER. The host calls `device.runHostFrame(frame)` once per displayed frame with that frame's predicted time, per-eye poses and asymmetric fields of view, and the swapchain image to render into; IWER runs the page's XR callbacks (and, through the backend, the window's animation frame) before returning. The device creates no DOM and emulates no headset pose.
+  - Rendering: `XRWebGLLayer` renders side by side into the host's swapchain, and `XRWebGLBinding.createProjectionLayer` (texture or texture-array) gives three.js real projection layers; `renderState.layers`, fixed foveation and `passthroughFullyObscured` are supported.
+  - Reference spaces: `local`, `local-floor` and `bounded-floor` (`XRBoundedReferenceSpace` with the stage outline) follow the host's spaces; a host recentre fires `reset` on requested and offset spaces. `getOffsetReferenceSpace` accepts an `XRRigidTransform`.
+  - Frame rate (`updateTargetFrameRate`, `frameratechange`), visibility, plane and mesh detection from the host, and `XRSession.trackedSources`.
+  - Exceptions thrown during a host frame go to `XRHostBackend.reportError` with their source (`xr-frame-callback`, `window-frame`, `layer`, `host-hook`); the other callbacks still run.
+  - A required feature the device lacks now rejects `requestSession` with a `NotSupportedError` DOMException.
+
+### Patch Changes
+
+- Host input: a hand is listed only while its wrist is tracked (`jointValid` of the wrist is 1). A hand without a tracked wrist is not tracked (WebXR Hand Input), so `mode = Hand` lists nothing until the wrist is valid again, and the hand comes and goes with `inputsourceschange`, as browsers do. Horizon OS can report a hand it does not see with an aim pose and no joints; listed, such a hand made apps aim and raycast with it every frame.
+- Host mode hot path: steady host frames allocate almost nothing (about one heap number per frame without hand tracking, down from 0.7 to 1.9 KB) and run 35 to 55% faster in the bundled benchmark (`pnpm --filter iwer run bench`). Spaces cache their world and inverse matrices per frame, pose objects are reused and rewritten, and input sources, callback lists and plane/mesh sets are updated in place. The emulator path gets slightly faster too; public typings are unchanged.
+
 ## 2.7.0
 
 ### Minor Changes
