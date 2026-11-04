@@ -59,6 +59,8 @@ export const HOST_INPUT_POSE_STRIDE = 7;
 
 const AXES = 4;
 const JOINT_NAMES = Object.values(XRHandJoint);
+/** `jointValid` index of the wrist, whose tracking decides whether a hand is listed. */
+const WRIST_JOINT = JOINT_NAMES.indexOf(XRHandJoint.Wrist);
 
 export type XRHostHandedness = XRHandedness.Left | XRHandedness.Right;
 
@@ -518,12 +520,20 @@ export class XRHostInput {
         let changed = false;
         for (let i = 0; i < HANDEDNESSES.length; i++) {
           const handedness = HANDEDNESSES[i];
-          const mode = internal.states[handedness].mode;
+          const state = internal.states[handedness];
+          const mode = state.mode;
           let next: XRHostSource | null = null;
           if (visible) {
             if (mode === XRHostInputMode.Controller) {
               next = internal.controllers[handedness];
-            } else if (mode === XRHostInputMode.Hand && internal.handTracking) {
+            } else if (
+              mode === XRHostInputMode.Hand &&
+              internal.handTracking &&
+              state.jointValid[WRIST_JOINT] !== 0
+            ) {
+              // A hand without a tracked wrist is not tracked (WebXR Hand
+              // Input), so it is not listed, as browsers do. Horizon OS can
+              // report a hand it does not see with an aim pose and no joints.
               next = internal.hands[handedness];
             }
           }

@@ -208,6 +208,7 @@ describe('XRHostInput', () => {
       expect(session.inputSources.length).toBe(0);
       input.left.mode = XRHostInputMode.Controller;
       input.right.mode = XRHostInputMode.Hand;
+      input.right.jointValid[0] = 1; // a tracked wrist
       runFrame();
       expect(changes.length).toBe(1);
       expect(changes[0].added).toEqual([
@@ -230,6 +231,7 @@ describe('XRHostInput', () => {
         changes.push(e),
       );
       input.left.mode = XRHostInputMode.Hand;
+      input.left.jointValid[0] = 1; // a tracked wrist
       runFrame();
       expect(changes.length).toBe(1);
       expect(changes[0].removed).toEqual([
@@ -245,6 +247,7 @@ describe('XRHostInput', () => {
       session.end();
       await start([]);
       input.left.mode = XRHostInputMode.Hand;
+      input.left.jointValid[0] = 1; // a tracked wrist
       input.right.mode = XRHostInputMode.Controller;
       runFrame();
       expect(Array.from(session.inputSources)).toEqual([
@@ -277,6 +280,32 @@ describe('XRHostInput', () => {
         [5, 'inputsourceschange'],
         [6, 'selectstart'],
       ]);
+    });
+
+    test('a hand is listed only while its wrist is tracked', () => {
+      const changes: XRInputSourcesChangeEvent[] = [];
+      session.addEventListener('inputsourceschange', (e: any) =>
+        changes.push(e),
+      );
+      const s = input.right;
+      // Horizon OS without controllers: a hand with an aim pose and no joints.
+      s.mode = XRHostInputMode.Hand;
+      setPose(s.targetRay, [0, 0.87, 0]);
+      s.targetRayValid = true;
+      runFrame();
+      expect(session.inputSources.length).toBe(0);
+      expect(changes.length).toBe(0);
+
+      s.jointValid[0] = 1; // the wrist is tracked
+      runFrame();
+      expect(changes.length).toBe(1);
+      expect(changes[0].added).toEqual([input.getHand('right').inputSource]);
+
+      s.jointValid[0] = 0;
+      runFrame();
+      expect(changes.length).toBe(2);
+      expect(changes[1].removed).toEqual([input.getHand('right').inputSource]);
+      expect(session.inputSources.length).toBe(0);
     });
 
     test('steady frames skip the session diff and keep the same arrays', () => {
@@ -338,6 +367,7 @@ describe('XRHostInput', () => {
     test('hand joints, radii and validity', () => {
       const s = input.right;
       s.mode = XRHostInputMode.Hand;
+      s.jointValid[0] = 1; // a tracked wrist
       for (let j = 0; j < HOST_INPUT_JOINTS; j++) {
         const o = j * HOST_INPUT_JOINT_STRIDE;
         s.joints.set(
@@ -381,6 +411,7 @@ describe('XRHostInput', () => {
     test('a hand grip falls back to the palm', () => {
       const s = input.left;
       s.mode = XRHostInputMode.Hand;
+      s.jointValid[0] = 1; // a tracked wrist
       setPose(s.palm, [0.15, 1.25, -0.1]);
       s.palmValid = true;
       s.gripValid = false;
@@ -500,6 +531,7 @@ describe('XRHostInput', () => {
       input.right.buttonPressed[0] = 1;
       runFrame();
       input.right.mode = XRHostInputMode.Hand;
+      input.right.jointValid[0] = 1; // a tracked wrist
       runFrame();
       expect(types()).toEqual([
         [2, 'selectstart'],
@@ -535,6 +567,7 @@ describe('XRHostInput', () => {
     test('tracked hands: button 0 is the pinch and selects, button 4 is the menu, 1 to 3 report nothing', () => {
       const s = input.left;
       s.mode = XRHostInputMode.Hand;
+      s.jointValid[0] = 1; // a tracked wrist
       runFrame();
       log = [];
       s.buttonValues[0] = 1;

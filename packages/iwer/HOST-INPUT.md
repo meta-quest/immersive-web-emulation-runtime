@@ -123,6 +123,12 @@ State slots that map to an empty button (controller 2, hand 1-3) are ignored.
   `squeezeend`) alone, as IWER already does for removed sources.
 - Hand sources are listed only when the session enabled `hand-tracking`;
   `mode = Hand` without it lists nothing for that hand.
+- A hand source is listed only while its wrist is tracked (`jointValid` of the
+  wrist is 1): a hand without a tracked wrist is not tracked (WebXR Hand Input),
+  so `mode = Hand` lists nothing until the wrist is valid again, and the hand
+  comes and goes with `inputsourceschange` like a mode change. Browsers do the
+  same; Horizon OS can report a hand it does not see with an aim pose and no
+  joints, which apps would otherwise aim and raycast with.
 - When the device's visibility is not `visible`, no host source is listed
   (sources are removed silently and come back without a click).
 - Untracked spaces: `XRFrame.getPose` returns `null` for an untracked target
