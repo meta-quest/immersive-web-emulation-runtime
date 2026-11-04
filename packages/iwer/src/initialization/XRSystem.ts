@@ -5,7 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
+import type {
+  WebXRFeature,
+  XRDeviceBase as XRDevice,
+} from '../device/XRDeviceBase.js';
 import {
   XRSession,
   XRSessionInit,

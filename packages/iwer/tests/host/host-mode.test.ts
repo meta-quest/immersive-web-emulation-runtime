@@ -11,7 +11,11 @@
 
 import { mat4, quat, vec3 } from 'gl-matrix';
 
-import { XRDevice, XRDeviceConfig } from '../../src/device/XRDevice';
+import {
+  XRDevice,
+  XRDeviceBase,
+  XRDeviceConfig,
+} from '../../src/device/XRDevice';
 import { metaQuest3 } from '../../src/device/configs/headset/meta';
 import { XRSession } from '../../src/session/XRSession';
 import type {
@@ -266,7 +270,7 @@ function projectionLayer(
 
 /** Runs one host frame with one XR callback and returns what it saw. */
 function frameWith<T>(
-  device: XRDevice,
+  device: XRDeviceBase,
   session: XRSession,
   read: (time: number, frame: XRFrame) => T,
   frame: XRHostFrame = makeFrame(),

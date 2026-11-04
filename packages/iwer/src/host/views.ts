@@ -9,7 +9,7 @@ import { mat4 } from 'gl-matrix';
 
 import { P_DEVICE, P_SPACE } from '../private.js';
 import { HOST_VIEW_STRIDE, hostPerspective, hostPoseMatrix } from './math.js';
-import type { XRDevice } from '../device/XRDevice.js';
+import type { XRDeviceBase as XRDevice } from '../device/XRDeviceBase.js';
 import { XREye } from '../views/XRView.js';
 import type { XRHostFrame } from './types.js';
 

@@ -2207,7 +2207,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
         ? 16.67
         : Math.min(Math.max(0, time - previousTime), MAX_REMOTE_FRAME_MS);
     if (this.options.mode === 'gaze-only') {
-      this.device[P_DEVICE].remote.update(delta);
+      this.device[P_DEVICE].remote?.update(delta);
       // A queued command may target the synthetic device's viewer. Reassert
       // the browser-owned pose so gaze-only mode cannot move the real view or
       // offset the gaze origin away from the physical headset.
@@ -2219,7 +2219,7 @@ export class XRNativeOverride implements NativeOverrideHandle {
       this.device.gaze?.updateTargetRaySpace();
       return;
     }
-    this.device[P_DEVICE].remote.update(delta);
+    this.device[P_DEVICE].remote?.update(delta);
     this.device[P_DEVICE].visibilityState = adapter.session.visibilityState;
     this.device[P_DEVICE].pendingVisibilityState = null;
 

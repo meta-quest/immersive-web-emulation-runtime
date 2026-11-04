@@ -1,0 +1,9 @@
+{
+  "name": "iwer/host",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "../lib/host.js",
+  "module": "../lib/host.js",
+  "types": "../lib/host.d.ts"
+}

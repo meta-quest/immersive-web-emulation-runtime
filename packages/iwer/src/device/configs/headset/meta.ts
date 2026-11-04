@@ -16,7 +16,7 @@ import {
   oculusTouchV3,
 } from '../controller/meta.js';
 
-import { XRDeviceConfig } from '../../XRDevice.js';
+import type { XRDeviceConfig } from '../../XRDeviceBase.js';
 import type { XRVisibilityMask } from '../../XRVisibilityMask.js';
 
 const degrees = (value: number): number => (value * Math.PI) / 180;

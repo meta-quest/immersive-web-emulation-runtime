@@ -28,7 +28,10 @@ import {
   XRDepthUsage,
 } from '../depth/XRDepthInformation.js';
 import { XRWebGLDepthInformation } from '../depth/XRWebGLBinding.js';
-import type { WebXRFeature, XRDevice } from '../device/XRDevice.js';
+import type {
+  WebXRFeature,
+  XRDeviceBase as XRDevice,
+} from '../device/XRDeviceBase.js';
 import { XRAnchor, XRAnchorSet, XRAnchorUtils } from '../anchors/XRAnchor.js';
 import {
   XRHitTestOptionsInit,

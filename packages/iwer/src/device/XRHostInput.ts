@@ -34,7 +34,7 @@ import { XRHandGamepadConfig, oculusHandConfig } from './XRHandInput.js';
 import { XRTrackedInput, dispatchButtonEdge } from './XRTrackedInput.js';
 
 import type { XRControllerConfig } from './XRController.js';
-import type { XRDevice } from './XRDevice.js';
+import type { XRDeviceBase as XRDevice } from './XRDeviceBase.js';
 import type { XRFrame } from '../frameloop/XRFrame.js';
 import { XRJointSpace } from '../spaces/XRJointSpace.js';
 import type { XRSession } from '../session/XRSession.js';
