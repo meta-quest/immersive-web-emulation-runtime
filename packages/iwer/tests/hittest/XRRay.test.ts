@@ -34,6 +34,111 @@ describe('XRRay', () => {
       expect(ray.origin.w).toBe(1);
     });
 
+    it.each([
+      undefined,
+      {},
+      { x: undefined, y: undefined, z: undefined, w: undefined },
+      null,
+    ])('defaults empty or undefined dictionary members: %p', (point) => {
+      const ray = Reflect.construct(XRRay, [point, point]);
+
+      expect(ray.origin).toMatchObject({ x: 0, y: 0, z: 0, w: 1 });
+      expect(ray.direction).toMatchObject({ x: 0, y: 0, z: -1, w: 0 });
+      expect(ray.matrix.every(Number.isFinite)).toBe(true);
+    });
+
+    it('defaults partial origin and direction and preserves cached points', () => {
+      const ray = new XRRay({ z: -2 }, { z: -2 });
+
+      expect(ray.origin).toMatchObject({ x: 0, y: 0, z: -2, w: 1 });
+      expect(ray.direction).toMatchObject({ x: 0, y: 0, z: -1, w: 0 });
+      expect(ray.matrix.every(Number.isFinite)).toBe(true);
+      expect(Array.from(ray.matrix.slice(12))).toEqual([0, 0, -2, 1]);
+      expect(ray.origin).toBe(ray.origin);
+      expect(ray.direction).toBe(ray.direction);
+    });
+
+    it('uses the direction-specific z and w defaults before normalization', () => {
+      const ray = new XRRay(undefined, { x: 1 });
+
+      expect(ray.direction).toEqual({
+        x: 1 / Math.sqrt(2),
+        y: 0,
+        z: -1 / Math.sqrt(2),
+        w: 0,
+      });
+      expect(ray.matrix.every(Number.isFinite)).toBe(true);
+    });
+
+    it('converts null members to zero instead of applying defaults', () => {
+      const ray = Reflect.construct(XRRay, [
+        { x: null, y: null, z: null, w: null },
+        { x: null, y: 2, z: null, w: null },
+      ]);
+
+      expect(ray.origin).toMatchObject({ x: 0, y: 0, z: 0, w: 0 });
+      expect(ray.direction).toMatchObject({ x: 0, y: 1, z: 0, w: 0 });
+      expect(ray.matrix.every(Number.isFinite)).toBe(true);
+    });
+
+    it('converts numeric strings and booleans before validating direction', () => {
+      const ray = Reflect.construct(XRRay, [
+        { x: '2', y: true, z: '-3', w: '1' },
+        { x: false, y: '2', z: false, w: '0' },
+      ]);
+
+      expect(ray.origin).toMatchObject({ x: 2, y: 1, z: -3, w: 1 });
+      expect(ray.direction).toMatchObject({ x: 0, y: 1, z: 0, w: 0 });
+    });
+
+    it.each([BigInt(1), Symbol('coordinate')])(
+      'rejects members that cannot convert to an unrestricted double: %p',
+      (value) => {
+        for (const member of ['x', 'w']) {
+          expect(() => Reflect.construct(XRRay, [{ [member]: value }])).toThrow(
+            TypeError,
+          );
+          expect(() =>
+            Reflect.construct(XRRay, [undefined, { [member]: value }]),
+          ).toThrow(TypeError);
+        }
+      },
+    );
+
+    it.each([
+      { z: 0 },
+      { x: '0', y: false, z: null, w: '0' },
+      { w: 1 },
+      { w: '1' },
+      { w: NaN },
+    ])('preserves direction validation after conversion: %p', (direction) => {
+      expect(() => Reflect.construct(XRRay, [undefined, direction])).toThrow(
+        expect.objectContaining({
+          name: 'TypeError',
+          message: 'Invalid direction value to construct XRRay',
+        }),
+      );
+    });
+
+    it.each([NaN, Infinity, -Infinity])(
+      'preserves existing non-finite origin and direction behavior: %p',
+      (value) => {
+        const ray = new XRRay(
+          { x: value, y: 0, z: 0, w: 1 },
+          { x: value, y: 0, z: -1, w: 0 },
+        );
+        const length = Math.sqrt(value * value + 1) || 1;
+
+        expect(ray.origin.x).toBe(value);
+        expect(ray.direction).toMatchObject({
+          x: value / length,
+          y: 0,
+          z: -1 / length,
+          w: 0,
+        });
+      },
+    );
+
     it('should create a ray with custom origin and direction', () => {
       const origin = { x: 1, y: 2, z: 3, w: 1 };
       const direction = { x: 0, y: 1, z: 0, w: 0 };

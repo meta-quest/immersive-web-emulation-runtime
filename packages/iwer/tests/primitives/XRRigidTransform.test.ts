@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { quat, vec3 } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 
 import { XRRigidTransform } from '../../src/primitives/XRRigidTransform';
 
@@ -34,6 +34,149 @@ describe('XRRigidTransform', () => {
     expect(transform.orientation.z).toBe(0);
     expect(transform.orientation.w).toBe(1);
   });
+
+  it('defaults a partial position and preserves the inverse and cached points', () => {
+    const transform = new XRRigidTransform({ z: -2 });
+
+    expect(transform.position).toMatchObject({ x: 0, y: 0, z: -2, w: 1 });
+    expect(transform.orientation).toMatchObject({ x: 0, y: 0, z: 0, w: 1 });
+    expect(transform.matrix.every(Number.isFinite)).toBe(true);
+    expect(transform.matrix).toEqual(
+      mat4.fromTranslation(mat4.create(), [0, 0, -2]),
+    );
+    expect(transform.inverse.position).toMatchObject({
+      x: 0,
+      y: 0,
+      z: 2,
+      w: 1,
+    });
+    expect(
+      mat4.multiply(mat4.create(), transform.matrix, transform.inverse.matrix),
+    ).toEqual(mat4.create());
+    expect(transform.inverse.inverse).toBe(transform);
+    expect(transform.inverse).toBe(transform.inverse);
+    expect(transform.position).toBe(transform.position);
+    expect(transform.orientation).toBe(transform.orientation);
+  });
+
+  it('defaults and normalizes a partial orientation', () => {
+    const transform = new XRRigidTransform({ z: -2 }, { z: 1 });
+
+    expect(transform.orientation.x).toBe(0);
+    expect(transform.orientation.y).toBe(0);
+    expect(transform.orientation.z).toBeCloseTo(Math.SQRT1_2);
+    expect(transform.orientation.w).toBeCloseTo(Math.SQRT1_2);
+    expect(transform.matrix.every(Number.isFinite)).toBe(true);
+  });
+
+  it.each([
+    undefined,
+    {},
+    { x: undefined, y: undefined, z: undefined, w: undefined },
+    null,
+  ])('defaults empty or undefined dictionary members: %p', (point) => {
+    const transform = Reflect.construct(XRRigidTransform, [point, point]);
+
+    expect(transform.position).toMatchObject({ x: 0, y: 0, z: 0, w: 1 });
+    expect(transform.orientation).toMatchObject({ x: 0, y: 0, z: 0, w: 1 });
+    expect(transform.matrix).toEqual(mat4.create());
+  });
+
+  it('converts null members to zero instead of applying defaults', () => {
+    const transform = Reflect.construct(XRRigidTransform, [
+      { x: null, y: null, z: null, w: null },
+      { x: null, y: null, z: 2, w: null },
+    ]);
+
+    expect(transform.position).toMatchObject({ x: 0, y: 0, z: 0, w: 1 });
+    expect(transform.orientation).toMatchObject({ x: 0, y: 0, z: 1, w: 0 });
+    expect(transform.matrix.every(Number.isFinite)).toBe(true);
+  });
+
+  it('converts numeric strings and booleans before normalization', () => {
+    const transform = Reflect.construct(XRRigidTransform, [
+      { x: '2', y: true, z: '-3', w: '1' },
+      { x: false, y: '0', z: '2', w: '2' },
+    ]);
+
+    expect(transform.position).toMatchObject({ x: 2, y: 1, z: -3, w: 1 });
+    expect(transform.orientation.x).toBe(0);
+    expect(transform.orientation.y).toBe(0);
+    expect(transform.orientation.z).toBeCloseTo(Math.SQRT1_2);
+    expect(transform.orientation.w).toBeCloseTo(Math.SQRT1_2);
+  });
+
+  it.each([BigInt(1), Symbol('coordinate')])(
+    'rejects members that cannot convert to an unrestricted double: %p',
+    (value) => {
+      for (const member of ['x', 'w']) {
+        expect(() =>
+          Reflect.construct(XRRigidTransform, [{ [member]: value }]),
+        ).toThrow(TypeError);
+        expect(() =>
+          Reflect.construct(XRRigidTransform, [undefined, { [member]: value }]),
+        ).toThrow(TypeError);
+      }
+    },
+  );
+
+  it('reads and converts inherited members once in WebIDL order', () => {
+    const calls: string[] = [];
+    const prototype = {};
+    for (const member of ['w', 'x', 'y', 'z']) {
+      Object.defineProperty(prototype, member, {
+        get() {
+          calls.push(member);
+          return {
+            valueOf() {
+              calls.push(`convert ${member}`);
+              return member === 'w' ? 1 : 0;
+            },
+          };
+        },
+      });
+    }
+    const point = Object.create(prototype);
+    const transform = Reflect.construct(XRRigidTransform, [point, point]);
+    const order = [
+      'w',
+      'convert w',
+      'x',
+      'convert x',
+      'y',
+      'convert y',
+      'z',
+      'convert z',
+    ];
+
+    expect(calls).toEqual([...order, ...order]);
+    expect(transform.matrix).toEqual(mat4.create());
+  });
+
+  it.each([NaN, Infinity, -Infinity, 0])(
+    'preserves existing non-finite and zero-orientation behavior: %p',
+    (value) => {
+      const transform = new XRRigidTransform(
+        { x: value, y: 0, z: 0, w: 1 },
+        { x: value, y: 0, z: 0, w: 0 },
+      );
+      const orientation = quat.normalize(
+        quat.create(),
+        quat.fromValues(value, 0, 0, 0),
+      );
+
+      expect(transform.position.x).toBe(value);
+      expect(transform.orientation).toMatchObject({
+        x: orientation[0],
+        y: orientation[1],
+        z: orientation[2],
+        w: orientation[3],
+      });
+      expect(transform.matrix).toEqual(
+        mat4.fromRotationTranslation(mat4.create(), orientation, [value, 0, 0]),
+      );
+    },
+  );
 
   it('should create a transform with given position and orientation', () => {
     const position = { x: 1, y: 2, z: 3, w: 1 };
