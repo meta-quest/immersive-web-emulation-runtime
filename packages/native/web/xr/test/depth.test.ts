@@ -107,6 +107,16 @@ test('XR-DEPTH-2: granted as gpu-optimized float32 (or unsigned-short), the nati
   );
   assert.equal(cpu.h.run('globalThis.__e'), 'NotSupportedError');
   assert.deepEqual(cpu.started, []);
+  // a headset without depth sensing (Quest 3S): a required depth-sensing rejects, and the runtime logs the reason,
+  // because apps often swallow it (an IWSDK app keeps showing its splash)
+  const none = depthHarness({ depthSensing: false });
+  await start(none.h, "{ requiredFeatures: ['depth-sensing'] }");
+  assert.equal(none.h.run('globalThis.__e'), 'NotSupportedError');
+  const why = none.h.logs.find((l) => l.includes('was rejected'));
+  assert.match(
+    why ?? none.h.logs.join('\n'),
+    /^warn: @iwer\/native: navigator\.xr\.requestSession\('immersive-ar'\) was rejected: NotSupportedError: .*depth-sensing/,
+  );
   assert.equal(
     cpu.h.calls.filter((c) => c[0] === 'requestPermissions').length,
     0,

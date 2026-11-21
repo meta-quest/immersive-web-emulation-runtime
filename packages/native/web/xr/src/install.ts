@@ -379,15 +379,41 @@ export function installNativeXR(
   // (a required feature this runtime does not grant, immersive-ar without the opt-in, ...) and no session exists,
   // the runtime hears it, so the never-offered error line and exit still apply instead of black forever.
   let pendingRequests = 0;
-  function trackRequest(p: Promise<object>): void {
+  function trackRequest(
+    p: Promise<object>,
+    call: string,
+    mode: string,
+    init: object | undefined,
+  ): void {
     pendingRequests++;
     natives.offered();
     p.then(
       () => {
         pendingRequests--;
       },
-      () => {
+      (error: unknown) => {
         pendingRequests--;
+        // Apps often swallow this rejection (IWSDK keeps offering), so the reason would appear nowhere: log it. An
+        // offer the page withdraws (AbortError) is not a failure.
+        const e = error as { name?: string; message?: string } | null;
+        if (e?.name !== 'AbortError') {
+          // IWER's message does not say which required feature is missing: name the ones this headset lacks
+          const required = featureList(
+            (init as { requiredFeatures?: unknown } | undefined)
+              ?.requiredFeatures,
+          );
+          const supported = config.supportedFeatures as string[];
+          const missing =
+            e?.name === 'NotSupportedError'
+              ? required.filter((f) => !supported.includes(f))
+              : [];
+          console.warn(
+            `@iwer/native: navigator.xr.${call}('${mode}') was rejected: ${e?.name ?? 'Error'}: ${e?.message ?? String(error)}` +
+              (missing.length
+                ? ` Required but not available on this headset: ${missing.join(', ')}.`
+                : ''),
+          );
+        }
         if (pendingRequests === 0 && !device.activeSession)
           natives.offerRejected?.();
       },
@@ -552,7 +578,7 @@ export function installNativeXR(
       const p = inOrder(String(mode), init, (i) =>
         requestSession.call(this, mode, i),
       );
-      trackRequest(p);
+      trackRequest(p, 'requestSession', String(mode), init);
       p.then(
         (s) => onSession(s, String(mode)),
         () => {},
@@ -572,7 +598,7 @@ export function installNativeXR(
       const p = inOrder(String(mode), init, (i) =>
         offerSession.call(this, mode, i),
       );
-      trackRequest(p);
+      trackRequest(p, 'offerSession', String(mode), init);
       return p;
     },
   });

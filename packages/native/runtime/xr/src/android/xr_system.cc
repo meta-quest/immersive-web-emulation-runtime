@@ -1492,8 +1492,9 @@ void XrSystem::Impl::life_tick(double now) {
     if (life.offers_rejected()) {
       log_text(kJsLogTag, LogLevel::kError,
                "No immersive session started 10 s after the page loaded: every navigator.xr.offerSession() / "
-               "requestSession() call was rejected (see the app's error for the reason, for example a required "
-               "feature this runtime does not support yet). This runtime shows WebXR content only. (XR-LIFE-7)");
+               "requestSession() call was rejected; the \"was rejected\" warning above gives the reason, for example "
+               "a required feature this headset does not have (depth sensing on a Quest 3S). This runtime shows WebXR "
+               "content only. (XR-LIFE-7)");
     } else {
       log_text(kJsLogTag, LogLevel::kError,
                "No immersive session was offered or requested 10 s after the page loaded. This runtime shows WebXR "
