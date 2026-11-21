@@ -1,0 +1,17 @@
+{
+  "//": "Files runtime/canvas2d needs in every APK (C2D-9): the bundled fonts, read by the runtime from assets/iwn/fonts/ (mapped, so store them uncompressed), and the third-party notices. Paths: 'from' relative to runtime/canvas2d, 'to' relative to the APK's assets/ directory. Consumed by the release build (release/stage-template-assets.mjs).",
+  "assets": [
+    { "from": "fonts/Roboto-Regular.ttf", "to": "iwn/fonts/Roboto-Regular.ttf", "compress": false },
+    { "from": "fonts/Roboto-Bold.ttf", "to": "iwn/fonts/Roboto-Bold.ttf", "compress": false },
+    { "from": "fonts/RobotoMono-Regular.ttf", "to": "iwn/fonts/RobotoMono-Regular.ttf", "compress": false },
+    { "from": "licenses/NOTICE.txt", "to": "iwn/licenses/canvas2d/NOTICE.txt" },
+    { "from": "licenses/FreeType-FTL.txt", "to": "iwn/licenses/canvas2d/FreeType-FTL.txt" },
+    { "from": "licenses/zlib-LICENSE.txt", "to": "iwn/licenses/canvas2d/zlib-LICENSE.txt" },
+    { "from": "licenses/HarfBuzz-COPYING.txt", "to": "iwn/licenses/canvas2d/HarfBuzz-COPYING.txt" },
+    { "from": "licenses/Unicode-License.txt", "to": "iwn/licenses/canvas2d/Unicode-License.txt" },
+    { "from": "licenses/Brotli-LICENSE.txt", "to": "iwn/licenses/canvas2d/Brotli-LICENSE.txt" },
+    { "from": "licenses/stb-LICENSE.txt", "to": "iwn/licenses/canvas2d/stb-LICENSE.txt" },
+    { "from": "fonts/OFL-Roboto.txt", "to": "iwn/licenses/canvas2d/OFL-Roboto.txt" },
+    { "from": "fonts/OFL-RobotoMono.txt", "to": "iwn/licenses/canvas2d/OFL-RobotoMono.txt" }
+  ]
+}

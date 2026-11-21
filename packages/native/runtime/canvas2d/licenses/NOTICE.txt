@@ -1,0 +1,15 @@
+Canvas 2D module of @iwer/native (runtime/canvas2d): third-party notices
+
+Portions of this software are copyright (c) 2026 The FreeType Project (www.freetype.org). All rights reserved.
+FreeType 2.14.2 is used under the FreeType License (FreeType-FTL.txt); its bundled zlib under the zlib license
+(zlib-LICENSE.txt).
+
+HarfBuzz 14.0.0: "Old MIT" license (HarfBuzz-COPYING.txt). Its Unicode Character Database tables, and the bidi class
+ranges of this module, are Unicode data (Unicode-License.txt).
+
+Brotli 1.2.0 decoder: MIT license (Brotli-LICENSE.txt).
+
+stb_image 2.30 and stb_image_write 1.16: MIT license (stb-LICENSE.txt).
+
+Bundled fonts Roboto Regular, Roboto Bold and Roboto Mono Regular: SIL Open Font License 1.1 (OFL-Roboto.txt,
+OFL-RobotoMono.txt).

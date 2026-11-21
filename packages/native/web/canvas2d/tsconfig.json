@@ -1,0 +1,8 @@
+{
+  "//": "Type-checks web/canvas2d (src + tests). Same settings as the package root: .ts imports, type stripping in Node.",
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "tools/**/*.ts"]
+}

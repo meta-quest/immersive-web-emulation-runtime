@@ -139,3 +139,36 @@ with).
 Nothing from npm ships in `web/image`: ImageData, ImageBitmap, createImageBitmap, HTMLImageElement and the data:
 URL/base64 parsing are written from the HTML, Fetch, Infra and WebIDL specs. The test-side PNG encoder and the
 fake natives' PNG decoder (`web/image/test/helpers.ts`, `web/image/fake-natives.ts`) use Node's `node:zlib`.
+
+## runtime/canvas2d + web/canvas2d: shipped in every APK
+
+| component | version | license | source | used for |
+|---|---|---|---|---|
+| FreeType | 2.14.2 | FreeType License (FTL; dual-licensed with GPLv2, we use the FTL: credit in the app's notices) | freetype.org 2.14.2 (github.com/freetype/freetype @ f4205da14867c5387cd6a329b90ee10a6df6eeff; `$IWN_THIRD_PARTY_DIR/freetype` or CMake `IWN_FREETYPE_DIR`) | font loading (TrueType, CFF/CFF2, WOFF via its bundled zlib, WOFF2 via Brotli), unhinted glyph outlines, names/OS/2 metrics, variable-font instances, COLR v0 layers. Minimal build: TrueType + CFF drivers, sfnt, psaux/psnames/pshinter, gzip; no hinting interpreter, autofit, renderers, PNG/SVG glyphs, Type 1, BDF (`runtime/canvas2d/third_party/config/`) |
+| HarfBuzz | 14.0.0 | Old MIT | github.com/harfbuzz/harfbuzz 14.0.0 (@ da69b6585cad71ff72d06d7563952cbf52b7735a; `$IWN_THIRD_PARTY_DIR/harfbuzz` or CMake `IWN_HARFBUZZ_DIR`) | text shaping (OpenType GSUB/GPOS: kerning, ligatures, marks, complex scripts) and the Unicode script/category data used for itemisation; amalgamated `harfbuzz.cc` without AAT/CFF/colour/bitmap/draw/paint (`third_party/harfbuzz.cmake`) |
+| zlib (inside FreeType) | 1.3.1 | zlib License | FreeType 2.14.2 `src/gzip/` (FreeType's bundled copy; upstream zlib.net) | WOFF 1.0 font decompression (FreeType's gzip module) |
+| Unicode Character Database data | Unicode 17.0.0 | Unicode License (Unicode, Inc. data files and software permission notice) | HarfBuzz's generated `src/hb-ucd-table.hh`; the bidi class ranges in `runtime/canvas2d/src/bidi.cc` are written from the UCD (DerivedBidiClass/BidiBrackets) | script and general category lookup (itemisation, bidi classes), paired brackets for the bidi algorithm |
+| Brotli (decoder only) | 1.2.0 | MIT | github.com/google/brotli v1.2.0 (@ 028fb5a23661f123017c060daa546b55cf4bde29; `$IWN_THIRD_PARTY_DIR/brotli` or CMake `IWN_BROTLI_DIR`) | WOFF2 font decompression inside FreeType (CMake option `IWN_CANVAS2D_WOFF2`, default ON; ~130 KB of the module, mostly the static dictionary) |
+| stb_image_write | 1.16 | MIT or public domain, choice | github.com/nothings/stb @ 2e2bef463a5b53ddf8bb788e25da6b8506314c08, `stb_image_write.h` (`$IWN_THIRD_PARTY_DIR/stb` or CMake `IWN_STB_DIR`) | PNG and JPEG encoding for `toDataURL`/`toBlob`/`convertToBlob` (file-static symbols) |
+| stb_image | 2.30 | MIT or public domain, choice | `stb_image.h` of the same stb tree | decoding the PNG images inside CBDT colour-emoji strikes (`STBI_ONLY_PNG`, file-static symbols) |
+| Roboto (Regular, Bold) | Google Fonts v51 (2026-02-19) | SIL Open Font License 1.1 (`runtime/canvas2d/fonts/OFL-Roboto.txt`) | npm `@expo-google-fonts/roboto@0.4.3` (the package redistributes the Google Fonts TTFs) | bundled `sans-serif` / `system-ui` face (C2D-9: Latin, Latin-1, Latin Extended, Greek, Cyrillic, Vietnamese, symbols). |
+| Roboto Mono (Regular) | Google Fonts (2026) | SIL Open Font License 1.1 (`runtime/canvas2d/fonts/OFL-RobotoMono.txt`) | npm `@expo-google-fonts/roboto-mono@0.4.2` | bundled `monospace` face |
+
+Shipping the notices (C2D-9): `runtime/canvas2d/licenses/` holds the texts (FTL with the FreeType credit line in
+`NOTICE.txt`, HarfBuzz `COPYING`, Brotli MIT, zlib, stb MIT, the Unicode notice) and `runtime/canvas2d/apk-assets.json`
+lists them with the bundled fonts and their OFL texts for the APK (`assets/iwn/licenses/canvas2d/`,
+`assets/iwn/fonts/`); the release build copies that list into the template (`release/stage-template-assets.mjs`). The Unicode notice text is the
+2016-2020 wording as distributed with the system ICU package (`/usr/share/licenses/libicu/LICENSE`); the current
+wording (Unicode License v3, https://www.unicode.org/license.txt) could not be fetched from here.
+
+Test/tooling only (not shipped): `node-api-headers` 1.9.0 (MIT, npm; headers for the Node addon the golden
+tests use), `playwright-core` 1.58.2 (Apache-2.0, npm, installed outside the repo) driving Playwright's
+`chrome-headless-shell` 145 (revision 1208, Playwright's browser cache) to render the Chrome goldens, and the test
+fixtures `web/canvas2d/test/fixtures/roboto-latin-400-normal.woff`/`.woff2` (npm `@fontsource/roboto@5.3.0`, SIL OFL
+1.1, licence file next to them) for the WOFF/WOFF2 loading test. The path
+rasterizer, stroker, compositing, gradients, CSS colour/font parsing, font matching, SVG path parsing, CBLC/CBDT
+parsing, the fonts.xml parser, the bidi algorithm and the PNG test codec are our own code, written from the HTML, CSS
+Color 4, CSS Fonts 4, CSS Font Loading 3, Compositing and Blending 1, Filter Effects 1, SVG 2, UAX #9 (bidi), UAX #24
+(scripts), OpenType and PNG specifications and the
+publicly described cell-coverage rasterization technique (see `runtime/canvas2d/README.md`). Skia and CanvasKit were
+considered and not used (size; see the same README).
