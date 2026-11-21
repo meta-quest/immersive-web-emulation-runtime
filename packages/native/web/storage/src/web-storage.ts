@@ -15,6 +15,14 @@ import type { StorageNatives } from './natives.ts';
 
 export const DEFAULT_QUOTA_UNITS = 5 * 1024 * 1024;
 
+/**
+ * Entries of the runtime's own in an area, stored under this prefix: the page's Storage API does not see them (not in
+ * getItem, key, length or the named properties), clear() keeps them, and they do not count against the page's quota.
+ * Quest Browser keeps an origin's persistent-anchor list the same way (a localStorage key hidden from the page and kept
+ * by clear()). Runtime code uses runtimeItem / setRuntimeItem.
+ */
+export const RUNTIME_KEY_PREFIX = '\u0000iwn:';
+
 function quotaError(): DOMException {
   const D = (globalThis as { DOMException?: typeof DOMException }).DOMException;
   const message = "Failed to execute 'setItem' on 'Storage': Setting the value exceeded the quota.";
@@ -32,13 +40,20 @@ export interface StorageBackend {
 }
 
 class Area {
-  map: Map<string, string>;
+  map = new Map<string, string>();
+  runtime = new Map<string, string>();
   used = 0;
   quota: number;
   backend: StorageBackend | null;
   constructor(entries: Iterable<[string, string]>, backend: StorageBackend | null, quota: number) {
-    this.map = new Map(entries);
-    for (const [k, v] of this.map) this.used += k.length + v.length;
+    for (const [k, v] of entries) {
+      if (k.startsWith(RUNTIME_KEY_PREFIX)) {
+        this.runtime.set(k.slice(RUNTIME_KEY_PREFIX.length), v);
+      } else {
+        this.map.set(k, v);
+        this.used += k.length + v.length;
+      }
+    }
     this.backend = backend;
     this.quota = quota;
   }
@@ -99,10 +114,29 @@ export class Storage {
     a.map.clear();
     a.used = 0;
     a.backend?.clear();
+    // the runtime's entries are not the page's to clear
+    for (const [k, v] of a.runtime) a.backend?.set(RUNTIME_KEY_PREFIX + k, v);
   }
   get [Symbol.toStringTag](): string {
     return 'Storage';
   }
+}
+
+/** A runtime entry of `storage` (see RUNTIME_KEY_PREFIX), null when absent. */
+export function runtimeItem(storage: Storage, key: string): string | null {
+  return areaOf(storage).runtime.get(key) ?? null;
+}
+
+/** Sets (null: removes) a runtime entry of `storage`, persisted with the area. */
+export function setRuntimeItem(storage: Storage, key: string, value: string | null): void {
+  const a = areaOf(storage);
+  if (value === null) {
+    if (a.runtime.delete(key)) a.backend?.remove(RUNTIME_KEY_PREFIX + key);
+    return;
+  }
+  if (a.runtime.get(key) === value) return;
+  a.runtime.set(key, value);
+  a.backend?.set(RUNTIME_KEY_PREFIX + key, value);
 }
 
 const PROTO_KEYS = new Set<string | symbol>();

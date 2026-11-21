@@ -66,6 +66,8 @@ export interface NativeXR {
   requestPermissions(names: readonly string[]): Promise<Record<string, boolean>>;
   /** The room (diagnostics): the runtime's scene status and what the adapter lists this frame. */
   scene(): Record<string, unknown>;
+  /** Spatial anchor counters of the native side (diagnostics, XR-ANCHOR-1); null without anchor natives. */
+  anchorStats(): Record<string, unknown> | null;
 }
 
 // XR-LIFE-1's M3 set. 'bounded-floor' is withdrawn when the headset has no boundary (XR-SPACE-1); 'hand-tracking'
@@ -440,32 +442,8 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   wrapLayerClass('XRWebGLBinding');
   wrapLayerClass('XRWebGLLayer');
 
-  // Anchors are a later milestone (XR-LIFE-1). IWER's own anchors would be poses fixed in the base space, not what
-  // the WebXR Anchors module promises, so without the 'anchors' feature (never granted in this release) the calls
-  // reject with NotSupportedError, as that module specifies for a session without the feature.
-  const gateAnchors = (ctorName: string, method: string, sessionOf: (self: object) => object | undefined) => {
-    const proto = (g[ctorName] as { prototype?: Record<string, unknown> } | undefined)?.prototype;
-    const original = proto?.[method] as ((...a: unknown[]) => Promise<unknown>) | undefined;
-    if (!proto || typeof original !== 'function') return;
-    Object.defineProperty(proto, method, {
-      configurable: true,
-      writable: true,
-      value: {
-        [method](this: object, ...a: unknown[]) {
-          const features = (sessionOf(this) as { enabledFeatures?: string[] } | undefined)?.enabledFeatures ?? [];
-          if (!features.includes('anchors')) {
-            return Promise.reject(
-              new DOMException(`${ctorName}.${method}: WebXR anchors are not supported by @iwer/native yet`, 'NotSupportedError'),
-            );
-          }
-          return original.apply(this, a);
-        },
-      }[method],
-    });
-  };
-  gateAnchors('XRFrame', 'createAnchor', (f) => (f as { session?: object }).session);
-  gateAnchors('XRSession', 'restorePersistentAnchor', (s) => s);
-  gateAnchors('XRSession', 'deletePersistentAnchor', (s) => s);
+  // Anchors (XR-ANCHOR-1) are IWER host mode's, over the backend's anchor hooks: without the 'anchors' feature (the
+  // headset has no spatial anchors, or the page did not ask) IWER rejects the calls with NotSupportedError.
 
   // window `load`: the entry module has been evaluated (XR-LIFE-7's clock starts).
   const addEventListener = g.addEventListener as ((t: string, l: () => void, o?: object) => void) | undefined;
@@ -500,6 +478,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   }
   function onFrame(kind: number, list?: XrNativeEvent[]): void {
     if (list) dispatch(list);
+    backend.anchors.poll();  // anchor requests the XR thread finished (their promises settle in IWER's next frame)
     if (kind === FRAME_XR) {
       frames++;
       const frame = record.refresh();
@@ -544,6 +523,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       ...(natives.sceneStatus?.() ?? { phase: 'unavailable' }),
       adapter: { ...scene.summary(), listedFrames: scene.listedFrames },
     }),
+    anchorStats: () => natives.anchorStats?.() ?? null,
   };
   Object.defineProperty(g, '__iwnXR', { value: api, configurable: true, enumerable: false, writable: false });
   return api;

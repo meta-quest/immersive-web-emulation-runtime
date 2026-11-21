@@ -199,16 +199,23 @@ export interface XRHostSwapchain {
 }
 
 /**
+ * An anchor the host tracks (WebXR Anchors). The host chooses what the
+ * object holds; IWER keeps the one `createAnchor` / `restoreAnchor` resolved
+ * with and passes it back to the other anchor hooks.
+ */
+export type XRHostAnchor = object;
+
+/**
  * Where an exception that IWER caught during a host frame came from:
  * - `xr-frame-callback`: an `XRSession.requestAnimationFrame` callback;
  * - `window-frame`: `XRHostBackend.runWindowFrame`;
  * - `layer`: IWER's own per-frame work for an `XRWebGLLayer`, or the
  *   frame's layer list for `submitLayers`;
  * - `host-hook`: a per-frame `XRHostBackend` hook (`getPlanes`, `getMeshes`,
- *   `setPassthroughVisible`), the frame-start input update that reads the
- *   host's input state, or the hit test over the host's scene. The step that
- *   threw is skipped for that frame (no plane or mesh update, input left as
- *   far as it got); the frame goes on.
+ *   `getAnchorPose`, `setPassthroughVisible`), the frame-start input update
+ *   that reads the host's input state, or the hit test over the host's scene.
+ *   The step that threw is skipped for that frame (no plane or mesh update,
+ *   input left as far as it got); the frame goes on.
  */
 export type XRHostErrorSource =
   | 'xr-frame-callback'
@@ -300,6 +307,35 @@ export interface XRHostBackend {
   getPlanes?(): ReadonlySet<NativePlane> | readonly NativePlane[] | null;
   /** Like `getPlanes`, for mesh-detection (assign new `vertices`/`indices` to report a change). */
   getMeshes?(): ReadonlySet<NativeMesh> | readonly NativeMesh[] | null;
+  /**
+   * Anchors (WebXR Anchors, and persistent anchors as Quest Browser offers
+   * them). With this hook, the anchors of a session that enabled `anchors`
+   * are the host's: `XRFrame.createAnchor` asks for one at `transform` (a
+   * column-major 4×4 matrix in the base space). Resolve with the host's
+   * anchor once it is tracked; reject if it cannot be created. The page's
+   * promise settles at the next frame, as the Anchors module specifies.
+   */
+  createAnchor?(transform: Float32Array): Promise<XRHostAnchor>;
+  /**
+   * Writes the anchor's current pose in the base space (column-major 4×4)
+   * into `out` and returns true, or returns false while the host cannot
+   * locate it (the page then gets no pose for its `anchorSpace`). Called
+   * once per visible frame for each anchor the session tracks.
+   */
+  getAnchorPose?(anchor: XRHostAnchor, out: Float32Array): boolean;
+  /**
+   * The page deleted the anchor, or its session ended: release it. A copy
+   * persisted with `persistAnchor` stays persisted.
+   */
+  deleteAnchor?(anchor: XRHostAnchor): void;
+  /** `XRAnchor.requestPersistentHandle()`: persist the anchor and resolve with its UUID. */
+  persistAnchor?(anchor: XRHostAnchor): Promise<string>;
+  /** `XRSession.restorePersistentAnchor(uuid)`: load a persisted anchor and resolve with it once tracked. */
+  restoreAnchor?(uuid: string): Promise<XRHostAnchor>;
+  /** `XRSession.deletePersistentAnchor(uuid)`: erase the persisted anchor. */
+  erasePersistentAnchor?(uuid: string): Promise<void>;
+  /** `XRSession.persistentAnchors`: the UUIDs this app has persisted. */
+  getPersistentAnchors?(): readonly string[];
   /**
    * Receives exceptions IWER catches while running a host frame (see
    * {@link XRHostErrorSource}). Without it they go to `console.error`. The

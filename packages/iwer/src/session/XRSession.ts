@@ -1233,10 +1233,24 @@ export class XRSession extends EventTarget {
 
   // anchors
   get persistentAnchors(): Readonly<string[]> {
+    const host = this[P_SESSION].host;
+    if (host && host.anchors.hosted) {
+      return host.anchors.persistentAnchors();
+    }
     return Array.from(this[P_SESSION].persistentAnchors.keys());
   }
 
   restorePersistentAnchor(uuid: string): Promise<XRAnchor> {
+    const host = this[P_SESSION].host;
+    if (host) {
+      const refused = host.anchors.refuse('XRSession.restorePersistentAnchor');
+      if (refused) {
+        return refused;
+      }
+      if (host.anchors.hosted) {
+        return host.anchors.restore(uuid);
+      }
+    }
     return new Promise<XRAnchor>((resolve, reject) => {
       if (!this[P_SESSION].persistentAnchors.has(uuid)) {
         reject(
@@ -1267,6 +1281,16 @@ export class XRSession extends EventTarget {
   }
 
   deletePersistentAnchor(uuid: string): Promise<undefined> {
+    const host = this[P_SESSION].host;
+    if (host) {
+      const refused = host.anchors.refuse('XRSession.deletePersistentAnchor');
+      if (refused) {
+        return refused;
+      }
+      if (host.anchors.hosted) {
+        return host.anchors.erase(uuid);
+      }
+    }
     return new Promise<undefined>((resolve, reject) => {
       if (!this[P_SESSION].persistentAnchors.has(uuid)) {
         reject(

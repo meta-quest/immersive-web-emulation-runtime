@@ -13,6 +13,7 @@ import type {
   XRHostFrame,
   XRHostSwapchain,
 } from './types.js';
+import { XRHostAnchors } from './anchors.js';
 import { invalidateHostPoses } from './frame.js';
 import { XRHostContentLayers } from './content-layers.js';
 import { XRHostFrameLoop, XRHostFrameRequest } from './frame-loop.js';
@@ -56,7 +57,7 @@ function visibilityOf(visible: boolean, focused: boolean): XRVisibilityState {
  * The host-mode side of an `XRSession` (`session[P_SESSION].host`). It turns
  * host frames and host events into WebXR behaviour and delegates the details
  * to small parts: views, output (swapchain, foveation, passthrough), frame
- * rate, reference spaces, scene, hit test, and the frame loop.
+ * rate, reference spaces, scene, hit test, anchors, and the frame loop.
  */
 export class XRHostSession {
   readonly session: XRSession;
@@ -69,6 +70,7 @@ export class XRHostSession {
   /** Quad and cylinder layers (WebXR Layers), each with its own swapchain. */
   readonly layers: XRHostContentLayers;
   readonly hitTest: XRHostHitTest;
+  readonly anchors: XRHostAnchors;
   private readonly loop: XRHostFrameLoop;
 
   /** The host frame being run; null outside `runFrame`. */
@@ -99,6 +101,7 @@ export class XRHostSession {
     this.spaces = new XRHostReferenceSpaces(globalSpace, this.output);
     this.scene = new XRHostScene(globalSpace, s.trackedPlanes, s.trackedMeshes);
     this.hitTest = new XRHostHitTest(globalSpace);
+    this.anchors = new XRHostAnchors(session, backend);
     this.loop = new XRHostFrameLoop(session);
     this.layers = new XRHostContentLayers(session, backend, (error) =>
       this.report(error, 'layer'),
@@ -255,6 +258,13 @@ export class XRHostSession {
             if (s.hasMeshes) {
               this.scene.keepMeshes(xrFrame);
             }
+          }
+        }
+        if (s.hasAnchors) {
+          try {
+            this.anchors.update();
+          } catch (error) {
+            this.report(error, 'host-hook');
           }
         }
         // input sources must reflect this frame before any callback runs
@@ -423,6 +433,7 @@ export class XRHostSession {
     this.closed = true;
     const session = this.session;
     session[P_SESSION].ended = true;
+    this.anchors.close();
     session[P_SESSION].teardown();
     this.rate.abandon();
     this.spaces.clear();

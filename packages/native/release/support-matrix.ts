@@ -69,7 +69,8 @@ export const ROWS: Row[] = [
   // with a synthetic room fed at the natives boundary (proto-roomscan, proto-placement, proto-showcase-ar). The native
   // query path is host-tested against a fake runtime only, until a person runs Space Setup on a test unit.
   { group: 'WebXR', api: 'Plane / mesh detection, hit test (incl. transient input)', keys: ['XR feature plane-detection', 'XR feature mesh-detection', 'XR feature hit-test', 'XRPlane', 'XRMesh', 'XRFrame.detectedPlanes', 'XRSession.requestHitTestSource', 'XRRay'], requires: ['immersive-ar (passthrough)'], deviceUntested: 'on a Quest 3 only without a room and with a synthetic room fed to the runtime; not yet against a real room from Space Setup', note: 'from the room of Space Setup (none: empty lists, no hits, where Quest Browser hits a floor plane); com.oculus.permission.USE_SCENE is asked for on first use' },
-  { group: 'WebXR', api: 'Anchors, depth', keys: ['XR feature anchors', 'XR feature depth-sensing', 'XRAnchor'] },
+  { group: 'WebXR', api: 'Anchors, persistent anchors (requestPersistentHandle, restorePersistentAnchor)', keys: ['XR feature anchors', 'XRAnchor', 'XRFrame.createAnchor', 'XRSession.restorePersistentAnchor'], requires: ['immersive-ar (passthrough)'], deviceUntested: 'on a Quest 3 the anchor calls reach the system, but the test headsets used had no 6DoF tracking, so no anchor was created, tracked or restored', note: 'com.oculus.permission.USE_ANCHOR_API (install time)' },
+  { group: 'WebXR', api: 'Depth sensing', keys: ['XR feature depth-sensing', 'XRWebGLBinding.getDepthInformation'] },
   { group: 'WebXR', api: 'Eye / gaze tracking', keys: ['XR feature eye-tracking'] },
   // --- graphics
   { group: 'Graphics', api: 'WebGL 2 and WebGL 1 (over OpenGL ES 3.2)', keys: ['WebGL2RenderingContext', 'WebGLRenderingContext', 'HTMLCanvasElement.getContext("webgl2")', 'HTMLCanvasElement.getContext("webgl")'] },

@@ -122,16 +122,18 @@ export const RULES: Rule[] = [
   { re: /^feature:(local|local-floor|viewer|bounded-floor|unbounded|hand-tracking|layers)$/, area: 'iwer', spec: ['XR-LIFE-1', 'XR-SPACE-1', 'IN-5', 'XR-SC-1'], policy: 'provide' },
   // XR-AR-2: planes, meshes and hit test from the headset's scene model (Space Setup), after the USE_SCENE prompt
   { re: /^feature:(plane-detection|mesh-detection|hit-test)$/, area: 'iwer', spec: ['XR-AR-2', 'XR-PERM-1'], policy: 'provide' },
-  { re: /^feature:(anchors|depth-sensing|light-estimation|camera-access|dom-overlay|secondary-views)$/, area: 'iwer', spec: ['XR-AR-1', 'XR-SEC-1', 'XR-DEPTH-1'], policy: 'later' },
+  // XR-ANCHOR-1: anchors (and persistent ones) over the headset's spatial anchors
+  { re: /^feature:anchors$/, area: 'iwer', spec: ['XR-ANCHOR-1'], policy: 'provide' },
+  { re: /^feature:(depth-sensing|light-estimation|camera-access|dom-overlay|secondary-views)$/, area: 'iwer', spec: ['XR-AR-1', 'XR-SEC-1', 'XR-DEPTH-1'], policy: 'later' },
   { re: /^feature:(eye-tracking|gaze-tracking)$/, area: 'iwer', spec: ['XRF-P-4'], policy: 'later', note: 'no gaze source while host input is on (open IWER decision)' },
   { re: /^feature:/, area: 'iwer', spec: ['XR-LIFE-1'], policy: 'later' },
   { re: /^XRSystem\.(requestSession|offerSession|isSessionSupported)/, area: 'iwer', spec: ['XR-INIT-3', 'XR-LIFE-1', 'XR-LIFE-2'], policy: 'provide' },
   // XR-LAYER-1: quad and cylinder layers in IWER host mode, one OpenXR swapchain and composition layer each
   { re: /^(XRCompositionLayer|XRQuadLayer|XRCylinderLayer|XRWebGLBinding\.(create(Quad|Cylinder)Layer|getSubImage)|XRWebGLSubImage)\b/, area: 'iwer', spec: ['XR-LAYER-1'], policy: 'provide' },
   { re: /^(XREquirectLayer|XRCubeLayer|XRWebGLBinding\.create(Equirect|Cube)Layer|XRMediaBinding)\b/, area: 'iwer', spec: ['XR-LAYER-1'], policy: 'later', note: 'equirect and cube layers and XRMediaBinding are not in IWER host mode (quad and cylinder layers are)' },
-  { re: /^XRHitTestResult\.createAnchor$/, area: 'iwer', spec: ['XR-AR-1'], policy: 'later', note: 'anchors: later' },
+  { re: /^(XRAnchor\w*|XRHitTestResult\.createAnchor|XRFrame\.(trackedAnchors|createAnchor)|XRSession\.(persistentAnchors|restorePersistentAnchor|deletePersistentAnchor))\b/, area: 'iwer', spec: ['XR-ANCHOR-1'], policy: 'provide' },
   { re: /^(XRPlane\w*|XRMesh\w*|XRHitTest\w*|XRTransientInput\w*|XRRay|XRFrame\.(detectedPlanes|detectedMeshes|getHitTestResults\w*)|XRSession\.requestHitTestSource\w*)\b/, area: 'iwer', spec: ['XR-AR-2'], policy: 'provide' },
-  { re: /^(XRAnchor\w*|XRFrame\.(trackedAnchors|createAnchor)|XRSession\.(persistentAnchors|restorePersistentAnchor|deletePersistentAnchor|initiateRoomCapture)|XRLight\w*|XRCamera|XRCPUDepthInformation|XRDepthInformation|XRWebGLDepthInformation|XRFrame\.getDepthInformation|XRWebGLBinding\.getDepthInformation|XRDOMOverlayState)\b/, area: 'iwer', spec: ['XR-AR-1', 'XR-DEPTH-1'], policy: 'later', note: 'anchors, depth, light estimation, raw camera access and DOM overlay: later' },
+  { re: /^(XRSession\.initiateRoomCapture|XRLight\w*|XRCamera|XRCPUDepthInformation|XRDepthInformation|XRWebGLDepthInformation|XRFrame\.getDepthInformation|XRWebGLBinding\.getDepthInformation|XRDOMOverlayState)\b/, area: 'iwer', spec: ['XR-AR-1', 'XR-DEPTH-1'], policy: 'later', note: 'depth, light estimation, raw camera access, DOM overlay and room capture: later' },
   { re: /^(XR\w*(\.\w+)?|Navigator\.xr|on:XR\w*\.\w+)$/, area: 'iwer', spec: ['XRF-*', 'XR-*'], policy: 'provide' },
   { re: /^Navigator\.getGamepads$/, area: 'input', spec: ['IN-9'], policy: 'provide', note: 'returns an empty list (XR gamepads come through XRInputSource)' },
   { re: /^Gamepad\w*/, area: 'input', spec: ['IN-1', 'IN-2'], policy: 'provide', note: 'XR gamepads come from IWER host mode (XRInputSource.gamepad)' },

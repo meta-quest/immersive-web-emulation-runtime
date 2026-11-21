@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "android/xr_layers.h"
+#include "android/xr_anchors.h"
 #include "iwn/core/asset_source.h"
 #include "iwn/core/json.h"
 #include "iwn/xr/frame_record.h"
@@ -147,6 +148,8 @@ class XrSystem {
   }
   void set_want_ticks(bool want) { want_ticks_.store(want, std::memory_order_relaxed); }
   void set_js_wake(std::function<void()> wake);
+  // Spatial anchors (xr_anchors.h): its JS-thread API.
+  XrAnchors& anchors() { return anchors_; }
 
  private:
   XrSystem() = default;
@@ -171,6 +174,7 @@ class XrSystem {
   FrameSlot slot_;
   uint32_t layer_words_[layers::kWords] = {};
   CommandQueue commands_;
+  XrAnchors anchors_;
   std::atomic<bool> pending_frame_{false};
   std::atomic<bool> pending_tick_{false};
   std::atomic<double> tick_start_ms_{0};

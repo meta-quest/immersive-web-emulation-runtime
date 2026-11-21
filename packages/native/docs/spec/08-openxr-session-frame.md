@@ -303,7 +303,7 @@ only.
 'alpha-blend'`) for apps that declare passthrough: the packer writes `xr.immersiveAr: true` into the runtime config
 when the resolved features include passthrough (`world.xr.mode: "ar"` implies it), and only then is
 `isSessionSupported('immersive-ar')` true. `plane-detection`/`mesh-detection` and `hit-test` from the scene model
-(XR-AR-2); `anchors`: IWER host mode already models it; the runtime implements it when scheduled.
+(XR-AR-2); `anchors` (XR-ANCHOR-1).
 *Check:* packer tests (`xr.immersiveAr` with and without passthrough); a device run of an AR sample gets past
 `isSessionSupported`.
 
@@ -360,6 +360,32 @@ each of them.
 *Check:* IWER host-mode tests (hit test), web/xr tests (planes, meshes, labels, hit test, empty room), host tests of
 the scene model against a fake runtime (`iwn_xr_android_tests`: re-query, failed query, teardown), a device run
 reading `__iwnXR.scene()` and the `xr.scene` stats section.
+
+**XR-ANCHOR-1 (MUST, when the headset has spatial anchors).** `anchors` is granted, in `immersive-vr` and
+`immersive-ar` sessions, when the runtime offers `XR_FB_spatial_entity` and the system reports spatial-entity support;
+persistence also needs `XR_FB_spatial_entity_storage` and `XR_FB_spatial_entity_query`. Without the feature every
+anchor call rejects with `NotSupportedError`. `XRFrame.createAnchor(pose, space)` (and
+`XRHitTestResult.createAnchor()`) creates a spatial anchor at that pose in the base space, at the frame's display
+time; the promise settles in a frame after the system's completion event, and rejects with `OperationError` when the
+system refuses (Horizon OS places anchors only with 6DoF tracking). Every frame handed to JS carries each live
+anchor's pose, located at the frame's predicted display time and delivered in a buffer of its own (not the frame
+record, XRF-*); an anchor the system cannot locate has no pose that frame. `anchor.delete()` destroys the anchor,
+and a session's anchors are destroyed when it ends. Persistent anchors follow Quest Browser:
+`anchor.requestPersistentHandle()` saves the anchor to the system's local anchor storage and resolves with its UUID
+(the same UUID on every call; after the anchor's session ended or the anchor was deleted it rejects with
+`InvalidStateError`), `session.persistentAnchors` lists the UUIDs this app persisted (kept in localStorage's runtime
+entries, which the page cannot see or clear, as Quest Browser keeps them per origin),
+`session.restorePersistentAnchor(uuid)` loads one by UUID (an unknown or malformed UUID rejects with
+`InvalidStateError`), and `session.deletePersistentAnchor(uuid)` erases it, also an anchor restored in this session or
+never loaded (its storable component is enabled first), and forgets it when the system has no such anchor; a delete
+while the same UUID is being restored rejects with `InvalidStateError`, as in Quest Browser. UUIDs compare in lower
+case. A refused creation's space is destroyed with it. At most 64 anchors live at a time. The
+manifest needs `com.oculus.permission.USE_ANCHOR_API` (a normal permission, no prompt), which the packer adds for the
+`anchors` feature.
+*Check:* web/xr and IWER host-mode tests of each call; host tests of the XR-thread side against a fake runtime
+(`iwn_xr_android_tests`: erase of a restored anchor, erase then delete, refused creation, restore and erase at once);
+device: grant, refusal and persistence paths without tracking; create, locate, persist, relaunch and restore by UUID
+on a headset that tracks in 6DoF.
 
 **XR-SEC-1 (MUST NOT).** No secondary views, no `dom-overlay`, no camera access in the first release;
 requesting them as required rejects; as optional, dropped.

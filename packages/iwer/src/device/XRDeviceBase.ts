@@ -66,6 +66,7 @@ import { XRGazeInput, supportsGazeTracking } from './XRGazeInput.js';
 import { XRViewerPose } from '../pose/XRViewerPose.js';
 import { XRViewport } from '../views/XRViewport.js';
 import { NativePlane } from '../planes/XRPlane.js';
+import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
 import { NativeMesh } from '../meshes/XRMesh.js';
 import type { DepthSensingData } from '../depth/XRDepthInformation.js';
 import { XRWebGLBinding } from '../depth/XRWebGLBinding.js';
@@ -1011,6 +1012,9 @@ export class XRDeviceBase {
       setGlobal('XRHitTestResult', XRHitTestResult);
       setGlobal('XRTransientInputHitTestSource', XRTransientInputHitTestSource);
       setGlobal('XRTransientInputHitTestResult', XRTransientInputHitTestResult);
+      // WebXR Anchors: host mode's anchors are the host's (host/anchors.ts)
+      setGlobal('XRAnchor', XRAnchor);
+      setGlobal('XRAnchorSet', XRAnchorSet);
       return;
     }
     if (polyfillLayers) {

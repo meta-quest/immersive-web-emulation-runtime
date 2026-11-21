@@ -1,12 +1,16 @@
-// A fake OpenXR runtime for the host tests of the XR thread's spatial-entity code (src/android/xr_scene.cc), which
-// makes OpenXR calls only. It behaves as Meta's mobile runtime does where that code depends on it:
+// A fake OpenXR runtime for the host tests of the XR thread's spatial-entity code (src/android/xr_scene.cc,
+// xr_anchors.cc), which makes OpenXR calls only. It behaves as Meta's mobile runtime does where that code depends on it:
 //   - a LOAD query returns the SAME XrSpace for an entity already loaded in the session (XrRuntimeSystem_Client
 //     GetXrSpaceFromSpatialAnchorMap; AnchorFrameworkHelper mergeAnchorWithRecord), and xrDestroySpace unloads the
 //     entity and invalidates that handle (OpenXR_Space.cpp), so a destroyed handle is dead for every holder;
 //   - handles are never reused (monotonically increasing), so a dead handle stays dead;
 //   - a query posts XrEventDataSpaceQueryResultsAvailableFB (unless it found nothing) and then
 //     XrEventDataSpaceQueryCompleteFB with the query's result; an empty room query completes with XR_SUCCESS;
-//   - spaces a query loads start with LOCATABLE disabled (xrSetSpaceComponentStatusFB enables it, with its event).
+//   - spaces a query loads start with LOCATABLE and STORABLE disabled (xrSetSpaceComponentStatusFB enables them, with
+//     its event); xrSaveSpaceFB and xrEraseSpaceFB fail with XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB without STORABLE
+//     (OpenXR_Anchor_Storage.cpp); a new anchor is locatable;
+//   - a failed anchor creation still delivers a new space with its completion event (CreateAndFinalize whatever the
+//     result), which the app must destroy.
 // Tests set up `world()` and the failure knobs, call into the code under test and pump the events into it.
 #pragma once
 
@@ -30,6 +34,8 @@ struct Entity {
   bool box = false;          // BOUNDED_3D
   bool mesh = false;         // TRIANGLE_MESH_META: one triangle
   XrPosef pose{{0, 0, 0, 1}, {0, 0, 0}};
+  bool anchor = false;       // a spatial anchor the app made (found by a UUID query only while persisted)
+  bool persisted = false;    // in the local anchor storage
 };
 
 struct Runtime {
@@ -38,6 +44,7 @@ struct Runtime {
   XrResult room_query_result = XR_SUCCESS;  // what the rooms query completes with (an error: no results either)
   bool fail_retrieve = false;               // xrRetrieveSpaceQueryResultsFB fails
   bool fail_container = false;              // xrGetSpaceContainerFB fails
+  XrResult create_result = XR_SUCCESS;      // what an anchor creation completes with (no 6DoF: XR_ERROR_RUNTIME_FAILURE)
   // what happened
   int destroyed_live = 0, destroyed_dead = 0, located_dead = 0;
   std::deque<XrEventDataBuffer> events;
@@ -49,6 +56,8 @@ void reset();
 XrUuidEXT uuid(uint8_t n);
 // Handles alive now.
 int live_handles();
+// Whether the entity with that UUID is in the local anchor storage.
+bool persisted(const XrUuidEXT& u);
 
 // Delivers every queued event to `handler`, also those posted while it runs.
 void pump(const std::function<void(const XrEventDataBuffer&)>& handler);

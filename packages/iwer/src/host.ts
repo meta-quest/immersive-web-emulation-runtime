@@ -55,6 +55,7 @@ export type {
 
 // host contract
 export type {
+  XRHostAnchor,
   XRHostBackend,
   XRHostContentLayerKind,
   XRHostErrorSource,

@@ -1,8 +1,9 @@
 // Host tests for the V8-free XR core (HL-3): frame record layout and writer (XRF-1..5), input mapping (XRF-IN-1,
 // IN-2..6), pacing (XR-LOOP-5, PERF-JS-3), perf-level policy (XR-PERF-1), session-lifetime policy (XR-LIFE-4/5/7),
 // the runtime-permission wait and order (XR-PERM-1), config parsing, the PNG writer (DBG-SHOT), the
-// XR-thread/JS-thread handoff and the loading screen (XR-IDLE-1: when it is shown, the hand-over to the app's first
-// frame, its placement, layout and spinner image).
+// XR-thread/JS-thread handoff, the loading screen (XR-IDLE-1: when it is shown, the hand-over to the app's first
+// frame, its placement, layout and spinner image) and the spatial anchors' slot table, pose buffer and UUID text
+// (XR-ANCHOR-1).
 #include <zlib.h>
 
 #include <atomic>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "iwn/core/json.h"
+#include "iwn/xr/anchors.h"
 #include "iwn/xr/frame_record.h"
 #include "iwn/xr/handoff.h"
 #include "iwn/xr/input_map.h"
@@ -2108,4 +2110,87 @@ IWN_TEST(PermissionQueue, OncePerProcessAndNeverWhatTheManifestLacks) {
   q.push({"x"});
   IWN_CHECK_EQ(q.drain().size(), size_t{2});
   IWN_CHECK(!q.pending());
+}
+
+// --- anchors ----------------------------------------------------------------------------------------------------------
+
+IWN_TEST(Anchors, UuidTextRoundTrip) {
+  const uint8_t bytes[16] = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0x4d, 0xef, 0x80, 0x01, 0x02, 0x03, 0x04, 0x05, 0xa6, 0xff};
+  const std::string text = format_uuid(bytes);
+  IWN_CHECK_EQ(text, std::string("12345678-9abc-4def-8001-02030405a6ff"));
+  uint8_t back[16] = {};
+  IWN_CHECK(parse_uuid(text, back));
+  IWN_CHECK(std::memcmp(back, bytes, 16) == 0);
+  IWN_CHECK(parse_uuid("12345678-9ABC-4DEF-8001-02030405A6FF", back));  // upper case too
+  IWN_CHECK(std::memcmp(back, bytes, 16) == 0);
+  uint8_t untouched[16] = {7};
+  for (const char* bad : {"", "not-a-uuid", "12345678-9abc-4def-8001-0203040506f", "12345678-9abc-4def-8001-0203040506fff",
+                          "12345678_9abc-4def-8001-0203040506ff", "1234567g-9abc-4def-8001-0203040506ff"}) {
+    IWN_CHECK(!parse_uuid(bad, untouched));
+  }
+  IWN_CHECK_EQ(int(untouched[0]), 7);
+}
+
+IWN_TEST(Anchors, SlotsAreReservedReleasedAndNeverReachedByStaleIds) {
+  AnchorTable t;
+  const uint32_t a = t.reserve();
+  IWN_CHECK(a != 0);
+  IWN_CHECK(t.state(a) == AnchorTable::State::kPending);
+  IWN_CHECK(t.go_live(a));
+  IWN_CHECK(!t.go_live(a));  // only from pending
+  IWN_CHECK(t.state(a) == AnchorTable::State::kLive);
+  IWN_CHECK_EQ(t.live_count(), 1);
+  IWN_CHECK(t.release(a));
+  IWN_CHECK(!t.release(a));  // once
+  IWN_CHECK(t.state(a) == AnchorTable::State::kReleasing);
+  t.free(a);
+  IWN_CHECK(t.state(a) == AnchorTable::State::kFree);
+  // the slot is taken again with a new generation: the old id reaches nothing
+  const uint32_t b = t.reserve();
+  IWN_CHECK_EQ(anchor_slot(b), anchor_slot(a));
+  IWN_CHECK(b != a);
+  IWN_CHECK(t.state(a) == AnchorTable::State::kFree);
+  IWN_CHECK(!t.release(a));
+  IWN_CHECK(t.state(b) == AnchorTable::State::kPending);
+  IWN_CHECK_EQ(t.id_of(anchor_slot(b)), b);
+  // a release before the create finished: go_live refuses, the slot waits to be freed
+  IWN_CHECK(t.release(b));
+  IWN_CHECK(!t.go_live(b));
+  t.free(b);
+  IWN_CHECK_EQ(t.live_count(), 0);
+}
+
+IWN_TEST(Anchors, TableFillsUpAndSessionEndReleasesEverything) {
+  AnchorTable t;
+  uint32_t ids[kMaxAnchors];
+  for (int i = 0; i < kMaxAnchors; ++i) {
+    ids[i] = t.reserve();
+    IWN_CHECK(ids[i] != 0);
+    if (i % 2 == 0) t.go_live(ids[i]);
+  }
+  IWN_CHECK_EQ(t.reserve(), 0u);  // full
+  IWN_CHECK_EQ(t.release_all(), kMaxAnchors);
+  IWN_CHECK_EQ(t.release_all(), 0);
+  for (int i = 0; i < kMaxAnchors; ++i) IWN_CHECK(t.state(ids[i]) == AnchorTable::State::kReleasing);
+  t.clear();
+  IWN_CHECK(t.reserve() != 0);
+}
+
+IWN_TEST(Anchors, PoseBufferHoldsFlagsAndPose) {
+  AnchorTable t;
+  const uint32_t a = t.reserve();
+  const int slot = anchor_slot(a);
+  t.write_pose(slot, pose(0.5f, 1.2f, -2, 0, 0.7071068f, 0, 0.7071068f), true);
+  const float* p = t.poses() + slot * kAnchorStride;
+  IWN_CHECK_EQ(p[0], 1.0f);
+  IWN_CHECK(near(p[1], 0.5) && near(p[2], 1.2) && near(p[3], -2));
+  IWN_CHECK(near(p[5], 0.7071068) && near(p[7], 0.7071068));
+  t.write_pose(slot, pose(9, 9, 9), false);  // not located: flags 0, the last pose stays
+  IWN_CHECK_EQ(p[0], 0.0f);
+  IWN_CHECK(near(p[1], 0.5));
+  t.write_pose(-1, pose(0, 0, 0), true);  // out of range: ignored
+  t.write_pose(kMaxAnchors, pose(0, 0, 0), true);
+  t.free(a);  // freed: cleared
+  for (int i = 0; i < kAnchorStride; ++i) IWN_CHECK_EQ(p[i], 0.0f);
+  IWN_CHECK_EQ(AnchorTable::pose_bytes(), sizeof(float) * kMaxAnchors * kAnchorStride);
 }

@@ -35,6 +35,8 @@ export interface XrInfo {
   meshDetection?: boolean;
   hitTest?: boolean;
   anchors?: boolean;
+  /** Anchors can be persisted and restored by UUID (XR_FB_spatial_entity_storage + _query). */
+  persistentAnchors?: boolean;
   depthSensing?: boolean;
   explicitGrant?: boolean;
   /** XR-LAYER-1: quad and cylinder layers (cylinder needs XR_KHR_composition_layer_cylinder). */
@@ -88,6 +90,17 @@ export interface SceneEntityData {
 export interface SceneData {
   version: number;
   entities: SceneEntityData[];
+}
+
+/** A finished anchor request (runtime/xr xr_anchors.h AnchorResult). */
+export interface NativeAnchorResult {
+  request: number;
+  ok: boolean;
+  /** create, restore: the anchor id */
+  anchor?: number;
+  /** persist: the UUID */
+  uuid?: string;
+  error?: string;
 }
 
 /** kind of a frame-handler call. */
@@ -154,6 +167,15 @@ export interface XrNatives {
   /** The pose table (8 floats per slot), written before each frame. */
   scenePoses?(): ArrayBuffer;
   sceneStatus?(): Record<string, unknown>;
+  // Spatial anchors (xr_anchors_binding.cc); a request number of 0 means refused at once.
+  anchorPoses?(): ArrayBuffer;
+  anchorCreate?(px: number, py: number, pz: number, qx: number, qy: number, qz: number, qw: number): number;
+  anchorPersist?(anchor: number): number;
+  anchorRestore?(uuid: string): number;
+  anchorErase?(uuid: string): number;
+  anchorDestroy?(anchor: number): void;
+  anchorResults?(): NativeAnchorResult[] | undefined;
+  anchorStats?(): Record<string, unknown>;
 }
 
 /** The internal surface of a WebGL context the hooks below take (web/webgl Ctx). */

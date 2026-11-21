@@ -5,7 +5,8 @@
 // XR_FB_swapchain_update_state, XR_FB_color_space, XR_EXT_performance_settings, XR_FB_passthrough,
 // XR_META_passthrough_preferences, XR_KHR_composition_layer_cylinder for xr_layers.cc; the scene extensions in
 // xr_scene.h), against
-// docs/spec/08, 09, 10 and 14 (DBG-SHOT). See xr_system.h for the threading model.
+// docs/spec/08, 09, 10 and 14 (DBG-SHOT). See xr_system.h for the threading model. Spatial anchors live in
+// xr_anchors.cc; this file only enables their extensions and calls their hooks.
 #include "android/xr_system.h"
 
 #include <GLES3/gl3.h>
@@ -444,6 +445,7 @@ void XrSystem::start(Runtime* rt, const XrConfig& config, bool debuggable, bool 
   // The composition-layer buffer's header, before the page's prelude checks it (the XR thread fills in the rest).
   layer_words_[layers::kVersionAt] = layers::kVersion;
   layer_words_[layers::kCountAt] = layers::kNoList;
+  anchors_.set_queue(&commands_);
   thread_ = std::thread([this] { thread_main(); });
 }
 
@@ -491,6 +493,7 @@ void XrSystem::stop() {
   // the command queue and may have left a frame, a tick or events behind for a JS thread that is gone.
   commands_.reopen();
   slot_.force_idle();
+  anchors_.reset();
   pending_frame_.store(false, std::memory_order_release);
   pending_tick_.store(false, std::memory_order_release);
   events_pending_.store(false, std::memory_order_release);
@@ -596,6 +599,9 @@ bool XrSystem::Impl::initialize() {
                         XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME,
                         XR_KHR_COMPOSITION_LAYER_COLOR_SCALE_BIAS_EXTENSION_NAME}) {
     if (usable(e)) enabled_exts.push_back(e);
+  }
+  for (const char* e : XrAnchors::kExtensions) {  // spatial anchors (xr_anchors.h)
+    if (usable(e) && !has(enabled_exts, e)) enabled_exts.push_back(e);
   }
   // Microgestures extend XR_EXT_hand_interaction's profile: without it xrCreateInstance fails
   // (XR_ERROR_EXTENSION_DEPENDENCY_NOT_ENABLED). The input code finds out from its bindings what it got (xr_input.h).
@@ -808,6 +814,7 @@ bool XrSystem::Impl::initialize() {
   }
 
   scene.init(instance, session, enabled_exts);
+  owner->anchors_.init(instance, system, session, base, enabled_exts);
   const double t_spaces = now_ms();
   input_ok = input.init(instance, session, input_ext, sys_hand_tracking);
   const double t_input = now_ms();
@@ -861,6 +868,8 @@ bool XrSystem::Impl::initialize() {
     info.set("planeDetection", scene.available());
     info.set("meshDetection", scene.available());
     info.set("hitTest", scene.available());
+    info.set("anchors", owner->anchors_.supported());
+    info.set("persistentAnchors", owner->anchors_.persistence());
     info.set("explicitGrant", cfg->explicit_grant);
     // XR-LAYER-1: quad and cylinder layers (the WebXR 'layers' feature itself is granted with projection layers)
     Json comp = Json::object();
@@ -1130,6 +1139,7 @@ void XrSystem::Impl::end_webxr(bool by_system) {
   const FrameSlot::State st = owner->slot_.state();
   comp_layers.end_session(st == FrameSlot::kRunning || st == FrameSlot::kDone);
   scene.session_ended();
+  owner->anchors_.end_session();
   life.on_session_ended(now_ms());
   if (input_ok) input.stop_haptics();
   // No WebXR content any more: the loading screen comes back, in front of the user (a reload boots the page again),
@@ -1432,6 +1442,7 @@ void XrSystem::Impl::poll_events() {
         log(LogLevel::kWarn, "xr: %u OpenXR events lost", reinterpret_cast<XrEventDataEventsLost&>(ev).lostEventCount);
         break;
       default:
+        owner->anchors_.on_event(ev);  // spatial-entity completions (ignores other modules' requests)
         break;
     }
   }
@@ -1632,6 +1643,7 @@ void XrSystem::Impl::run_frame() {
     }
     if (input_ok) input.sample(fs.predictedDisplayTime, base, session_hand_tracking, visibility.focused, hands);
     scene.locate(base, fs.predictedDisplayTime);  // pose slots, read by JS during the frame like the record
+    owner->anchors_.locate(fs.predictedDisplayTime);  // the anchor pose buffer, read by JS within this frame
 
     // The record (XRF-2), written while no JS frame is in flight.
     const double pdt = pacing.strictly_increasing(clock.to_perf_ms(fs.predictedDisplayTime));
@@ -1938,6 +1950,7 @@ void XrSystem::Impl::teardown() {
   scene.destroy();
   if (input_ok) input.destroy();
   input_ok = false;
+  owner->anchors_.shutdown();
   for (XrSpace* s : {&view_space, &local_space, &stage_space}) {
     if (*s != XR_NULL_HANDLE) xrDestroySpace(*s);
     *s = XR_NULL_HANDLE;

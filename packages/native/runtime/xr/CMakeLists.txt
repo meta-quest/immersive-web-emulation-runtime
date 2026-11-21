@@ -4,12 +4,12 @@
 # Targets
 #   iwn_xr_core           V8-free, OpenXR-call-free: frame record + layout, the composition-layer buffer, input
 #                         mapping, pacing, perf-level and session policies, runtime-permission order, config, PNG
-#                         writer, XR/JS thread handoff. Android + host.
+#                         writer, XR/JS thread handoff, the anchors' slot table. Android + host.
 #   iwn_openxr_loader     Android: the Khronos OpenXR loader built from source (OpenXR SDK 1.1.63) + jsoncpp,
 #                         static, symbols hidden.
 #   iwn_xr                Android: the XR thread (instance, session, swapchains, layers, quad and cylinder layers,
-#                         input, passthrough, screenshots), runtime permissions + the V8 binding iwn_register_xr
-#                         (JS: globalThis.__iwn.xr).
+#                         input, passthrough, scene, spatial anchors, screenshots), runtime permissions + the V8
+#                         binding iwn_register_xr (JS: globalThis.__iwn.xr).
 #   iwn_xr_core_tests     host unit tests (ctest).
 #   iwn_xr_android_tests  host tests of src/android code that makes OpenXR calls only, against a fake runtime.
 #   iwn_xr_record_dump    host tool: a known record written by the native writer (web/xr round-trip test).
@@ -26,6 +26,7 @@ if(NOT EXISTS "${IWN_OPENXR_SDK_DIR}/include/openxr/openxr.h")
 endif()
 
 add_library(iwn_xr_core STATIC
+  src/core/anchors.cc
   src/core/frame_record.cc
   src/core/handoff.cc
   src/core/input_map.cc
@@ -74,6 +75,7 @@ if(IWN_ANDROID)
   # --- the XR module -------------------------------------------------------------------------------------------
   add_library(iwn_xr STATIC
     src/android/egl_xr.cc
+    src/android/xr_anchors.cc
     src/android/jni_android.cc
     src/android/xr_system.cc
     src/android/xr_input.cc
@@ -82,6 +84,7 @@ if(IWN_ANDROID)
     src/android/xr_permissions.cc
     src/android/xr_scene.cc
     src/android/xr_shot.cc
+    src/v8/xr_anchors_binding.cc
     src/v8/xr_binding.cc
   )
   target_include_directories(iwn_xr PRIVATE src)
@@ -100,10 +103,10 @@ iwn_add_host_test(iwn_xr_core_tests
   SOURCES test/host/xr_core_test.cc
   LIBS iwn_xr_core)
 
-# XR-thread code of src/android that makes OpenXR calls only (the scene model), against a fake runtime that behaves
+# XR-thread code of src/android that makes OpenXR calls only (the scene model, spatial anchors), against a fake runtime that behaves
 # as Meta's does where that code depends on it (test/host/fake_openxr.h).
 iwn_add_host_test(iwn_xr_android_tests
-  SOURCES test/host/xr_android_test.cc test/host/fake_openxr.cc src/android/xr_scene.cc
+  SOURCES test/host/xr_android_test.cc test/host/fake_openxr.cc src/android/xr_scene.cc src/android/xr_anchors.cc
   LIBS iwn_xr_core)
 if(TARGET iwn_xr_android_tests)
   target_include_directories(iwn_xr_android_tests PRIVATE src)

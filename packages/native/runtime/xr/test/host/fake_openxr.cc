@@ -88,6 +88,7 @@ XrResult XRAPI_CALL QuerySpaces(XrSession, const XrSpaceQueryInfoBaseHeaderFB* b
     const auto* f = reinterpret_cast<const XrSpaceUuidFilterInfoFB*>(filter);
     for (uint32_t k = 0; k < f->uuidCount; ++k) {
       for (size_t i = 0; i < world.size(); ++i) {
+        if (world[i].anchor && !world[i].persisted) continue;  // not in the local storage
         if (std::memcmp(world[i].uuid.data, f->uuids[k].data, XR_UUID_SIZE) == 0) {
           out.push_back({load(static_cast<int>(i)), world[i].uuid});
         }
@@ -203,9 +204,80 @@ XrResult XRAPI_CALL GetTriangleMesh(XrSpace space, const XrSpaceTriangleMeshGetI
   return XR_SUCCESS;
 }
 
+XrResult XRAPI_CALL CreateSpatialAnchor(XrSession, const XrSpatialAnchorCreateInfoFB* info, XrAsyncRequestIdFB* id) {
+  auto& s = state();
+  *id = s.next_request++;
+  XrEventDataSpatialAnchorCreateCompleteFB done{XR_TYPE_EVENT_DATA_SPATIAL_ANCHOR_CREATE_COMPLETE_FB};
+  done.requestId = *id;
+  done.result = s.rt.create_result;
+  Entity e;
+  e.uuid = uuid(static_cast<uint8_t>(100 + s.rt.world.size()));
+  e.anchor = true;
+  e.pose = info->poseInSpace;
+  if (XR_SUCCEEDED(s.rt.create_result)) {
+    s.rt.world.push_back(e);
+    done.space = load(static_cast<int>(s.rt.world.size() - 1));
+    from_space(done.space)->enabled.insert(XR_SPACE_COMPONENT_TYPE_LOCATABLE_FB);
+    done.uuid = e.uuid;
+  } else {
+    s.handles.push_back(Handle{-1, true, {}});  // delivered with the failure all the same
+    done.space = to_space(s.handles.size() - 1);
+  }
+  post(&done, sizeof done);
+  return XR_SUCCESS;
+}
+
+XrResult XRAPI_CALL GetSpaceUuid(XrSpace space, XrUuidEXT* out) {
+  const Entity* e = entity_of(space);
+  if (!e) return XR_ERROR_HANDLE_INVALID;
+  *out = e->uuid;
+  return XR_SUCCESS;
+}
+
+XrResult XRAPI_CALL SaveSpace(XrSession, const XrSpaceSaveInfoFB* info, XrAsyncRequestIdFB* id) {
+  Handle* h = from_space(info->space);
+  if (!h || h->entity < 0) return XR_ERROR_HANDLE_INVALID;
+  if (h->enabled.count(XR_SPACE_COMPONENT_TYPE_STORABLE_FB) == 0) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
+  Entity& e = state().rt.world[static_cast<size_t>(h->entity)];
+  e.persisted = true;
+  *id = state().next_request++;
+  XrEventDataSpaceSaveCompleteFB done{XR_TYPE_EVENT_DATA_SPACE_SAVE_COMPLETE_FB};
+  done.requestId = *id;
+  done.result = XR_SUCCESS;
+  done.space = info->space;
+  done.uuid = e.uuid;
+  done.location = info->location;
+  post(&done, sizeof done);
+  return XR_SUCCESS;
+}
+
+XrResult XRAPI_CALL EraseSpace(XrSession, const XrSpaceEraseInfoFB* info, XrAsyncRequestIdFB* id) {
+  Handle* h = from_space(info->space);
+  if (!h || h->entity < 0) return XR_ERROR_HANDLE_INVALID;
+  if (h->enabled.count(XR_SPACE_COMPONENT_TYPE_STORABLE_FB) == 0) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
+  Entity& e = state().rt.world[static_cast<size_t>(h->entity)];
+  *id = state().next_request++;
+  XrEventDataSpaceEraseCompleteFB done{XR_TYPE_EVENT_DATA_SPACE_ERASE_COMPLETE_FB};
+  done.requestId = *id;
+  done.result = e.persisted ? XR_SUCCESS : XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
+  done.space = info->space;
+  done.uuid = e.uuid;
+  done.location = info->location;
+  e.persisted = false;
+  post(&done, sizeof done);
+  return XR_SUCCESS;
+}
+
 }  // namespace
 
 Runtime& runtime() { return state().rt; }
+
+bool persisted(const XrUuidEXT& u) {
+  for (const Entity& e : state().rt.world) {
+    if (std::memcmp(e.uuid.data, u.data, XR_UUID_SIZE) == 0) return e.persisted;
+  }
+  return false;
+}
 
 void reset() { state() = State{}; }
 
@@ -254,6 +326,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance, const char* nam
       {"xrGetSpaceSemanticLabelsFB", reinterpret_cast<PFN_xrVoidFunction>(&GetLabels)},
       {"xrGetSpaceBoundary2DFB", reinterpret_cast<PFN_xrVoidFunction>(&GetBoundary)},
       {"xrGetSpaceTriangleMeshMETA", reinterpret_cast<PFN_xrVoidFunction>(&GetTriangleMesh)},
+      {"xrCreateSpatialAnchorFB", reinterpret_cast<PFN_xrVoidFunction>(&CreateSpatialAnchor)},
+      {"xrGetSpaceUuidFB", reinterpret_cast<PFN_xrVoidFunction>(&GetSpaceUuid)},
+      {"xrSaveSpaceFB", reinterpret_cast<PFN_xrVoidFunction>(&SaveSpace)},
+      {"xrEraseSpaceFB", reinterpret_cast<PFN_xrVoidFunction>(&EraseSpace)},
   };
   for (const Entry& e : table) {
     if (std::strcmp(e.name, name) == 0) {
@@ -263,6 +339,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance, const char* nam
   }
   *fn = nullptr;
   return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(XrInstance, XrSystemId, XrSystemProperties* properties) {
+  for (auto* next = static_cast<XrBaseOutStructure*>(properties->next); next; next = next->next) {
+    if (next->type == XR_TYPE_SYSTEM_SPATIAL_ENTITY_PROPERTIES_FB) {
+      reinterpret_cast<XrSystemSpatialEntityPropertiesFB*>(next)->supportsSpatialEntity = XR_TRUE;
+    }
+  }
+  return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrResultToString(XrInstance, XrResult r, char buffer[XR_MAX_RESULT_STRING_SIZE]) {

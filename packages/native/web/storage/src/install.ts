@@ -16,7 +16,7 @@
 // makes them durable before exit (runtime/storage, iwn_storage_flush_all).
 
 import type { StorageNatives } from './natives.ts';
-import { createLocalStorage, createStorage, Storage } from './web-storage.ts';
+import { createLocalStorage, createStorage, runtimeItem, setRuntimeItem, Storage } from './web-storage.ts';
 
 export interface InstallStorageOptions {
   natives?: StorageNatives | null;
@@ -69,6 +69,12 @@ export function installStorage(g: typeof globalThis, opts: InstallStorageOptions
   });
   define(g, 'Storage', Storage);
   installed.push('localStorage', 'sessionStorage', 'Storage');
+  // Other preludes keep runtime state the page must not clear in localStorage's runtime entries (web/xr: the app's
+  // persistent anchors, as Quest Browser keeps them per origin).
+  define(g, '__iwnRuntimeStorage', {
+    getItem: (key: string) => runtimeItem((local ??= createLocalStorage(natives, warn)), key),
+    setItem: (key: string, value: string | null) => setRuntimeItem((local ??= createLocalStorage(natives, warn)), key, value),
+  });
 
   const nav = (g as unknown as { navigator?: Record<string, unknown> }).navigator;
   if (nav) {

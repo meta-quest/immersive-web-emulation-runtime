@@ -333,6 +333,18 @@ export class XRFrame {
   }
 
   createAnchor(pose: XRRigidTransform, space: XRSpace) {
+    const host = this[P_FRAME].session[P_SESSION].host;
+    if (host && this[P_FRAME].active) {
+      // host mode: the session must have enabled anchors; with the host's
+      // anchor hooks the anchor is the host's
+      const refused = host.anchors.refuse('XRFrame.createAnchor');
+      if (refused) {
+        return refused;
+      }
+      if (host.anchors.hosted) {
+        return host.anchors.create(pose, space);
+      }
+    }
     return new Promise<XRAnchor>((resolve, reject) => {
       if (!this[P_FRAME].active) {
         reject(

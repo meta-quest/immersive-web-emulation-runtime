@@ -38,6 +38,22 @@ export class XRAnchor {
   }
 
   requestPersistentHandle() {
+    const host = this[P_ANCHOR].session[P_SESSION].host;
+    if (host && !this[P_ANCHOR].deleted && host.anchors.owns(this)) {
+      return host.anchors.persist(this);
+    }
+    if (host?.anchors.hosted) {
+      // a host session's anchor is the host's to persist: once deleted or its
+      // session ended, there is nothing to persist (Chromium: InvalidStateError)
+      return Promise.reject(
+        new DOMException(
+          this[P_ANCHOR].deleted
+            ? 'XRAnchor has already been deleted.'
+            : 'XRSession has already ended.',
+          'InvalidStateError',
+        ),
+      );
+    }
     return new Promise<string>((resolve, reject) => {
       if (this[P_ANCHOR].deleted) {
         reject(
@@ -73,6 +89,8 @@ export class XRAnchor {
     this[P_ANCHOR].anchorSpace = null;
     this[P_ANCHOR].deleted = true;
     this[P_ANCHOR].session[P_SESSION].trackedAnchors.delete(this);
+    // host mode: the host releases its anchor
+    this[P_ANCHOR].session[P_SESSION].host?.anchors.onDelete(this);
   }
 }
 

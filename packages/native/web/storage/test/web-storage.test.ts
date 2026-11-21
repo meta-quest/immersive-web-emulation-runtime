@@ -97,6 +97,34 @@ test('localStorage mirrors every mutation; unchanged values are not re-sent; ses
   assert.equal(session.getItem('s'), '1');
 });
 
+test("runtime entries (__iwnRuntimeStorage) are the runtime's: hidden from the page, kept by clear(), persisted", () => {
+  const dir = mkdtempSync(join(tmpdir(), 'iwn-ls-'));
+  {
+    const { g, local } = freshGlobal(new FakeStorageNatives(dir));
+    const runtime = g.__iwnRuntimeStorage as { getItem(k: string): string | null; setItem(k: string, v: string | null): void };
+    local.setItem('page', '1');
+    runtime.setItem('anchors', '["u1"]');
+    assert.equal(runtime.getItem('anchors'), '["u1"]');
+    // the page sees only its own entries
+    assert.equal(local.length, 1);
+    assert.equal(local.key(0), 'page');
+    assert.deepEqual(Object.keys(local), ['page']);
+    assert.equal(local.getItem('anchors'), null);
+    assert.ok(!Object.keys(g).includes('__iwnRuntimeStorage'), 'not enumerable');
+    // a page that clears its storage does not clear the runtime's
+    local.clear();
+    assert.equal(local.length, 0);
+    assert.equal(runtime.getItem('anchors'), '["u1"]');
+  }
+  // the next launch reads it back (and the page's clear() stuck)
+  const { g, local } = freshGlobal(new FakeStorageNatives(dir));
+  const runtime = g.__iwnRuntimeStorage as { getItem(k: string): string | null; setItem(k: string, v: string | null): void };
+  assert.equal(runtime.getItem('anchors'), '["u1"]');
+  assert.equal(local.length, 0);
+  runtime.setItem('anchors', null);
+  assert.equal(runtime.getItem('anchors'), null);
+});
+
 test('lone surrogates survive the round trip', () => {
   const dir = mkdtempSync(join(tmpdir(), 'iwn-ls-'));
   freshGlobal(new FakeStorageNatives(dir)).local.setItem('s', 'a\uD800b');

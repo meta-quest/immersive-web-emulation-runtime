@@ -24,6 +24,7 @@
 //   sceneData(knownVersion) -> object | null   the room's entities when their version differs (starts the query)
 //   scenePoses() -> ArrayBuffer         entity poses, 8 floats per slot, written before each frame (xr_scene.h)
 //   sceneStatus() -> object             the scene model's state (diagnostics)
+//   anchor*()                           spatial anchors (xr_anchors_binding.cc)
 #include <v8.h>
 
 #include <cmath>
@@ -569,6 +570,8 @@ iwn::xr::XrConfig read_config(Runtime* rt) {
 
 }  // namespace
 
+void iwn_register_xr_anchors(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local<v8::Object> xr);
+
 void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local<v8::Object> natives) {
   Runtime* rt = Runtime::From(isolate);
   if (!rt) return;  // workers and other isolates the core did not create have no XR
@@ -662,5 +665,6 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
   set_fn(isolate, ctx, o, "scenePoses", ScenePoses);
   set_fn(isolate, ctx, o, "sceneStatus", SceneStatus);
   o->Set(ctx, str(isolate, "layoutVersion"), v8::Integer::NewFromUnsigned(isolate, L::kVersion)).Check();
+  iwn_register_xr_anchors(isolate, ctx, o);
   natives->Set(ctx, str(isolate, "xr"), o).Check();
 }

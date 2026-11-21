@@ -102,6 +102,7 @@ declare module 'iwer/host' {
     indices: Uint32Array;
     semanticLabel: string;
   }
+  export type XRHostAnchor = object;
 
   export interface XRHostBackend {
     beginSwapchain(options: XRHostSwapchainOptions): XRHostSwapchain | null;
@@ -121,6 +122,13 @@ declare module 'iwer/host' {
     reportError?(error: unknown, source: XRHostErrorSource): void;
     getPlanes?(): ReadonlySet<NativePlane> | readonly NativePlane[] | null;
     getMeshes?(): ReadonlySet<NativeMesh> | readonly NativeMesh[] | null;
+    createAnchor?(transform: Float32Array): Promise<XRHostAnchor>;
+    getAnchorPose?(anchor: XRHostAnchor, out: Float32Array): boolean;
+    deleteAnchor?(anchor: XRHostAnchor): void;
+    persistAnchor?(anchor: XRHostAnchor): Promise<string>;
+    restoreAnchor?(uuid: string): Promise<XRHostAnchor>;
+    erasePersistentAnchor?(uuid: string): Promise<void>;
+    getPersistentAnchors?(): readonly string[];
   }
 
   export type XRHostEvent =
