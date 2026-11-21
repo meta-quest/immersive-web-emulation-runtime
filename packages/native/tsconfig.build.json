@@ -8,5 +8,5 @@
     "declarationMap": false,
     "sourceMap": false
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "packager/src/**/*.ts"]
 }

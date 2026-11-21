@@ -13,10 +13,15 @@
     },
     "./package.json": "./package.json"
   },
+  "bin": {
+    "iwer-native": "bin/iwer-native.mjs"
+  },
   "files": [
+    "bin/",
     "lib/",
     "!lib/**/*.map",
     "!lib/**/*.d.ts.map",
+    "packager/templates.json",
     "README.md",
     "LICENSE"
   ],
@@ -24,8 +29,8 @@
     "clean": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\"",
-    "verify": "npm run typecheck && npm test && npm run build"
+    "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\" \"packager/test/**/*.test.ts\"",
+    "verify": "npm run typecheck && npm test && npm run build && node bin/iwer-native.mjs --help"
   },
   "engines": {
     "node": ">=20.19.0 <21.0.0-0 || >=22.12.0 <23.0.0-0 || >=24.0.0"

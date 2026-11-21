@@ -1,0 +1,5 @@
+{
+  "//": "The template APK this @iwer/native version packs with. 'bundled' (the alpha's delivery, see RELEASE.md): {file, version, sha256, size}, a file inside the npm package, checked against sha256 on every pack; release/stage-package.mjs --template fills it in, in the staged npm copy only (the tree keeps null and never holds the binary). 'template' (PKG-2, after the alpha): {version, url, sha256, size}, downloaded on demand into the user cache. With neither, the packer uses --template, $IWER_NATIVE_TEMPLATE or a template built in this checkout.",
+  "bundled": null,
+  "template": null
+}
