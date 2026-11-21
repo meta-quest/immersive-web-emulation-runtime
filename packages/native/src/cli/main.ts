@@ -30,6 +30,9 @@ import { NativeConfigError } from '../config/validate.ts';
 import { defaultExec, locateAdb, type Exec } from '../util/exec.ts';
 import { VERSION } from '../version.ts';
 import { runDoctor, type CheckStatus } from './doctor.ts';
+import { checkProject, runCompatCommand } from '../../compat/src/cli.ts';
+import { formatCompatReport } from '../../compat/src/check.ts';
+import { phaseMsProblem } from '../../compat/src/trace-run.ts';
 
 /** Exit codes. */
 export const EXIT = {
@@ -66,6 +69,8 @@ const COMMANDS = {
   doctor: 'Check Node, adb, connected headsets and the native config',
   validate:
     'Validate the "native" section of iwsdk.config.json and print the resolved target',
+  compat:
+    'Check the built dist/ for web APIs the native runtime lacks (static scan; --trace adds a headless run)',
 } as const;
 type Command = keyof typeof COMMANDS;
 
@@ -106,6 +111,16 @@ run options:
   --device-port <p> the device-side inspector port to forward to (overrides the lookup)
   --activity <cls>  launcher activity (default android.app.NativeActivity)
 
+compat options (pack runs the static check first; --skip-compat turns it off):
+  --dist <dir>      Vite output to check (default: <project>/dist)
+  --trace           also run the app headlessly (Playwright + IWER from the project);
+                    native.network.allow origins are let through, others blocked
+  --mirror <p>=<d>  trace run: answer requests under URL prefix <p> from directory <d> (repeatable)
+  --boot-ms <ms>    trace run: wait this long for the app to offer or request a session
+                    (default 25000; heavy apps load slowly under SwiftShader)
+  --strict          fail on warnings and on static mentions of unsupported calls
+  --verbose         show informational findings and evidence
+
 Exit codes: 0 ok, 1 failure, 2 usage error.
 `;
 
@@ -129,6 +144,12 @@ const OPTIONS = {
   forward: { type: 'string' },
   'device-port': { type: 'string' },
   activity: { type: 'string' },
+  trace: { type: 'boolean' },
+  mirror: { type: 'string', multiple: true },
+  'boot-ms': { type: 'string' },
+  strict: { type: 'boolean' },
+  verbose: { type: 'boolean' },
+  'skip-compat': { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean', short: 'v' },
 } as const;
@@ -183,6 +204,8 @@ export async function runCli(
       return install(ctx);
     case 'run':
       return run(ctx);
+    case 'compat':
+      return compat(ctx);
   }
 }
 
@@ -208,6 +231,12 @@ interface CommandContext {
     forward?: string;
     'device-port'?: string;
     activity?: string;
+    trace?: boolean;
+    mirror?: string[];
+    'boot-ms'?: string;
+    strict?: boolean;
+    verbose?: boolean;
+    'skip-compat'?: boolean;
   };
   rest: string[];
 }
@@ -313,6 +342,40 @@ async function pack({
   );
   const distDir = path.resolve(projectRoot, values.dist ?? 'dist');
   const buildType = values.release ? 'release' : 'debug';
+  // what the compat gate found, kept for --json output when it passes (warnings and the unsupported-API advice)
+  let compatSummary: Record<string, unknown> | undefined;
+  if (!values['skip-compat'] && existsSync(path.join(distDir, 'index.html'))) {
+    // the build:metavr compat gate: static scan of the dist, the app's source and config (compat/README.md)
+    let report: Awaited<ReturnType<typeof checkProject>>;
+    try {
+      report = await checkProject({
+        projectRoot,
+        distDir,
+        strict: values.strict,
+        allow: loaded.target.network.allow,
+      });
+    } catch (error) {
+      const message = `compat check could not run: ${(error as Error).message} (pass --skip-compat to pack anyway)`;
+      if (values.json) io.stdout(`${JSON.stringify({ ok: false, error: message }, null, 2)}\n`);
+      else io.stderr(`iwer-native pack: ${message}\n`);
+      return EXIT.failure;
+    }
+    if (!values.json && (!report.ok || report.warnings > 0))
+      io.stderr(formatCompatReport(report, { verbose: values.verbose }));
+    compatSummary = {
+      ok: report.ok,
+      errors: report.errors,
+      warnings: report.warnings,
+      findings: report.findings.filter((f) => f.severity !== 'info'),
+      ...(report.advice ? { advice: report.advice } : {}),
+    };
+    if (!report.ok || (values.strict && report.warnings > 0)) {
+      if (values.json)
+        io.stdout(`${JSON.stringify({ ok: false, error: 'compat check failed (pass --skip-compat to pack anyway)', compat: report }, null, 2)}\n`);
+      else io.stderr('iwer-native pack: compat check failed (pass --skip-compat to pack anyway)\n');
+      return EXIT.failure;
+    }
+  }
   let result: PackResult;
   try {
     const template = await resolveTemplate({
@@ -347,7 +410,7 @@ async function pack({
     return EXIT.failure;
   }
   if (values.json) {
-    io.stdout(`${JSON.stringify({ ok: true, ...result }, null, 2)}\n`);
+    io.stdout(`${JSON.stringify({ ok: true, ...result, ...(compatSummary ? { compat: compatSummary } : {}) }, null, 2)}\n`);
   } else {
     for (const w of result.warnings) io.stderr(`warning: ${w}\n`);
     io.stdout(formatPackReport(result));
@@ -359,6 +422,30 @@ async function pack({
   if (values.run)
     return launch(io, values, loaded.target.packageId, inspectorPortOf(out));
   return EXIT.ok;
+}
+
+async function compat({
+  io,
+  projectRoot,
+  values,
+  rest,
+}: CommandContext): Promise<number> {
+  if (rest.length > 0)
+    return usage(io, `compat takes no arguments (got "${rest.join(' ')}")`);
+  const bootProblem = values['boot-ms'] === undefined ? undefined : phaseMsProblem('--boot-ms', values['boot-ms']);
+  if (bootProblem) return usage(io, bootProblem);
+  return runCompatCommand({
+    projectRoot,
+    distDir: values.dist,
+    trace: values.trace,
+    mirrors: values.mirror,
+    bootMs: values['boot-ms'] === undefined ? undefined : Number(values['boot-ms']),
+    strict: values.strict,
+    verbose: values.verbose,
+    json: values.json,
+    stdout: io.stdout,
+    stderr: io.stderr,
+  });
 }
 
 /** Errors from the packer that are the user's to fix (printed, exit 1). */

@@ -295,3 +295,18 @@ Build/test only (not shipped): Android SDK build-tools 34/35 (`aapt2`, `apksigne
 dl.google.com) for the CI cross-checks and the template build; Android NDK r27c (clang, for
 the stand-in template's native library); JDK 8/17 `keytool` and OpenSSL 3.5 to generate the throwaway
 keystore fixtures in `packager/test/fixtures/`.
+
+## compat: nothing shipped
+
+`compat/` adds no dependency and ships no third-party code. Its optional headless run resolves these from the
+**app project's** `node_modules` at run time (IWSDK projects already have them); they are not dependencies of
+`@iwer/native`:
+
+| component | version used | license | source | used for |
+|---|---|---|---|---|
+| Playwright (`playwright`, `playwright-core`) | 1.58.2 | Apache-2.0 | npm, pinned so its Chromium revision (1208, headless shell 145.0.7632.6) matches Playwright's browser cache | driving headless Chromium for the trace run (`compat/src/trace-run.ts`) |
+| Chromium headless shell | 145.0.7632.6 (Playwright revision 1208) | BSD-3-Clause and others (Chromium) | Playwright's browser cache | the page the tracer runs in |
+| iwer (`build/iwer.js`) | 2.7.0 (this monorepo) | MIT | `immersive-web-emulation-runtime/packages/iwer` | XR frames in the headless run (emulation mode), and the host-mode class surface the matrix resolves against (`build/iwer-host.module.js`) |
+
+Sweep inputs (scratch only, outside the repo, never shipped): `@webxr-input-profiles/assets` 1.0.20 (MIT; npm) and `@iwsdk/example-assets` 0.4.2 (local tarball) served as local mirrors of `cdn.jsdelivr.net` during the
+sweep.

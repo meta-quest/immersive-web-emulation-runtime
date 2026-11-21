@@ -323,7 +323,7 @@ describe('pack', () => {
     });
     const t = io({ cwd: dir, env: env() });
     assert.equal(
-      await runCli(['pack', '--template', templateFile], t.io),
+      await runCli(['pack', '--skip-compat', '--template', templateFile], t.io),
       EXIT.ok,
       t.err(),
     );
@@ -332,7 +332,7 @@ describe('pack', () => {
     const r = io({ cwd: dir, env: env() });
     assert.equal(
       await runCli(
-        ['pack', '--release', '--template', templateFile],
+        ['pack', '--skip-compat', '--release', '--template', templateFile],
         r.io,
       ),
       EXIT.failure,
@@ -345,7 +345,7 @@ describe('pack', () => {
     const a = io({ cwd: dir, env: env() });
     assert.equal(
       await runCli(
-        ['pack', '--template', templateFile, '--out', 'outdir.apk'],
+        ['pack', '--skip-compat', '--template', templateFile, '--out', 'outdir.apk'],
         a.io,
       ),
       EXIT.failure,
@@ -357,7 +357,7 @@ describe('pack', () => {
     );
     const b = io({ cwd: dir, env: env() });
     assert.equal(
-      await runCli(['pack', '--template', dir], b.io),
+      await runCli(['pack', '--skip-compat', '--template', dir], b.io),
       EXIT.failure,
     );
     assert.match(b.err(), /is not a file/);

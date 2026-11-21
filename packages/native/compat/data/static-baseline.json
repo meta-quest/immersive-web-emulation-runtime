@@ -1,0 +1,51 @@
+{
+ "generatedAt": "2026-10-22T14:45:04.370Z",
+ "iwsdk": "1.2.0",
+ "source": "create-vr, create-ar, create-browser; 3 traced samples",
+ "keys": [
+  "BaseAudioContext.createMediaElementSource()",
+  "BaseAudioContext.createMediaStreamSource()",
+  "Document.createElement(\"video\")",
+  "HTMLVideoElement.requestVideoFrameCallback()",
+  "MediaDevices.getUserMedia()",
+  "Navigator.mediaDevices",
+  "VideoFrame",
+  "WebAssembly.instantiateStreaming()",
+  "XR feature anchors (optional)",
+  "XR feature camera-access (optional)",
+  "XR feature depth-sensing (optional)",
+  "XR feature hit-test (optional)",
+  "XR feature mesh-detection (optional)",
+  "XR feature plane-detection (optional)",
+  "XRWebGLBinding.createCylinderLayer()",
+  "XRWebGLBinding.createQuadLayer()",
+  "localStorage",
+  "new MutationObserver"
+ ],
+ "counts": {
+  "BaseAudioContext.createMediaElementSource()": 1,
+  "BaseAudioContext.createMediaStreamSource()": 1,
+  "Document.createElement(\"video\")": 2,
+  "HTMLVideoElement.requestVideoFrameCallback()": 4,
+  "MediaDevices.getUserMedia()": 2,
+  "Navigator.mediaDevices": 3,
+  "VideoFrame": 6,
+  "WebAssembly.instantiateStreaming()": 3,
+  "XR feature anchors (optional)": 4,
+  "XR feature camera-access (optional)": 1,
+  "XR feature depth-sensing (optional)": 3,
+  "XR feature hit-test (optional)": 4,
+  "XR feature mesh-detection (optional)": 2,
+  "XR feature plane-detection (optional)": 2,
+  "XRWebGLBinding.createCylinderLayer()": 1,
+  "XRWebGLBinding.createQuadLayer()": 1,
+  "localStorage": 3,
+  "new MutationObserver": 1
+ },
+ "origins": [
+  "https://api.dicebear.com",
+  "https://iwsdk.local",
+  "https://jcgt.org",
+  "https://unpkg.com"
+ ]
+}

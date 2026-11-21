@@ -22,6 +22,7 @@
     "!lib/**/*.map",
     "!lib/**/*.d.ts.map",
     "packager/templates.json",
+    "compat/data/",
     "README.md",
     "LICENSE"
   ],
@@ -29,7 +30,8 @@
     "clean": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\" \"packager/test/**/*.test.ts\"",
+    "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\" \"packager/test/**/*.test.ts\" \"compat/test/**/*.test.ts\"",
+    "test:compat": "node --test --test-concurrency=4 --test-reporter=spec \"compat/test/**/*.test.ts\"",
     "verify": "npm run typecheck && npm test && npm run build && node bin/iwer-native.mjs --help"
   },
   "engines": {
