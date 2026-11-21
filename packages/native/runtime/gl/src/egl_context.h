@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // EGL environment for the WebGL binding: one display, one root ES 3.2 context that owns the share group
 // (the OpenXR session is created with it: XrGraphicsBindingOpenGLESAndroidKHR takes Display(), Config(),
 // RootContext()), and one context per WebGL context, created in the root's share group so swapchain

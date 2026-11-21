@@ -60,9 +60,13 @@ const { values } = parseArgs({
 const sdk =
   process.env.ANDROID_HOME ||
   process.env.ANDROID_SDK_ROOT ||
-  (process.env.IWN_TOOLCHAIN_DIR ? path.join(process.env.IWN_TOOLCHAIN_DIR, 'android') : '');
+  (process.env.IWN_TOOLCHAIN_DIR
+    ? path.join(process.env.IWN_TOOLCHAIN_DIR, 'android')
+    : '');
 if (!sdk) {
-  console.error('build-template: set ANDROID_HOME (Android SDK with build-tools and platforms/android-34)');
+  console.error(
+    'build-template: set ANDROID_HOME (Android SDK with build-tools and platforms/android-34)',
+  );
   process.exit(2);
 }
 const buildTools = (() => {
@@ -242,8 +246,14 @@ try {
       let clean = false;
       try {
         clean =
-          run('git', ['-C', pkgRoot, 'status', '--porcelain', '--', '.'])
-            .trim() === '';
+          run('git', [
+            '-C',
+            pkgRoot,
+            'status',
+            '--porcelain',
+            '--',
+            '.',
+          ]).trim() === '';
       } catch {}
       buildId = clean ? head : `${head}-dirty`;
     }

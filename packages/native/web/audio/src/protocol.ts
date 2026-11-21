@@ -148,7 +148,13 @@ export const BIQUAD_TYPES = [
   'notch',
   'allpass',
 ] as const;
-export const OSC_TYPES = ['sine', 'square', 'sawtooth', 'triangle', 'custom'] as const;
+export const OSC_TYPES = [
+  'sine',
+  'square',
+  'sawtooth',
+  'triangle',
+  'custom',
+] as const;
 export const PANNING_MODELS = ['equalpower', 'HRTF'] as const;
 export const DISTANCE_MODELS = ['linear', 'inverse', 'exponential'] as const;
 export const CHANNEL_COUNT_MODES = ['max', 'clamped-max', 'explicit'] as const;

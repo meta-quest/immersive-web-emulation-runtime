@@ -19,12 +19,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { buildTestDist, buildTestTemplate } from '../packager/test/helpers.ts';
-import {
-  EXIT,
-  runCli,
-  splitShellWords,
-  type CliIo,
-} from '../src/cli/main.ts';
+import { EXIT, runCli, splitShellWords, type CliIo } from '../src/cli/main.ts';
 import { runDoctor } from '../src/cli/doctor.ts';
 import { loadNativeProject } from '../src/config/load.ts';
 import { NativeConfigError } from '../src/config/validate.ts';
@@ -312,7 +307,10 @@ describe('pack', () => {
       await runCli(['run', '--dry-run', '--forward', '9508'], t2.io),
       EXIT.ok,
     );
-    assert.match(t2.out(), /^adb forward tcp:9508 localabstract:com\.a\.b_devtools_9555\n/);
+    assert.match(
+      t2.out(),
+      /^adb forward tcp:9508 localabstract:com\.a\.b_devtools_9555\n/,
+    );
   });
   test('debug pack works without the release keystore; --release needs it', async () => {
     const dir = packProject({
@@ -327,7 +325,10 @@ describe('pack', () => {
       EXIT.ok,
       t.err(),
     );
-    assert.match(t.err(), /keystore file not found.*only needed for release builds/);
+    assert.match(
+      t.err(),
+      /keystore file not found.*only needed for release builds/,
+    );
     assert.match(t.out(), /signed\s+v2\+v3 with debug key/);
     const r = io({ cwd: dir, env: env() });
     assert.equal(
@@ -345,7 +346,14 @@ describe('pack', () => {
     const a = io({ cwd: dir, env: env() });
     assert.equal(
       await runCli(
-        ['pack', '--skip-compat', '--template', templateFile, '--out', 'outdir.apk'],
+        [
+          'pack',
+          '--skip-compat',
+          '--template',
+          templateFile,
+          '--out',
+          'outdir.apk',
+        ],
         a.io,
       ),
       EXIT.failure,
@@ -399,12 +407,23 @@ describe('pack', () => {
     const t3 = io();
     assert.equal(
       await runCli(
-        ['run', 'com.a.b', '--dry-run', '--forward', '9508', '--device-port', '9600'],
+        [
+          'run',
+          'com.a.b',
+          '--dry-run',
+          '--forward',
+          '9508',
+          '--device-port',
+          '9600',
+        ],
         t3.io,
       ),
       EXIT.ok,
     );
-    assert.match(t3.out(), /^adb forward tcp:9508 localabstract:com\.a\.b_devtools_9600\n/);
+    assert.match(
+      t3.out(),
+      /^adb forward tcp:9508 localabstract:com\.a\.b_devtools_9600\n/,
+    );
   });
   test('install hint names the package read from the APK', async () => {
     const dir = packProject();
@@ -618,7 +637,10 @@ describe('run', () => {
       await runCli(['run', 'com.x.y', '--dry-run', '--forward', '9508'], t.io),
       EXIT.ok,
     );
-    assert.match(t.out(), /^adb forward tcp:9508 localabstract:com\.x\.y_devtools_9229\n/);
+    assert.match(
+      t.out(),
+      /^adb forward tcp:9508 localabstract:com\.x\.y_devtools_9229\n/,
+    );
   });
   test('not installed', async () => {
     const t = io({
@@ -715,7 +737,10 @@ describe('doctor', () => {
       env: { STORE_PW: 'secret-value' },
     });
     assert.equal(await runCli(['doctor'], a.io), EXIT.ok);
-    assert.match(a.out(), /\[warn\] release signing: KEY_PW not set \(needed for pack --release only\)/);
+    assert.match(
+      a.out(),
+      /\[warn\] release signing: KEY_PW not set \(needed for pack --release only\)/,
+    );
     assert.ok(!a.out().includes('secret-value'));
     const b = io({
       cwd: dir,
@@ -730,17 +755,26 @@ describe('doctor', () => {
     const dir = project({
       native: {
         packageId: 'com.a.b',
-        signing: { keystore: '../secrets/release.p12', storePasswordEnv: 'STORE_PW' },
+        signing: {
+          keystore: '../secrets/release.p12',
+          storePasswordEnv: 'STORE_PW',
+        },
       },
     });
     const d = io({ cwd: dir, exec: healthy(), env: { STORE_PW: '' } });
     assert.equal(await runCli(['doctor'], d.io), EXIT.ok, d.out());
-    assert.match(d.out(), /\[warn\].*\n.*keystore file not found.*only needed for release builds/);
+    assert.match(
+      d.out(),
+      /\[warn\].*\n.*keystore file not found.*only needed for release builds/,
+    );
     // an empty password is set (pack accepts it)
     assert.match(d.out(), /\[ok\]\s+release signing: STORE_PW set/);
     const v = io({ cwd: dir });
     assert.equal(await runCli(['validate'], v.io), EXIT.ok, v.err());
-    assert.match(v.err() + v.out(), /keystore file not found.*only needed for release builds/);
+    assert.match(
+      v.err() + v.out(),
+      /keystore file not found.*only needed for release builds/,
+    );
   });
 
   test('invalid config fails', async () => {

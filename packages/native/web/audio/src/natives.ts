@@ -29,18 +29,36 @@ export interface AudioNatives {
   submit(ctx: number, words: Float64Array, count: number): number;
   startRendering(ctx: number): boolean;
   /** Returns [bufferId, ...channelData] (Float32Arrays alias native memory). */
-  createBuffer(channels: number, length: number, sampleRate: number): [number, ...Float32Array[]];
+  createBuffer(
+    channels: number,
+    length: number,
+    sampleRate: number,
+  ): [number, ...Float32Array[]];
   /** Returns [bufferId, channels, length, sampleRate, ...channelData], or null if unknown. */
-  takeBuffer(id: number): [number, number, number, number, ...Float32Array[]] | null;
+  takeBuffer(
+    id: number,
+  ): [number, number, number, number, ...Float32Array[]] | null;
   releaseBuffer(id: number): void;
   /** Detaches `data` and decodes it on a worker thread; completion arrives as an event. */
-  decode(ctx: number, data: ArrayBuffer, requestId: number, targetRate: number): void;
+  decode(
+    ctx: number,
+    data: ArrayBuffer,
+    requestId: number,
+    targetRate: number,
+  ): void;
   /** Flat event list [type, ctx, a, b, message | null, ...], or undefined when none. */
   poll(): Array<number | string | null> | undefined;
   /** True when native will post events as tasks (host hooks present); false means JS must poll. */
-  setEventHandler(fn: ((events: Array<number | string | null>) => void) | null): boolean;
+  setEventHandler(
+    fn: ((events: Array<number | string | null>) => void) | null,
+  ): boolean;
   pendingWork(): boolean;
-  analyserTime(ctx: number, node: number, out: Float32Array | Uint8Array, fftSize: number): void;
+  analyserTime(
+    ctx: number,
+    node: number,
+    out: Float32Array | Uint8Array,
+    fftSize: number,
+  ): void;
   analyserFreq(
     ctx: number,
     node: number,

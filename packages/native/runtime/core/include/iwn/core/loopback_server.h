@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Loopback-only HTTP + WebSocket server on its own thread (CDP-1..4, CDP-10, DBG-1, DBG-7), V8-free.
 // Serves one or more ports bound to 127.0.0.1. Socket I/O and frame parsing never run on the JS thread; complete
 // messages are handed to callbacks on the server thread (the V8 layer posts them to the JS thread). Every outgoing

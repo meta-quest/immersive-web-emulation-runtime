@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Khronos WebGL conformance subset runner (spec GL-CTS-1) for the @iwer/native WebGL binding.
 //
 // Runs the official test pages (sdk/tests/**.html) without a browser: each page gets a fresh V8 context
@@ -31,13 +38,22 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // 8 MB main-thread stack (SIGSEGV inside libgallium). Re-run this script with a 256 MB stack limit.
 if (!process.env.IWN_CTS_BIG_STACK) {
   const { spawnSync } = await import('node:child_process');
-  const quoted = [process.execPath, ...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)]
+  const quoted = [
+    process.execPath,
+    ...process.execArgv,
+    fileURLToPath(import.meta.url),
+    ...process.argv.slice(2),
+  ]
     .map((a) => `'${a.replace(/'/g, `'\\''`)}'`)
     .join(' ');
-  const r = spawnSync('/bin/sh', ['-c', `ulimit -s 262144 2>/dev/null; exec ${quoted}`], {
-    stdio: 'inherit',
-    env: { ...process.env, IWN_CTS_BIG_STACK: '1' },
-  });
+  const r = spawnSync(
+    '/bin/sh',
+    ['-c', `ulimit -s 262144 2>/dev/null; exec ${quoted}`],
+    {
+      stdio: 'inherit',
+      env: { ...process.env, IWN_CTS_BIG_STACK: '1' },
+    },
+  );
   process.exit(r.status ?? 1);
 }
 const args = {};
@@ -46,14 +62,20 @@ for (let i = 2; i < process.argv.length; i++) {
   if (a === '--verbose') args.verbose = true;
   else args[a.replace(/^--/, '')] = process.argv[++i];
 }
-const ROOT = args.root ?? path.join(os.homedir(), '.cache/iwn-webgl-cts/sdk-tests');
+const ROOT =
+  args.root ?? path.join(os.homedir(), '.cache/iwn-webgl-cts/sdk-tests');
 const LIST = args.list ?? path.join(here, 'subset.txt');
 const TIMEOUT = Number(args.timeout ?? 30000);
 const PASSES = args.webgl === '1' ? [1] : args.webgl === '2' ? [2] : [2, 1];
 let webglVersion = 2; // current pass
-const BUNDLE = fs.readFileSync(path.join(here, '..', 'dist', 'webgl.js'), 'utf8');
+const BUNDLE = fs.readFileSync(
+  path.join(here, '..', 'dist', 'webgl.js'),
+  'utf8',
+);
 const require = createRequire(import.meta.url);
-const addonPath = process.env.IWN_GL_ADDON ?? fileURLToPath(new URL('../../../build/gl/host/iwn_gl.node', import.meta.url));
+const addonPath =
+  process.env.IWN_GL_ADDON ??
+  fileURLToPath(new URL('../../../build/gl/host/iwn_gl.node', import.meta.url));
 const natives = require(addonPath).gl;
 
 let setCurrentPage = () => {};
@@ -114,10 +136,17 @@ function runPage(testRel) {
     timers: { setTimeout, clearTimeout, setInterval, clearInterval },
     now: () => performance.now(),
     globals: { URL, URLSearchParams, TextEncoder, TextDecoder, queueMicrotask },
-    installBinding: () => vm.runInContext(BUNDLE, ctx, { filename: 'webgl.js' }),
+    installBinding: () =>
+      vm.runInContext(BUNDLE, ctx, { filename: 'webgl.js' }),
     natives,
     webglOptions: process.env.IWN_WEBGL_DEBUG
-      ? { debugErrors: true, log: (m) => console.error(`[${testRel}] ${m.split('\n').slice(0, 3).join(' | ')}`) }
+      ? {
+          debugErrors: true,
+          log: (m) =>
+            console.error(
+              `[${testRel}] ${m.split('\n').slice(0, 3).join(' | ')}`,
+            ),
+        }
       : {},
     logError: (...a) => args.verbose && console.error(...a),
     onResults: (r) => (currentResults = r),
@@ -130,13 +159,24 @@ function runPage(testRel) {
 const { expandList, SUITE_VERSION } = await import('./list.mjs');
 
 process.on('uncaughtException', (e) => {
-  if (currentResults) currentResults.errors.push(`uncaught: ${e && e.stack ? e.stack.split('\n')[0] : e}`);
+  if (currentResults)
+    currentResults.errors.push(
+      `uncaught: ${e && e.stack ? e.stack.split('\n')[0] : e}`,
+    );
 });
 process.on('unhandledRejection', (e) => {
-  if (currentResults) currentResults.errors.push(`unhandled rejection: ${e && e.stack ? e.stack.split('\n')[0] : e}`);
+  if (currentResults)
+    currentResults.errors.push(
+      `unhandled rejection: ${e && e.stack ? e.stack.split('\n')[0] : e}`,
+    );
 });
 
-const report = { root: ROOT, started: new Date().toISOString(), passes: [], tests: [] };
+const report = {
+  root: ROOT,
+  started: new Date().toISOString(),
+  passes: [],
+  tests: [],
+};
 let passed = 0;
 let failed = 0;
 let excluded = 0;
@@ -146,23 +186,40 @@ for (const pass of PASSES) {
   webglVersion = pass;
   const { tests, exclude } = expandList(ROOT, LIST, pass, args.filter);
   total += tests.length;
-  const counts = { webgl: pass, suiteVersion: SUITE_VERSION[pass], passed: 0, failed: 0, excluded: 0, total: tests.length };
+  const counts = {
+    webgl: pass,
+    suiteVersion: SUITE_VERSION[pass],
+    passed: 0,
+    failed: 0,
+    excluded: 0,
+    total: tests.length,
+  };
   report.passes.push(counts);
   for (const t of tests) {
     const dir = `v${pass} ${path.dirname(t)}`;
     const d = byDir.get(dir) ?? { pass: 0, fail: 0, excluded: 0 };
     byDir.set(dir, d);
-    const why = exclude.get(t) ?? [...exclude.entries()].find(([k]) => k.endsWith('/') && t.startsWith(k))?.[1];
+    const why =
+      exclude.get(t) ??
+      [...exclude.entries()].find(
+        ([k]) => k.endsWith('/') && t.startsWith(k),
+      )?.[1];
     if (why !== undefined) {
       excluded++;
       counts.excluded++;
       d.excluded++;
-      report.tests.push({ webgl: pass, test: t, status: 'excluded', reason: why });
+      report.tests.push({
+        webgl: pass,
+        test: t,
+        status: 'excluded',
+        reason: why,
+      });
       continue;
     }
     setCurrentPage(`[v${pass}] ${t}`);
     const r = await runPage(t);
-    const ok = r.finished && r.fail === 0 && r.errors.length === 0 && r.pass > 0;
+    const ok =
+      r.finished && r.fail === 0 && r.errors.length === 0 && r.pass > 0;
     if (ok) {
       passed++;
       counts.passed++;
@@ -172,7 +229,15 @@ for (const pass of PASSES) {
       counts.failed++;
       d.fail++;
     }
-    report.tests.push({ webgl: pass, test: t, status: ok ? 'pass' : 'fail', subtests: { pass: r.pass, fail: r.fail }, timedOut: r.timedOut, failures: r.failures, errors: r.errors });
+    report.tests.push({
+      webgl: pass,
+      test: t,
+      status: ok ? 'pass' : 'fail',
+      subtests: { pass: r.pass, fail: r.fail },
+      timedOut: r.timedOut,
+      failures: r.failures,
+      errors: r.errors,
+    });
     const line = `${ok ? 'PASS' : 'FAIL'} [v${pass}] ${t} (${r.pass}/${r.pass + r.fail})${r.timedOut ? ' TIMEOUT' : ''}`;
     console.log(line);
     if (!ok && args.verbose) {
@@ -182,8 +247,16 @@ for (const pass of PASSES) {
   }
 }
 console.log('\nper directory:');
-for (const [dir, d] of [...byDir].sort()) console.log(`  ${dir}: pass ${d.pass}, fail ${d.fail}, excluded ${d.excluded}`);
-for (const c of report.passes) console.log(`WebGL ${c.webgl} pass (suite ${c.suiteVersion}): ${c.passed} passed, ${c.failed} failed, ${c.excluded} excluded (of ${c.total})`);
-console.log(`\nCTS subset: ${passed} passed, ${failed} failed, ${excluded} excluded (of ${total})`);
+for (const [dir, d] of [...byDir].sort())
+  console.log(
+    `  ${dir}: pass ${d.pass}, fail ${d.fail}, excluded ${d.excluded}`,
+  );
+for (const c of report.passes)
+  console.log(
+    `WebGL ${c.webgl} pass (suite ${c.suiteVersion}): ${c.passed} passed, ${c.failed} failed, ${c.excluded} excluded (of ${c.total})`,
+  );
+console.log(
+  `\nCTS subset: ${passed} passed, ${failed} failed, ${excluded} excluded (of ${total})`,
+);
 if (args.json) fs.writeFileSync(args.json, JSON.stringify(report, null, 2));
 process.exit(failed ? 1 : 0);

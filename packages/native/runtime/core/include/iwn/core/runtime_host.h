@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // How the platform shell (runtime/app: NativeActivity) starts and stops the runtime. The host owns the main JS
 // thread; the shell only posts lifecycle inputs and never waits on JS (PROC-3).
 #pragma once

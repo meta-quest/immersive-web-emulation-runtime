@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The order of Android runtime-permission requests (XR-PERM-1), V8- and JNI-free so it is unit-tested on the host
 // (xr_permissions.cc drives it).
 //

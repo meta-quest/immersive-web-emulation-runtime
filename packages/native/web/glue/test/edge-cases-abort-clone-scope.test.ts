@@ -52,7 +52,13 @@ describe('AbortSignal.any() and GC (DOM-10)', () => {
     await collect();
     run(`ctrl.abort('user')`);
     await tick(80);
-    assert.deepEqual(Array.from(run<string[]>(`results.slice()`)).sort(), ['algorithm', 'handler', 'listener', 'request:user', 'timeout:TimeoutError']);
+    assert.deepEqual(Array.from(run<string[]>(`results.slice()`)).sort(), [
+      'algorithm',
+      'handler',
+      'listener',
+      'request:user',
+      'timeout:TimeoutError',
+    ]);
   });
 
   test('dependents nobody listens to can be collected (removed listener, null handler, none)', async () => {
@@ -68,12 +74,19 @@ describe('AbortSignal.any() and GC (DOM-10)', () => {
     `);
     await collect();
     // The last one still has a listener, so it is held.
-    assert.deepEqual(Array.from(run<boolean[]>(`refs.map((r) => r.deref() === undefined)`)), [true, true, true, true, false]);
+    assert.deepEqual(
+      Array.from(run<boolean[]>(`refs.map((r) => r.deref() === undefined)`)),
+      [true, true, true, true, false],
+    );
   });
 
   test('a throwing abort algorithm does not stop other algorithms or the abort event', async () => {
     const errors: unknown[] = [];
-    const { run } = await createGlueContext({ preset: { console: { error: (...a: unknown[]) => errors.push(a), warn() {} } } });
+    const { run } = await createGlueContext({
+      preset: {
+        console: { error: (...a: unknown[]) => errors.push(a), warn() {} },
+      },
+    });
     const out = run<unknown[]>(`
       const out = [];
       onerror = (msg) => { out.push('onerror:' + msg); return true; };
@@ -84,7 +97,12 @@ describe('AbortSignal.any() and GC (DOM-10)', () => {
       try { ac.abort(); out.push('abort() returned'); } catch (e) { out.push('abort() threw ' + e.message); }
       out;
     `);
-    assert.deepEqual(Array.from(out), ['onerror:Uncaught Error: alg', 'second', 'abort-event', 'abort() returned']);
+    assert.deepEqual(Array.from(out), [
+      'onerror:Uncaught Error: alg',
+      'second',
+      'abort-event',
+      'abort() returned',
+    ]);
   });
 
   test('timeout() truncates before the range check; any() needs an iterable', async () => {
@@ -98,7 +116,12 @@ describe('AbortSignal.any() and GC (DOM-10)', () => {
       for (const bad of [-1, NaN, Infinity]) { try { AbortSignal.timeout(bad); out.push('ok'); } catch (e) { out.push(e.name); } }
       return out;
     })()`);
-    assert.deepEqual(Array.from(out), ['TimeoutError', 'TypeError', 'TypeError', 'TypeError']);
+    assert.deepEqual(Array.from(out), [
+      'TimeoutError',
+      'TypeError',
+      'TypeError',
+      'TypeError',
+    ]);
     const r = await both(`
       const out = [];
       for (const bad of [{ length: 0 }, 5, null]) { try { AbortSignal.any(bad); out.push('ok'); } catch (e) { out.push(e.name); } }
@@ -111,7 +134,10 @@ describe('AbortSignal.any() and GC (DOM-10)', () => {
 
 // A fake __iwn.clone that behaves like core's clone.cc: a ValueSerializer round trip with no host
 // object delegate (Node's structuredClone serializes JS class instances as plain objects the same way).
-function nativeCloneNatives(): { natives: Record<string, unknown>; seen: unknown[] } {
+function nativeCloneNatives(): {
+  natives: Record<string, unknown>;
+  seen: unknown[];
+} {
   const seen: unknown[] = [];
   const { natives } = fakeNatives({
     clone: {
@@ -150,9 +176,30 @@ describe('structuredClone with platform objects (TMR-3, WRK-5)', () => {
       out;
     `);
     assert.deepEqual(Array.from(out), [
-      'function', true, 2, true, 'a/b', 2, true, 'n.txt', 7, true, 'AbortError', 'msg', 20,
-      'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError',
-      0, 8, 1, 2,
+      'function',
+      true,
+      2,
+      true,
+      'a/b',
+      2,
+      true,
+      'n.txt',
+      7,
+      true,
+      'AbortError',
+      'msg',
+      20,
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      0,
+      8,
+      1,
+      2,
     ]);
     // Only the plain-data graphs reached the native hook.
     assert.equal(seen.length, 2);
@@ -161,13 +208,20 @@ describe('structuredClone with platform objects (TMR-3, WRK-5)', () => {
   test('a Proxy goes to the native path, which throws DataCloneError', async () => {
     const { natives } = nativeCloneNatives();
     const { run } = await createGlueContext({ natives });
-    assert.throws(() => run(`structuredClone(new Proxy({ a: 1 }, {}))`), { name: 'DataCloneError' });
+    assert.throws(() => run(`structuredClone(new Proxy({ a: 1 }, {}))`), {
+      name: 'DataCloneError',
+    });
   });
 
   test('accessors keep the JS path, so a getter runs once', async () => {
     const { natives, seen } = nativeCloneNatives();
     const { run } = await createGlueContext({ natives });
-    assert.equal(run(`let n = 0; const c = structuredClone({ get x() { n++; return 5; } }); [n, c.x].join()`), '1,5');
+    assert.equal(
+      run(
+        `let n = 0; const c = structuredClone({ get x() { n++; return 5; } }); [n, c.x].join()`,
+      ),
+      '1,5',
+    );
     assert.equal(seen.length, 0);
   });
 
@@ -200,7 +254,9 @@ describe('structuredClone with platform objects (TMR-3, WRK-5)', () => {
   test('a non-detachable buffer in the transfer list is a DataCloneError on the JS path', async () => {
     const { run } = await createGlueContext();
     assert.equal(
-      run(`const mem = new WebAssembly.Memory({ initial: 1 }); try { structuredClone(1, { transfer: [mem.buffer] }); 'ok' } catch (e) { e.name }`),
+      run(
+        `const mem = new WebAssembly.Memory({ initial: 1 }); try { structuredClone(1, { transfer: [mem.buffer] }); 'ok' } catch (e) { e.name }`,
+      ),
       'DataCloneError',
     );
   });
@@ -219,13 +275,18 @@ describe('structuredClone with platform objects (TMR-3, WRK-5)', () => {
       if (c[19999].pos[2] !== 20001) throw new Error('bad clone');
       [best(() => structuredClone(data)), best(() => __hostClone(data))];
     `);
-    assert.ok(jsMs <= 25 * Math.max(v8Ms, 2), `20,000-object JS clone took ${jsMs} ms vs ${v8Ms} ms in V8`);
+    assert.ok(
+      jsMs <= 25 * Math.max(v8Ms, 2),
+      `20,000-object JS clone took ${jsMs} ms vs ${v8Ms} ms in V8`,
+    );
   });
 });
 
 describe('worker scope (WRK-2)', () => {
   test('no window/history/matchMedia; WorkerLocation of the worker URL; the shared APIs are there', async () => {
-    const { run } = await createGlueContext({ config: { scope: 'worker', url: 'https://app.local/js/worker.js?x=1' } });
+    const { run } = await createGlueContext({
+      config: { scope: 'worker', url: 'https://app.local/js/worker.js?x=1' },
+    });
     const out = run<Record<string, unknown>>(`({
       window: typeof window, document: typeof document, history: typeof history, matchMedia: typeof matchMedia,
       devicePixelRatio: typeof devicePixelRatio, Location: typeof Location, WorkerLocation: typeof WorkerLocation,
@@ -236,31 +297,62 @@ describe('worker scope (WRK-2)', () => {
       blob: URL.createObjectURL(new Blob(['x'])).startsWith('blob:https://app.local/'),
       scope: ${REG}.scope, navigation: ${REG}.navigation,
     })`);
-    assert.deepEqual({ ...out }, {
-      window: 'undefined', document: 'undefined', history: 'undefined', matchMedia: 'undefined', devicePixelRatio: 'undefined',
-      Location: 'undefined', WorkerLocation: 'function', locationTag: '[object WorkerLocation]',
-      href: 'https://app.local/js/worker.js?x=1', origin: 'https://app.local', search: '?x=1', self: true, onmessage: true,
-      onpopstate: false, apis: true, crypto: 'function', performance: 'function', navigator: 'string', blob: true,
-      scope: 'worker', navigation: null,
-    });
+    assert.deepEqual(
+      { ...out },
+      {
+        window: 'undefined',
+        document: 'undefined',
+        history: 'undefined',
+        matchMedia: 'undefined',
+        devicePixelRatio: 'undefined',
+        Location: 'undefined',
+        WorkerLocation: 'function',
+        locationTag: '[object WorkerLocation]',
+        href: 'https://app.local/js/worker.js?x=1',
+        origin: 'https://app.local',
+        search: '?x=1',
+        self: true,
+        onmessage: true,
+        onpopstate: false,
+        apis: true,
+        crypto: 'function',
+        performance: 'function',
+        navigator: 'string',
+        blob: true,
+        scope: 'worker',
+        navigation: null,
+      },
+    );
   });
 
   test('a window alias the bootstrap set before the glue is removed in a worker', async () => {
     const { natives } = fakeNatives();
     const ctx = vm.createContext({});
     const g = vm.runInContext('globalThis', ctx) as Record<string, unknown>;
-    Object.defineProperty(g, 'window', { value: g, writable: true, configurable: true });
-    g.__iwn = { ...natives, config: { scope: 'worker', url: 'https://app.local/w.js' } };
+    Object.defineProperty(g, 'window', {
+      value: g,
+      writable: true,
+      configurable: true,
+    });
+    g.__iwn = {
+      ...natives,
+      config: { scope: 'worker', url: 'https://app.local/w.js' },
+    };
     const { glueScript } = await import('./harness.ts');
     (await glueScript()).runInContext(ctx);
     assert.equal(vm.runInContext(`typeof window`, ctx), 'undefined');
-    assert.equal(vm.runInContext(`location.href`, ctx), 'https://app.local/w.js');
+    assert.equal(
+      vm.runInContext(`location.href`, ctx),
+      'https://app.local/w.js',
+    );
   });
 });
 
 describe('global setters (WebIDL readonly / [Replaceable] / [PutForwards])', () => {
   test('location = url navigates; window, navigator, crypto, history are readonly; self, origin are replaceable', async () => {
-    const { run } = await createGlueContext({ config: { url: 'https://app.local/index.html' } });
+    const { run } = await createGlueContext({
+      config: { url: 'https://app.local/index.html' },
+    });
     const out = run<unknown[]>(`
       const out = [];
       location = '#frag';
@@ -274,13 +366,27 @@ describe('global setters (WebIDL readonly / [Replaceable] / [PutForwards])', () 
       out.push(performance, devicePixelRatio);
       out;
     `);
-    assert.deepEqual(Array.from(out), ['object', '#frag', 2, true, 'string', 'function', 'function', true, 'undefined,undefined,undefined,undefined,undefined,undefined', 7, 2]);
+    assert.deepEqual(Array.from(out), [
+      'object',
+      '#frag',
+      2,
+      true,
+      'string',
+      'function',
+      'function',
+      true,
+      'undefined,undefined,undefined,undefined,undefined,undefined',
+      7,
+      2,
+    ]);
   });
 });
 
 describe('location and history details (DOM-5, DOM-3)', () => {
   test('same hash and same URL do not grow history; fragment navigations fire popstate then hashchange', async () => {
-    const { run } = await createGlueContext({ config: { url: 'https://app.local/#a' } });
+    const { run } = await createGlueContext({
+      config: { url: 'https://app.local/#a' },
+    });
     const out = await run<Promise<unknown[]>>(`(async () => {
       const out = [];
       const ev = [];
@@ -301,9 +407,15 @@ describe('location and history details (DOM-5, DOM-3)', () => {
       return out;
     })()`);
     assert.deepEqual(JSON.parse(JSON.stringify(out)), [
-      1, 1, 2, ['popstate:null', 'popstate:null'],
+      1,
+      1,
+      2,
+      ['popstate:null', 'popstate:null'],
       ['popstate:null', 'popstate:null', 'hashchange:https://app.local/#b'],
-      'https://app.local/#b', 1, 50, '#p99',
+      'https://app.local/#b',
+      1,
+      50,
+      '#p99',
     ]);
   });
 });
@@ -393,7 +505,9 @@ describe('events: handler attributes and WebIDL conversions (DOM-2)', () => {
     // The prototype constants too (Node leaves Event.prototype's writable).
     const { run } = await createGlueContext();
     assert.equal(
-      run(`[Event.prototype, FileReader, FileReader.prototype].every((o) => Object.entries(Object.getOwnPropertyDescriptors(o)).filter(([k]) => /^[A-Z_]+$/.test(k)).every(([, d]) => !d.writable && !d.configurable && d.enumerable))`),
+      run(
+        `[Event.prototype, FileReader, FileReader.prototype].every((o) => Object.entries(Object.getOwnPropertyDescriptors(o)).filter(([k]) => /^[A-Z_]+$/.test(k)).every(([, d]) => !d.writable && !d.configurable && d.enumerable))`,
+      ),
       true,
     );
   });
@@ -401,16 +515,29 @@ describe('events: handler attributes and WebIDL conversions (DOM-2)', () => {
 
 describe('matchMedia Media Queries 4 (DOM-3)', () => {
   test('range syntax and unknown features under not()', async () => {
-    const { run } = await createGlueContext({ config: { viewport: { width: 1280, height: 720 } } });
+    const { run } = await createGlueContext({
+      config: { viewport: { width: 1280, height: 720 } },
+    });
     const out = run<unknown[]>(`[
       '(width >= 600px)', '(width > 1279.5px)', '(width < 1280px)', '(400px <= width <= 2000px)', '(1280px = width)',
       '(1300px > width > 1000px)', '(aspect-ratio > 1)', '(height <= 719px)', '(resolution >= 1dppx)', '(400px < width > 300px)',
       'not (bogus-feature)', '(bogus-feature) or (width >= 1px)', 'not ((bogus) and (width < 1px))', 'screen and (bogus)',
     ].map((q) => { const m = matchMedia(q); return [m.matches, m.media === 'not all']; })`);
     assert.deepEqual(JSON.parse(JSON.stringify(out)), [
-      [true, false], [true, false], [false, false], [true, false], [true, false],
-      [true, false], [true, false], [false, false], [true, false], [false, false],
-      [false, false], [true, false], [true, false], [false, false],
+      [true, false],
+      [true, false],
+      [false, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [true, false],
+      [false, false],
+      [true, false],
+      [false, false],
+      [false, false],
+      [true, false],
+      [true, false],
+      [false, false],
     ]);
   });
 });
@@ -431,7 +558,17 @@ describe('encoding and Blob edge cases (NET-14, NET-16)', () => {
       }
       out;
     `);
-    assert.deepEqual(Array.from(out), ['', '', 1, 'TypeError', 'TypeError', 'TypeError', 'TypeError', 'TypeError', 'TypeError']);
+    assert.deepEqual(Array.from(out), [
+      '',
+      '',
+      1,
+      'TypeError',
+      'TypeError',
+      'TypeError',
+      'TypeError',
+      'TypeError',
+      'TypeError',
+    ]);
   });
 
   test('one TextDecoder reused across decode() calls resets its BOM state (matches Node)', async () => {
@@ -467,7 +604,9 @@ describe('navigator.deviceMemory (DOM-4)', () => {
   test('rounds to the nearest power of two and clamps to [0.25, 8]', async () => {
     const got: unknown[] = [];
     for (const gib of [7.5, 6, 5.9, 3, 1.4, 0.3, 0.1, 16, 12]) {
-      const { natives } = fakeNatives({ device: { info: () => ({ deviceMemory: gib }) } });
+      const { natives } = fakeNatives({
+        device: { info: () => ({ deviceMemory: gib }) },
+      });
       const { run } = await createGlueContext({ natives });
       got.push(run(`navigator.deviceMemory`));
     }
@@ -476,9 +615,12 @@ describe('navigator.deviceMemory (DOM-4)', () => {
 });
 
 describe('install details', () => {
-  test('the glue replaces the bootstrap\'s minimal structuredClone and performance even in missing mode', async () => {
+  test("the glue replaces the bootstrap's minimal structuredClone and performance even in missing mode", async () => {
     const { run } = await createGlueContext({
-      preset: { structuredClone: () => 'bootstrap', performance: { now: () => 0 } },
+      preset: {
+        structuredClone: () => 'bootstrap',
+        performance: { now: () => 0 },
+      },
     });
     assert.equal(run(`structuredClone(new Blob(['a'])) instanceof Blob`), true);
     assert.equal(run(`typeof performance.mark`), 'function');
@@ -486,7 +628,10 @@ describe('install details', () => {
 
   test('a malformed JSON config warns and falls back to defaults', async () => {
     const warnings: string[] = [];
-    const { run } = await createGlueContext({ config: '{not json', preset: { console: { warn: (m: string) => warnings.push(m) } } });
+    const { run } = await createGlueContext({
+      config: '{not json',
+      preset: { console: { warn: (m: string) => warnings.push(m) } },
+    });
     assert.equal(run(`location.href`), 'https://app.local/');
     assert.equal(warnings.length, 1);
     assert.match(warnings[0]!, /glue config is not valid JSON/);
@@ -497,6 +642,9 @@ describe('IDNA shim (NET-13)', () => {
   test('capital sigma maps to σ (not final ς); a compatibility form of a separator is disallowed', async () => {
     const { run } = await createGlueContext();
     assert.equal(run(`new URL('https://ΒΌΛΟΣ/').host`), 'xn--nxasmq6b');
-    assert.equal(run(`try { new URL('https://a︒b/'); 'parsed' } catch (e) { e.name }`), 'TypeError');
+    assert.equal(
+      run(`try { new URL('https://a︒b/'); 'parsed' } catch (e) { e.name }`),
+      'TypeError',
+    );
   });
 });

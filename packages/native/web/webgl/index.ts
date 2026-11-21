@@ -14,7 +14,13 @@
 // or test/fake-natives.ts.
 
 export { installWebGL, type WebGLInstall } from './install.ts';
-export { Ctx as WebGLContextImpl, advanceEpoch, type CanvasLike, type ContextAttributes, type ContextOptions } from './core.ts';
+export {
+  Ctx as WebGLContextImpl,
+  advanceEpoch,
+  type CanvasLike,
+  type ContextAttributes,
+  type ContextOptions,
+} from './core.ts';
 export {
   wrapTexture,
   retargetTexture,

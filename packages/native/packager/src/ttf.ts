@@ -130,7 +130,8 @@ function buildCmap(buf: Buffer, cmap: number): (cp: number) => number {
     const encoding = buf.readUInt16BE(o + 2);
     const sub = cmap + buf.readUInt32BE(o + 4);
     const format = buf.readUInt16BE(sub);
-    const unicode = platform === 0 || (platform === 3 && (encoding === 1 || encoding === 10));
+    const unicode =
+      platform === 0 || (platform === 3 && (encoding === 1 || encoding === 10));
     if (!unicode) continue;
     if (format === 12 && format12 < 0) format12 = sub;
     if (format === 4 && format4 < 0) format4 = sub;
@@ -456,7 +457,8 @@ export function measureText(
 ): number {
   const scale = sizePx / font.unitsPerEm;
   let w = 0;
-  for (const cp of codePoints(text)) w += font.advance(font.glyphId(cp)) * scale;
+  for (const cp of codePoints(text))
+    w += font.advance(font.glyphId(cp)) * scale;
   return w;
 }
 

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Hashes against FIPS 180-4 / RFC test vectors, base64, data: URLs (NET-12), MIME table (NET-2).
 #include <cstdio>
 #include <set>

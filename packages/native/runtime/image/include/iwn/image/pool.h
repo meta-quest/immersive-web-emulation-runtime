@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Background threads for decode and pixel jobs (PROC-2: the JS thread only receives finished pixels), and the
 // process-wide registry that moves pixel stores between isolates when an ImageBitmap is transferred (WRK-5).
 #pragma once

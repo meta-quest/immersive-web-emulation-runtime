@@ -74,9 +74,14 @@ export interface WebAudioApi {
  * environment: AudioContext, OfflineAudioContext and AudioBuffer are bound subclasses so that
  * `new AudioContext()` and `new AudioBuffer(...)` reach these natives.
  */
-export function createWebAudio(natives: AudioNatives, options: WebAudioOptions = {}): WebAudioApi {
+export function createWebAudio(
+  natives: AudioNatives,
+  options: WebAudioOptions = {},
+): WebAudioApi {
   if (natives.protocolVersion !== PROTOCOL_VERSION) {
-    throw new Error(`iwn.audio protocol mismatch: native ${natives.protocolVersion}, JS ${PROTOCOL_VERSION}`);
+    throw new Error(
+      `iwn.audio protocol mismatch: native ${natives.protocolVersion}, JS ${PROTOCOL_VERSION}`,
+    );
   }
   const env = makeEnv(natives, options);
   class BoundAudioBuffer extends AudioBuffer {
@@ -145,7 +150,11 @@ const EXPERIMENTAL_NODES = [
 ] as const;
 
 /** Exported for the docs and tests: the names `experimental: false` turns into NotSupportedError stubs. */
-export const EXPERIMENTAL_INTERFACES: readonly string[] = [...EXPERIMENTAL_NODES.map(([n]) => n), 'OfflineAudioContext', 'OfflineAudioCompletionEvent'];
+export const EXPERIMENTAL_INTERFACES: readonly string[] = [
+  ...EXPERIMENTAL_NODES.map(([n]) => n),
+  'OfflineAudioContext',
+  'OfflineAudioCompletionEvent',
+];
 
 /**
  * The alpha surface (the alpha scope of 2026-10-20): beyond-basic interfaces become NotSupportedError stubs
@@ -153,19 +162,32 @@ export const EXPERIMENTAL_INTERFACES: readonly string[] = [...EXPERIMENTAL_NODES
  * interface, and OfflineAudioContext / OfflineAudioCompletionEvent are stubs too (installWebAudio leaves
  * them off the global, so `typeof OfflineAudioContext === 'undefined'`).
  */
-function gateExperimental(api: WebAudioApi, contextClass: { prototype: object }): void {
+function gateExperimental(
+  api: WebAudioApi,
+  contextClass: { prototype: object },
+): void {
   const stubs = api as unknown as Record<string, unknown>;
   for (const [name, factory] of EXPERIMENTAL_NODES) {
     stubs[name] = unsupportedNode(name);
     const method = {
       [factory](): never {
-        throw domError('NotSupportedError', `${name} (${factory}) is not supported in this @iwer/native alpha`);
+        throw domError(
+          'NotSupportedError',
+          `${name} (${factory}) is not supported in this @iwer/native alpha`,
+        );
       },
     }[factory]!;
-    Object.defineProperty(contextClass.prototype, factory, { value: method, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(contextClass.prototype, factory, {
+      value: method,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   }
   stubs.OfflineAudioContext = unsupportedNode('OfflineAudioContext');
-  stubs.OfflineAudioCompletionEvent = unsupportedNode('OfflineAudioCompletionEvent');
+  stubs.OfflineAudioCompletionEvent = unsupportedNode(
+    'OfflineAudioCompletionEvent',
+  );
 }
 
 /**
@@ -173,19 +195,33 @@ function gateExperimental(api: WebAudioApi, contextClass: { prototype: object })
  * Absent by design (AUD-6): MediaElementAudioSourceNode, MediaStream* nodes,
  * AudioWorklet, ScriptProcessorNode.
  */
-export function installWebAudio(target: object, natives: AudioNatives, options: WebAudioOptions = {}): WebAudioApi {
+export function installWebAudio(
+  target: object,
+  natives: AudioNatives,
+  options: WebAudioOptions = {},
+): WebAudioApi {
   const api = createWebAudio(natives, options);
   const define = (name: string, value: unknown) =>
-    Object.defineProperty(target, name, { value, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(target, name, {
+      value,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   const experimental = options.experimental === true;
   for (const [name, value] of Object.entries(api)) {
     if (name === 'env') continue;
     // Outside the alpha, OfflineAudioContext is absent (feature-detectable) rather than a throwing stub.
-    if (!experimental && (name === 'OfflineAudioContext' || name === 'OfflineAudioCompletionEvent')) continue;
+    if (
+      !experimental &&
+      (name === 'OfflineAudioContext' || name === 'OfflineAudioCompletionEvent')
+    )
+      continue;
     define(name, value);
   }
   define('webkitAudioContext', api.AudioContext);
-  if (experimental) define('webkitOfflineAudioContext', api.OfflineAudioContext);
+  if (experimental)
+    define('webkitOfflineAudioContext', api.OfflineAudioContext);
   followPageVisibility(target, natives, api);
   return api;
 }
@@ -198,15 +234,26 @@ const PAUSE_PAGE_HIDDEN = 4;
  * lifecycle (PROC-6) and the OpenXR session's hidden state into document.visibilityState, so one
  * listener covers both. JS-visible context state does not change; currentTime stops.
  */
-function followPageVisibility(target: object, natives: AudioNatives, api: WebAudioApi): void {
-  type Doc = { visibilityState?: string; addEventListener?: (t: string, f: () => void) => void };
+function followPageVisibility(
+  target: object,
+  natives: AudioNatives,
+  api: WebAudioApi,
+): void {
+  type Doc = {
+    visibilityState?: string;
+    addEventListener?: (t: string, f: () => void) => void;
+  };
   let attached = false;
   const attach = (): boolean => {
     if (attached) return true;
     const doc = (target as { document?: Doc }).document;
     if (!doc || typeof doc.addEventListener !== 'function') return false;
     attached = true;
-    const apply = () => natives.setOutputPaused(PAUSE_PAGE_HIDDEN, doc.visibilityState === 'hidden');
+    const apply = () =>
+      natives.setOutputPaused(
+        PAUSE_PAGE_HIDDEN,
+        doc.visibilityState === 'hidden',
+      );
     doc.addEventListener('visibilitychange', apply);
     if (doc.visibilityState === 'hidden') apply();
     return true;

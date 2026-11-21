@@ -42,7 +42,11 @@ export interface WorkersHooks {
   /** Serializer: a platform object found in a message -> a plain descriptor (or throw DataCloneError). */
   hostWrite(value: object): object;
   /** Deserializer: a descriptor -> the platform object in this realm. */
-  hostRead(descriptor: object, portIds: number[], bitmapTokens: number[]): object;
+  hostRead(
+    descriptor: object,
+    portIds: number[],
+    bitmapTokens: number[],
+  ): object;
   /** Objects whose instances are platform objects (checked natively along the prototype chain). */
   hostPrototypes: object[];
 }
@@ -55,14 +59,25 @@ export interface WorkersNatives {
    * creator passes the bytes it resolved in its own blob store. Throws NotSupportedError past the worker limit
    * (WRK-9), SecurityError for other origins. Returns [workerId, outsidePort].
    */
-  create(url: string, type: 'classic' | 'module', name: string, source: Uint8Array | null, deviceInfo: object | null): [number, number];
+  create(
+    url: string,
+    type: 'classic' | 'module',
+    name: string,
+    source: Uint8Array | null,
+    deviceInfo: object | null,
+  ): [number, number];
   terminate(workerId: number): void;
   /** A new entangled pair owned by this global. */
   channel(): [number, number];
   /** Structured serialization with the ArrayBuffers to transfer; returns a pending id for post(). */
   serialize(value: unknown, transfer: ArrayBuffer[]): number;
   /** Sends a serialized message from `port` to its peer, with the transferred ports and ImageBitmap tokens. */
-  post(port: number, pending: number, portIds: number[], bitmapTokens: number[]): boolean;
+  post(
+    port: number,
+    pending: number,
+    portIds: number[],
+    bitmapTokens: number[],
+  ): boolean;
   discard(pending: number): void;
   start(port: number): void;
   close(port: number): void;
@@ -74,7 +89,12 @@ export interface WorkersNatives {
   /** Worker only: self.close(). */
   closeSelf?(): void;
   /** Worker only: an error a child worker raised and this global did not handle goes to this worker's creator. */
-  forwardError?(message: string, filename: string, lineno: number, colno: number): void;
+  forwardError?(
+    message: string,
+    filename: string,
+    lineno: number,
+    colno: number,
+  ): void;
 }
 
 /** The parts of the glue registry (globalThis[Symbol.for('iwn.glue')]) used here. */
@@ -84,7 +104,11 @@ export interface GlueLike {
   blobFromBytes(bytes: Uint8Array, type?: string): object;
   events: {
     dispatchTrusted(target: EventTarget, event: Event): boolean;
-    defineEventHandler(proto: object, type: string, targetOf?: (self: object) => EventTarget): void;
+    defineEventHandler(
+      proto: object,
+      type: string,
+      targetOf?: (self: object) => EventTarget,
+    ): void;
     reportException(error: unknown): void;
   };
   scope: 'window' | 'worker';

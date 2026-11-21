@@ -116,7 +116,9 @@ export class AbortSignal extends EventTarget {
 
   static timeout(milliseconds: number): AbortSignal {
     if (arguments.length === 0) {
-      throw new TypeError("Failed to execute 'timeout' on 'AbortSignal': 1 argument required, but only 0 present.");
+      throw new TypeError(
+        "Failed to execute 'timeout' on 'AbortSignal': 1 argument required, but only 0 present.",
+      );
     }
     // WebIDL [EnforceRange] unsigned long long: ToNumber, reject non-finite, truncate, then range-check.
     const n = Number(milliseconds);
@@ -127,10 +129,14 @@ export class AbortSignal extends EventTarget {
       );
     }
     const signal = new AbortSignal(INTERNAL);
-    const setTimer = (globalThis as { setTimeout?: (cb: () => void, ms: number) => unknown })
-      .setTimeout;
+    const setTimer = (
+      globalThis as { setTimeout?: (cb: () => void, ms: number) => unknown }
+    ).setTimeout;
     if (typeof setTimer !== 'function') {
-      throw domException('AbortSignal.timeout needs timers', 'NotSupportedError');
+      throw domException(
+        'AbortSignal.timeout needs timers',
+        'NotSupportedError',
+      );
     }
     // Timer delays are WebIDL `long` (the core's setTimeout wraps them to int32, so 2^31 ms would fire
     // at once); wait in chunks of at most 2^31 - 1 ms.
@@ -138,7 +144,8 @@ export class AbortSignal extends EventTarget {
       const step = Math.min(remaining, MAX_TIMER_DELAY);
       setTimer(() => {
         if (remaining > step) wait(remaining - step);
-        else signalAbort(signal, domException('signal timed out', 'TimeoutError'));
+        else
+          signalAbort(signal, domException('signal timed out', 'TimeoutError'));
       }, step);
     };
     wait(ms);
@@ -150,7 +157,8 @@ export class AbortSignal extends EventTarget {
     if (
       signals === null ||
       (typeof signals !== 'object' && typeof signals !== 'function') ||
-      typeof (signals as { [Symbol.iterator]?: unknown })[Symbol.iterator] !== 'function'
+      typeof (signals as { [Symbol.iterator]?: unknown })[Symbol.iterator] !==
+        'function'
     ) {
       throw new TypeError(
         "Failed to execute 'any' on 'AbortSignal': The provided value cannot be converted to a sequence.",
@@ -187,7 +195,8 @@ export class AbortSignal extends EventTarget {
         rootState.dependents.add(ref);
         if (rootState.dependents.size >= rootState.pruneAt) {
           // Drop entries for dependents that were collected, so a long-lived source does not grow.
-          for (const r of rootState.dependents) if (r.deref() === undefined) rootState.dependents.delete(r);
+          for (const r of rootState.dependents)
+            if (r.deref() === undefined) rootState.dependents.delete(r);
           rootState.pruneAt = Math.max(64, rootState.dependents.size * 2);
         }
       }

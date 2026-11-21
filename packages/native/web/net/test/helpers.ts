@@ -7,7 +7,12 @@
 
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,18 +36,35 @@ export function setup(natives: NetNatives | null, glue?: unknown): Setup {
   const warnings: string[] = [];
   const g: Record<string | symbol, unknown> = { navigator: {} };
   if (glue) g[Symbol.for('iwn.glue')] = glue;
-  const registry = installNet(g as unknown as typeof globalThis, { natives, warn: (m) => warnings.push(m), mode: 'all' });
-  return { registry, fetch: registry.fetch, natives: natives as NetNatives, warnings, global: g };
+  const registry = installNet(g as unknown as typeof globalThis, {
+    natives,
+    warn: (m) => warnings.push(m),
+    mode: 'all',
+  });
+  return {
+    registry,
+    fetch: registry.fetch,
+    natives: natives as NetNatives,
+    warnings,
+    global: g,
+  };
 }
 
-export async function setupBridge(opts: BridgeOptions, glue?: unknown): Promise<Setup & { bridge: BridgeNatives }> {
+export async function setupBridge(
+  opts: BridgeOptions,
+  glue?: unknown,
+): Promise<Setup & { bridge: BridgeNatives }> {
   const bridge = new BridgeNatives(opts);
   await bridge.ready;
   return { ...setup(bridge, glue), bridge };
 }
 
 /** A fixture dist: _app/x.js, .well-known/y.json, ü.txt, a big binary, index.html. */
-export function makeDist(bigBytes = 5 * 1024 * 1024 + 3): { dir: string; big: Buffer; sha: string } {
+export function makeDist(bigBytes = 5 * 1024 * 1024 + 3): {
+  dir: string;
+  big: Buffer;
+  sha: string;
+} {
   const dir = mkdtempSync(join(tmpdir(), 'iwn-dist-'));
   mkdirSync(join(dir, '_app'));
   mkdirSync(join(dir, '.well-known'));
@@ -58,25 +80,39 @@ export function makeDist(bigBytes = 5 * 1024 * 1024 + 3): { dir: string; big: Bu
 }
 
 export function sha256(bytes: ArrayBuffer | Uint8Array): string {
-  return createHash('sha256').update(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)).digest('hex');
+  return createHash('sha256')
+    .update(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
+    .digest('hex');
 }
 
 export interface TestHttpServer {
   server: Server;
   port: number;
   origin: string;
-  requests: Array<{ method: string; url: string; headers: IncomingMessage['headers']; body: Buffer }>;
+  requests: Array<{
+    method: string;
+    url: string;
+    headers: IncomingMessage['headers'];
+    body: Buffer;
+  }>;
   close(): Promise<void>;
 }
 
-export async function startHttpServer(handler: (req: IncomingMessage, res: ServerResponse, body: Buffer) => void): Promise<TestHttpServer> {
+export async function startHttpServer(
+  handler: (req: IncomingMessage, res: ServerResponse, body: Buffer) => void,
+): Promise<TestHttpServer> {
   const requests: TestHttpServer['requests'] = [];
   const server = createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
       const body = Buffer.concat(chunks);
-      requests.push({ method: req.method ?? '', url: req.url ?? '', headers: req.headers, body });
+      requests.push({
+        method: req.method ?? '',
+        url: req.url ?? '',
+        headers: req.headers,
+        body,
+      });
       handler(req, res, body);
     });
   });

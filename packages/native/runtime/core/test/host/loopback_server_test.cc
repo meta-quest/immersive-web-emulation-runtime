@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // CDP-1..4, CDP-10, DBG-1 against the real server over loopback sockets: discovery, Host check, handshake with
 // mixed-case headers, echo, a multi-MB reply as one frame, ping/pong, close.
 #include <arpa/inet.h>

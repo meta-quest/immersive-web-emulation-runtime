@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // stb_image backend (public domain / MIT, v2.30): PNG, JPEG (baseline, progressive, CMYK/YCCK), GIF (first frame),
 // BMP. Used for host tests and as a fallback where AImageDecoder is unavailable.
 #include <climits>

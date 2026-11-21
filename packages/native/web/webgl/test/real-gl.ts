@@ -15,7 +15,9 @@ import type { GlNatives } from '../gen/natives.gen.ts';
 import { installWebGL, type WebGLInstall } from '../install.ts';
 
 // Default build directory: build/gl/host under the package (see runtime/gl/README.md).
-const addonPath = process.env.IWN_GL_ADDON ?? fileURLToPath(new URL('../../../build/gl/host/iwn_gl.node', import.meta.url));
+const addonPath =
+  process.env.IWN_GL_ADDON ??
+  fileURLToPath(new URL('../../../build/gl/host/iwn_gl.node', import.meta.url));
 
 let natives: GlNatives | null | undefined;
 
@@ -33,4 +35,7 @@ export function realInstall(): WebGLInstall | null {
   return installWebGL(globalThis as unknown as Record<string, unknown>, n);
 }
 
-export const SKIP_REAL = realNatives() === null ? 'host GL addon not built (cmake -S runtime/gl -DIWN_GL_NODE_ADDON=ON)' : false;
+export const SKIP_REAL =
+  realNatives() === null
+    ? 'host GL addon not built (cmake -S runtime/gl -DIWN_GL_NODE_ADDON=ON)'
+    : false;

@@ -21,7 +21,10 @@ export const RUNTIME_DIR = resolve(PKG, 'runtime/canvas2d');
 export const FONT_DIR = resolve(RUNTIME_DIR, 'fonts');
 
 export function addonPath(): string | null {
-  const candidates = [process.env.IWN_CANVAS2D_ADDON, resolve(PKG, 'build/canvas2d-host/canvas2d.node')];
+  const candidates = [
+    process.env.IWN_CANVAS2D_ADDON,
+    resolve(PKG, 'build/canvas2d-host/canvas2d.node'),
+  ];
   for (const c of candidates) if (c && existsSync(c)) return c;
   return null;
 }
@@ -40,9 +43,25 @@ export function loadNatives(): Canvas2DNatives | null {
 }
 
 export interface TestGlobal {
-  OffscreenCanvas: new (w: number, h: number) => { getContext(t: string, o?: unknown): any; width: number; height: number };
-  FontFace: new (family: string, src: unknown, d?: unknown) => { status: string; loaded: Promise<unknown> };
-  fonts: { add(f: unknown): unknown; ready: Promise<unknown>; check(font: string): boolean; size: number };
+  OffscreenCanvas: new (
+    w: number,
+    h: number,
+  ) => {
+    getContext(t: string, o?: unknown): any;
+    width: number;
+    height: number;
+  };
+  FontFace: new (
+    family: string,
+    src: unknown,
+    d?: unknown,
+  ) => { status: string; loaded: Promise<unknown> };
+  fonts: {
+    add(f: unknown): unknown;
+    ready: Promise<unknown>;
+    check(font: string): boolean;
+    size: number;
+  };
   Path2D: new (p?: unknown) => any;
   ImageData: new (...a: any[]) => any;
   [k: string]: any;
@@ -53,12 +72,26 @@ export function makeGlobal(n: Canvas2DNatives): TestGlobal {
   const g: Record<string, unknown> = { navigator: { language: 'en' } };
   installCanvas2D(g, { natives: n, mode: 'all' });
   const tg = g as unknown as TestGlobal;
-  const reg = new tg.FontFace('IwnTest', readFileSync(resolve(FONT_DIR, 'Roboto-Regular.ttf')), { weight: '400' });
-  const bold = new tg.FontFace('IwnTest', readFileSync(resolve(FONT_DIR, 'Roboto-Bold.ttf')), { weight: '700' });
+  const reg = new tg.FontFace(
+    'IwnTest',
+    readFileSync(resolve(FONT_DIR, 'Roboto-Regular.ttf')),
+    { weight: '400' },
+  );
+  const bold = new tg.FontFace(
+    'IwnTest',
+    readFileSync(resolve(FONT_DIR, 'Roboto-Bold.ttf')),
+    { weight: '700' },
+  );
   tg.fonts.add(reg);
   tg.fonts.add(bold);
   // "IwnRegular": the regular face only (synthetic bold/italic cases), as in tools/gen-goldens.mjs.
-  tg.fonts.add(new tg.FontFace('IwnRegular', readFileSync(resolve(FONT_DIR, 'Roboto-Regular.ttf')), { weight: '400' }));
+  tg.fonts.add(
+    new tg.FontFace(
+      'IwnRegular',
+      readFileSync(resolve(FONT_DIR, 'Roboto-Regular.ttf')),
+      { weight: '400' },
+    ),
+  );
   // The shared cases reference Path2D as a global (as in a browser).
   (globalThis as Record<string, unknown>).Path2D = tg.Path2D;
   return tg;

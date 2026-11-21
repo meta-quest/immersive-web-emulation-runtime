@@ -226,7 +226,9 @@ function configChecks(ctx: DoctorContext): DoctorCheck[] {
   }
   try {
     // A debug machine usually has no release keystore: its absence is a warning here, as for pack (release only).
-    const loaded = loadNativeProject(ctx.projectRoot, { requireKeystore: false });
+    const loaded = loadNativeProject(ctx.projectRoot, {
+      requireKeystore: false,
+    });
     const checks: DoctorCheck[] = [
       {
         id: 'config',

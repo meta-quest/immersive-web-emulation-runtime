@@ -7,4 +7,10 @@
 
 export { installWorkers, REGISTRY_KEY } from './install.ts';
 export type { InstallWorkersOptions, WorkersRegistry } from './install.ts';
-export type { WorkersHooks, WorkersInfo, WorkersNatives, GlueLike, ImageLike } from './natives.ts';
+export type {
+  WorkersHooks,
+  WorkersInfo,
+  WorkersNatives,
+  GlueLike,
+  ImageLike,
+} from './natives.ts';

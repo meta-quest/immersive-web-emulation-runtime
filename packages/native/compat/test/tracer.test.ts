@@ -47,12 +47,36 @@ globalThis.location = { href: '${ORIGIN}/', origin: '${ORIGIN}' };
 })();`;
 
 function setup() {
-  const ctx = vm.createContext({ URL, Blob, Date, Math, JSON, Promise, Error, console });
-  vm.runInContext(PRELUDE, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude.js` });
-  vm.runInContext(tracerScript({ role: 'main', toolMarker: '/__iwn_compat/', selfMarker: '/__iwn_compat/tracer' }), ctx, { filename: `${ORIGIN}/__iwn_compat/tracer.js` });
-  const app = (code: string) => vm.runInContext(code, ctx, { filename: `${ORIGIN}/assets/index-abc.js` });
-  const tool = (code: string) => vm.runInContext(code, ctx, { filename: `${ORIGIN}/__iwn_compat/iwer.js` });
-  const dumpIt = () => vm.runInContext('__iwnCompat.dump()', ctx, { filename: `${ORIGIN}/__iwn_compat/driver.js` }) as TraceDump;
+  const ctx = vm.createContext({
+    URL,
+    Blob,
+    Date,
+    Math,
+    JSON,
+    Promise,
+    Error,
+    console,
+  });
+  vm.runInContext(PRELUDE, ctx, {
+    filename: `${ORIGIN}/__iwn_compat/prelude.js`,
+  });
+  vm.runInContext(
+    tracerScript({
+      role: 'main',
+      toolMarker: '/__iwn_compat/',
+      selfMarker: '/__iwn_compat/tracer',
+    }),
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/tracer.js` },
+  );
+  const app = (code: string) =>
+    vm.runInContext(code, ctx, { filename: `${ORIGIN}/assets/index-abc.js` });
+  const tool = (code: string) =>
+    vm.runInContext(code, ctx, { filename: `${ORIGIN}/__iwn_compat/iwer.js` });
+  const dumpIt = () =>
+    vm.runInContext('__iwnCompat.dump()', ctx, {
+      filename: `${ORIGIN}/__iwn_compat/driver.js`,
+    }) as TraceDump;
   return { ctx, app, tool, dump: dumpIt };
 }
 
@@ -78,10 +102,16 @@ test('records app calls with call sites and argument details', () => {
   assert.equal(a['HTMLCanvasElement.width']?.app, 1);
   assert.equal(a['HTMLCanvasElement.getContext("webgl2")']?.app, 1);
   assert.equal(a['WebGL2RenderingContext.drawElements()']?.calls, 2);
-  assert.match(a['WebGL2RenderingContext.drawElements()']!.site!, /^\/assets\/index-abc\.js:\d+:\d+$/);
+  assert.match(
+    a['WebGL2RenderingContext.drawElements()']!.site!,
+    /^\/assets\/index-abc\.js:\d+:\d+$/,
+  );
   assert.equal(a['WebGL.getExtension("OVR_multiview2")']?.app, 1);
   assert.equal(a['WebGL.getExtension("EXT_nope") -> null']?.app, 1);
-  assert.equal(a['ext:OVR_multiview2.framebufferTextureMultiviewOVR()']?.app, 1);
+  assert.equal(
+    a['ext:OVR_multiview2.framebufferTextureMultiviewOVR()']?.app,
+    1,
+  );
   assert.equal(a['on:HTMLCanvasElement.pointerdown']?.app, 1);
   assert.equal(a['fetch(cross-origin https://cdn.example.net .glb)']?.app, 1);
   assert.equal(a['fetch(same-origin .json)']?.app, 1);
@@ -90,12 +120,16 @@ test('records app calls with call sites and argument details', () => {
 
 test('calls made by injected tooling are not attributed to the app', () => {
   const t = setup();
-  t.tool(`const c = new HTMLCanvasElement(); c.getContext('webgl2').drawElements();`);
+  t.tool(
+    `const c = new HTMLCanvasElement(); c.getContext('webgl2').drawElements();`,
+  );
   const a = t.dump().apis;
   assert.equal(a['WebGL2RenderingContext.drawElements()']?.app, 0);
   assert.equal(a['WebGL2RenderingContext.drawElements()']?.tool, 1);
   // a tool function called by the app still counts as tool for what it does inside
-  t.tool(`globalThis.toolHelper = () => new HTMLCanvasElement().getContext('webgl2');`);
+  t.tool(
+    `globalThis.toolHelper = () => new HTMLCanvasElement().getContext('webgl2');`,
+  );
   t.app(`toolHelper();`);
   assert.equal(t.dump().apis['HTMLCanvasElement.getContext()']?.app, 0);
 });
@@ -115,14 +149,26 @@ test('wrapped members keep identity, shape and native-looking toString', () => {
       new (class extends HTMLCanvasElement {})() instanceof HTMLCanvasElement,
     ];
   `);
-  assert.deepEqual(Array.from(r as unknown[]), [true, 'drawElements', 0, true, true, true, true]);
+  assert.deepEqual(Array.from(r as unknown[]), [
+    true,
+    'drawElements',
+    0,
+    true,
+    true,
+    true,
+    true,
+  ]);
 });
 
 test('setPhase and xr counts; navigator instance members through the prototype', () => {
   const t = setup();
   t.app(`navigator.platform;`);
-  vm.runInContext(`__iwnCompat.setPhase('xr')`, t.ctx, { filename: `${ORIGIN}/__iwn_compat/driver.js` });
-  t.app(`const gl = new HTMLCanvasElement().getContext('webgl2'); for (let i = 0; i < 5; i++) gl.drawElements();`);
+  vm.runInContext(`__iwnCompat.setPhase('xr')`, t.ctx, {
+    filename: `${ORIGIN}/__iwn_compat/driver.js`,
+  });
+  t.app(
+    `const gl = new HTMLCanvasElement().getContext('webgl2'); for (let i = 0; i < 5; i++) gl.drawElements();`,
+  );
   const d = t.dump();
   assert.equal(d.phase, 'xr');
   assert.equal(d.apis['WebGL2RenderingContext.drawElements()']?.xrCalls, 5);
@@ -147,23 +193,38 @@ test('the tracer leaves prototype identity and constructibility as they were', (
       typeof c.nope,
     ];
   `);
-  assert.deepEqual(Array.from(r as unknown[]), [true, true, true, true, false, 'TypeError', 'undefined']);
+  assert.deepEqual(Array.from(r as unknown[]), [
+    true,
+    true,
+    true,
+    true,
+    false,
+    'TypeError',
+    'undefined',
+  ]);
   assert.ok((t.dump().apis['miss:HTMLCanvasElement.nope']?.app ?? 0) > 0); // the miss probe still sees it
 });
 
 test('detail rows get the call site of their own call, also past the sampling window', () => {
   const t = setup();
-  t.app(`for (let i = 0; i < 70; i++) new HTMLCanvasElement().getContext('webgl2');`);
+  t.app(
+    `for (let i = 0; i < 70; i++) new HTMLCanvasElement().getContext('webgl2');`,
+  );
   t.app(`\n\nnew HTMLCanvasElement().getContext('2d');`);
   const a = t.dump().apis;
   assert.equal(a['HTMLCanvasElement.getContext("webgl2")']?.app, 70);
   // the fake canvas has no 2d context: the detail row says it came back null
-  assert.match(a['HTMLCanvasElement.getContext("2d") -> null']!.site!, /index-abc\.js:3:/);
+  assert.match(
+    a['HTMLCanvasElement.getContext("2d") -> null']!.site!,
+    /index-abc\.js:3:/,
+  );
 });
 
 test('objects of non-global classes returned by getters are traced (IWER gamepads)', () => {
   const t = setup();
-  t.app(`const s = new XRInputSource(); const g = s.gamepad; g.buttons[0].value; g.axes; g.buttons[0].pressed;`);
+  t.app(
+    `const s = new XRInputSource(); const g = s.gamepad; g.buttons[0].value; g.axes; g.buttons[0].pressed;`,
+  );
   const a = t.dump().apis;
   assert.equal(a['XRInputSource.gamepad']?.app, 1);
   assert.equal(a['Gamepad.buttons']?.app, 2);
@@ -173,24 +234,53 @@ test('objects of non-global classes returned by getters are traced (IWER gamepad
 });
 
 test('worker role: detail hooks match the global-scope-prefixed members', () => {
-  const ctx = vm.createContext({ URL, Blob, Date, Math, JSON, Promise, Error, console });
-  vm.runInContext(`(() => {
+  const ctx = vm.createContext({
+    URL,
+    Blob,
+    Date,
+    Math,
+    JSON,
+    Promise,
+    Error,
+    console,
+  });
+  vm.runInContext(
+    `(() => {
     class WorkerGlobalScope {}
     WorkerGlobalScope.prototype.fetch = function fetch(u) { return Promise.resolve(u); };
     Object.setPrototypeOf(globalThis, WorkerGlobalScope.prototype);
     globalThis.WorkerGlobalScope = WorkerGlobalScope;
     globalThis.location = { href: '${ORIGIN}/w.js', origin: '${ORIGIN}' };
-  })();`, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude.js` });
-  vm.runInContext(tracerScript({ role: 'worker', toolMarker: '/__iwn_compat/', selfMarker: '/__iwn_compat/tracer' }), ctx, { filename: `${ORIGIN}/__iwn_compat/tracer.js` });
-  vm.runInContext(`fetch('https://cdn.example.net/x.wasm');`, ctx, { filename: `${ORIGIN}/assets/worker.js` });
-  const a = (vm.runInContext('__iwnCompat.dump()', ctx, { filename: `${ORIGIN}/__iwn_compat/driver.js` }) as TraceDump).apis;
+  })();`,
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/prelude.js` },
+  );
+  vm.runInContext(
+    tracerScript({
+      role: 'worker',
+      toolMarker: '/__iwn_compat/',
+      selfMarker: '/__iwn_compat/tracer',
+    }),
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/tracer.js` },
+  );
+  vm.runInContext(`fetch('https://cdn.example.net/x.wasm');`, ctx, {
+    filename: `${ORIGIN}/assets/worker.js`,
+  });
+  const a = (
+    vm.runInContext('__iwnCompat.dump()', ctx, {
+      filename: `${ORIGIN}/__iwn_compat/driver.js`,
+    }) as TraceDump
+  ).apis;
   assert.equal(a['WorkerGlobalScope.fetch()']?.app, 1);
   assert.equal(a['fetch(cross-origin https://cdn.example.net .wasm)']?.app, 1);
 });
 
 test('an app call is recorded even after a long run of tool calls of the same API', () => {
   const t = setup();
-  t.tool(`const c = new HTMLCanvasElement(); for (let i = 0; i < 200; i++) c.width;`);
+  t.tool(
+    `const c = new HTMLCanvasElement(); for (let i = 0; i < 200; i++) c.width;`,
+  );
   t.app(`\nnew HTMLCanvasElement().width;`);
   const a = t.dump().apis;
   assert.equal(a['HTMLCanvasElement.width']?.app, 1);
@@ -208,7 +298,9 @@ test('listeners on app subclasses of EventTarget record EventTarget; IWER XR cla
     new XRThing().addEventListener('select', () => {});
   `);
   // a real XR interface (a global, as IWER installs them) keeps its name
-  t.tool(`class XRSession extends EventTarget { get [Symbol.toStringTag]() { return 'EventTarget'; } } globalThis.XRSession = XRSession;`);
+  t.tool(
+    `class XRSession extends EventTarget { get [Symbol.toStringTag]() { return 'EventTarget'; } } globalThis.XRSession = XRSession;`,
+  );
   t.tool(`__iwnCompat.wrapLate(['XRSession']);`);
   t.app(`new XRSession().addEventListener('end', () => {});`);
   const a = t.dump().apis;
@@ -227,16 +319,34 @@ test('constructor detail rows get the site of their own construction', () => {
   `);
   t.tool(`__iwnCompat.wrapLate(['AudioContext', 'WebSocket']);`);
   // an unrelated detail call first: its site must not leak into the constructor rows
-  t.app(`new HTMLCanvasElement().getContext('webgl2');\n\nnew AudioContext({ latencyHint: 'interactive' });\nnew WebSocket('wss://game.example-mp.net/room');`);
+  t.app(
+    `new HTMLCanvasElement().getContext('webgl2');\n\nnew AudioContext({ latencyHint: 'interactive' });\nnew WebSocket('wss://game.example-mp.net/room');`,
+  );
   const a = t.dump().apis;
-  assert.match(a['new AudioContext({latencyHint: interactive})']!.site!, /index-abc\.js:3:/);
-  assert.match(a['new WebSocket(cross-origin wss://game.example-mp.net)']!.site!, /index-abc\.js:4:/);
+  assert.match(
+    a['new AudioContext({latencyHint: interactive})']!.site!,
+    /index-abc\.js:3:/,
+  );
+  assert.match(
+    a['new WebSocket(cross-origin wss://game.example-mp.net)']!.site!,
+    /index-abc\.js:4:/,
+  );
 });
 
 test('the tracer does not count its own reads (busy guard), in the page and in workers', () => {
   // main: fetch details parse the URL against location (a wrapped accessor here); those reads are the tracer's
-  const ctx = vm.createContext({ URL, Blob, Date, Math, JSON, Promise, Error, console });
-  vm.runInContext(`(() => {
+  const ctx = vm.createContext({
+    URL,
+    Blob,
+    Date,
+    Math,
+    JSON,
+    Promise,
+    Error,
+    console,
+  });
+  vm.runInContext(
+    `(() => {
     class WorkerGlobalScope {}
     WorkerGlobalScope.prototype.fetch = function fetch(u) { return Promise.resolve({ text: () => Promise.resolve('{}') }); };
     let timers = 0;
@@ -245,10 +355,31 @@ test('the tracer does not count its own reads (busy guard), in the page and in w
     Object.defineProperty(WorkerGlobalScope.prototype, 'location', { get() { return { href: '${ORIGIN}/w.js', origin: '${ORIGIN}' }; }, configurable: true });
     Object.setPrototypeOf(globalThis, WorkerGlobalScope.prototype);
     globalThis.WorkerGlobalScope = WorkerGlobalScope;
-  })();`, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude.js` });
-  vm.runInContext(tracerScript({ role: 'worker', toolMarker: '/__iwn_compat/', selfMarker: '/__iwn_compat/tracer', reportUrl: `${ORIGIN}/__iwn_compat/report`, flushMs: 500 }), ctx, { filename: `${ORIGIN}/__iwn_compat/tracer.js` });
-  vm.runInContext(`fetch('https://cdn.example.net/x.wasm'); fetch('./y.json');`, ctx, { filename: `${ORIGIN}/assets/worker.js` });
-  const a = (vm.runInContext('__iwnCompat.dump()', ctx, { filename: `${ORIGIN}/__iwn_compat/driver.js` }) as TraceDump).apis;
+  })();`,
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/prelude.js` },
+  );
+  vm.runInContext(
+    tracerScript({
+      role: 'worker',
+      toolMarker: '/__iwn_compat/',
+      selfMarker: '/__iwn_compat/tracer',
+      reportUrl: `${ORIGIN}/__iwn_compat/report`,
+      flushMs: 500,
+    }),
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/tracer.js` },
+  );
+  vm.runInContext(
+    `fetch('https://cdn.example.net/x.wasm'); fetch('./y.json');`,
+    ctx,
+    { filename: `${ORIGIN}/assets/worker.js` },
+  );
+  const a = (
+    vm.runInContext('__iwnCompat.dump()', ctx, {
+      filename: `${ORIGIN}/__iwn_compat/driver.js`,
+    }) as TraceDump
+  ).apis;
   assert.equal(a['WorkerGlobalScope.fetch()']?.calls, 2);
   // the worker's own flush timers and the URL parsing's location reads are not app (or any) calls
   assert.equal(a['WorkerGlobalScope.setTimeout()'], undefined);
@@ -256,22 +387,75 @@ test('the tracer does not count its own reads (busy guard), in the page and in w
 });
 
 test('headset trim: absent globals and navigator members are gone, unsupported contexts return null', () => {
-  const ctx = vm.createContext({ URL, Blob, Date, Math, JSON, Promise, Error, console });
-  vm.runInContext(PRELUDE, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude.js` });
-  vm.runInContext(`globalThis.VideoDecoder = class VideoDecoder {}; globalThis.BroadcastChannel = class BroadcastChannel {}; globalThis.caches = {};
+  const ctx = vm.createContext({
+    URL,
+    Blob,
+    Date,
+    Math,
+    JSON,
+    Promise,
+    Error,
+    console,
+  });
+  vm.runInContext(PRELUDE, ctx, {
+    filename: `${ORIGIN}/__iwn_compat/prelude.js`,
+  });
+  vm.runInContext(
+    `globalThis.VideoDecoder = class VideoDecoder {}; globalThis.BroadcastChannel = class BroadcastChannel {}; globalThis.caches = {};
     Object.defineProperty(Navigator.prototype, 'gpu', { get() { return { requestAdapter() {} }; }, configurable: true });
     // a canvas that offers every context type, so the trim's filter is what makes 'webgpu' null
-    HTMLCanvasElement.prototype.getContext = function getContext(type) { return { type }; };`, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude2.js` });
-  const trim = { absent: ['^(VideoDecoder)\\b', '^(Navigator\\.gpu|BroadcastChannel|caches)\\b'], keep: ['caches'], contexts: ['2d', 'webgl', 'webgl2'] };
-  vm.runInContext(tracerScript({ role: 'main', toolMarker: '/__iwn_compat/', selfMarker: '/__iwn_compat/tracer', trim }), ctx, { filename: `${ORIGIN}/__iwn_compat/tracer.js` });
-  const r = vm.runInContext(`[typeof VideoDecoder, 'BroadcastChannel' in globalThis, typeof caches, navigator.gpu === undefined, 'gpu' in navigator, new HTMLCanvasElement().getContext('webgpu'), String(HTMLCanvasElement.prototype.getContext).includes('return { type }'), new HTMLCanvasElement().getContext('webgl2').type]`, ctx, { filename: `${ORIGIN}/assets/index-abc.js` });
-  assert.deepEqual(Array.from(r as unknown[]), ['undefined', false, 'object', true, false, null, true, 'webgl2']);
-  const d = vm.runInContext('__iwnCompat.dump()', ctx, { filename: `${ORIGIN}/__iwn_compat/driver.js` }) as TraceDump;
-  assert.deepEqual([...(d.removed ?? [])].sort(), ['BroadcastChannel', 'Navigator.gpu', 'VideoDecoder']);
+    HTMLCanvasElement.prototype.getContext = function getContext(type) { return { type }; };`,
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/prelude2.js` },
+  );
+  const trim = {
+    absent: [
+      '^(VideoDecoder)\\b',
+      '^(Navigator\\.gpu|BroadcastChannel|caches)\\b',
+    ],
+    keep: ['caches'],
+    contexts: ['2d', 'webgl', 'webgl2'],
+  };
+  vm.runInContext(
+    tracerScript({
+      role: 'main',
+      toolMarker: '/__iwn_compat/',
+      selfMarker: '/__iwn_compat/tracer',
+      trim,
+    }),
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/tracer.js` },
+  );
+  const r = vm.runInContext(
+    `[typeof VideoDecoder, 'BroadcastChannel' in globalThis, typeof caches, navigator.gpu === undefined, 'gpu' in navigator, new HTMLCanvasElement().getContext('webgpu'), String(HTMLCanvasElement.prototype.getContext).includes('return { type }'), new HTMLCanvasElement().getContext('webgl2').type]`,
+    ctx,
+    { filename: `${ORIGIN}/assets/index-abc.js` },
+  );
+  assert.deepEqual(Array.from(r as unknown[]), [
+    'undefined',
+    false,
+    'object',
+    true,
+    false,
+    null,
+    true,
+    'webgl2',
+  ]);
+  const d = vm.runInContext('__iwnCompat.dump()', ctx, {
+    filename: `${ORIGIN}/__iwn_compat/driver.js`,
+  }) as TraceDump;
+  assert.deepEqual([...(d.removed ?? [])].sort(), [
+    'BroadcastChannel',
+    'Navigator.gpu',
+    'VideoDecoder',
+  ]);
   // the app's probes of the removed navigator member are recorded; the context request is a null detail row
   assert.ok((d.apis['miss:Navigator.gpu']?.app ?? 0) > 0);
   assert.ok((d.apis['miss:gpu (in, Navigator chain)']?.app ?? 0) > 0);
-  assert.equal(d.apis['HTMLCanvasElement.getContext("webgpu") -> null']?.app, 1);
+  assert.equal(
+    d.apis['HTMLCanvasElement.getContext("webgpu") -> null']?.app,
+    1,
+  );
 });
 
 test('wrapLate traces what IWER installs on the navigator instance and the WebGL prototypes', () => {
@@ -280,7 +464,9 @@ test('wrapLate traces what IWER installs on the navigator instance and the WebGL
   t.tool(`Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 OculusBrowser', writable: false, configurable: true, enumerable: true });
     WebGL2RenderingContext.prototype.makeXRCompatible = function makeXRCompatible() { return Promise.resolve(); };
     __iwnCompat.wrapLate([]);`);
-  const r = t.app(`[/OculusBrowser/.test(navigator.userAgent), typeof new HTMLCanvasElement().getContext('webgl2').makeXRCompatible()]`);
+  const r = t.app(
+    `[/OculusBrowser/.test(navigator.userAgent), typeof new HTMLCanvasElement().getContext('webgl2').makeXRCompatible()]`,
+  );
   assert.deepEqual(Array.from(r as unknown[]), [true, 'object']);
   const a = t.dump().apis;
   assert.equal(a['Navigator.userAgent']?.app, 1);
@@ -288,15 +474,52 @@ test('wrapLate traces what IWER installs on the navigator instance and the WebGL
 });
 
 test('WebSocket gating: blocked origins are redirected to the refusing endpoint, own and allowlisted ones are not', () => {
-  const ctx = vm.createContext({ URL, Blob, Date, Math, JSON, Promise, Error, console });
-  vm.runInContext(PRELUDE, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude.js` });
-  vm.runInContext(`globalThis.WebSocket = class WebSocket extends EventTarget { constructor(u) { super(); this.u = String(u); } };`, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude2.js` });
+  const ctx = vm.createContext({
+    URL,
+    Blob,
+    Date,
+    Math,
+    JSON,
+    Promise,
+    Error,
+    console,
+  });
+  vm.runInContext(PRELUDE, ctx, {
+    filename: `${ORIGIN}/__iwn_compat/prelude.js`,
+  });
+  vm.runInContext(
+    `globalThis.WebSocket = class WebSocket extends EventTarget { constructor(u) { super(); this.u = String(u); } };`,
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/prelude2.js` },
+  );
   // the runtime matches ws(s) against the http(s) origin, and the config only accepts http(s) entries: a wss://
   // entry (which `validate` rejects) covers nothing
-  const wsBlock = { url: 'ws://127.0.0.1:9/__iwn_compat/ws-blocked?u=', allow: ['https://ok.example.net', 'https://*.allowed.net', 'wss://wss-entry.example.net', 'http://plain.example.net'] };
-  vm.runInContext(tracerScript({ role: 'main', toolMarker: '/__iwn_compat/', selfMarker: '/__iwn_compat/tracer', wsBlock }), ctx, { filename: `${ORIGIN}/__iwn_compat/tracer.js` });
-  const r = vm.runInContext(`['wss://game.example-mp.net/room', 'wss://ok.example.net/a', 'wss://eu.allowed.net/b', '/live', 'https://game.example-mp.net/x', 'wss://wss-entry.example.net/c', 'ws://plain.example.net/d', 'wss://plain.example.net/e', 'ftp://game.example-mp.net/x', 'wss://game.example-mp.net/room#frag'].map((u) => new WebSocket(u).u)`, ctx, { filename: `${ORIGIN}/assets/index-abc.js` });
-  const blocked = (u: string) => `ws://127.0.0.1:9/__iwn_compat/ws-blocked?u=${encodeURIComponent(u)}`;
+  const wsBlock = {
+    url: 'ws://127.0.0.1:9/__iwn_compat/ws-blocked?u=',
+    allow: [
+      'https://ok.example.net',
+      'https://*.allowed.net',
+      'wss://wss-entry.example.net',
+      'http://plain.example.net',
+    ],
+  };
+  vm.runInContext(
+    tracerScript({
+      role: 'main',
+      toolMarker: '/__iwn_compat/',
+      selfMarker: '/__iwn_compat/tracer',
+      wsBlock,
+    }),
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/tracer.js` },
+  );
+  const r = vm.runInContext(
+    `['wss://game.example-mp.net/room', 'wss://ok.example.net/a', 'wss://eu.allowed.net/b', '/live', 'https://game.example-mp.net/x', 'wss://wss-entry.example.net/c', 'ws://plain.example.net/d', 'wss://plain.example.net/e', 'ftp://game.example-mp.net/x', 'wss://game.example-mp.net/room#frag'].map((u) => new WebSocket(u).u)`,
+    ctx,
+    { filename: `${ORIGIN}/assets/index-abc.js` },
+  );
+  const blocked = (u: string) =>
+    `ws://127.0.0.1:9/__iwn_compat/ws-blocked?u=${encodeURIComponent(u)}`;
   assert.deepEqual(Array.from(r as unknown[]), [
     blocked('wss://game.example-mp.net/room'),
     'wss://ok.example.net/a',
@@ -310,22 +533,68 @@ test('WebSocket gating: blocked origins are redirected to the refusing endpoint,
     'ftp://game.example-mp.net/x',
     'wss://game.example-mp.net/room#frag',
   ]);
-  const a = (vm.runInContext('__iwnCompat.dump()', ctx, { filename: `${ORIGIN}/__iwn_compat/driver.js` }) as TraceDump).apis;
-  assert.equal(a['new WebSocket(cross-origin wss://game.example-mp.net)']?.app, 2); // the rows keep the app's URLs (/room and /room#frag)
+  const a = (
+    vm.runInContext('__iwnCompat.dump()', ctx, {
+      filename: `${ORIGIN}/__iwn_compat/driver.js`,
+    }) as TraceDump
+  ).apis;
+  assert.equal(
+    a['new WebSocket(cross-origin wss://game.example-mp.net)']?.app,
+    2,
+  ); // the rows keep the app's URLs (/room and /room#frag)
 });
 
 test('headset trim: an absent member a runtime layer stubs throws NotSupportedError, and the call is recorded', () => {
-  const ctx = vm.createContext({ URL, Blob, Date, Math, JSON, Promise, Error, console });
-  vm.runInContext(PRELUDE, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude.js` });
-  vm.runInContext(`class DOMException extends Error { constructor(m, n) { super(m); this.name = n; } }
+  const ctx = vm.createContext({
+    URL,
+    Blob,
+    Date,
+    Math,
+    JSON,
+    Promise,
+    Error,
+    console,
+  });
+  vm.runInContext(PRELUDE, ctx, {
+    filename: `${ORIGIN}/__iwn_compat/prelude.js`,
+  });
+  vm.runInContext(
+    `class DOMException extends Error { constructor(m, n) { super(m); this.name = n; } }
     globalThis.DOMException = DOMException;
     class BaseAudioContext { createScriptProcessor() { return { ok: true }; } createGain() { return { gain: 1 }; } }
-    globalThis.BaseAudioContext = BaseAudioContext; globalThis.AudioContext = class AudioContext extends BaseAudioContext {};`, ctx, { filename: `${ORIGIN}/__iwn_compat/prelude2.js` });
-  const trim = { absent: ['^(ScriptProcessorNode|BaseAudioContext\\.createScriptProcessor)\\b'], keep: ['BaseAudioContext.createGain'], contexts: ['2d', 'webgl', 'webgl2'], stubs: ['BaseAudioContext.createScriptProcessor'] };
-  vm.runInContext(tracerScript({ role: 'main', toolMarker: '/__iwn_compat/', selfMarker: '/__iwn_compat/tracer', trim }), ctx, { filename: `${ORIGIN}/__iwn_compat/tracer.js` });
-  const r = vm.runInContext(`const c = new AudioContext(); let e = 'none'; try { c.createScriptProcessor(1024, 1, 1); } catch (x) { e = x.name; } ['createScriptProcessor' in c, e, c.createGain().gain]`, ctx, { filename: `${ORIGIN}/assets/index-abc.js` });
+    globalThis.BaseAudioContext = BaseAudioContext; globalThis.AudioContext = class AudioContext extends BaseAudioContext {};`,
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/prelude2.js` },
+  );
+  const trim = {
+    absent: [
+      '^(ScriptProcessorNode|BaseAudioContext\\.createScriptProcessor)\\b',
+    ],
+    keep: ['BaseAudioContext.createGain'],
+    contexts: ['2d', 'webgl', 'webgl2'],
+    stubs: ['BaseAudioContext.createScriptProcessor'],
+  };
+  vm.runInContext(
+    tracerScript({
+      role: 'main',
+      toolMarker: '/__iwn_compat/',
+      selfMarker: '/__iwn_compat/tracer',
+      trim,
+    }),
+    ctx,
+    { filename: `${ORIGIN}/__iwn_compat/tracer.js` },
+  );
+  const r = vm.runInContext(
+    `const c = new AudioContext(); let e = 'none'; try { c.createScriptProcessor(1024, 1, 1); } catch (x) { e = x.name; } ['createScriptProcessor' in c, e, c.createGain().gain]`,
+    ctx,
+    { filename: `${ORIGIN}/assets/index-abc.js` },
+  );
   assert.deepEqual(Array.from(r as unknown[]), [true, 'NotSupportedError', 1]);
-  const d = vm.runInContext('__iwnCompat.dump()', ctx, { filename: `${ORIGIN}/__iwn_compat/driver.js` }) as TraceDump;
-  assert.ok(!(d.removed ?? []).includes('BaseAudioContext.createScriptProcessor'));
+  const d = vm.runInContext('__iwnCompat.dump()', ctx, {
+    filename: `${ORIGIN}/__iwn_compat/driver.js`,
+  }) as TraceDump;
+  assert.ok(
+    !(d.removed ?? []).includes('BaseAudioContext.createScriptProcessor'),
+  );
   assert.equal(d.apis['BaseAudioContext.createScriptProcessor()']?.app, 1);
 });

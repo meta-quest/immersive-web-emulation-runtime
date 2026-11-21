@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Minimal WebIDL parser for the subset the WebGL IDL files use: interface / interface mixin / partial
 // interface / dictionary / typedef / includes, consts, operations (with overloads, optional args and
 // defaults), attributes, and extended attributes (kept as raw strings). Written from the WebIDL grammar

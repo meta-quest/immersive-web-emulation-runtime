@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // In-process V8 code cache for worker isolates (CC-5). Worker pools start several isolates that compile the same
 // runtime preludes (web glue, net, image, ...) and the same worker script (three's KTX2/Draco/MSDF workers are blob:
 // scripts posted to 2-4 workers). The first isolate produces V8's code cache right after compiling; later isolates

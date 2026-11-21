@@ -22,10 +22,13 @@ const glue = G[Symbol.for('iwn.glue')] as any;
 
 /** The glue's EventTarget: DOM nodes subclass it and implement GET_THE_PARENT for capture/bubble paths. */
 export const BaseEventTarget: new () => any =
-  typeof G.EventTarget === 'function' ? G.EventTarget : (class EventTarget {} as any);
+  typeof G.EventTarget === 'function'
+    ? G.EventTarget
+    : (class EventTarget {} as any);
 export const BaseEvent: new (type: string, init?: any) => any =
   typeof G.Event === 'function' ? G.Event : (class Event {} as any);
-export const GET_THE_PARENT: symbol = glue?.events?.GET_THE_PARENT ?? Symbol.for('iwn.event.getTheParent');
+export const GET_THE_PARENT: symbol =
+  glue?.events?.GET_THE_PARENT ?? Symbol.for('iwn.event.getTheParent');
 
 /** HTML event handler IDL attributes (`onclick`, ...) through the glue's implementation (HTML §8.1.8.1). */
 export function defineHandler(proto: object, type: string): void {
@@ -46,7 +49,11 @@ export function defineHandler(proto: object, type: string): void {
         this[slot] = undefined;
         return;
       }
-      const rec = { value: v, listener: (e: unknown) => (rec.value as (e: unknown) => unknown).call(this, e) };
+      const rec = {
+        value: v,
+        listener: (e: unknown) =>
+          (rec.value as (e: unknown) => unknown).call(this, e),
+      };
       this[slot] = rec;
       this.addEventListener(type, rec.listener);
     },
@@ -88,38 +95,52 @@ export function pageConfig(): Record<string, any> {
 export function isWorkerScope(): boolean {
   if (G.__iwn?.core?.isWorker === true) return true;
   if (pageConfig().scope === 'worker') return true;
-  return typeof G.importScripts === 'function' || typeof G.WorkerGlobalScope === 'function';
+  return (
+    typeof G.importScripts === 'function' ||
+    typeof G.WorkerGlobalScope === 'function'
+  );
 }
 
 /** DOM-3's fixed window size: config `viewport` (the glue's default, 1280x720, when absent). */
 export function viewport(): { width: number; height: number } {
   const v = pageConfig().viewport;
-  const ok = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0;
-  return ok(v?.width) && ok(v?.height) ? { width: Math.floor(v.width), height: Math.floor(v.height) } : { width: 1280, height: 720 };
+  const ok = (n: unknown): n is number =>
+    typeof n === 'number' && Number.isFinite(n) && n > 0;
+  return ok(v?.width) && ok(v?.height)
+    ? { width: Math.floor(v.width), height: Math.floor(v.height) }
+    : { width: 1280, height: 720 };
 }
 
 /** The document URL: the glue's navigation state (what `location` shows), else the core's, else the default. */
 export function documentURL(): string {
   try {
     const nav = glue?.navigation;
-    if (nav && typeof nav.current === 'function') return String(nav.current().href);
+    if (nav && typeof nav.current === 'function')
+      return String(nav.current().href);
   } catch {
     // fall through
   }
   const href = G.location?.href;
   if (typeof href === 'string') return href;
-  return typeof G.__iwn?.core?.documentUrl === 'string' ? G.__iwn.core.documentUrl : 'https://app.local/';
+  return typeof G.__iwn?.core?.documentUrl === 'string'
+    ? G.__iwn.core.documentUrl
+    : 'https://app.local/';
 }
 
 /** `{visibilityState, focused, readyState}` from the core (defaults when absent: tests, other hosts). */
-export function lifecycle(): { visibilityState: string; focused: boolean; readyState: string } {
+export function lifecycle(): {
+  visibilityState: string;
+  focused: boolean;
+  readyState: string;
+} {
   try {
     const s = G.__iwn?.core?.lifecycleState?.();
     if (s && typeof s === 'object') {
       return {
         visibilityState: s.visibilityState === 'hidden' ? 'hidden' : 'visible',
         focused: s.focused !== false,
-        readyState: typeof s.readyState === 'string' ? s.readyState : 'complete',
+        readyState:
+          typeof s.readyState === 'string' ? s.readyState : 'complete',
       };
     }
   } catch {
@@ -168,7 +189,8 @@ export function reportException(error: unknown): void {
 
 /** WebIDL DOMString conversion (null and undefined stringify, symbols throw). */
 export function str(v: unknown): string {
-  if (typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol value to a string');
+  if (typeof v === 'symbol')
+    throw new TypeError('Cannot convert a Symbol value to a string');
   return String(v);
 }
 

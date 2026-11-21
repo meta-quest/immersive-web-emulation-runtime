@@ -16,9 +16,21 @@ import * as E from './gen/enums.gen.ts';
 import { indexTypeBytes } from './formats.ts';
 import { programExtras } from './programs.ts';
 import { WebGLTexture } from './objects.ts';
-import { textureKind, isFloat32Format, TK_FLOAT, TK_INT, TK_UINT, TK_DEPTH } from './textures.ts';
+import {
+  textureKind,
+  isFloat32Format,
+  TK_FLOAT,
+  TK_INT,
+  TK_UINT,
+  TK_DEPTH,
+} from './textures.ts';
 import { i32List } from './views.ts';
-import { attachmentFormat, framebufferVerdict, formatClass, sharedExponentMaskConflict } from './framebuffers.ts';
+import {
+  attachmentFormat,
+  framebufferVerdict,
+  formatClass,
+  sharedExponentMaskConflict,
+} from './framebuffers.ts';
 import { OUT_INT, OUT_UINT, type ProgramRecord } from './reflection.ts';
 import type { WebGLFramebuffer } from './objects.ts';
 import { valueTypes } from './attribs.ts';
@@ -28,7 +40,11 @@ function toInt64(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function textureForTarget(ctx: Ctx, unit: number, target: number): WebGLTexture | null {
+function textureForTarget(
+  ctx: Ctx,
+  unit: number,
+  target: number,
+): WebGLTexture | null {
   switch (target) {
     case E.TEXTURE_2D:
       return ctx._tex2D[unit] ?? null;
@@ -61,7 +77,8 @@ export const drawInternals = {
     }
     const fb = this._drawFbo;
     if (fb === null) {
-      if (!this._dfbReady || this._dfbNeedsClear) this._ensureDefaultFramebuffer();
+      if (!this._dfbReady || this._dfbNeedsClear)
+        this._ensureDefaultFramebuffer();
       this._dfbDrawn = true;
     } else {
       if ((p._numViews || 1) !== (fb._numViews || 1)) {
@@ -70,11 +87,19 @@ export const drawInternals = {
         this._e(E.INVALID_OPERATION, what);
         return false;
       }
-      if (fb._verdictEpoch !== this._fbEpoch ? framebufferVerdict(this, fb, E.DRAW_FRAMEBUFFER) : fb._verdict) {
+      if (
+        fb._verdictEpoch !== this._fbEpoch
+          ? framebufferVerdict(this, fb, E.DRAW_FRAMEBUFFER)
+          : fb._verdict
+      ) {
         this._e(E.INVALID_FRAMEBUFFER_OPERATION, what);
         return false;
       }
-      if (fb._numViews > 1 && ((this._tf._active && !this._tf._paused) || this._activeQueries.has(E.TIME_ELAPSED_EXT))) {
+      if (
+        fb._numViews > 1 &&
+        ((this._tf._active && !this._tf._paused) ||
+          this._activeQueries.has(E.TIME_ELAPSED_EXT))
+      ) {
         this._e(E.INVALID_OPERATION, what);
         return false;
       }
@@ -83,7 +108,12 @@ export const drawInternals = {
       this._e(E.INVALID_OPERATION, what);
       return false;
     }
-    if (this._v2 && rec.outMask !== 0xffff && this._caps[9] !== 1 && !outputsMatch(this, rec, fb)) {
+    if (
+      this._v2 &&
+      rec.outMask !== 0xffff &&
+      this._caps[9] !== 1 &&
+      !outputsMatch(this, rec, fb)
+    ) {
       this._e(E.INVALID_OPERATION, what); // undefined output for an active draw buffer, or output / buffer type
       return false;
     }
@@ -109,11 +139,20 @@ export const drawInternals = {
       this._e(E.INVALID_OPERATION, what); // sampler type vs texture format / compare mode (WebGL 2.0 §5.22)
       return false;
     }
-    if (fb !== null && fb._rgb9e5 !== 0 && sharedExponentMaskConflict(this, fb)) {
+    if (
+      fb !== null &&
+      fb._rgb9e5 !== 0 &&
+      sharedExponentMaskConflict(this, fb)
+    ) {
       this._e(E.INVALID_OPERATION, what); // WEBGL_render_shared_exponent colour-mask rule
       return false;
     }
-    if (this._caps[0] === 1 && fb !== null && fb._has32F && !floatBlendSupported(this)) {
+    if (
+      this._caps[0] === 1 &&
+      fb !== null &&
+      fb._has32F &&
+      !floatBlendSupported(this)
+    ) {
       this._e(E.INVALID_OPERATION, what); // blending a 32-bit float colour buffer needs EXT_float_blend
       return false;
     }
@@ -125,7 +164,11 @@ export const drawInternals = {
       this._e(E.INVALID_OPERATION, what);
       return false;
     }
-    if (this._tf._active && !this._tf._paused && (tfConflict(this) || !tfModeOk(this._tf._mode, mode))) {
+    if (
+      this._tf._active &&
+      !this._tf._paused &&
+      (tfConflict(this) || !tfModeOk(this._tf._mode, mode))
+    ) {
       this._e(E.INVALID_OPERATION, what);
       return false;
     }
@@ -137,7 +180,13 @@ export const drawInternals = {
     this._feedbackLoop = false;
     const fb = this._drawFbo;
     const p = this._program;
-    if (fb === null || fb._texAttachments === 0 || p === null || p._record === null) return;
+    if (
+      fb === null ||
+      fb._texAttachments === 0 ||
+      p === null ||
+      p._record === null
+    )
+      return;
     const x = programExtras(p);
     for (const [index, target] of x.samplers) {
       const u = p._record.uniforms[index];
@@ -145,9 +194,18 @@ export const drawInternals = {
         const unit = x.samplerUnits.get(index * 4096 + e) ?? 0;
         const t = textureForTarget(this, unit, target);
         // incomplete (never specified) textures sample as black and are not a loop
-        if (t === null || t._attachCount === 0 || (t._level0 === null && !t._immutable)) continue;
+        if (
+          t === null ||
+          t._attachCount === 0 ||
+          (t._level0 === null && !t._immutable)
+        )
+          continue;
         for (const a of fb._attachments.values()) {
-          if (a.object === t && a.level >= t._baseLevel && a.level <= t._maxLevel) {
+          if (
+            a.object === t &&
+            a.level >= t._baseLevel &&
+            a.level <= t._maxLevel
+          ) {
             this._feedbackLoop = true;
             return;
           }
@@ -155,9 +213,20 @@ export const drawInternals = {
       }
     }
   },
-  _elementsCheck(this: Ctx, count: number, type: number, offset: number, what: string): boolean {
+  _elementsCheck(
+    this: Ctx,
+    count: number,
+    type: number,
+    offset: number,
+    what: string,
+  ): boolean {
     const size = indexTypeBytes(type);
-    if (size === 0 || (size === 4 && !this._v2 && !this._extensions.has('OES_element_index_uint'))) {
+    if (
+      size === 0 ||
+      (size === 4 &&
+        !this._v2 &&
+        !this._extensions.has('OES_element_index_uint'))
+    ) {
       this._e(E.INVALID_ENUM, what);
       return false;
     }
@@ -188,7 +257,11 @@ export const drawInternals = {
  * with an attachment and a colour mask with any channel on needs a fragment output at its location, and that
  * output's base type (float / int / uint) must match the colour buffer's.
  */
-function outputsMatch(ctx: Ctx, rec: ProgramRecord, fb: WebGLFramebuffer | null): boolean {
+function outputsMatch(
+  ctx: Ctx,
+  rec: ProgramRecord,
+  fb: WebGLFramebuffer | null,
+): boolean {
   if (fb === null) {
     if (ctx._dfbDrawBuffer === E.NONE) return true;
     if (!(rec.outMask & 1)) return (ctx._bufMaskOn & 1) === 0;
@@ -208,7 +281,8 @@ function outputsMatch(ctx: Ctx, rec: ProgramRecord, fb: WebGLFramebuffer | null)
     const k = rec.outKinds[i];
     if (k === 0) continue;
     const c = formatClass(attachmentFormat(a));
-    if ((c === 'i') !== (k === OUT_INT) || (c === 'u') !== (k === OUT_UINT)) return false;
+    if ((c === 'i') !== (k === OUT_INT) || (c === 'u') !== (k === OUT_UINT))
+      return false;
   }
   return true;
 }
@@ -216,12 +290,19 @@ function outputsMatch(ctx: Ctx, rec: ProgramRecord, fb: WebGLFramebuffer | null)
 /** Sampler uniform kinds: 0 float, 1 int, 2 uint, 3 shadow. */
 function samplerKind(type: number): number {
   switch (type) {
-    case E.INT_SAMPLER_2D: case E.INT_SAMPLER_3D: case E.INT_SAMPLER_CUBE: case E.INT_SAMPLER_2D_ARRAY:
+    case E.INT_SAMPLER_2D:
+    case E.INT_SAMPLER_3D:
+    case E.INT_SAMPLER_CUBE:
+    case E.INT_SAMPLER_2D_ARRAY:
       return TK_INT;
-    case E.UNSIGNED_INT_SAMPLER_2D: case E.UNSIGNED_INT_SAMPLER_3D: case E.UNSIGNED_INT_SAMPLER_CUBE:
+    case E.UNSIGNED_INT_SAMPLER_2D:
+    case E.UNSIGNED_INT_SAMPLER_3D:
+    case E.UNSIGNED_INT_SAMPLER_CUBE:
     case E.UNSIGNED_INT_SAMPLER_2D_ARRAY:
       return TK_UINT;
-    case E.SAMPLER_2D_SHADOW: case E.SAMPLER_CUBE_SHADOW: case E.SAMPLER_2D_ARRAY_SHADOW:
+    case E.SAMPLER_2D_SHADOW:
+    case E.SAMPLER_CUBE_SHADOW:
+    case E.SAMPLER_2D_ARRAY_SHADOW:
       return TK_DEPTH;
     default:
       return TK_FLOAT;
@@ -229,7 +310,11 @@ function samplerKind(type: number): number {
 }
 
 const usesMips = (f: number): boolean => f !== E.NEAREST && f !== E.LINEAR;
-const linear = (f: number): boolean => f === E.LINEAR || f === E.LINEAR_MIPMAP_NEAREST || f === E.LINEAR_MIPMAP_LINEAR || f === E.NEAREST_MIPMAP_LINEAR;
+const linear = (f: number): boolean =>
+  f === E.LINEAR ||
+  f === E.LINEAR_MIPMAP_NEAREST ||
+  f === E.LINEAR_MIPMAP_LINEAR ||
+  f === E.NEAREST_MIPMAP_LINEAR;
 
 /**
  * Draw-time texture rules WebGL adds to GLES, recomputed only when a binding, sampling parameter, level,
@@ -262,16 +347,20 @@ function computeTextures(ctx: Ctx): void {
       const unit = x.samplerUnits.get(index * 4096 + e) ?? 0;
       const t = textureForTarget(ctx, unit, target);
       if (t === null) continue;
-      const base = t._immutable ? Math.min(t._baseLevel, t._immutableLevels - 1) : t._baseLevel;
+      const base = t._immutable
+        ? Math.min(t._baseLevel, t._immutableLevels - 1)
+        : t._baseLevel;
       const l = t._levels.get(base);
       if (l === undefined) continue; // never specified: incomplete, samples black
       const smp = ctx._samplers[unit];
       const tk = textureKind(l.internalformat);
       const compare = smp ? smp._compareMode : t._compareMode;
       const ok =
-        sk === TK_FLOAT ? tk === TK_FLOAT || (tk === TK_DEPTH && compare === E.NONE)
-        : sk === TK_DEPTH ? tk === TK_DEPTH && compare === E.COMPARE_REF_TO_TEXTURE
-        : tk === sk;
+        sk === TK_FLOAT
+          ? tk === TK_FLOAT || (tk === TK_DEPTH && compare === E.NONE)
+          : sk === TK_DEPTH
+            ? tk === TK_DEPTH && compare === E.COMPARE_REF_TO_TEXTURE
+            : tk === sk;
       if (!ok) {
         ctx._texInvalid = true;
         return;
@@ -280,16 +369,28 @@ function computeTextures(ctx: Ctx): void {
       const magF = smp ? smp._magFilter : t._magFilter;
       let black = false;
       const filtersLinearly = linear(minF) || magF === E.LINEAR;
-      if (!floatLinear && isFloat32Format(l.internalformat) && filtersLinearly) black = true;
+      if (!floatLinear && isFloat32Format(l.internalformat) && filtersLinearly)
+        black = true;
       // GLES 3.0 §3.8.13: a depth texture with compare mode NONE and a LINEAR filter is incomplete (some drivers
       // filter it anyway)
-      if (ctx._v2 && tk === TK_DEPTH && compare === E.NONE && filtersLinearly) black = true;
+      if (ctx._v2 && tk === TK_DEPTH && compare === E.NONE && filtersLinearly)
+        black = true;
       // WebGL 1 half-float textures (OES_texture_half_float) filter linearly only with OES_texture_half_float_linear
-      if (!ctx._v2 && filtersLinearly && (l.internalformat === E.RGBA16F || l.internalformat === E.RGB16F) && !ctx._extensions.has('OES_texture_half_float_linear')) black = true;
-      if (!ctx._v2 && ((l.width & (l.width - 1)) !== 0 || (l.height & (l.height - 1)) !== 0)) {
+      if (
+        !ctx._v2 &&
+        filtersLinearly &&
+        (l.internalformat === E.RGBA16F || l.internalformat === E.RGB16F) &&
+        !ctx._extensions.has('OES_texture_half_float_linear')
+      )
+        black = true;
+      if (
+        !ctx._v2 &&
+        ((l.width & (l.width - 1)) !== 0 || (l.height & (l.height - 1)) !== 0)
+      ) {
         const ws = smp ? smp._wrapS : t._wrapS;
         const wt = smp ? smp._wrapT : t._wrapT;
-        if (usesMips(minF) || ws !== E.CLAMP_TO_EDGE || wt !== E.CLAMP_TO_EDGE) black = true;
+        if (usesMips(minF) || ws !== E.CLAMP_TO_EDGE || wt !== E.CLAMP_TO_EDGE)
+          black = true;
       }
       if (black) ctx._texSubst.push(unit, target);
     }
@@ -323,9 +424,15 @@ function bindStandIns(ctx: Ctx, on: boolean): void {
 /** Base type of a shader attribute type: 0 float, 1 int, 2 uint. */
 function attribBase(type: number): number {
   switch (type) {
-    case E.INT: case E.INT_VEC2: case E.INT_VEC3: case E.INT_VEC4:
+    case E.INT:
+    case E.INT_VEC2:
+    case E.INT_VEC3:
+    case E.INT_VEC4:
       return 1;
-    case E.UNSIGNED_INT: case E.UNSIGNED_INT_VEC2: case E.UNSIGNED_INT_VEC3: case E.UNSIGNED_INT_VEC4:
+    case E.UNSIGNED_INT:
+    case E.UNSIGNED_INT_VEC2:
+    case E.UNSIGNED_INT_VEC3:
+    case E.UNSIGNED_INT_VEC4:
       return 2;
     default:
       return 0;
@@ -337,7 +444,10 @@ function attribBase(type: number): number {
  * float; vertexAttribIPointer with a signed / unsigned type -> int / uint) when enabled, else the type of the
  * last vertexAttrib* value.
  */
-function attribTypesMatch(ctx: Ctx, rec: import('./reflection.ts').ProgramRecord): boolean {
+function attribTypesMatch(
+  ctx: Ctx,
+  rec: import('./reflection.ts').ProgramRecord,
+): boolean {
   const vao = ctx._vao;
   const values = valueTypes(ctx);
   for (const a of rec.attribs) {
@@ -346,7 +456,8 @@ function attribTypesMatch(ctx: Ctx, rec: import('./reflection.ts').ProgramRecord
     let have: number;
     if (vao._enabled[a.location]) {
       const o = a.location * 7;
-      if (vao._pointer[o + 5] === 0) have = 0; // vertexAttribPointer: always float to the shader
+      if (vao._pointer[o + 5] === 0)
+        have = 0; // vertexAttribPointer: always float to the shader
       else {
         const t = vao._pointer[o + 1];
         have = t === E.BYTE || t === E.SHORT || t === E.INT ? 1 : 2;
@@ -368,7 +479,9 @@ function floatBlendSupported(ctx: Ctx): boolean {
 function hasZeroDivisor(ctx: Ctx): boolean {
   const rec = ctx._program?._record;
   if (!rec) return true;
-  for (const a of rec.attribs) if (a.location >= 0 && ctx._vao._pointer[a.location * 7 + 6] === 0) return true;
+  for (const a of rec.attribs)
+    if (a.location >= 0 && ctx._vao._pointer[a.location * 7 + 6] === 0)
+      return true;
   return rec.attribs.length === 0;
 }
 
@@ -387,11 +500,18 @@ function stencilConflict(ctx: Ctx): boolean {
   const f = ctx._stencilFuncF;
   const b = ctx._stencilFuncB;
   const clampRef = (r: number): number => (r < 0 ? 0 : r > m ? m : r);
-  return clampRef(f[1]) !== clampRef(b[1]) || (f[2] & m) !== (b[2] & m) || (ctx._stencilMaskF & m) !== (ctx._stencilMaskB & m);
+  return (
+    clampRef(f[1]) !== clampRef(b[1]) ||
+    (f[2] & m) !== (b[2] & m) ||
+    (ctx._stencilMaskF & m) !== (ctx._stencilMaskB & m)
+  );
 }
 
 /** WebGL 2.0 §5.?: every active uniform block needs a bound buffer range at least as large as the block. */
-function uniformBlocksBacked(ctx: Ctx, rec: import('./reflection.ts').ProgramRecord): boolean {
+function uniformBlocksBacked(
+  ctx: Ctx,
+  rec: import('./reflection.ts').ProgramRecord,
+): boolean {
   for (const block of rec.blocks) {
     const buf = ctx._uboBindings[block.binding];
     if (!buf) return false;
@@ -406,8 +526,11 @@ function uniformBlocksBacked(ctx: Ctx, rec: import('./reflection.ts').ProgramRec
 /** GLES 3.0 table 2.9: draw mode allowed for a transform feedback primitive mode. */
 function tfModeOk(tfMode: number, mode: number): boolean {
   if (tfMode === E.POINTS) return mode === E.POINTS;
-  if (tfMode === E.LINES) return mode === E.LINES || mode === E.LINE_LOOP || mode === E.LINE_STRIP;
-  return mode === E.TRIANGLES || mode === E.TRIANGLE_STRIP || mode === E.TRIANGLE_FAN;
+  if (tfMode === E.LINES)
+    return mode === E.LINES || mode === E.LINE_LOOP || mode === E.LINE_STRIP;
+  return (
+    mode === E.TRIANGLES || mode === E.TRIANGLE_STRIP || mode === E.TRIANGLE_FAN
+  );
 }
 
 /** WebGL 2.0 §5.?: transform feedback buffers may not be read by the same draw nor bound twice. */
@@ -419,8 +542,10 @@ function tfConflict(ctx: Ctx): boolean {
     if (!b) continue;
     for (let j = i + 1; j < tfb.length; j++) if (tfb[j] === b) return true;
     if (vao._elementBuffer === b) return true;
-    for (let k = 0; k < vao._buffers.length; k++) if (vao._enabled[k] && vao._buffers[k] === b) return true;
-    for (let k = 0; k < ctx._uboBindings.length; k++) if (ctx._uboBindings[k] === b) return true;
+    for (let k = 0; k < vao._buffers.length; k++)
+      if (vao._enabled[k] && vao._buffers[k] === b) return true;
+    for (let k = 0; k < ctx._uboBindings.length; k++)
+      if (ctx._uboBindings[k] === b) return true;
   }
   return false;
 }
@@ -428,28 +553,56 @@ function tfConflict(ctx: Ctx): boolean {
 /** Bytes one captured varying of `type` takes (GLES 3.0 table 2.10 types). */
 function varyingBytes(type: number): number {
   switch (type) {
-    case E.FLOAT: case E.INT: case E.UNSIGNED_INT: return 4;
-    case E.FLOAT_VEC2: case E.INT_VEC2: case E.UNSIGNED_INT_VEC2: return 8;
-    case E.FLOAT_VEC3: case E.INT_VEC3: case E.UNSIGNED_INT_VEC3: return 12;
-    case E.FLOAT_VEC4: case E.INT_VEC4: case E.UNSIGNED_INT_VEC4: case E.FLOAT_MAT2: return 16;
-    case E.FLOAT_MAT2x3: case E.FLOAT_MAT3x2: return 24;
-    case E.FLOAT_MAT2x4: case E.FLOAT_MAT4x2: return 32;
-    case E.FLOAT_MAT3: return 36;
-    case E.FLOAT_MAT3x4: case E.FLOAT_MAT4x3: return 48;
-    case E.FLOAT_MAT4: return 64;
-    default: return 16;
+    case E.FLOAT:
+    case E.INT:
+    case E.UNSIGNED_INT:
+      return 4;
+    case E.FLOAT_VEC2:
+    case E.INT_VEC2:
+    case E.UNSIGNED_INT_VEC2:
+      return 8;
+    case E.FLOAT_VEC3:
+    case E.INT_VEC3:
+    case E.UNSIGNED_INT_VEC3:
+      return 12;
+    case E.FLOAT_VEC4:
+    case E.INT_VEC4:
+    case E.UNSIGNED_INT_VEC4:
+    case E.FLOAT_MAT2:
+      return 16;
+    case E.FLOAT_MAT2x3:
+    case E.FLOAT_MAT3x2:
+      return 24;
+    case E.FLOAT_MAT2x4:
+    case E.FLOAT_MAT4x2:
+      return 32;
+    case E.FLOAT_MAT3:
+      return 36;
+    case E.FLOAT_MAT3x4:
+    case E.FLOAT_MAT4x3:
+      return 48;
+    case E.FLOAT_MAT4:
+      return 64;
+    default:
+      return 16;
   }
 }
 
 /** Vertices a draw of `count` vertices in `mode` writes to transform feedback (whole primitives only). */
 function capturedVertices(mode: number, count: number): number {
   switch (mode) {
-    case E.POINTS: return count;
-    case E.LINES: return count - (count % 2);
-    case E.LINE_STRIP: return count < 2 ? 0 : (count - 1) * 2;
-    case E.LINE_LOOP: return count < 2 ? 0 : count * 2;
-    case E.TRIANGLES: return count - (count % 3);
-    default: return count < 3 ? 0 : (count - 2) * 3; // strips, fans
+    case E.POINTS:
+      return count;
+    case E.LINES:
+      return count - (count % 2);
+    case E.LINE_STRIP:
+      return count < 2 ? 0 : (count - 1) * 2;
+    case E.LINE_LOOP:
+      return count < 2 ? 0 : count * 2;
+    case E.TRIANGLES:
+      return count - (count % 3);
+    default:
+      return count < 3 ? 0 : (count - 2) * 3; // strips, fans
   }
 }
 
@@ -457,7 +610,12 @@ function capturedVertices(mode: number, count: number): number {
  * GLES 3.0 §2.15.2: a draw that would write past the end of any transform feedback binding is INVALID_OPERATION.
  * Counts the vertices captured since beginTransformFeedback (records them when the draw goes ahead).
  */
-function tfReserve(ctx: Ctx, mode: number, count: number, instances: number): boolean {
+function tfReserve(
+  ctx: Ctx,
+  mode: number,
+  count: number,
+  instances: number,
+): boolean {
   const tf = ctx._tf;
   if (!tf._active || tf._paused) return true;
   const rec = tf._program?._record;
@@ -467,12 +625,18 @@ function tfReserve(ctx: Ctx, mode: number, count: number, instances: number): bo
   const separate = rec.tfBufferMode === E.SEPARATE_ATTRIBS;
   const slots = separate ? rec.varyings.length : 1;
   let stride = 0;
-  if (!separate) for (const v of rec.varyings) stride += varyingBytes(v.type) * v.size;
+  if (!separate)
+    for (const v of rec.varyings) stride += varyingBytes(v.type) * v.size;
   for (let i = 0; i < slots; i++) {
     const b = tf._buffers[i];
     if (!b) continue;
-    const per = separate ? varyingBytes(rec.varyings[i].type) * rec.varyings[i].size : stride;
-    const avail = tf._sizes[i] > 0 ? Math.min(tf._sizes[i], b._size - tf._offsets[i]) : b._size;
+    const per = separate
+      ? varyingBytes(rec.varyings[i].type) * rec.varyings[i].size
+      : stride;
+    const avail =
+      tf._sizes[i] > 0
+        ? Math.min(tf._sizes[i], b._size - tf._offsets[i])
+        : b._size;
     if (total * per > avail) {
       ctx._e(E.INVALID_OPERATION, 'draw (transform feedback buffer overflow)');
       return false;
@@ -489,36 +653,58 @@ export const drawMethods = {
     first |= 0;
     count |= 0;
     if (first < 0 || count < 0) return this._e(E.INVALID_VALUE, 'drawArrays');
-    if (!this._drawCheck(mode, 'drawArrays') || !tfReserve(this, mode, count, 1)) return;
+    if (
+      !this._drawCheck(mode, 'drawArrays') ||
+      !tfReserve(this, mode, count, 1)
+    )
+      return;
     if (count === 0) return;
     const sub = this._texSubst.length !== 0;
     if (sub) bindStandIns(this, true);
     this._n.drawArrays(mode, first, count);
     if (sub) bindStandIns(this, false);
   },
-  drawElements(this: Ctx, mode: number, count: number, type: number, offset: number): void {
+  drawElements(
+    this: Ctx,
+    mode: number,
+    count: number,
+    type: number,
+    offset: number,
+  ): void {
     if (this._skip()) return;
     mode >>>= 0;
     count |= 0;
     type >>>= 0;
     const off = toInt64(offset);
     if (!this._elementsCheck(count, type, off, 'drawElements')) return;
-    if (!this._drawCheck(mode, 'drawElements') || !tfReserve(this, mode, count, 1)) return;
+    if (
+      !this._drawCheck(mode, 'drawElements') ||
+      !tfReserve(this, mode, count, 1)
+    )
+      return;
     if (count === 0) return;
     const sub = this._texSubst.length !== 0;
     if (sub) bindStandIns(this, true);
     this._n.drawElements(mode, count, type, off);
     if (sub) bindStandIns(this, false);
   },
-  drawArraysInstanced(this: Ctx, mode: number, first: number, count: number, instanceCount: number): void {
+  drawArraysInstanced(
+    this: Ctx,
+    mode: number,
+    first: number,
+    count: number,
+    instanceCount: number,
+  ): void {
     if (this._skip()) return;
     mode >>>= 0;
     first |= 0;
     count |= 0;
     instanceCount |= 0;
-    if (first < 0 || count < 0 || instanceCount < 0) return this._e(E.INVALID_VALUE, 'drawArraysInstanced');
+    if (first < 0 || count < 0 || instanceCount < 0)
+      return this._e(E.INVALID_VALUE, 'drawArraysInstanced');
     if (!this._drawCheck(mode, 'drawArraysInstanced')) return;
-    if (!this._v2 && !hasZeroDivisor(this)) return this._e(E.INVALID_OPERATION, 'drawArraysInstanced');
+    if (!this._v2 && !hasZeroDivisor(this))
+      return this._e(E.INVALID_OPERATION, 'drawArraysInstanced');
     if (!tfReserve(this, mode, count, instanceCount)) return;
     if (count === 0 || instanceCount === 0) return;
     const sub = this._texSubst.length !== 0;
@@ -526,17 +712,26 @@ export const drawMethods = {
     this._n.drawArraysInstanced(mode, first, count, instanceCount);
     if (sub) bindStandIns(this, false);
   },
-  drawElementsInstanced(this: Ctx, mode: number, count: number, type: number, offset: number, instanceCount: number): void {
+  drawElementsInstanced(
+    this: Ctx,
+    mode: number,
+    count: number,
+    type: number,
+    offset: number,
+    instanceCount: number,
+  ): void {
     if (this._skip()) return;
     mode >>>= 0;
     count |= 0;
     type >>>= 0;
     instanceCount |= 0;
     const off = toInt64(offset);
-    if (instanceCount < 0) return this._e(E.INVALID_VALUE, 'drawElementsInstanced');
+    if (instanceCount < 0)
+      return this._e(E.INVALID_VALUE, 'drawElementsInstanced');
     if (!this._elementsCheck(count, type, off, 'drawElementsInstanced')) return;
     if (!this._drawCheck(mode, 'drawElementsInstanced')) return;
-    if (!this._v2 && !hasZeroDivisor(this)) return this._e(E.INVALID_OPERATION, 'drawElementsInstanced');
+    if (!this._v2 && !hasZeroDivisor(this))
+      return this._e(E.INVALID_OPERATION, 'drawElementsInstanced');
     if (!tfReserve(this, mode, count, instanceCount)) return;
     if (count === 0 || instanceCount === 0) return;
     const sub = this._texSubst.length !== 0;
@@ -544,7 +739,15 @@ export const drawMethods = {
     this._n.drawElementsInstanced(mode, count, type, off, instanceCount);
     if (sub) bindStandIns(this, false);
   },
-  drawRangeElements(this: Ctx, mode: number, start: number, end: number, count: number, type: number, offset: number): void {
+  drawRangeElements(
+    this: Ctx,
+    mode: number,
+    start: number,
+    end: number,
+    count: number,
+    type: number,
+    offset: number,
+  ): void {
     if (this._skip()) return;
     mode >>>= 0;
     start >>>= 0;
@@ -554,7 +757,11 @@ export const drawMethods = {
     const off = toInt64(offset);
     if (end < start) return this._e(E.INVALID_VALUE, 'drawRangeElements');
     if (!this._elementsCheck(count, type, off, 'drawRangeElements')) return;
-    if (!this._drawCheck(mode, 'drawRangeElements') || !tfReserve(this, mode, count, 1)) return;
+    if (
+      !this._drawCheck(mode, 'drawRangeElements') ||
+      !tfReserve(this, mode, count, 1)
+    )
+      return;
     if (count === 0) return;
     const sub = this._texSubst.length !== 0;
     if (sub) bindStandIns(this, true);
@@ -564,7 +771,13 @@ export const drawMethods = {
 };
 
 /** WEBGL_multi_draw (GL-25): list checks per the extension spec and Chromium, then one native call. */
-function listCheck(ctx: Ctx, list: unknown, offset: number, drawcount: number, what: string): Int32Array | null {
+function listCheck(
+  ctx: Ctx,
+  list: unknown,
+  offset: number,
+  drawcount: number,
+  what: string,
+): Int32Array | null {
   const arr = i32List(ctx, list, what);
   const len = arr === list ? arr.length : (list as ArrayLike<unknown>).length;
   if (offset >= len && drawcount > 0) {
@@ -580,17 +793,115 @@ function listCheck(ctx: Ctx, list: unknown, offset: number, drawcount: number, w
 }
 
 export const multiDrawMethods = {
-  multiDrawArraysWEBGL(this: { _gl: Ctx }, mode: number, firsts: unknown, firstsOffset: number, counts: unknown, countsOffset: number, drawcount: number): void {
-    multiDraw(this._gl, false, mode >>> 0, firsts, firstsOffset >>> 0, counts, countsOffset >>> 0, 0, null, 0, null, 0, drawcount | 0, 'multiDrawArraysWEBGL');
+  multiDrawArraysWEBGL(
+    this: { _gl: Ctx },
+    mode: number,
+    firsts: unknown,
+    firstsOffset: number,
+    counts: unknown,
+    countsOffset: number,
+    drawcount: number,
+  ): void {
+    multiDraw(
+      this._gl,
+      false,
+      mode >>> 0,
+      firsts,
+      firstsOffset >>> 0,
+      counts,
+      countsOffset >>> 0,
+      0,
+      null,
+      0,
+      null,
+      0,
+      drawcount | 0,
+      'multiDrawArraysWEBGL',
+    );
   },
-  multiDrawElementsWEBGL(this: { _gl: Ctx }, mode: number, counts: unknown, countsOffset: number, type: number, offsets: unknown, offsetsOffset: number, drawcount: number): void {
-    multiDraw(this._gl, true, mode >>> 0, null, 0, counts, countsOffset >>> 0, type >>> 0, offsets, offsetsOffset >>> 0, null, 0, drawcount | 0, 'multiDrawElementsWEBGL');
+  multiDrawElementsWEBGL(
+    this: { _gl: Ctx },
+    mode: number,
+    counts: unknown,
+    countsOffset: number,
+    type: number,
+    offsets: unknown,
+    offsetsOffset: number,
+    drawcount: number,
+  ): void {
+    multiDraw(
+      this._gl,
+      true,
+      mode >>> 0,
+      null,
+      0,
+      counts,
+      countsOffset >>> 0,
+      type >>> 0,
+      offsets,
+      offsetsOffset >>> 0,
+      null,
+      0,
+      drawcount | 0,
+      'multiDrawElementsWEBGL',
+    );
   },
-  multiDrawArraysInstancedWEBGL(this: { _gl: Ctx }, mode: number, firsts: unknown, firstsOffset: number, counts: unknown, countsOffset: number, instanceCounts: unknown, instanceCountsOffset: number, drawcount: number): void {
-    multiDraw(this._gl, false, mode >>> 0, firsts, firstsOffset >>> 0, counts, countsOffset >>> 0, 0, null, 0, instanceCounts, instanceCountsOffset >>> 0, drawcount | 0, 'multiDrawArraysInstancedWEBGL');
+  multiDrawArraysInstancedWEBGL(
+    this: { _gl: Ctx },
+    mode: number,
+    firsts: unknown,
+    firstsOffset: number,
+    counts: unknown,
+    countsOffset: number,
+    instanceCounts: unknown,
+    instanceCountsOffset: number,
+    drawcount: number,
+  ): void {
+    multiDraw(
+      this._gl,
+      false,
+      mode >>> 0,
+      firsts,
+      firstsOffset >>> 0,
+      counts,
+      countsOffset >>> 0,
+      0,
+      null,
+      0,
+      instanceCounts,
+      instanceCountsOffset >>> 0,
+      drawcount | 0,
+      'multiDrawArraysInstancedWEBGL',
+    );
   },
-  multiDrawElementsInstancedWEBGL(this: { _gl: Ctx }, mode: number, counts: unknown, countsOffset: number, type: number, offsets: unknown, offsetsOffset: number, instanceCounts: unknown, instanceCountsOffset: number, drawcount: number): void {
-    multiDraw(this._gl, true, mode >>> 0, null, 0, counts, countsOffset >>> 0, type >>> 0, offsets, offsetsOffset >>> 0, instanceCounts, instanceCountsOffset >>> 0, drawcount | 0, 'multiDrawElementsInstancedWEBGL');
+  multiDrawElementsInstancedWEBGL(
+    this: { _gl: Ctx },
+    mode: number,
+    counts: unknown,
+    countsOffset: number,
+    type: number,
+    offsets: unknown,
+    offsetsOffset: number,
+    instanceCounts: unknown,
+    instanceCountsOffset: number,
+    drawcount: number,
+  ): void {
+    multiDraw(
+      this._gl,
+      true,
+      mode >>> 0,
+      null,
+      0,
+      counts,
+      countsOffset >>> 0,
+      type >>> 0,
+      offsets,
+      offsetsOffset >>> 0,
+      instanceCounts,
+      instanceCountsOffset >>> 0,
+      drawcount | 0,
+      'multiDrawElementsInstancedWEBGL',
+    );
   },
 };
 
@@ -614,22 +925,31 @@ function multiDraw(
   if (drawcount < 0) return ctx._e(E.INVALID_VALUE, what);
   const c = listCheck(ctx, counts, countsOff, drawcount, what);
   if (!c) return;
-  const f = elements ? null : listCheck(ctx, firsts, firstsOff, drawcount, what);
+  const f = elements
+    ? null
+    : listCheck(ctx, firsts, firstsOff, drawcount, what);
   if (!elements && !f) return;
-  const o = elements ? listCheck(ctx, offsets, offsetsOff, drawcount, what) : null;
+  const o = elements
+    ? listCheck(ctx, offsets, offsetsOff, drawcount, what)
+    : null;
   if (elements && !o) return;
-  const i = insts === null ? null : listCheck(ctx, insts, instsOff, drawcount, what);
+  const i =
+    insts === null ? null : listCheck(ctx, insts, instsOff, drawcount, what);
   if (insts !== null && !i) return;
   if (elements) {
     for (let k = 0; k < drawcount; k++) {
-      if (!ctx._elementsCheck(c[countsOff + k], type, o![offsetsOff + k], what)) return;
+      if (!ctx._elementsCheck(c[countsOff + k], type, o![offsetsOff + k], what))
+        return;
     }
   } else {
     for (let k = 0; k < drawcount; k++) {
-      if (f![firstsOff + k] < 0 || c[countsOff + k] < 0) return ctx._e(E.INVALID_VALUE, what);
+      if (f![firstsOff + k] < 0 || c[countsOff + k] < 0)
+        return ctx._e(E.INVALID_VALUE, what);
     }
   }
-  if (i) for (let k = 0; k < drawcount; k++) if (i[instsOff + k] < 0) return ctx._e(E.INVALID_VALUE, what);
+  if (i)
+    for (let k = 0; k < drawcount; k++)
+      if (i[instsOff + k] < 0) return ctx._e(E.INVALID_VALUE, what);
   if (!ctx._drawCheck(mode, what)) return;
   if (drawcount === 0) return;
   const p = ctx._program!;
@@ -639,9 +959,36 @@ function multiDraw(
   const sub = ctx._texSubst.length !== 0;
   if (sub) bindStandIns(ctx, true);
   if (elements) {
-    n.multiDrawElements(mode, c, countsOff * 4, bytes, type, o!, offsetsOff * 4, bytes, i, i ? instsOff * 4 : 0, i ? bytes : 0, drawcount, drawId);
+    n.multiDrawElements(
+      mode,
+      c,
+      countsOff * 4,
+      bytes,
+      type,
+      o!,
+      offsetsOff * 4,
+      bytes,
+      i,
+      i ? instsOff * 4 : 0,
+      i ? bytes : 0,
+      drawcount,
+      drawId,
+    );
   } else {
-    n.multiDrawArrays(mode, f!, firstsOff * 4, bytes, c, countsOff * 4, bytes, i, i ? instsOff * 4 : 0, i ? bytes : 0, drawcount, drawId);
+    n.multiDrawArrays(
+      mode,
+      f!,
+      firstsOff * 4,
+      bytes,
+      c,
+      countsOff * 4,
+      bytes,
+      i,
+      i ? instsOff * 4 : 0,
+      i ? bytes : 0,
+      drawcount,
+      drawId,
+    );
   }
   if (sub) bindStandIns(ctx, false);
   // the multi-draw set webgl_DrawID behind the uniform cache: it is internal, no app-visible cache entry

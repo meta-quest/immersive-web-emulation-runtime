@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // One background thread that runs jobs in order (V8-free, host-tested).
 //
 // Used for blocking file work the JS thread must not do (PROC-2), such as reading an import()'s module graph out

@@ -24,7 +24,10 @@
       removedStaysRemoved: localStorage.getItem('to_remove') === null,
       length: localStorage.length,
     };
-    localStorage.setItem('after_reload', String(localStorage.getItem('launches')));
+    localStorage.setItem(
+      'after_reload',
+      String(localStorage.getItem('launches')),
+    );
     return v;
   });
   await check('fetch_after_reload', async () => {
@@ -32,14 +35,25 @@
     return [r.status, (await r.text()).length];
   });
   await check('indexeddb_after_reload', async () => {
-    const req = (r) => new Promise((res, rej) => ((r.onsuccess = () => res(r.result)), (r.onerror = () => rej(r.error))));
+    const req = (r) =>
+      new Promise(
+        (res, rej) => (
+          (r.onsuccess = () => res(r.result)),
+          (r.onerror = () => rej(r.error))
+        ),
+      );
     const open = indexedDB.open('devtest', 1);
-    open.onupgradeneeded = () => open.result.createObjectStore('launches', { autoIncrement: true });
+    open.onupgradeneeded = () =>
+      open.result.createObjectStore('launches', { autoIncrement: true });
     const db = await req(open);
     const tx = db.transaction('launches', 'readwrite');
     tx.objectStore('launches').add({ reload: true });
-    await new Promise((res, rej) => ((tx.oncomplete = res), (tx.onerror = () => rej(tx.error))));
-    const n = await req(db.transaction('launches').objectStore('launches').count());
+    await new Promise(
+      (res, rej) => ((tx.oncomplete = res), (tx.onerror = () => rej(tx.error))),
+    );
+    const n = await req(
+      db.transaction('launches').objectStore('launches').count(),
+    );
     db.close();
     return n;
   });

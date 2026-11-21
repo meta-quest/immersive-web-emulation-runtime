@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // OpenXR input for the XR thread (docs/spec/10 IN-1..7): one action set with WebXR's controller controls bound for
 // the Touch, Touch Plus and Touch Pro profiles, the hand interaction profile (XR_EXT_hand_interaction: aim and grip
 // poses, plus the XR_META_hand_tracking_microgestures swipes and tap when the runtime has them), XR_EXT_hand_tracking

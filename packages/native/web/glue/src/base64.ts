@@ -11,7 +11,8 @@ import { type DOMException, domException } from './dom-exception.ts';
 import { bytesToLatin1 } from './encoding.ts';
 import { toDOMString } from './util.ts';
 
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const ALPHABET =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const DECODE = new Int16Array(128).fill(-1);
 for (let i = 0; i < 64; i++) DECODE[ALPHABET.charCodeAt(i)] = i;
 
@@ -26,7 +27,8 @@ function invalid(op: 'atob' | 'btoa'): DOMException {
 
 // 12-bit index -> two base64 characters as char codes (hi << 8 | lo).
 const PAIRS = new Uint16Array(4096);
-for (let i = 0; i < 4096; i++) PAIRS[i] = (ALPHABET.charCodeAt(i >> 6) << 8) | ALPHABET.charCodeAt(i & 63);
+for (let i = 0; i < 4096; i++)
+  PAIRS[i] = (ALPHABET.charCodeAt(i >> 6) << 8) | ALPHABET.charCodeAt(i & 63);
 
 /**
  * Standard base64 (RFC 4648 §4, padded) of `n` code units read by `at` (each 0..255). Writes ASCII
@@ -63,7 +65,9 @@ export function base64Encode(bytes: Uint8Array): string {
 
 export function btoa(data: string): string {
   if (arguments.length === 0) {
-    throw new TypeError("Failed to execute 'btoa' on 'Window': 1 argument required, but only 0 present.");
+    throw new TypeError(
+      "Failed to execute 'btoa' on 'Window': 1 argument required, but only 0 present.",
+    );
   }
   const s = toDOMString(data, "Failed to execute 'btoa' on 'Window'");
   return encodeUnits(s.length, (k) => {
@@ -75,11 +79,16 @@ export function btoa(data: string): string {
 
 export function atob(data: string): string {
   if (arguments.length === 0) {
-    throw new TypeError("Failed to execute 'atob' on 'Window': 1 argument required, but only 0 present.");
+    throw new TypeError(
+      "Failed to execute 'atob' on 'Window': 1 argument required, but only 0 present.",
+    );
   }
   // Forgiving-base64 decode: strip ASCII whitespace, drop up to two trailing '=' when the length is a
   // multiple of 4, reject length % 4 == 1 and any non-alphabet code point.
-  let s = toDOMString(data, "Failed to execute 'atob' on 'Window'").replace(/[\t\n\f\r ]+/g, '');
+  let s = toDOMString(data, "Failed to execute 'atob' on 'Window'").replace(
+    /[\t\n\f\r ]+/g,
+    '',
+  );
   if (s.length % 4 === 0) {
     if (s.endsWith('==')) s = s.slice(0, -2);
     else if (s.endsWith('=')) s = s.slice(0, -1);
@@ -96,7 +105,8 @@ export function atob(data: string): string {
     return v;
   };
   for (; i + 3 < n; i += 4) {
-    const v = (val(i) << 18) | (val(i + 1) << 12) | (val(i + 2) << 6) | val(i + 3);
+    const v =
+      (val(i) << 18) | (val(i + 1) << 12) | (val(i + 2) << 6) | val(i + 3);
     out[o++] = v >> 16;
     out[o++] = (v >> 8) & 0xff;
     out[o++] = v & 0xff;
@@ -104,7 +114,8 @@ export function atob(data: string): string {
   const rest = n - i;
   if (rest >= 2) {
     // Discard the bits that do not make a whole byte (forgiving-base64 step 8).
-    const v = (val(i) << 18) | (val(i + 1) << 12) | (rest === 3 ? val(i + 2) << 6 : 0);
+    const v =
+      (val(i) << 18) | (val(i + 1) << 12) | (rest === 3 ? val(i + 2) << 6 : 0);
     out[o++] = v >> 16;
     if (rest === 3) out[o++] = (v >> 8) & 0xff;
   }

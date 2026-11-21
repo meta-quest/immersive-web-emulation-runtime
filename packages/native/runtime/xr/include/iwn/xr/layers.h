@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Composition layers (WebXR Layers quad and cylinder layers, docs/spec/08 XR-LAYER-1): the buffer the adapter
 // (web/xr/src/layers.ts) and the XR thread share for them, the pure part of turning one entry into OpenXR layer
 // parameters, and the bookkeeping of a frame's list (which images become content, which layers can be shown).

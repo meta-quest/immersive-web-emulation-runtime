@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // LOOP-1..3, TMR-5 at the scheduler level: task order, timers vs tasks, cross-thread posts wake the loop, budget
 // carry-over, the 60 Hz window rAF fallback, frame pumps.
 #include <atomic>

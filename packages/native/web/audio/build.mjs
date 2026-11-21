@@ -23,11 +23,13 @@ const options = {
   format: 'iife',
   platform: 'neutral',
   target: 'es2024',
-  keepNames: true,  // AudioContext.name === 'AudioContext', error.constructor.name, ...
+  keepNames: true, // AudioContext.name === 'AudioContext', error.constructor.name, ...
   legalComments: 'none',
   logLevel: 'warning',
 };
 await build({ ...options, outfile: join(out, 'audio.js') });
 await build({ ...options, outfile: join(out, 'audio.min.js'), minify: true });
 const min = readFileSync(join(out, 'audio.min.js'));
-console.log(`dist/audio.min.js ${min.length} bytes, ${gzipSync(min).length} gzip`);
+console.log(
+  `dist/audio.min.js ${min.length} bytes, ${gzipSync(min).length} gzip`,
+);

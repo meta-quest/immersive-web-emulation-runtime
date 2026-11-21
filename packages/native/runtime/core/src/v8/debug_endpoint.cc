@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Host debug endpoint (docs/spec/14): {"method","params","id"?} over WebSocket path /host; each reply is the
 // method's result object (plus "id" when given) or {"error": "..."}, sent as one unfragmented text frame.
 // Built-in methods: eval (DBG-EVAL), stats (DBG-STATS), info (DBG-6); modules add more (shot: XR module, M3).

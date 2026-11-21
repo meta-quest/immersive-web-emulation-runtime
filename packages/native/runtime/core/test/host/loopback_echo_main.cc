@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Host test server: the real LoopbackServer with an echo backend. Prints "PORT <n>" once listening.
 //   /json/version, /json/list  -> JSON like the device (one page target)
 //   ws /devtools/page/1        -> echoes {"id":N,...} as {"id":N,"result":{"echo":<text>}}

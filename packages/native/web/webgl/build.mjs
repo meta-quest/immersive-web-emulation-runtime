@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Builds dist/webgl.js (readable) and dist/webgl.min.js (shipped prelude), IIFE, and prints the size line.
 import { build } from 'esbuild';
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -25,4 +32,6 @@ for (const minify of [false, true]) {
   });
 }
 const code = readFileSync(join(out, 'webgl.min.js'));
-console.log(`webgl.min.js: ${(code.length / 1024).toFixed(1)} KB minified, ${(gzipSync(code, { level: 9 }).length / 1024).toFixed(1)} KB min+gzip`);
+console.log(
+  `webgl.min.js: ${(code.length / 1024).toFixed(1)} KB minified, ${(gzipSync(code, { level: 9 }).length / 1024).toFixed(1)} KB min+gzip`,
+);

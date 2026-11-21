@@ -32,13 +32,22 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { evaluateCompat, formatCompatReport, type CompatReport } from './check.ts';
+import {
+  evaluateCompat,
+  formatCompatReport,
+  type CompatReport,
+} from './check.ts';
 import { projectSignals } from './project.ts';
 import { controlTrim, headsetTrim } from './providers.ts';
 import { CAMERA_SIGNAL, scanDist, type ScanResult } from './scan.ts';
 import { loadSurface, packageRoot } from './surface.ts';
 import { featuresFromWorld } from '../../src/config/resolve.ts';
-import { findIwerBuild, loadPlaywright, runTrace, type TraceResult } from './trace-run.ts';
+import {
+  findIwerBuild,
+  loadPlaywright,
+  runTrace,
+  type TraceResult,
+} from './trace-run.ts';
 
 export interface CompatCliOptions {
   projectRoot: string;
@@ -67,9 +76,13 @@ export function readAllowlist(projectRoot: string): string[] {
   const file = path.join(projectRoot, 'iwsdk.config.json');
   if (!existsSync(file)) return [];
   try {
-    const cfg = JSON.parse(readFileSync(file, 'utf8')) as { native?: { network?: { allow?: unknown } } };
+    const cfg = JSON.parse(readFileSync(file, 'utf8')) as {
+      native?: { network?: { allow?: unknown } };
+    };
     const a = cfg.native?.network?.allow;
-    return Array.isArray(a) ? a.filter((x): x is string => typeof x === 'string') : [];
+    return Array.isArray(a)
+      ? a.filter((x): x is string => typeof x === 'string')
+      : [];
   } catch {
     return [];
   }
@@ -81,59 +94,121 @@ export function readAllowlist(projectRoot: string): string[] {
  * IWSDK and calls getUserMedia gets the camera when the features are derived). What the headset offers depends on
  * them: passthrough turns immersive-ar on (XR-AR-1), camera getUserMedia (XR-CAM-1).
  */
-export function declaredFeatures(projectRoot: string, scan: ScanResult, given?: { names: string[]; derived: boolean }): Set<string> {
+export function declaredFeatures(
+  projectRoot: string,
+  scan: ScanResult,
+  given?: { names: string[]; derived: boolean },
+): Set<string> {
   let resolved = given;
   if (!resolved) {
     let cfg: { native?: { features?: unknown }; world?: unknown } = {};
     try {
-      cfg = JSON.parse(readFileSync(path.join(projectRoot, 'iwsdk.config.json'), 'utf8')) as typeof cfg;
+      cfg = JSON.parse(
+        readFileSync(path.join(projectRoot, 'iwsdk.config.json'), 'utf8'),
+      ) as typeof cfg;
     } catch {
       /* no or unreadable config: only what the dist implies */
     }
     const nf = cfg.native?.features;
-    resolved = nf && typeof nf === 'object'
-      ? { names: Object.entries(nf as Record<string, unknown>).filter(([, v]) => v !== false && v !== null && v !== undefined).map(([k]) => k), derived: false }
-      : { names: Object.keys(featuresFromWorld(cfg.world)), derived: true };
+    resolved =
+      nf && typeof nf === 'object'
+        ? {
+            names: Object.entries(nf as Record<string, unknown>)
+              .filter(([, v]) => v !== false && v !== null && v !== undefined)
+              .map(([k]) => k),
+            derived: false,
+          }
+        : { names: Object.keys(featuresFromWorld(cfg.world)), derived: true };
   }
   const out = new Set(resolved.names);
-  if (resolved.derived && !out.has('camera') && !scan.iwsdk && scan.hits.some((h) => h.key === CAMERA_SIGNAL.key)) out.add('camera');
+  if (
+    resolved.derived &&
+    !out.has('camera') &&
+    !scan.iwsdk &&
+    scan.hits.some((h) => h.key === CAMERA_SIGNAL.key)
+  )
+    out.add('camera');
   return out;
 }
 
-export async function checkProject(opts: Omit<CompatCliOptions, 'stdout' | 'stderr' | 'json' | 'verbose'> & { log?: (m: string) => void }): Promise<CompatReport> {
+export async function checkProject(
+  opts: Omit<CompatCliOptions, 'stdout' | 'stderr' | 'json' | 'verbose'> & {
+    log?: (m: string) => void;
+  },
+): Promise<CompatReport> {
   const dist = path.resolve(opts.projectRoot, opts.distDir ?? 'dist');
-  if (!existsSync(path.join(dist, 'index.html'))) throw new CompatUsageError(`${dist} has no index.html; build first (vite build)`);
+  if (!existsSync(path.join(dist, 'index.html')))
+    throw new CompatUsageError(
+      `${dist} has no index.html; build first (vite build)`,
+    );
   const { surface, origin } = await loadSurface();
   const scan = scanDist(dist);
   const declared = declaredFeatures(opts.projectRoot, scan, opts.features);
   const allow = opts.allow ?? readAllowlist(opts.projectRoot);
   let trace: TraceResult | undefined;
-  let traceAgain: ((roots: string[]) => Promise<NonNullable<TraceResult['controls']>>) | undefined;
+  let traceAgain:
+    | ((roots: string[]) => Promise<NonNullable<TraceResult['controls']>>)
+    | undefined;
   if (opts.trace) {
     const mirrors = parseMirrors(opts.mirrors ?? []);
     const pw = await loadPlaywright(opts.projectRoot);
     const iwer = findIwerBuild(opts.projectRoot);
     if (!pw || !iwer || !existsSync(iwer))
-      throw new CompatUsageError('--trace needs playwright and iwer in the project\'s node_modules (IWSDK projects have both via @iwsdk/cli and @iwsdk/vite-plugin-dev)');
-    opts.log?.(`tracing ${dist} headlessly (IWER ${path.relative(opts.projectRoot, iwer)})`);
+      throw new CompatUsageError(
+        "--trace needs playwright and iwer in the project's node_modules (IWSDK projects have both via @iwsdk/cli and @iwsdk/vite-plugin-dev)",
+      );
+    opts.log?.(
+      `tracing ${dist} headlessly (IWER ${path.relative(opts.projectRoot, iwer)})`,
+    );
     const trim = headsetTrim(surface, { declared });
-    const run = (t: typeof trim) => runTrace({ distDir: dist, iwerSource: readFileSync(iwer, 'utf8'), playwright: pw, log: opts.log, allow, mirrors, trim: t, emulateAR: declared.has('passthrough'), bootTimeoutMs: opts.bootMs });
+    const run = (t: typeof trim) =>
+      runTrace({
+        distDir: dist,
+        iwerSource: readFileSync(iwer, 'utf8'),
+        playwright: pw,
+        log: opts.log,
+        allow,
+        mirrors,
+        trim: t,
+        emulateAR: declared.has('passthrough'),
+        bootTimeoutMs: opts.bootMs,
+      });
     trace = await run(trim);
     traceAgain = async (roots: string[]) => {
       // one browser at a time; at most MAX_CONTROL_RUNS extra runs
       const controls = [];
       for (const root of roots.slice(0, MAX_CONTROL_RUNS)) {
-        opts.log?.(`control run with ${root.replace(/^Navigator\./, 'navigator.')} left in place (does removing it cause the page error?)`);
+        opts.log?.(
+          `control run with ${root.replace(/^Navigator\./, 'navigator.')} left in place (does removing it cause the page error?)`,
+        );
         const c = await run(controlTrim(trim, root, trace!.removed ?? []));
-        controls.push({ kept: root, pageErrors: c.pageErrors, reachedXR: c.reachedXR, ...(c.hung ? { hung: c.hung } : {}) });
+        controls.push({
+          kept: root,
+          pageErrors: c.pageErrors,
+          reachedXR: c.reachedXR,
+          ...(c.hung ? { hung: c.hung } : {}),
+        });
       }
       return controls;
     };
   }
   const iwsdkVersion = iwsdkCoreVersion(opts.projectRoot);
   // the baseline describes library code IWSDK builds carry: for a plain three.js (or other) bundle every hit is the app's
-  const iwsdk = !!iwsdkVersion || dependsOnIwsdk(opts.projectRoot) || !!scan.iwsdk;
-  const evaluate = () => evaluateCompat({ scan, trace, app: projectSignals(opts.projectRoot), surface, surfaceOrigin: origin, allow, strict: opts.strict, baseline: iwsdk ? loadBaseline() : undefined, iwsdkVersion, declared });
+  const iwsdk =
+    !!iwsdkVersion || dependsOnIwsdk(opts.projectRoot) || !!scan.iwsdk;
+  const evaluate = () =>
+    evaluateCompat({
+      scan,
+      trace,
+      app: projectSignals(opts.projectRoot),
+      surface,
+      surfaceOrigin: origin,
+      allow,
+      strict: opts.strict,
+      baseline: iwsdk ? loadBaseline() : undefined,
+      iwsdkVersion,
+      declared,
+    });
   let report = evaluate();
   if (trace && traceAgain && report.controlCandidates?.length) {
     // a TypeError in the trimmed run and a removed root the app touched: re-run with the root left in place, so
@@ -150,8 +225,12 @@ export const MAX_CONTROL_RUNS = 3;
 /** package.json lists @iwsdk/core (dependencies or devDependencies). */
 export function dependsOnIwsdk(projectRoot: string): boolean {
   try {
-    const pkg = JSON.parse(readFileSync(path.join(projectRoot, 'package.json'), 'utf8')) as Record<string, Record<string, unknown> | undefined>;
-    return ['dependencies', 'devDependencies', 'peerDependencies'].some((k) => !!pkg[k] && '@iwsdk/core' in pkg[k]!);
+    const pkg = JSON.parse(
+      readFileSync(path.join(projectRoot, 'package.json'), 'utf8'),
+    ) as Record<string, Record<string, unknown> | undefined>;
+    return ['dependencies', 'devDependencies', 'peerDependencies'].some(
+      (k) => !!pkg[k] && '@iwsdk/core' in pkg[k]!,
+    );
   } catch {
     return false;
   }
@@ -160,8 +239,14 @@ export function dependsOnIwsdk(projectRoot: string): boolean {
 /** The project's installed @iwsdk/core version, if any. */
 export function iwsdkCoreVersion(projectRoot: string): string | undefined {
   try {
-    const req = createRequire(path.join(path.resolve(projectRoot), 'package.json'));
-    const v = (JSON.parse(readFileSync(req.resolve('@iwsdk/core/package.json'), 'utf8')) as { version?: unknown }).version;
+    const req = createRequire(
+      path.join(path.resolve(projectRoot), 'package.json'),
+    );
+    const v = (
+      JSON.parse(
+        readFileSync(req.resolve('@iwsdk/core/package.json'), 'utf8'),
+      ) as { version?: unknown }
+    ).version;
     return typeof v === 'string' ? v : undefined;
   } catch {
     return undefined;
@@ -169,24 +254,47 @@ export function iwsdkCoreVersion(projectRoot: string): string | undefined {
 }
 
 /** `<url-prefix>=<dir>` -> { prefix, dir }. */
-export function parseMirrors(specs: string[]): Array<{ prefix: string; dir: string }> {
+export function parseMirrors(
+  specs: string[],
+): Array<{ prefix: string; dir: string }> {
   return specs.map((m) => {
     const i = m.lastIndexOf('=');
-    if (i <= 0 || !/^https?:\/\//.test(m)) throw new CompatUsageError(`--mirror wants <url-prefix>=<dir> (got "${m}")`);
+    if (i <= 0 || !/^https?:\/\//.test(m))
+      throw new CompatUsageError(
+        `--mirror wants <url-prefix>=<dir> (got "${m}")`,
+      );
     const dir = path.resolve(m.slice(i + 1));
-    if (!existsSync(dir)) throw new CompatUsageError(`--mirror directory ${dir} does not exist`);
+    if (!existsSync(dir))
+      throw new CompatUsageError(`--mirror directory ${dir} does not exist`);
     return { prefix: m.slice(0, i), dir };
   });
 }
 
 /** data/static-baseline.json (written by scripts/baseline.mjs), if present. */
-export function loadBaseline(root = packageRoot()): { keys: Set<string>; origins: Set<string>; counts: Map<string, number>; iwsdk?: string } | undefined {
+export function loadBaseline(root = packageRoot()):
+  | {
+      keys: Set<string>;
+      origins: Set<string>;
+      counts: Map<string, number>;
+      iwsdk?: string;
+    }
+  | undefined {
   if (!root) return undefined;
   const file = path.join(root, 'compat', 'data', 'static-baseline.json');
   if (!existsSync(file)) return undefined;
   try {
-    const j = JSON.parse(readFileSync(file, 'utf8')) as { keys?: string[]; origins?: string[]; counts?: Record<string, number>; iwsdk?: string };
-    return { keys: new Set(j.keys ?? []), origins: new Set(j.origins ?? []), counts: new Map(Object.entries(j.counts ?? {})), iwsdk: typeof j.iwsdk === 'string' ? j.iwsdk : undefined };
+    const j = JSON.parse(readFileSync(file, 'utf8')) as {
+      keys?: string[];
+      origins?: string[];
+      counts?: Record<string, number>;
+      iwsdk?: string;
+    };
+    return {
+      keys: new Set(j.keys ?? []),
+      origins: new Set(j.origins ?? []),
+      counts: new Map(Object.entries(j.counts ?? {})),
+      iwsdk: typeof j.iwsdk === 'string' ? j.iwsdk : undefined,
+    };
   } catch {
     return undefined;
   }
@@ -207,8 +315,12 @@ export async function runCompatCommand(o: CompatCliOptions): Promise<number> {
   } catch (error) {
     const e = error as Error;
     const usage = e.name === 'CompatUsageError';
-    if (o.json) o.stdout(`${JSON.stringify({ ok: false, error: e.message }, null, 2)}\n`);
-    else o.stderr(`iwer-native compat: ${usage ? '' : 'the check could not run: '}${e.message}\n`);
+    if (o.json)
+      o.stdout(`${JSON.stringify({ ok: false, error: e.message }, null, 2)}\n`);
+    else
+      o.stderr(
+        `iwer-native compat: ${usage ? '' : 'the check could not run: '}${e.message}\n`,
+      );
     return usage ? 2 : 1;
   }
   if (o.json) o.stdout(`${JSON.stringify(report, null, 2)}\n`);

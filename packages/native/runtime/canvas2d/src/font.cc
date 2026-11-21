@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Font faces over FreeType (outlines, names, metrics, COLR v0) and HarfBuzz (cmap, shaping); CBDT colour strikes
 // parsed here from the OpenType CBLC/CBDT table formats and decoded with stb_image.
 

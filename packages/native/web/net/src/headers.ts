@@ -9,8 +9,16 @@
 // values, sort-and-combine iteration with set-cookie kept separate, guards (immutable, request,
 // response) and the forbidden request/response header rules.
 
-export type HeadersGuard = 'none' | 'request' | 'request-no-cors' | 'response' | 'immutable';
-export type HeadersInitLike = Headers | Iterable<Iterable<string>> | Record<string, string>;
+export type HeadersGuard =
+  | 'none'
+  | 'request'
+  | 'request-no-cors'
+  | 'response'
+  | 'immutable';
+export type HeadersInitLike =
+  | Headers
+  | Iterable<Iterable<string>>
+  | Record<string, string>;
 
 const TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 // Leading/trailing HTTP whitespace: U+0009, U+000A, U+000D, U+0020.
@@ -40,14 +48,24 @@ const FORBIDDEN_REQUEST = new Set([
   'via',
 ]);
 
-export function isForbiddenRequestHeader(lowerName: string, value?: string): boolean {
+export function isForbiddenRequestHeader(
+  lowerName: string,
+  value?: string,
+): boolean {
   if (FORBIDDEN_REQUEST.has(lowerName)) return true;
-  if (lowerName.startsWith('proxy-') || lowerName.startsWith('sec-')) return true;
+  if (lowerName.startsWith('proxy-') || lowerName.startsWith('sec-'))
+    return true;
   if (
     value !== undefined &&
-    (lowerName === 'x-http-method' || lowerName === 'x-http-method-override' || lowerName === 'x-method-override')
+    (lowerName === 'x-http-method' ||
+      lowerName === 'x-http-method-override' ||
+      lowerName === 'x-method-override')
   ) {
-    return value.split(',').some((m) => ['CONNECT', 'TRACE', 'TRACK'].includes(m.trim().toUpperCase()));
+    return value
+      .split(',')
+      .some((m) =>
+        ['CONNECT', 'TRACE', 'TRACK'].includes(m.trim().toUpperCase()),
+      );
   }
   return false;
 }
@@ -64,7 +82,8 @@ function validate(name: string, value: string): void {
   if (!TOKEN.test(name)) throw new TypeError(`Invalid header name: "${name}"`);
   for (let i = 0; i < value.length; i++) {
     const c = value.charCodeAt(i);
-    if (c === 0 || c === 0x0a || c === 0x0d || c > 0xff) throw new TypeError(`Invalid value for header "${name}"`);
+    if (c === 0 || c === 0x0a || c === 0x0d || c > 0xff)
+      throw new TypeError(`Invalid value for header "${name}"`);
   }
 }
 
@@ -85,7 +104,8 @@ export class Headers {
 
   delete(name: string): void {
     name = String(name);
-    if (!TOKEN.test(name)) throw new TypeError(`Invalid header name: "${name}"`);
+    if (!TOKEN.test(name))
+      throw new TypeError(`Invalid header name: "${name}"`);
     if (!checkGuard(this, name.toLowerCase(), '')) return;
     const lower = name.toLowerCase();
     this[LIST] = this[LIST].filter(([n]) => n !== lower);
@@ -93,7 +113,8 @@ export class Headers {
 
   get(name: string): string | null {
     name = String(name);
-    if (!TOKEN.test(name)) throw new TypeError(`Invalid header name: "${name}"`);
+    if (!TOKEN.test(name))
+      throw new TypeError(`Invalid header name: "${name}"`);
     const lower = name.toLowerCase();
     const values = this[LIST].filter(([n]) => n === lower).map(([, v]) => v);
     return values.length ? values.join(', ') : null;
@@ -105,7 +126,8 @@ export class Headers {
 
   has(name: string): boolean {
     name = String(name);
-    if (!TOKEN.test(name)) throw new TypeError(`Invalid header name: "${name}"`);
+    if (!TOKEN.test(name))
+      throw new TypeError(`Invalid header name: "${name}"`);
     const lower = name.toLowerCase();
     return this[LIST].some(([n]) => n === lower);
   }
@@ -126,8 +148,12 @@ export class Headers {
     this[LIST] = list.filter(([n], i) => i <= first || n !== lower);
   }
 
-  forEach(callback: (value: string, name: string, parent: Headers) => void, thisArg?: unknown): void {
-    for (const [n, v] of sortAndCombine(this)) callback.call(thisArg, v, n, this);
+  forEach(
+    callback: (value: string, name: string, parent: Headers) => void,
+    thisArg?: unknown,
+  ): void {
+    for (const [n, v] of sortAndCombine(this))
+      callback.call(thisArg, v, n, this);
   }
 
   *entries(): IterableIterator<[string, string]> {
@@ -157,7 +183,8 @@ export class Headers {
 function checkGuard(h: Headers, lower: string, value: string): boolean {
   const guard = h[GUARD];
   if (guard === 'immutable') throw new TypeError('Headers are immutable');
-  if (guard === 'request' && isForbiddenRequestHeader(lower, value)) return false;
+  if (guard === 'request' && isForbiddenRequestHeader(lower, value))
+    return false;
   if (guard === 'response' && isForbiddenResponseHeader(lower)) return false;
   return true;
 }
@@ -170,13 +197,20 @@ function appendHeader(h: Headers, name: string, value: string): void {
 }
 
 function sortAndCombine(h: Headers): Array<[string, string]> {
-  const names = [...new Set(h[LIST].map(([n]) => n))].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const names = [...new Set(h[LIST].map(([n]) => n))].sort((a, b) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
   const out: Array<[string, string]> = [];
   for (const n of names) {
     if (n === 'set-cookie') {
       for (const [ln, v] of h[LIST]) if (ln === n) out.push([n, v]);
     } else {
-      out.push([n, h[LIST].filter(([ln]) => ln === n).map(([, v]) => v).join(', ')]);
+      out.push([
+        n,
+        h[LIST].filter(([ln]) => ln === n)
+          .map(([, v]) => v)
+          .join(', '),
+      ]);
     }
   }
   return out;
@@ -187,12 +221,16 @@ export function fillHeaders(h: Headers, init: HeadersInitLike): void {
     for (const [n, v] of init[LIST]) appendHeader(h, n, v);
     return;
   }
-  if (typeof init !== 'object') throw new TypeError("Failed to construct 'Headers': The provided value is not of type '(record<ByteString, ByteString> or sequence<sequence<ByteString>>)'.");
+  if (typeof init !== 'object')
+    throw new TypeError(
+      "Failed to construct 'Headers': The provided value is not of type '(record<ByteString, ByteString> or sequence<sequence<ByteString>>)'.",
+    );
   const iter = (init as { [Symbol.iterator]?: unknown })[Symbol.iterator];
   if (typeof iter === 'function') {
     for (const pair of init as Iterable<Iterable<string>>) {
       const arr = typeof pair === 'string' ? null : [...pair];
-      if (!arr || arr.length !== 2) throw new TypeError("Failed to construct 'Headers': Invalid value");
+      if (!arr || arr.length !== 2)
+        throw new TypeError("Failed to construct 'Headers': Invalid value");
       appendHeader(h, String(arr[0]), normalizeValue(arr[1]));
     }
     return;
@@ -200,7 +238,8 @@ export function fillHeaders(h: Headers, init: HeadersInitLike): void {
   for (const key of Reflect.ownKeys(init)) {
     const desc = Reflect.getOwnPropertyDescriptor(init, key);
     if (!desc || !desc.enumerable) continue;
-    if (typeof key === 'symbol') throw new TypeError('Header names must be strings');
+    if (typeof key === 'symbol')
+      throw new TypeError('Header names must be strings');
     appendHeader(h, key, normalizeValue((init as Record<string, string>)[key]));
   }
 }
@@ -216,7 +255,10 @@ export function getGuard(h: Headers): HeadersGuard {
   return h[GUARD];
 }
 /** Builds response headers from native (lower-cased) pairs without guard checks. */
-export function headersFromPairs(flat: readonly string[], guard: HeadersGuard): Headers {
+export function headersFromPairs(
+  flat: readonly string[],
+  guard: HeadersGuard,
+): Headers {
   const h = new Headers();
   for (let i = 0; i + 1 < flat.length; i += 2) {
     const n = flat[i].toLowerCase();

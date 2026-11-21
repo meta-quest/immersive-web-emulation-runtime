@@ -4,12 +4,12 @@ Native half of Web Storage, IndexedDB and the Cache API. JS sees it as `globalTh
 `binding/storage_binding.cc` header comment and `web/storage/src/natives.ts`). Spec: NET-STORE-1..3, PROC-7 exit
 flush.
 
-| target | what |
-|---|---|
-| `iwn_sqlite3` | SQLite 3.53.2 amalgamation (sqlite.org, our flags) |
-| `iwn_storage_core` | `KvStore` (localStorage log), `SqlDatabase`/`SqlService` (one worker thread per database), fs helpers; host + Android, no V8 |
-| `iwn_storage` | the V8 binding, `iwn_register_storage` |
-| `iwn_storage_core_test`, `iwn_kv_crash_helper` | host tests (incl. killing a writer process) |
+| target                                         | what                                                                                                                         |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `iwn_sqlite3`                                  | SQLite 3.53.2 amalgamation (sqlite.org, our flags)                                                                           |
+| `iwn_storage_core`                             | `KvStore` (localStorage log), `SqlDatabase`/`SqlService` (one worker thread per database), fs helpers; host + Android, no V8 |
+| `iwn_storage`                                  | the V8 binding, `iwn_register_storage`                                                                                       |
+| `iwn_storage_core_test`, `iwn_kv_crash_helper` | host tests (incl. killing a writer process)                                                                                  |
 
 ```bash
 cmake -S runtime/storage -B /tmp/st -G Ninja && ninja -C /tmp/st -j 16 && /tmp/st/iwn_storage_core_test   # 13 tests

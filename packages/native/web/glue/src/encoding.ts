@@ -14,7 +14,13 @@
 import type { GlueNatives } from './natives.ts';
 // encode/encodeInto take USVString; the UTF-8 encoder replaces lone surrogates itself, so DOMString
 // conversion gives the same bytes without a toWellFormed() copy.
-import { bytesOf, checkDictionary, enumerable, tag, toDOMString } from './util.ts';
+import {
+  bytesOf,
+  checkDictionary,
+  enumerable,
+  tag,
+  toDOMString,
+} from './util.ts';
 
 type Enc = 'utf-8' | 'utf-16le' | 'utf-16be' | 'windows-1252';
 
@@ -76,10 +82,10 @@ export function getEncoding(label: string): Enc | 'replacement' | null {
 
 // windows-1252 bytes 0x80..0x9F (the index-windows-1252 entries that differ from ISO-8859-1).
 const CP1252 = new Uint16Array([
-  0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030,
-  0x0160, 0x2039, 0x0152, 0x008d, 0x017d, 0x008f, 0x0090, 0x2018, 0x2019, 0x201c,
-  0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d,
-  0x017e, 0x0178,
+  0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6,
+  0x2030, 0x0160, 0x2039, 0x0152, 0x008d, 0x017d, 0x008f, 0x0090, 0x2018,
+  0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161,
+  0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
 ]);
 
 const CHUNK = 0x2000;
@@ -103,10 +109,14 @@ function unitsToString(units: Uint16Array, length: number): string {
 /** Bytes as a string of the same code units (latin1 / isomorphic decode), in chunks. */
 export function bytesToLatin1(bytes: Uint8Array): string {
   const n = bytes.length;
-  if (n <= CHUNK) return String.fromCharCode.apply(null, bytes as unknown as number[]);
+  if (n <= CHUNK)
+    return String.fromCharCode.apply(null, bytes as unknown as number[]);
   let out = '';
   for (let i = 0; i < n; i += CHUNK) {
-    out += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, n)) as unknown as number[]);
+    out += String.fromCharCode.apply(
+      null,
+      bytes.subarray(i, Math.min(i + CHUNK, n)) as unknown as number[],
+    );
   }
   return out;
 }
@@ -136,12 +146,20 @@ class Utf8Decoder implements Decoder {
       let k = 0;
       while (k < n && bytes[k]! < 0x80) k++;
       if (k === n) return bytesToLatin1(bytes);
-      if (k >= 64) return bytesToLatin1(bytes.subarray(0, k)) + this.decodeFrom(bytes.subarray(k), flush, fatal);
+      if (k >= 64)
+        return (
+          bytesToLatin1(bytes.subarray(0, k)) +
+          this.decodeFrom(bytes.subarray(k), flush, fatal)
+        );
     }
     return this.decodeFrom(bytes, flush, fatal);
   }
 
-  private decodeFrom(bytes: Uint8Array, flush: boolean, fatal: boolean): string {
+  private decodeFrom(
+    bytes: Uint8Array,
+    flush: boolean,
+    fatal: boolean,
+  ): string {
     const n = bytes.length;
     const out = new Uint16Array(n + 2);
     let o = 0;
@@ -290,7 +308,9 @@ function newDecoder(enc: Enc): Decoder {
 
 let nativeEncoding: GlueNatives['encoding'] | undefined;
 /** Wired by the installer. */
-export function setNativeEncoding(n: GlueNatives['encoding'] | undefined): void {
+export function setNativeEncoding(
+  n: GlueNatives['encoding'] | undefined,
+): void {
   nativeEncoding = n;
 }
 
@@ -308,8 +328,13 @@ export class TextDecoder {
   #bomSeen = false;
 
   constructor(label: string = 'utf-8', options?: TextDecoderOptions | null) {
-    checkDictionary(options, "Failed to construct 'TextDecoder': The provided value is not of type 'TextDecoderOptions'.");
-    const enc = getEncoding(toDOMString(label, "Failed to construct 'TextDecoder'"));
+    checkDictionary(
+      options,
+      "Failed to construct 'TextDecoder': The provided value is not of type 'TextDecoderOptions'.",
+    );
+    const enc = getEncoding(
+      toDOMString(label, "Failed to construct 'TextDecoder'"),
+    );
     if (enc === null || enc === 'replacement') {
       throw new RangeError(
         `Failed to construct 'TextDecoder': The encoding label provided ('${String(label)}') is invalid.`,
@@ -331,8 +356,14 @@ export class TextDecoder {
     return this.#ignoreBOM;
   }
 
-  decode(input?: ArrayBufferView | ArrayBuffer, options?: { stream?: boolean }): string {
-    checkDictionary(options, "Failed to execute 'decode' on 'TextDecoder': The provided value is not of type 'TextDecodeOptions'.");
+  decode(
+    input?: ArrayBufferView | ArrayBuffer,
+    options?: { stream?: boolean },
+  ): string {
+    checkDictionary(
+      options,
+      "Failed to execute 'decode' on 'TextDecoder': The provided value is not of type 'TextDecodeOptions'.",
+    );
     if (!this.#doNotFlush) {
       this.#decoder = newDecoder(this.#encoding);
       this.#bomSeen = false;
@@ -340,7 +371,9 @@ export class TextDecoder {
     const stream = !!options?.stream;
     this.#doNotFlush = stream;
     const bytes =
-      input === undefined ? new Uint8Array(0) : bytesOf(input, "Failed to execute 'decode' on 'TextDecoder'");
+      input === undefined
+        ? new Uint8Array(0)
+        : bytesOf(input, "Failed to execute 'decode' on 'TextDecoder'");
     let out: string;
     const dec = this.#decoder;
     if (
@@ -462,7 +495,10 @@ export class TextEncoder {
     if (nativeEncoding && s.length >= 256) return nativeEncoding.encodeUtf8(s);
     return utf8Encode(s);
   }
-  encodeInto(source: string, destination: Uint8Array): { read: number; written: number } {
+  encodeInto(
+    source: string,
+    destination: Uint8Array,
+  ): { read: number; written: number } {
     if (arguments.length < 2) {
       throw new TypeError(
         `Failed to execute 'encodeInto' on 'TextEncoder': 2 arguments required, but only ${arguments.length} present.`,
@@ -473,7 +509,12 @@ export class TextEncoder {
         "Failed to execute 'encodeInto' on 'TextEncoder': parameter 2 is not of type 'Uint8Array'.",
       );
     }
-    return encodeIntoImpl(toDOMString(source, "Failed to execute 'encodeInto' on 'TextEncoder'"), 0, destination, 0);
+    return encodeIntoImpl(
+      toDOMString(source, "Failed to execute 'encodeInto' on 'TextEncoder'"),
+      0,
+      destination,
+      0,
+    );
   }
 }
 tag(TextEncoder, 'TextEncoder');

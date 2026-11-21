@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // HTTP/1.1 request parsing and the WebSocket protocol (RFC 6455) for the inspector and the debug endpoint, V8-free.
 // Header names are matched case-insensitively and Upgrade/Connection are token lists (RFC 9110, CDP-3, GAP-5).
 #pragma once

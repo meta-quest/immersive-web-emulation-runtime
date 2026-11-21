@@ -15,7 +15,12 @@ export interface AllowEntry {
   port: number;
 }
 
-const DEFAULT_PORT: Record<string, number> = { 'http:': 80, 'https:': 443, 'ws:': 80, 'wss:': 443 };
+const DEFAULT_PORT: Record<string, number> = {
+  'http:': 80,
+  'https:': 443,
+  'ws:': 80,
+  'wss:': 443,
+};
 
 export function parseAllowlist(entries: readonly string[]): AllowEntry[] {
   const out: AllowEntry[] = [];
@@ -31,8 +36,14 @@ export function parseAllowlist(entries: readonly string[]): AllowEntry[] {
     } catch {
       continue;
     }
-    if (wildcard && (!u.hostname.includes('.') || u.hostname.startsWith('['))) continue;
-    out.push({ scheme: m[1], host: u.hostname, wildcard, port: u.port ? Number(u.port) : DEFAULT_PORT[u.protocol] });
+    if (wildcard && (!u.hostname.includes('.') || u.hostname.startsWith('[')))
+      continue;
+    out.push({
+      scheme: m[1],
+      host: u.hostname,
+      wildcard,
+      port: u.port ? Number(u.port) : DEFAULT_PORT[u.protocol],
+    });
   }
   return out;
 }
@@ -44,21 +55,42 @@ export function isLoopbackHost(host: string): boolean {
 
 export type Verdict = 'allowed' | 'not-listed' | 'cleartext';
 
-export function checkOrigin(list: readonly AllowEntry[], url: URL, debug: boolean): Verdict {
-  const scheme = url.protocol === 'ws:' ? 'http' : url.protocol === 'wss:' ? 'https' : url.protocol.slice(0, -1);
-  if (scheme === 'http' && !(debug && isLoopbackHost(url.hostname))) return 'cleartext';
+export function checkOrigin(
+  list: readonly AllowEntry[],
+  url: URL,
+  debug: boolean,
+): Verdict {
+  const scheme =
+    url.protocol === 'ws:'
+      ? 'http'
+      : url.protocol === 'wss:'
+        ? 'https'
+        : url.protocol.slice(0, -1);
+  if (scheme === 'http' && !(debug && isLoopbackHost(url.hostname)))
+    return 'cleartext';
   const port = url.port ? Number(url.port) : DEFAULT_PORT[url.protocol];
   for (const e of list) {
     if (e.scheme !== scheme || e.port !== port) continue;
-    if (!e.wildcard ? url.hostname === e.host : url.hostname.endsWith('.' + e.host)) return 'allowed';
+    if (
+      !e.wildcard
+        ? url.hostname === e.host
+        : url.hostname.endsWith('.' + e.host)
+    )
+      return 'allowed';
   }
   return 'not-listed';
 }
 
 /** "https://host[:port]" (ws/wss reported as their HTTP origin). */
 export function httpOrigin(url: URL): string {
-  const proto = url.protocol === 'ws:' ? 'http:' : url.protocol === 'wss:' ? 'https:' : url.protocol;
-  const port = url.port && Number(url.port) !== DEFAULT_PORT[proto] ? ':' + url.port : '';
+  const proto =
+    url.protocol === 'ws:'
+      ? 'http:'
+      : url.protocol === 'wss:'
+        ? 'https:'
+        : url.protocol;
+  const port =
+    url.port && Number(url.port) !== DEFAULT_PORT[proto] ? ':' + url.port : '';
   return `${proto}//${url.hostname}${port}`;
 }
 
@@ -74,9 +106,13 @@ export class BlockedOriginLog {
     if (this.#seen.has(origin)) return;
     this.#seen.add(origin);
     if (verdict === 'cleartext') {
-      this.warn(`[iwer-native] network: blocked ${origin}: cleartext http/ws is allowed only to loopback hosts in debug builds; use https`);
+      this.warn(
+        `[iwer-native] network: blocked ${origin}: cleartext http/ws is allowed only to loopback hosts in debug builds; use https`,
+      );
     } else {
-      this.warn(`[iwer-native] network: blocked ${origin}: add "${origin}" to native.network.allow in iwsdk.config.json`);
+      this.warn(
+        `[iwer-native] network: blocked ${origin}: add "${origin}" to native.network.allow in iwsdk.config.json`,
+      );
     }
   }
   get blocked(): string[] {

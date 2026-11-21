@@ -22,7 +22,23 @@ const webRoot = join(domRoot, '..');
 
 function newestSource(dir: string): number {
   let t = 0;
-  for (const f of ['entry.ts', ...['css', 'document', 'env', 'geometry', 'html-elements', 'html', 'install', 'nodes', 'observers', 'selectors', 'ui-events', 'window'].map((n) => `src/${n}.ts`)]) {
+  for (const f of [
+    'entry.ts',
+    ...[
+      'css',
+      'document',
+      'env',
+      'geometry',
+      'html-elements',
+      'html',
+      'install',
+      'nodes',
+      'observers',
+      'selectors',
+      'ui-events',
+      'window',
+    ].map((n) => `src/${n}.ts`),
+  ]) {
     const p = join(dir, f);
     if (existsSync(p)) t = Math.max(t, statSync(p).mtimeMs);
   }
@@ -34,7 +50,9 @@ function ensureBuilt(): void {
   if (built) return;
   const min = join(domRoot, 'dist', 'dom.min.js');
   if (!existsSync(min) || statSync(min).mtimeMs < newestSource(domRoot)) {
-    execFileSync(process.execPath, [join(domRoot, 'build.mjs')], { stdio: 'ignore' });
+    execFileSync(process.execPath, [join(domRoot, 'build.mjs')], {
+      stdio: 'ignore',
+    });
   }
   built = true;
 }
@@ -63,15 +81,33 @@ export interface DomContextOptions {
 
 export function createDomContext(opts: DomContextOptions = {}): DomContext {
   ensureBuilt();
-  const lifecycle: Lifecycle = { visibilityState: 'visible', focused: true, readyState: 'loading' };
+  const lifecycle: Lifecycle = {
+    visibilityState: 'visible',
+    focused: true,
+    readyState: 'loading',
+  };
   const sandbox: Record<string, unknown> = {};
   const ctx = vm.createContext(sandbox);
   const g = vm.runInContext('globalThis', ctx) as Record<string, any>;
-  const config = { url: 'https://app.local/', ...(opts.config ?? {}), ...(opts.worker ? { scope: 'worker' } : {}) };
+  const config = {
+    url: 'https://app.local/',
+    ...(opts.config ?? {}),
+    ...(opts.worker ? { scope: 'worker' } : {}),
+  };
   g.__iwn = {
-    clock: { now: () => hostPerformance.now(), timeOrigin: () => hostPerformance.timeOrigin },
+    clock: {
+      now: () => hostPerformance.now(),
+      timeOrigin: () => hostPerformance.timeOrigin,
+    },
     crypto: { random: (u8: Uint8Array) => u8.fill(7) },
-    device: { info: () => ({ model: 'Quest 3S', androidRelease: '14', languages: ['en-US'], hardwareConcurrency: 4 }) },
+    device: {
+      info: () => ({
+        model: 'Quest 3S',
+        androidRelease: '14',
+        languages: ['en-US'],
+        hardwareConcurrency: 4,
+      }),
+    },
     app: { reload() {}, navigate() {} },
     core: {
       lifecycleState: () => ({ ...lifecycle }),
@@ -95,14 +131,39 @@ export function createDomContext(opts: DomContextOptions = {}): DomContext {
       text: async () => body ?? '',
     };
   };
-  vm.runInContext(readFileSync(join(webRoot, 'glue', 'dist', 'glue.min.js'), 'utf8'), ctx, { filename: 'glue.min.js' });
-  vm.runInContext(readFileSync(join(domRoot, 'dist', 'dom.min.js'), 'utf8'), ctx, { filename: 'dom.min.js' });
+  vm.runInContext(
+    readFileSync(join(webRoot, 'glue', 'dist', 'glue.min.js'), 'utf8'),
+    ctx,
+    { filename: 'glue.min.js' },
+  );
+  vm.runInContext(
+    readFileSync(join(domRoot, 'dist', 'dom.min.js'), 'utf8'),
+    ctx,
+    { filename: 'dom.min.js' },
+  );
   if (opts.image) {
     const imageMin = join(webRoot, 'image', 'dist', 'image.min.js');
-    g.__iwn.image = { decode() {}, fromPixels() {}, close() {}, transform() {}, cancel() {}, poll() {}, needsPolling: false };
-    vm.runInContext(readFileSync(imageMin, 'utf8'), ctx, { filename: 'image.min.js' });
+    g.__iwn.image = {
+      decode() {},
+      fromPixels() {},
+      close() {},
+      transform() {},
+      cancel() {},
+      poll() {},
+      needsPolling: false,
+    };
+    vm.runInContext(readFileSync(imageMin, 'utf8'), ctx, {
+      filename: 'image.min.js',
+    });
   }
-  return { g, ctx, run: <T,>(code: string) => vm.runInContext(code, ctx) as T, lifecycle, fetched };
+  return {
+    g,
+    ctx,
+    run: <T>(code: string) => vm.runInContext(code, ctx) as T,
+    lifecycle,
+    fetched,
+  };
 }
 
-export const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
+export const tick = (ms = 0): Promise<void> =>
+  new Promise((r) => setTimeout(r, ms));

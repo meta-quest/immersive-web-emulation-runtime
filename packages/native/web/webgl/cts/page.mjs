@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Realm-agnostic part of the GL-CTS-1 runner: a minimal DOM and the page loader for one Khronos WebGL
 // conformance page. The host runner (harness.mjs) uses it inside a fresh node:vm context per page; the device
 // runner (device-main.mjs, bundled into a runtime app) uses it in the page context, which the host driver
@@ -19,7 +26,12 @@ class Node_ {
     this._listeners = {};
     this._text = '';
     this.className = '';
-    this.classList = { add() {}, remove() {}, contains: () => false, toggle() {} };
+    this.classList = {
+      add() {},
+      remove() {},
+      contains: () => false,
+      toggle() {},
+    };
   }
   get id() {
     return this.attributes.id ?? '';
@@ -52,7 +64,8 @@ class Node_ {
     if (c.parentNode) c.parentNode.removeChild(c);
     this.childNodes.push(c);
     c.parentNode = this;
-    if (c.tagName === 'SCRIPT' && c.src && !c._fromMarkup) this.ownerDocument._loadScript(c);
+    if (c.tagName === 'SCRIPT' && c.src && !c._fromMarkup)
+      this.ownerDocument._loadScript(c);
     return c;
   }
   insertBefore(c, ref) {
@@ -80,7 +93,8 @@ class Node_ {
   setAttribute(k, v) {
     this.attributes[k] = String(v);
     if (k === 'id') this.ownerDocument._ids.set(String(v), this);
-    if ((k === 'width' || k === 'height') && this.tagName === 'CANVAS') this[k] = Number(v);
+    if ((k === 'width' || k === 'height') && this.tagName === 'CANVAS')
+      this[k] = Number(v);
   }
   getAttribute(k) {
     return this.attributes[k] ?? null;
@@ -112,7 +126,9 @@ class Node_ {
     return !ev.defaultPrevented;
   }
   get textContent() {
-    return this._text + this.childNodes.map((c) => c.textContent ?? '').join('');
+    return (
+      this._text + this.childNodes.map((c) => c.textContent ?? '').join('')
+    );
   }
   set textContent(v) {
     this._text = String(v);
@@ -147,7 +163,16 @@ class Node_ {
     return [];
   }
   getBoundingClientRect() {
-    return { left: 0, top: 0, right: this.width ?? 0, bottom: this.height ?? 0, width: this.width ?? 0, height: this.height ?? 0, x: 0, y: 0 };
+    return {
+      left: 0,
+      top: 0,
+      right: this.width ?? 0,
+      bottom: this.height ?? 0,
+      width: this.width ?? 0,
+      height: this.height ?? 0,
+      x: 0,
+      y: 0,
+    };
   }
   get clientWidth() {
     return this.width ?? 0;
@@ -202,11 +227,13 @@ class Canvas_ extends Node_ {
  */
 function scratch2d(canvas) {
   const win = canvas.ownerDocument._window;
-  const make = (w, h) => new win.ImageData(Math.max(1, w | 0), Math.max(1, h | 0));
+  const make = (w, h) =>
+    new win.ImageData(Math.max(1, w | 0), Math.max(1, h | 0));
   return {
     canvas,
     getImageData: (_x, _y, w, h) => make(w, h),
-    createImageData: (w, h) => (typeof w === 'object' ? make(w.width, w.height) : make(w, h)),
+    createImageData: (w, h) =>
+      typeof w === 'object' ? make(w.width, w.height) : make(w, h),
     putImageData() {},
   };
 }
@@ -288,7 +315,9 @@ class Document_ {
       this._env.evalScript(text, rel);
       el.onload?.({ type: 'load' });
     } catch (e) {
-      this._window.__scriptErrors.push(`${rel}: ${e && e.stack ? e.stack.split('\n')[0] : e}`);
+      this._window.__scriptErrors.push(
+        `${rel}: ${e && e.stack ? e.stack.split('\n')[0] : e}`,
+      );
       el.onerror?.({ type: 'error' });
     }
   }
@@ -312,28 +341,45 @@ function makeEvent(type, extra = {}) {
 
 export function parseHtml(html) {
   const items = [];
-  const re = /<(script|canvas|div|span|pre|img|video|textarea|p|iframe)\b([^>]*)>([\s\S]*?)<\/\1>|<(canvas|div|img)\b([^>]*)\/?>/gi;
+  const re =
+    /<(script|canvas|div|span|pre|img|video|textarea|p|iframe)\b([^>]*)>([\s\S]*?)<\/\1>|<(canvas|div|img)\b([^>]*)\/?>/gi;
   let m;
   while ((m = re.exec(html))) {
     const tag = (m[1] ?? m[4]).toLowerCase();
     const attrText = m[2] ?? m[5] ?? '';
     const attrs = {};
-    for (const a of attrText.matchAll(/([\w-]+)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/g)) attrs[a[1].toLowerCase()] = a[3] ?? a[4] ?? a[5];
-    for (const a of attrText.matchAll(/\s([\w-]+)(?=\s|$)/g)) if (!(a[1].toLowerCase() in attrs)) attrs[a[1].toLowerCase()] = '';
+    for (const a of attrText.matchAll(
+      /([\w-]+)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/g,
+    ))
+      attrs[a[1].toLowerCase()] = a[3] ?? a[4] ?? a[5];
+    for (const a of attrText.matchAll(/\s([\w-]+)(?=\s|$)/g))
+      if (!(a[1].toLowerCase() in attrs)) attrs[a[1].toLowerCase()] = '';
     items.push({ tag, attrs, body: m[3] ?? '' });
   }
   const title = /<title>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '';
-  const bodyOnload = /<body\b[^>]*\bonload\s*=\s*("([^"]*)"|'([^']*)')/i.exec(html);
-  return { items, title, bodyOnload: bodyOnload ? (bodyOnload[2] ?? bodyOnload[3]) : null };
+  const bodyOnload = /<body\b[^>]*\bonload\s*=\s*("([^"]*)"|'([^']*)')/i.exec(
+    html,
+  );
+  return {
+    items,
+    title,
+    bodyOnload: bodyOnload ? (bodyOnload[2] ?? bodyOnload[3]) : null,
+  };
 }
 
 function isJsType(type) {
-  return !type || /^(text|application)\/(javascript|ecmascript)$/i.test(type) || type === 'module';
+  return (
+    !type ||
+    /^(text|application)\/(javascript|ecmascript)$/i.test(type) ||
+    type === 'module'
+  );
 }
 
 /** ROOT-relative path of `url` referenced from the ROOT-relative page `fromRel` (query/hash dropped). */
 export function resolveRel(fromRel, url) {
-  const u = String(url).replace(/^file:\/\//, '').split(/[?#]/)[0];
+  const u = String(url)
+    .replace(/^file:\/\//, '')
+    .split(/[?#]/)[0];
   const parts = u.startsWith('/') ? [] : fromRel.split('/').slice(0, -1);
   for (const seg of u.split('/')) {
     if (seg === '' || seg === '.') continue;
@@ -357,7 +403,15 @@ export function runPage(env) {
   const T = env.timers;
   const now = env.now;
   const { items, title, bodyOnload } = parseHtml(html);
-  const results = { pass: 0, fail: 0, skipped: 0, failures: [], finished: false, errors: [], missing: [] };
+  const results = {
+    pass: 0,
+    fail: 0,
+    skipped: 0,
+    failures: [],
+    finished: false,
+    errors: [],
+    missing: [],
+  };
   env.onResults?.(results);
   const doc = new Document_(win, testRel);
   doc._env = env;
@@ -376,10 +430,17 @@ export function runPage(env) {
           // the page's latest "Testing ..." debug() line says which iteration failed
           const out = doc.getElementById('console');
           let where = '';
-          for (let i = (out?.childNodes.length ?? 0) - 1, n = 0; i >= 0 && n < 40; i--, n++) {
+          for (
+            let i = (out?.childNodes.length ?? 0) - 1, n = 0;
+            i >= 0 && n < 40;
+            i--, n++
+          ) {
             const t = out.childNodes[i].textContent;
             if (/^\s*Testing\b/.test(t)) {
-              where = ` [${t.replace(/<br\s*\/?>/g, '').trim().slice(0, 160)}]`;
+              where = ` [${t
+                .replace(/<br\s*\/?>/g, '')
+                .trim()
+                .slice(0, 160)}]`;
               break;
             }
           }
@@ -400,18 +461,46 @@ export function runPage(env) {
     document: doc,
     parent: { webglTestHarness: harness },
     top: null,
-    location: { href, pathname, search, hash: '', protocol: 'file:', host: '', hostname: '', origin: 'null', toString: () => href },
-    navigator: { userAgent: 'iwer-native-cts', platform: 'Linux', hardwareConcurrency: 4, language: 'en-US' },
-    console: { log() {}, info() {}, warn() {}, error: (...a) => env.logError?.(...a), debug() {}, assert() {}, time() {}, timeEnd() {} },
+    location: {
+      href,
+      pathname,
+      search,
+      hash: '',
+      protocol: 'file:',
+      host: '',
+      hostname: '',
+      origin: 'null',
+      toString: () => href,
+    },
+    navigator: {
+      userAgent: 'iwer-native-cts',
+      platform: 'Linux',
+      hardwareConcurrency: 4,
+      language: 'en-US',
+    },
+    console: {
+      log() {},
+      info() {},
+      warn() {},
+      error: (...a) => env.logError?.(...a),
+      debug() {},
+      assert() {},
+      time() {},
+      timeEnd() {},
+    },
     performance: { now },
     ...env.globals,
     setTimeout: (f, t, ...a) => {
       const h = T.setTimeout(() => {
         timers.delete(h);
         try {
-          typeof f === 'function' ? f(...a) : env.evalScript(String(f), `${testRel}#timer`);
+          typeof f === 'function'
+            ? f(...a)
+            : env.evalScript(String(f), `${testRel}#timer`);
         } catch (e) {
-          win.__scriptErrors.push(`timer: ${e && e.stack ? e.stack.split('\n')[0] : e}`);
+          win.__scriptErrors.push(
+            `timer: ${e && e.stack ? e.stack.split('\n')[0] : e}`,
+          );
         }
       }, t);
       timers.add(h);
@@ -449,7 +538,11 @@ export function runPage(env) {
       return true;
     },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
-    postMessage: (data) => win.setTimeout(() => win.dispatchEvent(makeEvent('message', { data, source: win })), 0),
+    postMessage: (data) =>
+      win.setTimeout(
+        () => win.dispatchEvent(makeEvent('message', { data, source: win })),
+        0,
+      ),
     devicePixelRatio: 1,
     screen: { width: 1920, height: 1080, availWidth: 1920, availHeight: 1080 },
     innerWidth: 1024,
@@ -503,7 +596,12 @@ export function runPage(env) {
   // defineProperty, not assignment: on device some of these exist as the runtime's own (configurable) globals.
   for (const [k, v] of Object.entries(vars)) {
     try {
-      Object.defineProperty(win, k, { value: v, writable: true, configurable: true, enumerable: false });
+      Object.defineProperty(win, k, {
+        value: v,
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
     } catch {
       win.__scriptErrors?.push(`harness: cannot set global ${k}`);
     }
@@ -540,7 +638,8 @@ export function runPage(env) {
       el._fromMarkup = true;
       el._text = it.body;
       if (it.attrs.src) el.src = it.attrs.src;
-      if (isJsType(it.attrs.type) && !it.attrs.language?.startsWith('x-shader')) scriptQueue.push(el);
+      if (isJsType(it.attrs.type) && !it.attrs.language?.startsWith('x-shader'))
+        scriptQueue.push(el);
     } else {
       el._text = it.body;
     }
@@ -550,17 +649,32 @@ export function runPage(env) {
   for (const [id, el] of doc._ids) if (!(id in win)) win[id] = el;
   // The markup's scripts, in document order: { filename, code } (code null: a src file readText lacks).
   const scripts = scriptQueue.map((el) => {
-    if (!el.attributes.src) return { filename: `${testRel}#inline`, code: el._text, inline: true };
+    if (!el.attributes.src)
+      return { filename: `${testRel}#inline`, code: el._text, inline: true };
     const rel = resolveRel(testRel, el.src);
     const code = env.readText(rel);
     if (code === null) win.__missing.push(rel);
     return { filename: rel, code, inline: false };
   });
   const scriptError = (script, e) => {
-    if (script.code === null) win.__scriptErrors.push(`${script.filename}: not found`);
+    if (script.code === null)
+      win.__scriptErrors.push(`${script.filename}: not found`);
     else if (script.inline) {
-      win.__scriptErrors.push(`inline: ${e && e.name ? `${e.name}: ${e.message}` : String(e)} @ ${e && e.stack ? e.stack.split('\n').filter((l) => /at /.test(l)).slice(0, 2).join(' | ') : ''}`);
-    } else win.__scriptErrors.push(`${script.filename}: ${e && e.stack ? e.stack.split('\n')[0] : e}`);
+      win.__scriptErrors.push(
+        `inline: ${e && e.name ? `${e.name}: ${e.message}` : String(e)} @ ${
+          e && e.stack
+            ? e.stack
+                .split('\n')
+                .filter((l) => /at /.test(l))
+                .slice(0, 2)
+                .join(' | ')
+            : ''
+        }`,
+      );
+    } else
+      win.__scriptErrors.push(
+        `${script.filename}: ${e && e.stack ? e.stack.split('\n')[0] : e}`,
+      );
   };
   const page = { scripts, scriptError, finish: () => finishPage() };
   if (env.deferScripts) return page; // the caller runs page.scripts as classic scripts, then page.finish()
@@ -582,14 +696,18 @@ export function runPage(env) {
       try {
         env.evalScript(bodyOnload, `${testRel}#body-onload`);
       } catch (e) {
-        win.__scriptErrors.push(`body onload: ${e && e.name ? `${e.name}: ${e.message}` : e}`);
+        win.__scriptErrors.push(
+          `body onload: ${e && e.name ? `${e.name}: ${e.message}` : e}`,
+        );
       }
     }
     if (typeof win.onload === 'function') {
       try {
         win.onload({ type: 'load' });
       } catch (e) {
-        win.__scriptErrors.push(`onload: ${e && e.stack ? e.stack.split('\n')[0] : e}`);
+        win.__scriptErrors.push(
+          `onload: ${e && e.stack ? e.stack.split('\n')[0] : e}`,
+        );
       }
     }
     return new Promise((resolve) => {

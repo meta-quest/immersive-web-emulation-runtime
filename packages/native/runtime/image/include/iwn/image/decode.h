@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Image decoding: format sniffing, EXIF orientation, decoder backends (Android AImageDecoder, stb_image, libwebp)
 // and the decode-then-process pipeline that createImageBitmap / HTMLImageElement use. Plain C++, no V8.
 // Decode() is synchronous and thread-safe; the binding runs it on the decode pool, never on a JS thread (PROC-2).

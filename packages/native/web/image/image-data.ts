@@ -24,7 +24,9 @@ let domException: (message: string, name: string) => Error = (m, n) => {
 };
 
 /** Lets the installer supply the global DOMException. */
-export function setImageDataErrors(make: (message: string, name: string) => Error): void {
+export function setImageDataErrors(
+  make: (message: string, name: string) => Error,
+): void {
   domException = make;
 }
 
@@ -38,7 +40,9 @@ function toUnsignedLong(v: unknown): number {
 function parseSettings(settings: unknown): ColorSpace {
   if (settings === undefined || settings === null) return 'srgb';
   if (typeof settings !== 'object' && typeof settings !== 'function') {
-    throw new TypeError("Failed to construct 'ImageData': The provided value is not of type 'ImageDataSettings'.");
+    throw new TypeError(
+      "Failed to construct 'ImageData': The provided value is not of type 'ImageDataSettings'.",
+    );
   }
   const cs = (settings as ImageDataSettings).colorSpace;
   if (cs === undefined) return 'srgb';
@@ -60,15 +64,20 @@ function parseSettings(settings: unknown): ColorSpace {
 const MAX_BYTES = 2 ** 31 - 1;
 
 // Intrinsics captured at load, so later page changes to the prototypes cannot fake the checks below.
-const typedArrayBuffer = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), 'buffer')!
-  .get as (this: ArrayBufferView) => ArrayBufferLike;
-const arrayBufferResizable = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'resizable')?.get as
-  | ((this: ArrayBuffer) => boolean)
-  | undefined;
+const typedArrayBuffer = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype),
+  'buffer',
+)!.get as (this: ArrayBufferView) => ArrayBufferLike;
+const arrayBufferResizable = Object.getOwnPropertyDescriptor(
+  ArrayBuffer.prototype,
+  'resizable',
+)?.get as ((this: ArrayBuffer) => boolean) | undefined;
 const SAB: SharedArrayBufferConstructor | undefined =
   typeof SharedArrayBuffer === 'function' ? SharedArrayBuffer : undefined;
 const sabByteLength = SAB
-  ? (Object.getOwnPropertyDescriptor(SAB.prototype, 'byteLength')?.get as ((this: SharedArrayBuffer) => number) | undefined)
+  ? (Object.getOwnPropertyDescriptor(SAB.prototype, 'byteLength')?.get as
+      | ((this: SharedArrayBuffer) => number)
+      | undefined)
   : undefined;
 
 // WebIDL: a buffer-source argument without [AllowShared] / [AllowResizable] (ImageData's constructor has neither)
@@ -78,17 +87,24 @@ function checkBufferKind(view: Uint8ClampedArray): void {
   let shared = false;
   if (sabByteLength) {
     try {
-      sabByteLength.call(buffer as SharedArrayBuffer);  // throws unless a SharedArrayBuffer
+      sabByteLength.call(buffer as SharedArrayBuffer); // throws unless a SharedArrayBuffer
       shared = true;
     } catch {
       shared = false;
     }
   }
   if (shared) {
-    throw new TypeError("Failed to construct 'ImageData': The provided ArrayBufferView value must not be shared.");
+    throw new TypeError(
+      "Failed to construct 'ImageData': The provided ArrayBufferView value must not be shared.",
+    );
   }
-  if (arrayBufferResizable && arrayBufferResizable.call(buffer as ArrayBuffer)) {
-    throw new TypeError("Failed to construct 'ImageData': The provided ArrayBufferView value must not be resizable.");
+  if (
+    arrayBufferResizable &&
+    arrayBufferResizable.call(buffer as ArrayBuffer)
+  ) {
+    throw new TypeError(
+      "Failed to construct 'ImageData': The provided ArrayBufferView value must not be resizable.",
+    );
   }
 }
 
@@ -99,7 +115,12 @@ export class ImageData {
   #colorSpace: ColorSpace;
 
   constructor(sw: number, sh: number, settings?: ImageDataSettings);
-  constructor(data: Uint8ClampedArray, sw: number, sh?: number, settings?: ImageDataSettings);
+  constructor(
+    data: Uint8ClampedArray,
+    sw: number,
+    sh?: number,
+    settings?: ImageDataSettings,
+  );
   constructor(a: unknown, b: unknown, c?: unknown, d?: unknown) {
     if (arguments.length < 2) {
       throw new TypeError(
@@ -118,7 +139,10 @@ export class ImageData {
         );
       }
       if (sw === 0) {
-        throw domException("Failed to construct 'ImageData': The source width is zero or not a number.", 'IndexSizeError');
+        throw domException(
+          "Failed to construct 'ImageData': The source width is zero or not a number.",
+          'IndexSizeError',
+        );
       }
       const pixels = length / 4;
       if (pixels % sw !== 0) {
@@ -148,14 +172,22 @@ export class ImageData {
     const sw = toUnsignedLong(a);
     const sh = toUnsignedLong(b);
     if (sw === 0) {
-      throw domException("Failed to construct 'ImageData': The source width is zero or not a number.", 'IndexSizeError');
+      throw domException(
+        "Failed to construct 'ImageData': The source width is zero or not a number.",
+        'IndexSizeError',
+      );
     }
     if (sh === 0) {
-      throw domException("Failed to construct 'ImageData': The source height is zero or not a number.", 'IndexSizeError');
+      throw domException(
+        "Failed to construct 'ImageData': The source height is zero or not a number.",
+        'IndexSizeError',
+      );
     }
     const bytes = sw * sh * 4;
     if (bytes > MAX_BYTES) {
-      throw new RangeError("Failed to construct 'ImageData': Out of memory at ImageData creation.");
+      throw new RangeError(
+        "Failed to construct 'ImageData': Out of memory at ImageData creation.",
+      );
     }
     this.#colorSpace = parseSettings(c);
     this.#width = sw;
@@ -182,7 +214,10 @@ export class ImageData {
   /** The image-source protocol (source.ts). A detached buffer cannot be used. */
   [IMAGE_SOURCE](): PixelsDescriptor {
     if (this.#data.buffer.byteLength === 0 && this.#data.length === 0) {
-      throw domException('The ImageData has been detached.', 'InvalidStateError');
+      throw domException(
+        'The ImageData has been detached.',
+        'InvalidStateError',
+      );
     }
     return {
       kind: 'pixels',
@@ -195,13 +230,21 @@ export class ImageData {
   }
 
   static {
-    Object.defineProperty(this.prototype, Symbol.toStringTag, { value: 'ImageData', configurable: true });
+    Object.defineProperty(this.prototype, Symbol.toStringTag, {
+      value: 'ImageData',
+      configurable: true,
+    });
   }
 }
 
 /** For structuredClone (WRK-5): ImageData is serializable (copy). */
 export function cloneImageData(value: ImageData): ImageData {
-  return new ImageData(new Uint8ClampedArray(value.data), value.width, value.height, {
-    colorSpace: value.colorSpace,
-  });
+  return new ImageData(
+    new Uint8ClampedArray(value.data),
+    value.width,
+    value.height,
+    {
+      colorSpace: value.colorSpace,
+    },
+  );
 }

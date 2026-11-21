@@ -27,38 +27,154 @@ export interface RGBA {
 }
 
 const NAMED: Record<string, number> = {
-  aliceblue: 0xf0f8ff, antiquewhite: 0xfaebd7, aqua: 0x00ffff, aquamarine: 0x7fffd4, azure: 0xf0ffff,
-  beige: 0xf5f5dc, bisque: 0xffe4c4, black: 0x000000, blanchedalmond: 0xffebcd, blue: 0x0000ff,
-  blueviolet: 0x8a2be2, brown: 0xa52a2a, burlywood: 0xdeb887, cadetblue: 0x5f9ea0, chartreuse: 0x7fff00,
-  chocolate: 0xd2691e, coral: 0xff7f50, cornflowerblue: 0x6495ed, cornsilk: 0xfff8dc, crimson: 0xdc143c,
-  cyan: 0x00ffff, darkblue: 0x00008b, darkcyan: 0x008b8b, darkgoldenrod: 0xb8860b, darkgray: 0xa9a9a9,
-  darkgreen: 0x006400, darkgrey: 0xa9a9a9, darkkhaki: 0xbdb76b, darkmagenta: 0x8b008b,
-  darkolivegreen: 0x556b2f, darkorange: 0xff8c00, darkorchid: 0x9932cc, darkred: 0x8b0000,
-  darksalmon: 0xe9967a, darkseagreen: 0x8fbc8f, darkslateblue: 0x483d8b, darkslategray: 0x2f4f4f,
-  darkslategrey: 0x2f4f4f, darkturquoise: 0x00ced1, darkviolet: 0x9400d3, deeppink: 0xff1493,
-  deepskyblue: 0x00bfff, dimgray: 0x696969, dimgrey: 0x696969, dodgerblue: 0x1e90ff, firebrick: 0xb22222,
-  floralwhite: 0xfffaf0, forestgreen: 0x228b22, fuchsia: 0xff00ff, gainsboro: 0xdcdcdc, ghostwhite: 0xf8f8ff,
-  gold: 0xffd700, goldenrod: 0xdaa520, gray: 0x808080, green: 0x008000, greenyellow: 0xadff2f, grey: 0x808080,
-  honeydew: 0xf0fff0, hotpink: 0xff69b4, indianred: 0xcd5c5c, indigo: 0x4b0082, ivory: 0xfffff0,
-  khaki: 0xf0e68c, lavender: 0xe6e6fa, lavenderblush: 0xfff0f5, lawngreen: 0x7cfc00, lemonchiffon: 0xfffacd,
-  lightblue: 0xadd8e6, lightcoral: 0xf08080, lightcyan: 0xe0ffff, lightgoldenrodyellow: 0xfafad2,
-  lightgray: 0xd3d3d3, lightgreen: 0x90ee90, lightgrey: 0xd3d3d3, lightpink: 0xffb6c1, lightsalmon: 0xffa07a,
-  lightseagreen: 0x20b2aa, lightskyblue: 0x87cefa, lightslategray: 0x778899, lightslategrey: 0x778899,
-  lightsteelblue: 0xb0c4de, lightyellow: 0xffffe0, lime: 0x00ff00, limegreen: 0x32cd32, linen: 0xfaf0e6,
-  magenta: 0xff00ff, maroon: 0x800000, mediumaquamarine: 0x66cdaa, mediumblue: 0x0000cd,
-  mediumorchid: 0xba55d3, mediumpurple: 0x9370db, mediumseagreen: 0x3cb371, mediumslateblue: 0x7b68ee,
-  mediumspringgreen: 0x00fa9a, mediumturquoise: 0x48d1cc, mediumvioletred: 0xc71585, midnightblue: 0x191970,
-  mintcream: 0xf5fffa, mistyrose: 0xffe4e1, moccasin: 0xffe4b5, navajowhite: 0xffdead, navy: 0x000080,
-  oldlace: 0xfdf5e6, olive: 0x808000, olivedrab: 0x6b8e23, orange: 0xffa500, orangered: 0xff4500,
-  orchid: 0xda70d6, palegoldenrod: 0xeee8aa, palegreen: 0x98fb98, paleturquoise: 0xafeeee,
-  palevioletred: 0xdb7093, papayawhip: 0xffefd5, peachpuff: 0xffdab9, peru: 0xcd853f, pink: 0xffc0cb,
-  plum: 0xdda0dd, powderblue: 0xb0e0e6, purple: 0x800080, rebeccapurple: 0x663399, red: 0xff0000,
-  rosybrown: 0xbc8f8f, royalblue: 0x4169e1, saddlebrown: 0x8b4513, salmon: 0xfa8072, sandybrown: 0xf4a460,
-  seagreen: 0x2e8b57, seashell: 0xfff5ee, sienna: 0xa0522d, silver: 0xc0c0c0, skyblue: 0x87ceeb,
-  slateblue: 0x6a5acd, slategray: 0x708090, slategrey: 0x708090, snow: 0xfffafa, springgreen: 0x00ff7f,
-  steelblue: 0x4682b4, tan: 0xd2b48c, teal: 0x008080, thistle: 0xd8bfd8, tomato: 0xff6347,
-  turquoise: 0x40e0d0, violet: 0xee82ee, wheat: 0xf5deb3, white: 0xffffff, whitesmoke: 0xf5f5f5,
-  yellow: 0xffff00, yellowgreen: 0x9acd32,
+  aliceblue: 0xf0f8ff,
+  antiquewhite: 0xfaebd7,
+  aqua: 0x00ffff,
+  aquamarine: 0x7fffd4,
+  azure: 0xf0ffff,
+  beige: 0xf5f5dc,
+  bisque: 0xffe4c4,
+  black: 0x000000,
+  blanchedalmond: 0xffebcd,
+  blue: 0x0000ff,
+  blueviolet: 0x8a2be2,
+  brown: 0xa52a2a,
+  burlywood: 0xdeb887,
+  cadetblue: 0x5f9ea0,
+  chartreuse: 0x7fff00,
+  chocolate: 0xd2691e,
+  coral: 0xff7f50,
+  cornflowerblue: 0x6495ed,
+  cornsilk: 0xfff8dc,
+  crimson: 0xdc143c,
+  cyan: 0x00ffff,
+  darkblue: 0x00008b,
+  darkcyan: 0x008b8b,
+  darkgoldenrod: 0xb8860b,
+  darkgray: 0xa9a9a9,
+  darkgreen: 0x006400,
+  darkgrey: 0xa9a9a9,
+  darkkhaki: 0xbdb76b,
+  darkmagenta: 0x8b008b,
+  darkolivegreen: 0x556b2f,
+  darkorange: 0xff8c00,
+  darkorchid: 0x9932cc,
+  darkred: 0x8b0000,
+  darksalmon: 0xe9967a,
+  darkseagreen: 0x8fbc8f,
+  darkslateblue: 0x483d8b,
+  darkslategray: 0x2f4f4f,
+  darkslategrey: 0x2f4f4f,
+  darkturquoise: 0x00ced1,
+  darkviolet: 0x9400d3,
+  deeppink: 0xff1493,
+  deepskyblue: 0x00bfff,
+  dimgray: 0x696969,
+  dimgrey: 0x696969,
+  dodgerblue: 0x1e90ff,
+  firebrick: 0xb22222,
+  floralwhite: 0xfffaf0,
+  forestgreen: 0x228b22,
+  fuchsia: 0xff00ff,
+  gainsboro: 0xdcdcdc,
+  ghostwhite: 0xf8f8ff,
+  gold: 0xffd700,
+  goldenrod: 0xdaa520,
+  gray: 0x808080,
+  green: 0x008000,
+  greenyellow: 0xadff2f,
+  grey: 0x808080,
+  honeydew: 0xf0fff0,
+  hotpink: 0xff69b4,
+  indianred: 0xcd5c5c,
+  indigo: 0x4b0082,
+  ivory: 0xfffff0,
+  khaki: 0xf0e68c,
+  lavender: 0xe6e6fa,
+  lavenderblush: 0xfff0f5,
+  lawngreen: 0x7cfc00,
+  lemonchiffon: 0xfffacd,
+  lightblue: 0xadd8e6,
+  lightcoral: 0xf08080,
+  lightcyan: 0xe0ffff,
+  lightgoldenrodyellow: 0xfafad2,
+  lightgray: 0xd3d3d3,
+  lightgreen: 0x90ee90,
+  lightgrey: 0xd3d3d3,
+  lightpink: 0xffb6c1,
+  lightsalmon: 0xffa07a,
+  lightseagreen: 0x20b2aa,
+  lightskyblue: 0x87cefa,
+  lightslategray: 0x778899,
+  lightslategrey: 0x778899,
+  lightsteelblue: 0xb0c4de,
+  lightyellow: 0xffffe0,
+  lime: 0x00ff00,
+  limegreen: 0x32cd32,
+  linen: 0xfaf0e6,
+  magenta: 0xff00ff,
+  maroon: 0x800000,
+  mediumaquamarine: 0x66cdaa,
+  mediumblue: 0x0000cd,
+  mediumorchid: 0xba55d3,
+  mediumpurple: 0x9370db,
+  mediumseagreen: 0x3cb371,
+  mediumslateblue: 0x7b68ee,
+  mediumspringgreen: 0x00fa9a,
+  mediumturquoise: 0x48d1cc,
+  mediumvioletred: 0xc71585,
+  midnightblue: 0x191970,
+  mintcream: 0xf5fffa,
+  mistyrose: 0xffe4e1,
+  moccasin: 0xffe4b5,
+  navajowhite: 0xffdead,
+  navy: 0x000080,
+  oldlace: 0xfdf5e6,
+  olive: 0x808000,
+  olivedrab: 0x6b8e23,
+  orange: 0xffa500,
+  orangered: 0xff4500,
+  orchid: 0xda70d6,
+  palegoldenrod: 0xeee8aa,
+  palegreen: 0x98fb98,
+  paleturquoise: 0xafeeee,
+  palevioletred: 0xdb7093,
+  papayawhip: 0xffefd5,
+  peachpuff: 0xffdab9,
+  peru: 0xcd853f,
+  pink: 0xffc0cb,
+  plum: 0xdda0dd,
+  powderblue: 0xb0e0e6,
+  purple: 0x800080,
+  rebeccapurple: 0x663399,
+  red: 0xff0000,
+  rosybrown: 0xbc8f8f,
+  royalblue: 0x4169e1,
+  saddlebrown: 0x8b4513,
+  salmon: 0xfa8072,
+  sandybrown: 0xf4a460,
+  seagreen: 0x2e8b57,
+  seashell: 0xfff5ee,
+  sienna: 0xa0522d,
+  silver: 0xc0c0c0,
+  skyblue: 0x87ceeb,
+  slateblue: 0x6a5acd,
+  slategray: 0x708090,
+  slategrey: 0x708090,
+  snow: 0xfffafa,
+  springgreen: 0x00ff7f,
+  steelblue: 0x4682b4,
+  tan: 0xd2b48c,
+  teal: 0x008080,
+  thistle: 0xd8bfd8,
+  tomato: 0xff6347,
+  turquoise: 0x40e0d0,
+  violet: 0xee82ee,
+  wheat: 0xf5deb3,
+  white: 0xffffff,
+  whitesmoke: 0xf5f5f5,
+  yellow: 0xffff00,
+  yellowgreen: 0x9acd32,
 };
 
 const cache = new Map<string, RGBA | null>();
@@ -82,7 +198,8 @@ function parseUncached(input: string): RGBA | null {
   if (s.length === 0) return null;
   if (s[0] === '#') return parseHex(s.slice(1));
   const named = NAMED[s];
-  if (named !== undefined) return { r: named >> 16, g: (named >> 8) & 255, b: named & 255, a: 255 };
+  if (named !== undefined)
+    return { r: named >> 16, g: (named >> 8) & 255, b: named & 255, a: 255 };
   if (s === 'transparent') return { r: 0, g: 0, b: 0, a: 0 };
   if (s === 'currentcolor') return { r: 0, g: 0, b: 0, a: 255 };
   const open = s.indexOf('(');
@@ -160,7 +277,9 @@ function signedPow(v: number, e: number): number {
 }
 function srgbEncode(c: number): number {
   const a = Math.abs(c);
-  return a <= 0.0031308 ? 12.92 * c : Math.sign(c) * (1.055 * a ** (1 / 2.4) - 0.055);
+  return a <= 0.0031308
+    ? 12.92 * c
+    : Math.sign(c) * (1.055 * a ** (1 / 2.4) - 0.055);
 }
 function srgbDecode(c: number): number {
   const a = Math.abs(c);
@@ -192,7 +311,13 @@ function oklabToLinSrgb(L: number, a: number, b: number): Vec3 {
 
 /** Linear-light sRGB (any range) -> 8-bit, gamut clipped. */
 function fromLinear(lin: Vec3, a: number, css: string): RGBA {
-  return { r: clamp255(srgbEncode(lin[0]) * 255), g: clamp255(srgbEncode(lin[1]) * 255), b: clamp255(srgbEncode(lin[2]) * 255), a, css };
+  return {
+    r: clamp255(srgbEncode(lin[0]) * 255),
+    g: clamp255(srgbEncode(lin[1]) * 255),
+    b: clamp255(srgbEncode(lin[2]) * 255),
+    a,
+    css,
+  };
 }
 
 /** Number as browsers serialize colour components (up to 6 decimals, no trailing zeros). */
@@ -201,7 +326,10 @@ function fmt(v: number): string {
   return Object.is(r, -0) ? '0' : String(r);
 }
 
-function modernArgs(body: string, count: number): { parts: string[]; alpha: string | null } | null {
+function modernArgs(
+  body: string,
+  count: number,
+): { parts: string[]; alpha: string | null } | null {
   if (body.includes(',')) return null;
   const slash = body.split('/');
   if (slash.length > 2) return null;
@@ -217,7 +345,12 @@ function modernArgs(body: string, count: number): { parts: string[]; alpha: stri
 
 function alphaSuffix(a: number, alphaTok: Token | undefined): string {
   if (!alphaTok || a === 255) return '';
-  const v = alphaTok.unit === 'none' ? 0 : alphaTok.unit === '%' ? alphaTok.value / 100 : alphaTok.value;
+  const v =
+    alphaTok.unit === 'none'
+      ? 0
+      : alphaTok.unit === '%'
+        ? alphaTok.value / 100
+        : alphaTok.value;
   return ` / ${fmt(Math.max(0, Math.min(1, v)))}`;
 }
 
@@ -227,7 +360,8 @@ function parseLabLike(fn: string, body: string): RGBA | null {
   const t = args.parts.map(tokenize);
   if (t.some((x) => x === null)) return null;
   const tk = t as Token[];
-  const alphaTok = args.alpha === null ? undefined : (tokenize(args.alpha) ?? undefined);
+  const alphaTok =
+    args.alpha === null ? undefined : (tokenize(args.alpha) ?? undefined);
   if (args.alpha !== null && !alphaTok) return null;
   const a = alphaOf(alphaTok);
   if (a === null) return null;
@@ -236,7 +370,13 @@ function parseLabLike(fn: string, body: string): RGBA | null {
   // Percent references (CSS Color 4): L 100% = 100 (lab/lch) or 1 (oklab/oklch); a/b 100% = 125 or 0.4; C 100% =
   // 150 or 0.4.
   const num = (x: Token, pct: number): number | null =>
-    x.unit === 'none' ? 0 : x.unit === '%' ? (x.value / 100) * pct : x.unit === '' ? x.value : null;
+    x.unit === 'none'
+      ? 0
+      : x.unit === '%'
+        ? (x.value / 100) * pct
+        : x.unit === ''
+          ? x.value
+          : null;
   let L = num(tk[0]!, ok ? 1 : 100);
   if (L === null) return null;
   L = Math.max(0, Math.min(ok ? 1 : 100, L));
@@ -261,7 +401,11 @@ function parseLabLike(fn: string, body: string): RGBA | null {
     B = c1 * Math.sin(h);
   }
   if (ok) return fromLinear(oklabToLinSrgb(L, A, B), a, css);
-  return fromLinear(mul(XYZ65_TO_LIN_SRGB, mul(D50_TO_D65, labToXyz50(L, A, B))), a, css);
+  return fromLinear(
+    mul(XYZ65_TO_LIN_SRGB, mul(D50_TO_D65, labToXyz50(L, A, B))),
+    a,
+    css,
+  );
 }
 
 function parseColorFn(body: string): RGBA | null {
@@ -271,9 +415,18 @@ function parseColorFn(body: string): RGBA | null {
   const args = modernArgs(m[2]!, 3);
   if (!args) return null;
   const t = args.parts.map(tokenize);
-  if (t.some((x) => x === null || (x.unit !== '' && x.unit !== '%' && x.unit !== 'none'))) return null;
-  const v = (t as Token[]).map((x) => (x.unit === 'none' ? 0 : x.unit === '%' ? x.value / 100 : x.value)) as Vec3;
-  const alphaTok = args.alpha === null ? undefined : (tokenize(args.alpha) ?? undefined);
+  if (
+    t.some(
+      (x) =>
+        x === null || (x.unit !== '' && x.unit !== '%' && x.unit !== 'none'),
+    )
+  )
+    return null;
+  const v = (t as Token[]).map((x) =>
+    x.unit === 'none' ? 0 : x.unit === '%' ? x.value / 100 : x.value,
+  ) as Vec3;
+  const alphaTok =
+    args.alpha === null ? undefined : (tokenize(args.alpha) ?? undefined);
   if (args.alpha !== null && !alphaTok) return null;
   const a = alphaOf(alphaTok);
   if (a === null) return null;
@@ -287,24 +440,39 @@ function parseColorFn(body: string): RGBA | null {
       lin = v;
       break;
     case 'display-p3':
-      lin = mul(XYZ65_TO_LIN_SRGB, mul(LIN_P3_TO_XYZ65, v.map(srgbDecode) as Vec3));
+      lin = mul(
+        XYZ65_TO_LIN_SRGB,
+        mul(LIN_P3_TO_XYZ65, v.map(srgbDecode) as Vec3),
+      );
       break;
     case 'a98-rgb':
-      lin = mul(XYZ65_TO_LIN_SRGB, mul(LIN_A98_TO_XYZ65, v.map((c) => signedPow(c, 563 / 256)) as Vec3));
+      lin = mul(
+        XYZ65_TO_LIN_SRGB,
+        mul(LIN_A98_TO_XYZ65, v.map((c) => signedPow(c, 563 / 256)) as Vec3),
+      );
       break;
     case 'rec2020': {
       const al = 1.09929682680944;
       const be = 0.018053968510807;
       const dec = (c: number) => {
         const x = Math.abs(c);
-        return x < be * 4.5 ? c / 4.5 : Math.sign(c) * ((x + al - 1) / al) ** (1 / 0.45);
+        return x < be * 4.5
+          ? c / 4.5
+          : Math.sign(c) * ((x + al - 1) / al) ** (1 / 0.45);
       };
-      lin = mul(XYZ65_TO_LIN_SRGB, mul(LIN_REC2020_TO_XYZ65, v.map(dec) as Vec3));
+      lin = mul(
+        XYZ65_TO_LIN_SRGB,
+        mul(LIN_REC2020_TO_XYZ65, v.map(dec) as Vec3),
+      );
       break;
     }
     case 'prophoto-rgb': {
-      const dec = (c: number) => (Math.abs(c) <= 16 / 512 ? c / 16 : signedPow(c, 1.8));
-      lin = mul(XYZ65_TO_LIN_SRGB, mul(D50_TO_D65, mul(LIN_PROPHOTO_TO_XYZ50, v.map(dec) as Vec3)));
+      const dec = (c: number) =>
+        Math.abs(c) <= 16 / 512 ? c / 16 : signedPow(c, 1.8);
+      lin = mul(
+        XYZ65_TO_LIN_SRGB,
+        mul(D50_TO_D65, mul(LIN_PROPHOTO_TO_XYZ50, v.map(dec) as Vec3)),
+      );
       break;
     }
     case 'xyz':
@@ -328,7 +496,12 @@ function parseHex(h: string): RGBA | null {
     case 3:
       return { r: n(0, 1) * 17, g: n(1, 1) * 17, b: n(2, 1) * 17, a: 255 };
     case 4:
-      return { r: n(0, 1) * 17, g: n(1, 1) * 17, b: n(2, 1) * 17, a: n(3, 1) * 17 };
+      return {
+        r: n(0, 1) * 17,
+        g: n(1, 1) * 17,
+        b: n(2, 1) * 17,
+        a: n(3, 1) * 17,
+      };
     case 6:
       return { r: n(0, 2), g: n(2, 2), b: n(4, 2), a: 255 };
     case 8:
@@ -353,7 +526,14 @@ function tokenize(part: string): Token | null {
   const rest = p.slice(m[0].length);
   const value = parseFloat(m[0]);
   if (!Number.isFinite(value)) return null;
-  if (rest === '' || rest === '%' || rest === 'deg' || rest === 'rad' || rest === 'grad' || rest === 'turn') {
+  if (
+    rest === '' ||
+    rest === '%' ||
+    rest === 'deg' ||
+    rest === 'rad' ||
+    rest === 'grad' ||
+    rest === 'turn'
+  ) {
     return { value, unit: rest };
   }
   return null;
@@ -398,12 +578,27 @@ function parseRgb(body: string): RGBA | null {
   if (sp.legacy) {
     // Legacy syntax: all three percentages or all three numbers; no "none".
     const pct = ch[0]!.unit === '%';
-    if (ch.some((c) => c.unit === 'none' || (c.unit === '%') !== pct || (c.unit !== '%' && c.unit !== ''))) return null;
+    if (
+      ch.some(
+        (c) =>
+          c.unit === 'none' ||
+          (c.unit === '%') !== pct ||
+          (c.unit !== '%' && c.unit !== ''),
+      )
+    )
+      return null;
     if (t[3] && t[3].unit === 'none') return null;
-  } else if (ch.some((c) => c.unit !== '' && c.unit !== '%' && c.unit !== 'none')) {
+  } else if (
+    ch.some((c) => c.unit !== '' && c.unit !== '%' && c.unit !== 'none')
+  ) {
     return null;
   }
-  const conv = (c: Token) => (c.unit === 'none' ? 0 : c.unit === '%' ? clamp255((c.value / 100) * 255) : clamp255(c.value));
+  const conv = (c: Token) =>
+    c.unit === 'none'
+      ? 0
+      : c.unit === '%'
+        ? clamp255((c.value / 100) * 255)
+        : clamp255(c.value);
   const a = alphaOf(t[3]);
   if (a === null) return null;
   return { r: conv(ch[0]!), g: conv(ch[1]!), b: conv(ch[2]!), a };
@@ -458,8 +653,17 @@ function parseHsl(body: string): RGBA | null {
   if (sp.legacy && t[0]!.unit === 'none') return null;
   const a = alphaOf(t[3]);
   if (a === null) return null;
-  const [r, g, b] = hslToRgb(h, Math.max(0, Math.min(1, s)), Math.max(0, Math.min(1, l)));
-  return { r: clamp255(r * 255), g: clamp255(g * 255), b: clamp255(b * 255), a };
+  const [r, g, b] = hslToRgb(
+    h,
+    Math.max(0, Math.min(1, s)),
+    Math.max(0, Math.min(1, l)),
+  );
+  return {
+    r: clamp255(r * 255),
+    g: clamp255(g * 255),
+    b: clamp255(b * 255),
+    a,
+  };
 }
 
 function parseHwb(body: string): RGBA | null {
@@ -470,7 +674,12 @@ function parseHwb(body: string): RGBA | null {
   const t = toks as Token[];
   const h = hueDegrees(t[0]!);
   if (h === null) return null;
-  const pct = (x: Token) => (x.unit === 'none' ? 0 : x.unit === '%' || x.unit === '' ? x.value / 100 : null);
+  const pct = (x: Token) =>
+    x.unit === 'none'
+      ? 0
+      : x.unit === '%' || x.unit === ''
+        ? x.value / 100
+        : null;
   let w = pct(t[1]!);
   let bl = pct(t[2]!);
   if (w === null || bl === null) return null;
@@ -483,9 +692,18 @@ function parseHwb(body: string): RGBA | null {
     const gray = w / (w + bl);
     rgb = [gray, gray, gray];
   } else {
-    rgb = hslToRgb(h, 1, 0.5).map((c) => c * (1 - w! - bl!) + w!) as [number, number, number];
+    rgb = hslToRgb(h, 1, 0.5).map((c) => c * (1 - w! - bl!) + w!) as [
+      number,
+      number,
+      number,
+    ];
   }
-  return { r: clamp255(rgb[0] * 255), g: clamp255(rgb[1] * 255), b: clamp255(rgb[2] * 255), a };
+  return {
+    r: clamp255(rgb[0] * 255),
+    g: clamp255(rgb[1] * 255),
+    b: clamp255(rgb[2] * 255),
+    a,
+  };
 }
 
 function hex2(n: number): string {

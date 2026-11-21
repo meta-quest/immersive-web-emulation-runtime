@@ -6,10 +6,19 @@
  */
 
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { before, test } from 'node:test';
-import { buildTestDist, buildTestTemplate } from '../../packager/test/helpers.ts';
+import {
+  buildTestDist,
+  buildTestTemplate,
+} from '../../packager/test/helpers.ts';
 import { runCli, type CliIo } from '../../src/cli/main.ts';
 import { declaredFeatures, loadBaseline } from '../src/cli.ts';
 import { buildInventory } from '../src/inventory.ts';
@@ -20,25 +29,37 @@ import { tempDir, writeTree } from './helpers.ts';
 
 test('inventory: layers measured in order, protocol-checked bundles retried, source fallback', () => {
   const root = writeTree(tempDir(), {
-    'runtime/core/js/bootstrap.js': '(function (natives, g) { g.setTimeout = function setTimeout() {}; })',
-    'web/glue/dist/glue.js': 'globalThis.URL = class URL { get href() { return ""; } }; globalThis.navigator = { platform: "x" };',
-    'web/audio/dist/audio.js': 'if (__iwn.audio.protocolVersion !== 3) throw new Error("iwn.audio protocol mismatch: native " + __iwn.audio.protocolVersion + ", JS 3"); globalThis.AudioContext = class AudioContext { createGain() {} };',
-    'web/webgl/dist/webgl.js': 'globalThis.WebGL2RenderingContext = class { drawElements() {} }; const EXTS = ["OVR_multiview2", "EXT_color_buffer_float"];',
+    'runtime/core/js/bootstrap.js':
+      '(function (natives, g) { g.setTimeout = function setTimeout() {}; })',
+    'web/glue/dist/glue.js':
+      'globalThis.URL = class URL { get href() { return ""; } }; globalThis.navigator = { platform: "x" };',
+    'web/audio/dist/audio.js':
+      'if (__iwn.audio.protocolVersion !== 3) throw new Error("iwn.audio protocol mismatch: native " + __iwn.audio.protocolVersion + ", JS 3"); globalThis.AudioContext = class AudioContext { createGain() {} };',
+    'web/webgl/dist/webgl.js':
+      'globalThis.WebGL2RenderingContext = class { drawElements() {} }; const EXTS = ["OVR_multiview2", "EXT_color_buffer_float"];',
     'web/dom/src/index.ts': 'export class HTMLDivElement { appendChild() {} }',
   });
   const inv = buildInventory(root);
   const by = Object.fromEntries(inv.layers.map((l) => [l.layer, l]));
-  assert.deepEqual(inv.layers.map((l) => l.layer), ['v8', 'runtime/core', 'web/glue', 'web/audio', 'web/dom', 'web/webgl']);
+  assert.deepEqual(
+    inv.layers.map((l) => l.layer),
+    ['v8', 'runtime/core', 'web/glue', 'web/audio', 'web/dom', 'web/webgl'],
+  );
   assert.ok(by.v8!.globals.includes('Intl'));
   assert.deepEqual(by['runtime/core']!.globals, ['setTimeout']);
   assert.ok(by['web/glue']!.members.includes('URL.href'));
   assert.ok(by['web/glue']!.members.includes('navigator.platform'));
   assert.equal(by['web/audio']!.how, 'eval');
   assert.ok(by['web/audio']!.members.includes('AudioContext.createGain'));
-  assert.ok(!by['web/audio']!.members.some((m) => m.endsWith('.hasOwnProperty'))); // the context's Object.prototype ends the walk
+  assert.ok(
+    !by['web/audio']!.members.some((m) => m.endsWith('.hasOwnProperty')),
+  ); // the context's Object.prototype ends the walk
   assert.equal(by['web/dom']!.how, 'source');
   assert.ok(by['web/dom']!.tokens!.includes('HTMLDivElement'));
-  assert.deepEqual(by['web/webgl']!.tokens, ['EXT_color_buffer_float', 'OVR_multiview2']);
+  assert.deepEqual(by['web/webgl']!.tokens, [
+    'EXT_color_buffer_float',
+    'OVR_multiview2',
+  ]);
   // snapshot round trip
   const s = measuredSurface(inv, ['XRSession']);
   const back = fromSnapshot(JSON.parse(JSON.stringify(toSnapshot(s, 'test'))));
@@ -49,20 +70,36 @@ test('inventory: layers measured in order, protocol-checked bundles retried, sou
 
 test('inventory: opt-in preludes and natives do not count; constructor stubs are recorded; window aliases are skipped', () => {
   const root = writeTree(tempDir(), {
-    'web/glue/dist/glue.js': 'globalThis.frames = globalThis; globalThis.top = globalThis; globalThis.EventTarget = class EventTarget {};',
+    'web/glue/dist/glue.js':
+      'globalThis.frames = globalThis; globalThis.top = globalThis; globalThis.EventTarget = class EventTarget {};',
     // installs WebSocket only over the opt-in transport, like web/net
-    'web/net/dist/net.js': 'const n = __iwn.net; globalThis.fetch = function fetch() {}; if (typeof n.wsConnect === "function" && typeof n.wsSend === "function") globalThis.WebSocket = class WebSocket {};',
-    'web/storage/dist/storage.js': 'globalThis.localStorage = { getItem() {} };',
-    'web/storage/dist/idb.js': 'globalThis.indexedDB = { open() {} }; globalThis.caches = { open() {} };',
-    'web/audio/dist/audio.js': 'function unsupportedNode(name) { return class { constructor() { throw new DOMException(name + " is not supported", "NotSupportedError"); } }; } globalThis.GainNode = class GainNode { constructor() {} }; globalThis.WaveShaperNode = unsupportedNode("WaveShaperNode");',
+    'web/net/dist/net.js':
+      'const n = __iwn.net; globalThis.fetch = function fetch() {}; if (typeof n.wsConnect === "function" && typeof n.wsSend === "function") globalThis.WebSocket = class WebSocket {};',
+    'web/storage/dist/storage.js':
+      'globalThis.localStorage = { getItem() {} };',
+    'web/storage/dist/idb.js':
+      'globalThis.indexedDB = { open() {} }; globalThis.caches = { open() {} };',
+    'web/audio/dist/audio.js':
+      'function unsupportedNode(name) { return class { constructor() { throw new DOMException(name + " is not supported", "NotSupportedError"); } }; } globalThis.GainNode = class GainNode { constructor() {} }; globalThis.WaveShaperNode = unsupportedNode("WaveShaperNode");',
   });
   const inv = buildInventory(root);
   const all = inv.layers.flatMap((l) => l.globals);
-  assert.ok(all.includes('fetch') && !all.includes('WebSocket'), 'no WebSocket without the opt-in transport');
-  assert.ok(all.includes('localStorage') && !all.includes('indexedDB') && !all.includes('caches'), 'idb.js is an opt-in prelude');
+  assert.ok(
+    all.includes('fetch') && !all.includes('WebSocket'),
+    'no WebSocket without the opt-in transport',
+  );
+  assert.ok(
+    all.includes('localStorage') &&
+      !all.includes('indexedDB') &&
+      !all.includes('caches'),
+    'idb.js is an opt-in prelude',
+  );
   const audio = inv.layers.find((l) => l.layer === 'web/audio')!;
   assert.deepEqual(audio.stubs, ['WaveShaperNode']);
-  assert.ok(!inv.layers.some((l) => l.members.some((m) => /^(frames|top)\./.test(m))), 'window aliases are not walked');
+  assert.ok(
+    !inv.layers.some((l) => l.members.some((m) => /^(frames|top)\./.test(m))),
+    'window aliases are not walked',
+  );
   const s = measuredSurface(inv, []);
   const r = (k: string) => resolve(parseKey(k), s);
   // a stub of an alpha-later API is the alpha gate: "later" (a warning), still marked as a stub
@@ -93,7 +130,8 @@ function io(cwd: string): CliIo & { out: string; err: string } {
 
 test('cli: iwer-native compat (static) exit codes and json', async () => {
   const proj = writeTree(tempDir(), {
-    'dist/index.html': '<html><head></head><body><script type="module" src="/a.js"></script></body></html>',
+    'dist/index.html':
+      '<html><head></head><body><script type="module" src="/a.js"></script></body></html>',
     'dist/a.js': 'c.getContext("webgl2"); new VideoDecoder({});',
     'iwsdk.config.json': JSON.stringify({ native: { network: { allow: [] } } }),
   });
@@ -106,7 +144,10 @@ test('cli: iwer-native compat (static) exit codes and json', async () => {
   assert.equal(await runCli(['compat', '--strict'], b), 1);
   const c = io(proj);
   assert.equal(await runCli(['compat', '--json'], c), 0);
-  const j = JSON.parse(c.out) as { ok: boolean; findings: Array<{ key: string }> };
+  const j = JSON.parse(c.out) as {
+    ok: boolean;
+    findings: Array<{ key: string }>;
+  };
   assert.equal(j.ok, true);
   writeTree(proj, { 'dist/e.js': 'new XRDevice(metaQuest3).installRuntime()' });
   const d = io(proj);
@@ -119,37 +160,71 @@ test('cli: iwer-native compat (static) exit codes and json', async () => {
 
 test('cli: the dormant-library baseline applies to IWSDK apps only; a plain three.js app gets its warnings', async () => {
   const files = {
-    'dist/index.html': '<html><head></head><body><script type="module" src="/assets/a.js"></script></body></html>',
-    'dist/assets/a.js': 'const s=await navigator.mediaDevices.getUserMedia({video:true});const q=b.createEquirectLayer({});',
-    'index.html': '<html><head><script type="module" src="/main.js"></script></head></html>',
+    'dist/index.html':
+      '<html><head></head><body><script type="module" src="/assets/a.js"></script></body></html>',
+    'dist/assets/a.js':
+      'const s=await navigator.mediaDevices.getUserMedia({video:true});const q=b.createEquirectLayer({});',
+    'index.html':
+      '<html><head><script type="module" src="/main.js"></script></head></html>',
   };
   // Vite's vanilla layout: main.js at the project root, no src/, no IWSDK
   // native.features without the camera: pack does not declare it, so getUserMedia is absent on the headset
-  const noCamera = JSON.stringify({ native: { packageId: 'com.example.plain', features: { handTracking: true } } });
-  const plain = writeTree(tempDir(), { ...files, 'iwsdk.config.json': noCamera, 'package.json': '{"dependencies":{"three":"0.181.0"}}', 'main.js': 'const s = await navigator.mediaDevices.getUserMedia({ video: true });\nconst q = binding.createEquirectLayer({});' });
+  const noCamera = JSON.stringify({
+    native: {
+      packageId: 'com.example.plain',
+      features: { handTracking: true },
+    },
+  });
+  const plain = writeTree(tempDir(), {
+    ...files,
+    'iwsdk.config.json': noCamera,
+    'package.json': '{"dependencies":{"three":"0.181.0"}}',
+    'main.js':
+      'const s = await navigator.mediaDevices.getUserMedia({ video: true });\nconst q = binding.createEquirectLayer({});',
+  });
   const a = io(plain);
   assert.equal(await runCli(['compat', '--verbose'], a), 0);
   assert.match(a.out, /\[warn\] MediaDevices\.getUserMedia\(\)/);
   assert.match(a.out, /\[warn\] XRWebGLBinding\.createEquirectLayer\(\)/);
   assert.doesNotMatch(a.out, /library code every IWSDK build carries/);
   // the same bundle without app source: still the app's (no IWSDK), so still warnings
-  const bare = writeTree(tempDir(), { ...files, 'iwsdk.config.json': noCamera, 'package.json': '{"dependencies":{"three":"0.181.0"}}' });
+  const bare = writeTree(tempDir(), {
+    ...files,
+    'iwsdk.config.json': noCamera,
+    'package.json': '{"dependencies":{"three":"0.181.0"}}',
+  });
   const b = io(bare);
   await runCli(['compat'], b);
   assert.match(b.out, /\[warn\] MediaDevices\.getUserMedia\(\)/);
   // derived features (no native.features): pack declares the camera for a bundle that is not IWSDK and calls
   // getUserMedia, so it is provided
-  const derived = writeTree(tempDir(), { ...files, 'package.json': '{"dependencies":{"three":"0.181.0"}}' });
+  const derived = writeTree(tempDir(), {
+    ...files,
+    'package.json': '{"dependencies":{"three":"0.181.0"}}',
+  });
   const dv = io(derived);
   await runCli(['compat', '--json'], dv);
-  const rdv = JSON.parse(dv.out) as { findings: Array<{ key: string; status: string }>; supported: Record<string, number> };
-  assert.equal(rdv.findings.find((f) => f.key === 'MediaDevices.getUserMedia()'), undefined);
+  const rdv = JSON.parse(dv.out) as {
+    findings: Array<{ key: string; status: string }>;
+    supported: Record<string, number>;
+  };
+  assert.equal(
+    rdv.findings.find((f) => f.key === 'MediaDevices.getUserMedia()'),
+    undefined,
+  );
   assert.ok((rdv.supported.provided ?? 0) > 0);
   // an IWSDK project with the same bundle and no app use: dormant library code
-  const iw = writeTree(tempDir(), { ...files, 'iwsdk.config.json': noCamera, 'package.json': '{"dependencies":{"@iwsdk/core":"1.1.0"}}' });
+  const iw = writeTree(tempDir(), {
+    ...files,
+    'iwsdk.config.json': noCamera,
+    'package.json': '{"dependencies":{"@iwsdk/core":"1.1.0"}}',
+  });
   const c = io(iw);
   await runCli(['compat', '--verbose'], c);
-  assert.match(c.out, /\[info\] MediaDevices\.getUserMedia\(\).*library code every IWSDK build carries/);
+  assert.match(
+    c.out,
+    /\[info\] MediaDevices\.getUserMedia\(\).*library code every IWSDK build carries/,
+  );
 });
 
 test('cli: --boot-ms is validated', async () => {
@@ -167,7 +242,10 @@ test('cli: help lists the compat command', async () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   assert.ok(readme.includes('What to do when the check fails'));
   // User docs: no browser fallback, no review/paste/task numbers, no build-machine paths or internal hosts.
-  assert.doesNotMatch(readme, /\bTWA\b|Trusted Web Activity|\b[DPT]\d{8,}\b|\/home\/|\/data\/users\/|\.facebook\.(?:net|com)\b/);
+  assert.doesNotMatch(
+    readme,
+    /\bTWA\b|Trusted Web Activity|\b[DPT]\d{8,}\b|\/home\/|\/data\/users\/|\.facebook\.(?:net|com)\b/,
+  );
 });
 
 // ---- the pack gate ------------------------------------------------------
@@ -179,8 +257,17 @@ before(async () => {
 
 function packProject(files: Record<string, string> = {}): string {
   const dir = tempDir('iwn-compat-pack-');
-  writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'gate-test', version: '1.0.0' }));
-  writeFileSync(path.join(dir, 'iwsdk.config.json'), JSON.stringify({ version: 'iwsdk.project.v1', native: { packageId: 'com.a.gate', appName: 'Gate' } }));
+  writeFileSync(
+    path.join(dir, 'package.json'),
+    JSON.stringify({ name: 'gate-test', version: '1.0.0' }),
+  );
+  writeFileSync(
+    path.join(dir, 'iwsdk.config.json'),
+    JSON.stringify({
+      version: 'iwsdk.project.v1',
+      native: { packageId: 'com.a.gate', appName: 'Gate' },
+    }),
+  );
   buildTestDist(dir, files);
   return dir;
 }
@@ -192,26 +279,51 @@ function packIo(cwd: string) {
 }
 
 test('pack gate: an injected emulator fails the gate before packing; --json reports it as JSON', async () => {
-  const dir = packProject({ 'assets/e.js': 'const c={userAgentException:/x/,activation:"auto"};new Q(Z.metaQuest3).installRuntime({});' });
+  const dir = packProject({
+    'assets/e.js':
+      'const c={userAgentException:/x/,activation:"auto"};new Q(Z.metaQuest3).installRuntime({});',
+  });
   const a = packIo(dir);
   assert.equal(await runCli(['pack', '--template', templateFile], a), 1);
   assert.match(a.err, /injected WebXR emulator/);
-  assert.match(a.err, /compat check failed \(pass --skip-compat to pack anyway\)/);
+  assert.match(
+    a.err,
+    /compat check failed \(pass --skip-compat to pack anyway\)/,
+  );
   assert.ok(!existsSync(path.join(dir, 'dist-metavr')));
   const b = packIo(dir);
-  assert.equal(await runCli(['pack', '--json', '--template', templateFile], b), 1);
-  const j = JSON.parse(b.out) as { ok: boolean; error: string; compat: { findings: Array<{ key: string }> } };
+  assert.equal(
+    await runCli(['pack', '--json', '--template', templateFile], b),
+    1,
+  );
+  const j = JSON.parse(b.out) as {
+    ok: boolean;
+    error: string;
+    compat: { findings: Array<{ key: string }> };
+  };
   assert.equal(j.ok, false);
   assert.ok(j.compat.findings.some((f) => f.key === 'injected WebXR emulator'));
 });
 
 test('pack gate: --strict fails on warnings; --skip-compat packs anyway', async () => {
-  const dir = packProject({ 'assets/v.js': 'if (window.VideoDecoder) new VideoDecoder({});' });
+  const dir = packProject({
+    'assets/v.js': 'if (window.VideoDecoder) new VideoDecoder({});',
+  });
   const a = packIo(dir);
-  assert.equal(await runCli(['pack', '--strict', '--template', templateFile], a), 1);
+  assert.equal(
+    await runCli(['pack', '--strict', '--template', templateFile], a),
+    1,
+  );
   assert.match(a.err, /new VideoDecoder/);
   const b = packIo(dir);
-  assert.equal(await runCli(['pack', '--strict', '--skip-compat', '--template', templateFile], b), 0, b.err);
+  assert.equal(
+    await runCli(
+      ['pack', '--strict', '--skip-compat', '--template', templateFile],
+      b,
+    ),
+    0,
+    b.err,
+  );
   assert.ok(existsSync(path.join(dir, 'dist-metavr', 'Gate.apk')));
   // without --strict the warning is printed and the pack goes ahead
   const c = packIo(dir);
@@ -221,37 +333,82 @@ test('pack gate: --strict fails on warnings; --skip-compat packs anyway', async 
 
 test('pack gate: an app on a newer IWSDK minor than the shipped baseline passes --strict; an older minor warns', async () => {
   const shipped = loadBaseline()?.iwsdk;
-  assert.ok(shipped, 'compat/data/static-baseline.json records the IWSDK version it was made from');
+  assert.ok(
+    shipped,
+    'compat/data/static-baseline.json records the IWSDK version it was made from',
+  );
   const [major, minor] = shipped.split('.').map(Number) as [number, number];
   const withIwsdk = (version: string) => {
     const dir = packProject();
-    writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'gate-test', version: '1.0.0', dependencies: { '@iwsdk/core': `^${version}` } }));
-    writeTree(dir, { 'node_modules/@iwsdk/core/package.json': JSON.stringify({ name: '@iwsdk/core', version }) });
+    writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        name: 'gate-test',
+        version: '1.0.0',
+        dependencies: { '@iwsdk/core': `^${version}` },
+      }),
+    );
+    writeTree(dir, {
+      'node_modules/@iwsdk/core/package.json': JSON.stringify({
+        name: '@iwsdk/core',
+        version,
+      }),
+    });
     return dir;
   };
   const newer = withIwsdk(`${major}.${minor + 1}.0`);
   const a = packIo(newer);
   assert.equal(await runCli(['compat', '--strict', '--verbose'], a), 0, a.out);
-  assert.match(a.out, /\[info\] static baseline version: .*a newer minor version/);
+  assert.match(
+    a.out,
+    /\[info\] static baseline version: .*a newer minor version/,
+  );
   const b = packIo(newer);
-  assert.equal(await runCli(['pack', '--strict', '--template', templateFile], b), 0, b.err);
+  assert.equal(
+    await runCli(['pack', '--strict', '--template', templateFile], b),
+    0,
+    b.err,
+  );
   assert.ok(existsSync(path.join(newer, 'dist-metavr', 'Gate.apk')));
-  const older = withIwsdk(minor > 0 ? `${major}.${minor - 1}.0` : `${major - 1}.0.0`);
+  const older = withIwsdk(
+    minor > 0 ? `${major}.${minor - 1}.0` : `${major - 1}.0.0`,
+  );
   const c = packIo(older);
   assert.equal(await runCli(['compat', '--strict'], c), 1);
-  assert.match(c.out, /\[warn\] static baseline version: .*Update @iwsdk\/core and @iwsdk\/vite-plugin-dev to \d+\.\d+\.\d+ or later/);
+  assert.match(
+    c.out,
+    /\[warn\] static baseline version: .*Update @iwsdk\/core and @iwsdk\/vite-plugin-dev to \d+\.\d+\.\d+ or later/,
+  );
   assert.doesNotMatch(c.out, /compat\/scripts|baseline\.mjs/);
   // a warning, not an error: without --strict the check passes
   assert.equal(await runCli(['compat'], packIo(older)), 0);
 });
 
-test('pack gate: the app\'s own AR config is checked even though library code mentions AR everywhere', async () => {
+test("pack gate: the app's own AR config is checked even though library code mentions AR everywhere", async () => {
   const dir = packProject();
-  writeFileSync(path.join(dir, 'iwsdk.config.json'), JSON.stringify({ version: 'iwsdk.project.v1', native: { packageId: 'com.a.gate', appName: 'Gate' }, world: { xr: { mode: 'ar', features: { hitTest: { required: true }, lightEstimation: { required: true } } } } }));
+  writeFileSync(
+    path.join(dir, 'iwsdk.config.json'),
+    JSON.stringify({
+      version: 'iwsdk.project.v1',
+      native: { packageId: 'com.a.gate', appName: 'Gate' },
+      world: {
+        xr: {
+          mode: 'ar',
+          features: {
+            hitTest: { required: true },
+            lightEstimation: { required: true },
+          },
+        },
+      },
+    }),
+  );
   const a = packIo(dir);
   assert.equal(await runCli(['pack', '--template', templateFile], a), 0, a.err);
   // AR mode declares passthrough (pack derives it), so immersive-ar itself is offered (XR-AR-1)
-  assert.doesNotMatch(a.err, /\[warn\] XRSystem\.offerSession\("immersive-ar"\)/);
+  assert.doesNotMatch(
+    a.err,
+    /\[warn\] XRSystem\.offerSession\("immersive-ar"\)/,
+  );
   assert.doesNotMatch(a.err, /\[warn\] XR feature hit-test \(required\)/); // XR-AR-2
   assert.match(a.err, /\[warn\] XR feature light-estimation \(required\)/);
   assert.match(a.err, /There is no fallback route/);
@@ -260,7 +417,10 @@ test('pack gate: the app\'s own AR config is checked even though library code me
 
 test('compat and the pack gate: a dangling link is a message, not a stack trace', async () => {
   const dir = packProject();
-  symlinkSync(path.join(dir, 'nowhere.js'), path.join(dir, 'dist', 'dangling.js'));
+  symlinkSync(
+    path.join(dir, 'nowhere.js'),
+    path.join(dir, 'dist', 'dangling.js'),
+  );
   const a = io(dir);
   const code = await runCli(['compat'], a);
   assert.equal(code, 0);
@@ -280,36 +440,95 @@ test('compat: --mirror is validated', async () => {
 });
 
 test('cli: declaredFeatures resolves the features as pack does (native.features, else derived; AR mode -> passthrough)', () => {
-  const dist = { 'dist/index.html': '<html></html>', 'dist/assets/a.js': 'navigator.mediaDevices.getUserMedia({video:true})' };
-  const ar = writeTree(tempDir(), { ...dist, 'iwsdk.config.json': JSON.stringify({ world: { xr: { mode: 'ar', features: { hitTest: { required: true } } } } }) });
+  const dist = {
+    'dist/index.html': '<html></html>',
+    'dist/assets/a.js': 'navigator.mediaDevices.getUserMedia({video:true})',
+  };
+  const ar = writeTree(tempDir(), {
+    ...dist,
+    'iwsdk.config.json': JSON.stringify({
+      world: { xr: { mode: 'ar', features: { hitTest: { required: true } } } },
+    }),
+  });
   const scan = (root: string) => scanDist(path.join(root, 'dist'));
-  assert.deepEqual([...declaredFeatures(ar, scan(ar))].sort(), ['camera', 'hitTest', 'passthrough']);
-  const explicit = writeTree(tempDir(), { ...dist, 'iwsdk.config.json': JSON.stringify({ world: { xr: { mode: 'ar' } }, native: { packageId: 'com.a.b', features: { handTracking: true, anchors: false } } }) });
-  assert.deepEqual([...declaredFeatures(explicit, scan(explicit))], ['handTracking']);
+  assert.deepEqual([...declaredFeatures(ar, scan(ar))].sort(), [
+    'camera',
+    'hitTest',
+    'passthrough',
+  ]);
+  const explicit = writeTree(tempDir(), {
+    ...dist,
+    'iwsdk.config.json': JSON.stringify({
+      world: { xr: { mode: 'ar' } },
+      native: {
+        packageId: 'com.a.b',
+        features: { handTracking: true, anchors: false },
+      },
+    }),
+  });
+  assert.deepEqual(
+    [...declaredFeatures(explicit, scan(explicit))],
+    ['handTracking'],
+  );
   // what pack resolved wins over the file
-  assert.deepEqual([...declaredFeatures(ar, scan(ar), { names: ['passthrough'], derived: false })], ['passthrough']);
+  assert.deepEqual(
+    [
+      ...declaredFeatures(ar, scan(ar), {
+        names: ['passthrough'],
+        derived: false,
+      }),
+    ],
+    ['passthrough'],
+  );
 });
 
 test('cli: an IWSDK app that declares the camera (world.features.camera) gets no unsupported finding for it (XR-CAM-1)', async () => {
   const files = {
-    'dist/index.html': '<html><head></head><body><script type="module" src="/assets/a.js"></script></body></html>',
-    'dist/assets/a.js': 'const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});const d=await navigator.mediaDevices.enumerateDevices();v.srcObject=s;v.requestVideoFrameCallback(f);',
+    'dist/index.html':
+      '<html><head></head><body><script type="module" src="/assets/a.js"></script></body></html>',
+    'dist/assets/a.js':
+      'const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});const d=await navigator.mediaDevices.enumerateDevices();v.srcObject=s;v.requestVideoFrameCallback(f);',
     'package.json': '{"dependencies":{"@iwsdk/core":"1.0.0"}}',
-    'src/index.ts': "import { CameraSource, World } from '@iwsdk/core';\nWorld.create(el, { features: { camera: true } });\nentity.addComponent(CameraSource, {});",
+    'src/index.ts':
+      "import { CameraSource, World } from '@iwsdk/core';\nWorld.create(el, { features: { camera: true } });\nentity.addComponent(CameraSource, {});",
   };
-  const declaring = writeTree(tempDir(), { ...files, 'iwsdk.config.json': JSON.stringify({ world: { xr: { mode: 'vr' }, features: { camera: true } } }) });
+  const declaring = writeTree(tempDir(), {
+    ...files,
+    'iwsdk.config.json': JSON.stringify({
+      world: { xr: { mode: 'vr' }, features: { camera: true } },
+    }),
+  });
   const a = io(declaring);
   assert.equal(await runCli(['compat', '--json'], a), 0);
-  const r = JSON.parse(a.out) as { advice?: string; findings: Array<{ key: string; status: string; severity: string }> };
-  assert.deepEqual(r.findings.filter((f) => f.status === 'unsupported'), []);
+  const r = JSON.parse(a.out) as {
+    advice?: string;
+    findings: Array<{ key: string; status: string; severity: string }>;
+  };
+  assert.deepEqual(
+    r.findings.filter((f) => f.status === 'unsupported'),
+    [],
+  );
   // provided: counted as supported, not listed
-  assert.equal(r.findings.find((f) => f.key === 'MediaDevices.getUserMedia()'), undefined);
+  assert.equal(
+    r.findings.find((f) => f.key === 'MediaDevices.getUserMedia()'),
+    undefined,
+  );
   assert.equal(r.advice, undefined);
   // the same app with the camera left out of native.features: unsupported, with the way to declare it
-  const left = writeTree(tempDir(), { ...files, 'iwsdk.config.json': JSON.stringify({ world: { xr: { mode: 'vr' }, features: { camera: true } }, native: { packageId: 'com.example.cam', features: {} } }) });
+  const left = writeTree(tempDir(), {
+    ...files,
+    'iwsdk.config.json': JSON.stringify({
+      world: { xr: { mode: 'vr' }, features: { camera: true } },
+      native: { packageId: 'com.example.cam', features: {} },
+    }),
+  });
   const b = io(left);
   await runCli(['compat', '--json'], b);
-  const f = (JSON.parse(b.out) as { findings: Array<{ key: string; status: string; message: string }> }).findings.find((x) => x.key === 'MediaDevices.getUserMedia()');
+  const f = (
+    JSON.parse(b.out) as {
+      findings: Array<{ key: string; status: string; message: string }>;
+    }
+  ).findings.find((x) => x.key === 'MediaDevices.getUserMedia()');
   assert.equal(f?.status, 'unsupported');
   assert.match(f!.message, /native\.features\.camera/);
 });

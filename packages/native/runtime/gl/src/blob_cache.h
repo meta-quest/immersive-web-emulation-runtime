@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Persistent program-binary cache behind EGL_ANDROID_blob_cache (spec GL-22): the driver hands us opaque
 // key/value blobs (compiled shaders / program binaries) and asks for them on later compiles. We keep them
 // in memory and in one file in the app's cache directory, bounded (default 32 MB, least recently used

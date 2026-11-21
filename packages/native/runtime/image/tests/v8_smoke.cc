@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Device smoke test of the image module's V8 binding: a minimal V8 embedding (V8 embedder hello-world pattern) that
 // registers iwn_register_image on a "natives" object and runs the given scripts in one context, twice: once with
 // completions posted to the platform's foreground task runner and once in polling mode. A tiny setTimeout (run by

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // URL handling the module loader needs without V8 (MOD-2, MOD-3, NET-1, NET-4, NET-12), written from the WHATWG
 // URL Standard (basic URL parser, special schemes, path normalisation) and HTML's "resolve a module specifier".
 // It is deliberately a subset: no IDNA/punycode, no IPv6 host parsing beyond pass-through, no setters. The full

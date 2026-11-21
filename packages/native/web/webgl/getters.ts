@@ -30,30 +30,65 @@ import {
 // Native-backed values: kind 1 = int, 2 = float, 3 = Int32Array(2), 4 = Float32Array(2), 5 = int64, 6 = bool
 // `limit` values never change for a context and are cached after the first query.
 const LIMITS1: Array<readonly [number, number]> = [
-  [E.MAX_TEXTURE_SIZE, 1], [E.MAX_CUBE_MAP_TEXTURE_SIZE, 1], [E.MAX_RENDERBUFFER_SIZE, 1],
-  [E.MAX_TEXTURE_IMAGE_UNITS, 1], [E.MAX_VERTEX_TEXTURE_IMAGE_UNITS, 1], [E.MAX_COMBINED_TEXTURE_IMAGE_UNITS, 1],
-  [E.MAX_VERTEX_ATTRIBS, 1], [E.MAX_VARYING_VECTORS, 1], [E.MAX_VERTEX_UNIFORM_VECTORS, 1],
-  [E.MAX_FRAGMENT_UNIFORM_VECTORS, 1], [E.MAX_VIEWPORT_DIMS, 3], [E.ALIASED_LINE_WIDTH_RANGE, 4],
-  [E.ALIASED_POINT_SIZE_RANGE, 4], [E.SUBPIXEL_BITS, 1],
+  [E.MAX_TEXTURE_SIZE, 1],
+  [E.MAX_CUBE_MAP_TEXTURE_SIZE, 1],
+  [E.MAX_RENDERBUFFER_SIZE, 1],
+  [E.MAX_TEXTURE_IMAGE_UNITS, 1],
+  [E.MAX_VERTEX_TEXTURE_IMAGE_UNITS, 1],
+  [E.MAX_COMBINED_TEXTURE_IMAGE_UNITS, 1],
+  [E.MAX_VERTEX_ATTRIBS, 1],
+  [E.MAX_VARYING_VECTORS, 1],
+  [E.MAX_VERTEX_UNIFORM_VECTORS, 1],
+  [E.MAX_FRAGMENT_UNIFORM_VECTORS, 1],
+  [E.MAX_VIEWPORT_DIMS, 3],
+  [E.ALIASED_LINE_WIDTH_RANGE, 4],
+  [E.ALIASED_POINT_SIZE_RANGE, 4],
+  [E.SUBPIXEL_BITS, 1],
 ];
 const LIMITS2: Array<readonly [number, number]> = [
-  [E.MAX_3D_TEXTURE_SIZE, 1], [E.MAX_ARRAY_TEXTURE_LAYERS, 1], [E.MAX_COLOR_ATTACHMENTS, 1], [E.MAX_DRAW_BUFFERS, 1],
-  [E.MAX_ELEMENT_INDEX, 5], [E.MAX_ELEMENTS_INDICES, 1], [E.MAX_ELEMENTS_VERTICES, 1],
-  [E.MAX_FRAGMENT_INPUT_COMPONENTS, 1], [E.MAX_FRAGMENT_UNIFORM_BLOCKS, 1], [E.MAX_FRAGMENT_UNIFORM_COMPONENTS, 1],
-  [E.MAX_PROGRAM_TEXEL_OFFSET, 1], [E.MIN_PROGRAM_TEXEL_OFFSET, 1], [E.MAX_SAMPLES, 1],
-  [E.MAX_SERVER_WAIT_TIMEOUT, 5], [E.MAX_TEXTURE_LOD_BIAS, 2], [E.MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS, 1],
-  [E.MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS, 1], [E.MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS, 1],
-  [E.MAX_UNIFORM_BLOCK_SIZE, 5], [E.MAX_UNIFORM_BUFFER_BINDINGS, 1], [E.MAX_VARYING_COMPONENTS, 1],
-  [E.MAX_VERTEX_OUTPUT_COMPONENTS, 1], [E.MAX_VERTEX_UNIFORM_BLOCKS, 1], [E.MAX_VERTEX_UNIFORM_COMPONENTS, 1],
-  [E.MAX_COMBINED_UNIFORM_BLOCKS, 1], [E.MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS, 5],
-  [E.MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS, 5], [E.UNIFORM_BUFFER_OFFSET_ALIGNMENT, 1],
+  [E.MAX_3D_TEXTURE_SIZE, 1],
+  [E.MAX_ARRAY_TEXTURE_LAYERS, 1],
+  [E.MAX_COLOR_ATTACHMENTS, 1],
+  [E.MAX_DRAW_BUFFERS, 1],
+  [E.MAX_ELEMENT_INDEX, 5],
+  [E.MAX_ELEMENTS_INDICES, 1],
+  [E.MAX_ELEMENTS_VERTICES, 1],
+  [E.MAX_FRAGMENT_INPUT_COMPONENTS, 1],
+  [E.MAX_FRAGMENT_UNIFORM_BLOCKS, 1],
+  [E.MAX_FRAGMENT_UNIFORM_COMPONENTS, 1],
+  [E.MAX_PROGRAM_TEXEL_OFFSET, 1],
+  [E.MIN_PROGRAM_TEXEL_OFFSET, 1],
+  [E.MAX_SAMPLES, 1],
+  [E.MAX_SERVER_WAIT_TIMEOUT, 5],
+  [E.MAX_TEXTURE_LOD_BIAS, 2],
+  [E.MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS, 1],
+  [E.MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS, 1],
+  [E.MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS, 1],
+  [E.MAX_UNIFORM_BLOCK_SIZE, 5],
+  [E.MAX_UNIFORM_BUFFER_BINDINGS, 1],
+  [E.MAX_VARYING_COMPONENTS, 1],
+  [E.MAX_VERTEX_OUTPUT_COMPONENTS, 1],
+  [E.MAX_VERTEX_UNIFORM_BLOCKS, 1],
+  [E.MAX_VERTEX_UNIFORM_COMPONENTS, 1],
+  [E.MAX_COMBINED_UNIFORM_BLOCKS, 1],
+  [E.MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS, 5],
+  [E.MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS, 5],
+  [E.UNIFORM_BUFFER_OFFSET_ALIGNMENT, 1],
 ];
 const LIMIT1 = new Map(LIMITS1);
 const LIMIT2 = new Map(LIMITS2);
 /** Values that depend on the bound framebuffer (queried each time). */
 const FB_DEPENDENT = new Map<number, number>([
-  [E.RED_BITS, 1], [E.GREEN_BITS, 1], [E.BLUE_BITS, 1], [E.ALPHA_BITS, 1], [E.DEPTH_BITS, 1], [E.STENCIL_BITS, 1],
-  [E.SAMPLE_BUFFERS, 1], [E.SAMPLES, 1], [E.IMPLEMENTATION_COLOR_READ_FORMAT, 1], [E.IMPLEMENTATION_COLOR_READ_TYPE, 1],
+  [E.RED_BITS, 1],
+  [E.GREEN_BITS, 1],
+  [E.BLUE_BITS, 1],
+  [E.ALPHA_BITS, 1],
+  [E.DEPTH_BITS, 1],
+  [E.STENCIL_BITS, 1],
+  [E.SAMPLE_BUFFERS, 1],
+  [E.SAMPLES, 1],
+  [E.IMPLEMENTATION_COLOR_READ_FORMAT, 1],
+  [E.IMPLEMENTATION_COLOR_READ_TYPE, 1],
 ]);
 
 function nativeValue(ctx: Ctx, pname: number, kind: number): unknown {
@@ -143,8 +178,14 @@ export const getterMethods = {
   },
   makeXRCompatible(this: Ctx): Promise<void> {
     if (this._lost) {
-      const D = (globalThis as { DOMException?: new (m: string, n: string) => Error }).DOMException;
-      return Promise.reject(D ? new D('context lost', 'InvalidStateError') : new Error('context lost'));
+      const D = (
+        globalThis as { DOMException?: new (m: string, n: string) => Error }
+      ).DOMException;
+      return Promise.reject(
+        D
+          ? new D('context lost', 'InvalidStateError')
+          : new Error('context lost'),
+      );
     }
     this._attrs.xrCompatible = true;
     return Promise.resolve();
@@ -158,8 +199,11 @@ export const getterMethods = {
       case E.UNIFORM_BUFFER_START:
       case E.UNIFORM_BUFFER_SIZE:
         if (index >= this._maxUboBindings) break;
-        if (target === E.UNIFORM_BUFFER_BINDING) return this._uboBindings[index];
-        return this._uboRanges[index * 2 + (target === E.UNIFORM_BUFFER_SIZE ? 1 : 0)];
+        if (target === E.UNIFORM_BUFFER_BINDING)
+          return this._uboBindings[index];
+        return this._uboRanges[
+          index * 2 + (target === E.UNIFORM_BUFFER_SIZE ? 1 : 0)
+        ];
       case E.TRANSFORM_FEEDBACK_BUFFER_BINDING:
         if (index >= this._maxTfBuffers) break;
         return this._tf._buffers[index];
@@ -193,8 +237,14 @@ export const getterMethods = {
       default:
         break;
     }
-    if (target === E.UNIFORM_BUFFER_BINDING || target === E.UNIFORM_BUFFER_START || target === E.UNIFORM_BUFFER_SIZE ||
-        target === E.TRANSFORM_FEEDBACK_BUFFER_BINDING || target === E.TRANSFORM_FEEDBACK_BUFFER_START || target === E.TRANSFORM_FEEDBACK_BUFFER_SIZE) {
+    if (
+      target === E.UNIFORM_BUFFER_BINDING ||
+      target === E.UNIFORM_BUFFER_START ||
+      target === E.UNIFORM_BUFFER_SIZE ||
+      target === E.TRANSFORM_FEEDBACK_BUFFER_BINDING ||
+      target === E.TRANSFORM_FEEDBACK_BUFFER_START ||
+      target === E.TRANSFORM_FEEDBACK_BUFFER_SIZE
+    ) {
       this._e(E.INVALID_VALUE, 'getIndexedParameter');
       return null;
     }
@@ -211,13 +261,19 @@ export const getterMethods = {
     switch (pname) {
       // --- WebGL-only values / strings
       case E.VERSION:
-        return v2 ? `WebGL 2.0 (${this._info.version})` : `WebGL 1.0 (${this._info.version})`;
+        return v2
+          ? `WebGL 2.0 (${this._info.version})`
+          : `WebGL 1.0 (${this._info.version})`;
       case E.SHADING_LANGUAGE_VERSION:
-        return v2 ? `WebGL GLSL ES 3.00 (${this._info.glsl})` : `WebGL GLSL ES 1.0 (${this._info.glsl})`;
+        return v2
+          ? `WebGL GLSL ES 3.00 (${this._info.glsl})`
+          : `WebGL GLSL ES 1.0 (${this._info.glsl})`;
       case E.VENDOR:
         return this._opts.unmaskedStrings ? this._info.vendor : 'WebKit';
       case E.RENDERER:
-        return this._opts.unmaskedStrings ? this._info.renderer : 'WebKit WebGL';
+        return this._opts.unmaskedStrings
+          ? this._info.renderer
+          : 'WebKit WebGL';
       case E.UNMASKED_VENDOR_WEBGL:
         if (!this._extensions.has('WEBGL_debug_renderer_info')) break;
         return this._info.vendor;
@@ -234,7 +290,9 @@ export const getterMethods = {
         if (!v2) break;
         return 0;
       case E.COMPRESSED_TEXTURE_FORMATS:
-        return new Uint32Array([...this._enabledCompressed].filter((f) => COMPRESSED_FORMATS[f]));
+        return new Uint32Array(
+          [...this._enabledCompressed].filter((f) => COMPRESSED_FORMATS[f]),
+        );
       // --- bindings
       case E.ACTIVE_TEXTURE:
         return E.TEXTURE0 + this._activeUnit;
@@ -265,16 +323,29 @@ export const getterMethods = {
       case E.BLEND_SRC_ALPHA:
       case E.BLEND_DST_ALPHA: {
         const v =
-          pname === E.BLEND_EQUATION_RGB ? this._blendEq[0] : pname === E.BLEND_EQUATION_ALPHA ? this._blendEq[1]
-          : pname === E.BLEND_SRC_RGB ? this._blendFunc[0] : pname === E.BLEND_DST_RGB ? this._blendFunc[1]
-          : pname === E.BLEND_SRC_ALPHA ? this._blendFunc[2] : this._blendFunc[3];
+          pname === E.BLEND_EQUATION_RGB
+            ? this._blendEq[0]
+            : pname === E.BLEND_EQUATION_ALPHA
+              ? this._blendEq[1]
+              : pname === E.BLEND_SRC_RGB
+                ? this._blendFunc[0]
+                : pname === E.BLEND_DST_RGB
+                  ? this._blendFunc[1]
+                  : pname === E.BLEND_SRC_ALPHA
+                    ? this._blendFunc[2]
+                    : this._blendFunc[3];
         // 0xFFFFFFFF: poisoned by an indexed blend call (OES_draw_buffers_indexed): ask the driver
         return v === 0xffffffff ? this._getInt(pname) : v;
       }
       case E.COLOR_CLEAR_VALUE:
         return f32(this._clearColor);
       case E.COLOR_WRITEMASK:
-        return [this._colorMask[0] === 1, this._colorMask[1] === 1, this._colorMask[2] === 1, this._colorMask[3] === 1];
+        return [
+          this._colorMask[0] === 1,
+          this._colorMask[1] === 1,
+          this._colorMask[2] === 1,
+          this._colorMask[3] === 1,
+        ];
       case E.CULL_FACE_MODE:
         return this._cullFace;
       case E.DEPTH_CLEAR_VALUE:
@@ -353,16 +424,28 @@ export const getterMethods = {
       case E.UNPACK_ALIGNMENT:
         return this._ps[PS_UNPACK_ALIGNMENT];
       case E.MAX_VIEWS_OVR:
-        if (!this._extensions.has('OVR_multiview2') && !this._extensions.has('OCULUS_multiview')) break;
+        if (
+          !this._extensions.has('OVR_multiview2') &&
+          !this._extensions.has('OCULUS_multiview')
+        )
+          break;
         return this._getLimit(E.MAX_VIEWS_OVR);
       case E.MAX_TEXTURE_MAX_ANISOTROPY_EXT:
         if (!this._extensions.has('EXT_texture_filter_anisotropic')) break;
         return cachedLimit(this, pname, 2);
       case E.GPU_DISJOINT_EXT:
-        if (!this._extensions.has('EXT_disjoint_timer_query_webgl2') && !this._extensions.has('EXT_disjoint_timer_query')) break;
+        if (
+          !this._extensions.has('EXT_disjoint_timer_query_webgl2') &&
+          !this._extensions.has('EXT_disjoint_timer_query')
+        )
+          break;
         return nativeValue(this, pname, 6);
       case E.TIMESTAMP_EXT:
-        if (!this._extensions.has('EXT_disjoint_timer_query_webgl2') && !this._extensions.has('EXT_disjoint_timer_query')) break;
+        if (
+          !this._extensions.has('EXT_disjoint_timer_query_webgl2') &&
+          !this._extensions.has('EXT_disjoint_timer_query')
+        )
+          break;
         return nativeValue(this, pname, 5);
       case E.MAX_CLIP_DISTANCES_WEBGL:
       case E.MAX_CULL_DISTANCES_WEBGL:
@@ -377,7 +460,12 @@ export const getterMethods = {
         return this._maxColorAttachments;
     }
     // WEBGL_draw_buffers: DRAW_BUFFERi_WEBGL on the WebGL 1 surface (WebGL 2 answers them below)
-    if (!v2 && pname >= E.DRAW_BUFFER0 && pname <= E.DRAW_BUFFER15 && this._extensions.has('WEBGL_draw_buffers')) {
+    if (
+      !v2 &&
+      pname >= E.DRAW_BUFFER0 &&
+      pname <= E.DRAW_BUFFER15 &&
+      this._extensions.has('WEBGL_draw_buffers')
+    ) {
       const i = pname - E.DRAW_BUFFER0;
       if (i >= this._maxDrawBuffers) {
         this._e(E.INVALID_ENUM, 'getParameter');
@@ -415,7 +503,9 @@ export const getterMethods = {
         case E.TRANSFORM_FEEDBACK_PAUSED:
           return this._tf._paused;
         case E.READ_BUFFER:
-          return this._readFbo === null ? this._dfbReadBuffer : this._readFbo._readBuffer;
+          return this._readFbo === null
+            ? this._dfbReadBuffer
+            : this._readFbo._readBuffer;
         case E.PACK_ROW_LENGTH:
           return this._ps[PS_PACK_ROW_LENGTH];
         case E.PACK_SKIP_PIXELS:
@@ -439,7 +529,8 @@ export const getterMethods = {
           this._e(E.INVALID_ENUM, 'getParameter');
           return null;
         }
-        if (this._drawFbo === null) return i === 0 ? this._dfbDrawBuffer : E.NONE;
+        if (this._drawFbo === null)
+          return i === 0 ? this._dfbDrawBuffer : E.NONE;
         return this._drawFbo._drawBuffers[i] ?? E.NONE;
       }
       const k2 = LIMIT2.get(pname);
@@ -449,7 +540,8 @@ export const getterMethods = {
     if (k1 !== undefined) return cachedLimit(this, pname, k1);
     const fk = FB_DEPENDENT.get(pname);
     if (fk !== undefined) {
-      if (this._drawFbo === null || this._readFbo === null) this._ensureDefaultFramebuffer();
+      if (this._drawFbo === null || this._readFbo === null)
+        this._ensureDefaultFramebuffer();
       return nativeValue(this, pname, fk);
     }
     this._e(E.INVALID_ENUM, 'getParameter');
@@ -480,7 +572,8 @@ export const attributeAccessors: Record<string, PropertyDescriptor> = {
     },
     set(this: Ctx, v: unknown) {
       const s = String(v);
-      if (s !== 'srgb' && s !== 'display-p3') throw new TypeError(`'${s}' is not a valid PredefinedColorSpace`);
+      if (s !== 'srgb' && s !== 'display-p3')
+        throw new TypeError(`'${s}' is not a valid PredefinedColorSpace`);
       this._drawingBufferColorSpace = s; // accepted and ignored (no colour management), GL-2
     },
   },
@@ -490,7 +583,8 @@ export const attributeAccessors: Record<string, PropertyDescriptor> = {
     },
     set(this: Ctx, v: unknown) {
       const s = String(v);
-      if (s !== 'srgb' && s !== 'display-p3') throw new TypeError(`'${s}' is not a valid PredefinedColorSpace`);
+      if (s !== 'srgb' && s !== 'display-p3')
+        throw new TypeError(`'${s}' is not a valid PredefinedColorSpace`);
       this._unpackColorSpace = s;
     },
   },

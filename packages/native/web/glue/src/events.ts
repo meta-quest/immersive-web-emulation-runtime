@@ -11,7 +11,14 @@
 // bubble along a parent chain: subclasses (the DOM stand-ins) implement [GET_THE_PARENT].
 
 import { domException } from './dom-exception.ts';
-import { enumerable, setLength, tag, toDOMString, toUnsignedLongLong, toUSVString } from './util.ts';
+import {
+  enumerable,
+  setLength,
+  tag,
+  toDOMString,
+  toUnsignedLongLong,
+  toUSVString,
+} from './util.ts';
 
 export { toDOMString };
 
@@ -83,7 +90,6 @@ let ev!: {
   end(e: Event): void;
   canceled(e: Event): boolean;
 };
-
 
 export class Event {
   // Defined below as non-writable, non-configurable constants (WebIDL), not as class fields.
@@ -226,7 +232,9 @@ export class Event {
   }
   initEvent(type: string, bubbles = false, cancelable = false): void {
     if (arguments.length === 0) {
-      throw new TypeError("Failed to execute 'initEvent' on 'Event': 1 argument required, but only 0 present.");
+      throw new TypeError(
+        "Failed to execute 'initEvent' on 'Event': 1 argument required, but only 0 present.",
+      );
     }
     const t = toDOMString(type, "Failed to execute 'initEvent' on 'Event'");
     if (this.#dispatching) return;
@@ -248,8 +256,18 @@ for (const [k, v] of [
   ['BUBBLING_PHASE', 3],
 ] as const) {
   // WebIDL constants: { [[Writable]]: false, [[Enumerable]]: true, [[Configurable]]: false }.
-  Object.defineProperty(Event.prototype, k, { value: v, enumerable: true, writable: false, configurable: false });
-  Object.defineProperty(Event, k, { value: v, enumerable: true, writable: false, configurable: false });
+  Object.defineProperty(Event.prototype, k, {
+    value: v,
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
+  Object.defineProperty(Event, k, {
+    value: v,
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
 }
 tag(Event, 'Event');
 setLength(Event, 1);
@@ -281,7 +299,10 @@ export function markTrusted<E extends Event>(event: E): E {
 }
 
 function isDictionary(options: unknown): options is Record<string, unknown> {
-  return options !== null && (typeof options === 'object' || typeof options === 'function');
+  return (
+    options !== null &&
+    (typeof options === 'object' || typeof options === 'function')
+  );
 }
 
 /** DOM "flatten": a dictionary's `capture`, else the (boolean or AddEventListenerOptions) value ToBoolean. */
@@ -293,7 +314,10 @@ function flattenCapture(options: unknown): boolean {
 // Abort hook: abort.ts registers how to watch an AbortSignal without an import cycle. Called with
 // NOOP_PROBE it only answers false (not a signal), 'aborted' or true; with a callback it subscribes
 // and returns the unsubscribe function.
-type SignalWatcher = (signal: unknown, onAbort: () => void) => boolean | 'aborted' | (() => void);
+type SignalWatcher = (
+  signal: unknown,
+  onAbort: () => void,
+) => boolean | 'aborted' | (() => void);
 let watchSignal: SignalWatcher | null = null;
 export function setSignalWatcher(fn: SignalWatcher): void {
   watchSignal = fn;
@@ -302,14 +326,19 @@ export function setSignalWatcher(fn: SignalWatcher): void {
 // A `{ signal }` listener's abort algorithm holds its target and listener weakly (as Chromium and
 // Node do): the signal must not keep a target alive. When the target is collected first, the registry
 // drops the algorithm from the signal.
-const signalCleanup = new FinalizationRegistry<() => void>((unsubscribe) => unsubscribe());
+const signalCleanup = new FinalizationRegistry<() => void>((unsubscribe) =>
+  unsubscribe(),
+);
 
 const listenersOf = new WeakMap<EventTarget, Listener[]>();
 
 // Told when a target's listeners change (abort.ts keeps dependent AbortSignals alive while they have
 // abort listeners).
-let listenerObserver: ((target: EventTarget, type: string) => void) | null = null;
-export function setListenerObserver(fn: (target: EventTarget, type: string) => void): void {
+let listenerObserver: ((target: EventTarget, type: string) => void) | null =
+  null;
+export function setListenerObserver(
+  fn: (target: EventTarget, type: string) => void,
+): void {
   listenerObserver = fn;
 }
 
@@ -337,8 +366,15 @@ export class EventTarget {
       );
     }
     // WebIDL converts every argument (type, callback, options) before the null-callback early return.
-    type = toDOMString(type, "Failed to execute 'addEventListener' on 'EventTarget'");
-    if (callback != null && typeof callback !== 'function' && typeof callback !== 'object') {
+    type = toDOMString(
+      type,
+      "Failed to execute 'addEventListener' on 'EventTarget'",
+    );
+    if (
+      callback != null &&
+      typeof callback !== 'function' &&
+      typeof callback !== 'object'
+    ) {
       throw new TypeError(
         "Failed to execute 'addEventListener' on 'EventTarget': parameter 2 is not of type 'Object'.",
       );
@@ -411,7 +447,10 @@ export class EventTarget {
       );
     }
     const capture = flattenCapture(options);
-    type = toDOMString(type, "Failed to execute 'removeEventListener' on 'EventTarget'");
+    type = toDOMString(
+      type,
+      "Failed to execute 'removeEventListener' on 'EventTarget'",
+    );
     const self = (this ?? globalThis) as EventTarget;
     const list = listenersFor(self);
     for (const l of list) {
@@ -578,7 +617,9 @@ function invoke(
       } else {
         const handleEvent = (cb as { handleEvent?: unknown }).handleEvent;
         if (typeof handleEvent !== 'function') {
-          throw new TypeError("'handleEvent' property of the listener is not callable.");
+          throw new TypeError(
+            "'handleEvent' property of the listener is not callable.",
+          );
         }
         handleEvent.call(cb, event);
       }
@@ -596,7 +637,13 @@ function invoke(
 // an event handler"); later non-null values keep its position. Setting null deactivates it (removes
 // the listener), so a later non-null value registers again at the end of the list.
 
-const handlerState = new WeakMap<object, Map<string, { value: unknown; listener: (this: unknown, event: Event) => void }>>();
+const handlerState = new WeakMap<
+  object,
+  Map<
+    string,
+    { value: unknown; listener: (this: unknown, event: Event) => void }
+  >
+>();
 
 export function defineEventHandler(
   proto: object,
@@ -614,12 +661,20 @@ export function defineEventHandler(
         map = new Map();
         handlerState.set(target, map);
       }
-      const v = typeof value === 'function' || (value !== null && typeof value === 'object') ? value : null;
+      const v =
+        typeof value === 'function' ||
+        (value !== null && typeof value === 'object')
+          ? value
+          : null;
       const existing = map.get(type);
       if (v === null) {
         if (existing) {
           map.delete(type);
-          EventTarget.prototype.removeEventListener.call(target, type, existing.listener);
+          EventTarget.prototype.removeEventListener.call(
+            target,
+            type,
+            existing.listener,
+          );
         }
         return;
       }
@@ -633,10 +688,23 @@ export function defineEventHandler(
           const h = slot.value;
           if (typeof h !== 'function') return;
           const ret: unknown =
-            type === 'error' && event instanceof ErrorEvent && isGlobalLike(target)
-              ? h.call(this, event.message, event.filename, event.lineno, event.colno, event.error)
+            type === 'error' &&
+            event instanceof ErrorEvent &&
+            isGlobalLike(target)
+              ? h.call(
+                  this,
+                  event.message,
+                  event.filename,
+                  event.lineno,
+                  event.colno,
+                  event.error,
+                )
               : h.call(this, event);
-          if (type === 'error' && isGlobalLike(target) && event instanceof ErrorEvent) {
+          if (
+            type === 'error' &&
+            isGlobalLike(target) &&
+            event instanceof ErrorEvent
+          ) {
             if (ret === true) event.preventDefault();
           } else if (ret === false) {
             event.preventDefault();
@@ -676,7 +744,12 @@ export class CustomEvent<T = unknown> extends Event {
   get detail(): T | null {
     return this.#detail;
   }
-  initCustomEvent(type: string, bubbles = false, cancelable = false, detail: T | null = null): void {
+  initCustomEvent(
+    type: string,
+    bubbles = false,
+    cancelable = false,
+    detail: T | null = null,
+  ): void {
     if (ev.isDispatching(this)) return;
     this.initEvent(type, bubbles, cancelable);
     this.#detail = detail;
@@ -708,8 +781,10 @@ export class ErrorEvent extends Event {
     }
     super(type, init);
     const what = "Failed to construct 'ErrorEvent'";
-    this.#message = init?.message === undefined ? '' : toDOMString(init.message, what);
-    this.#filename = init?.filename === undefined ? '' : toUSVString(init.filename, what);
+    this.#message =
+      init?.message === undefined ? '' : toDOMString(init.message, what);
+    this.#filename =
+      init?.filename === undefined ? '' : toUSVString(init.filename, what);
     this.#lineno = init?.lineno === undefined ? 0 : init.lineno >>> 0;
     this.#colno = init?.colno === undefined ? 0 : init.colno >>> 0;
     this.#error = init?.error;
@@ -790,8 +865,12 @@ export class MessageEvent<T = unknown> extends Event {
     super(type, init);
     this.#data = init?.data === undefined ? null : init.data;
     const what = "Failed to construct 'MessageEvent'";
-    this.#origin = init?.origin === undefined ? '' : toUSVString(init.origin, what);
-    this.#lastEventId = init?.lastEventId === undefined ? '' : toDOMString(init.lastEventId, what);
+    this.#origin =
+      init?.origin === undefined ? '' : toUSVString(init.origin, what);
+    this.#lastEventId =
+      init?.lastEventId === undefined
+        ? ''
+        : toDOMString(init.lastEventId, what);
     this.#source = init?.source ?? null;
     this.#ports = Object.freeze(init?.ports ? Array.from(init.ports) : []);
   }
@@ -849,4 +928,3 @@ export class ProgressEvent extends Event {
 tag(ProgressEvent, 'ProgressEvent');
 setLength(ProgressEvent, 1);
 enumerable(ProgressEvent, ['lengthComputable', 'loaded', 'total']);
-

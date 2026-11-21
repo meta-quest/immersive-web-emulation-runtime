@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Parser for Android's /system/etc/fonts.xml (the platform font configuration documented in the Android source
 // tree's frameworks/base/data/fonts/fonts.xml format): <familyset> of <family name|lang|variant> elements holding
 // <font weight style index fallbackFor>file</font> entries (with optional <axis> children), plus <alias>.

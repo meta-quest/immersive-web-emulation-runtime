@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Android AImageDecoder backend (NDK <android/imagedecoder.h>, API 30+). The functions are resolved from
 // libjnigraphics.so at run time so the runtime still loads on API 29 (the template's minSdk); there the software
 // backends take over. AImageDecoder decodes whatever the OS supports: PNG, JPEG, GIF, WebP, BMP, ICO, WBMP, HEIF

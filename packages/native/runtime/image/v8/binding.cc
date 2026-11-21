@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Thin V8 layer over the image core. Written from the V8 embedder headers (15.5) and docs. Everything that touches V8
 // runs on the isolate's thread; pool threads only see plain C++ (bytes in, PixelStore out) and post a completion.
 //

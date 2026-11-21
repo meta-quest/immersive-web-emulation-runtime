@@ -10,7 +10,12 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { both, compareMessages, createGlueContext, fakeNatives } from './harness.ts';
+import {
+  both,
+  compareMessages,
+  createGlueContext,
+  fakeNatives,
+} from './harness.ts';
 
 describe('Blob / File (NET-14)', () => {
   test('construction, type, slice and readers match Node', async () => {
@@ -45,7 +50,12 @@ describe('Blob / File (NET-14)', () => {
   // Node converts only CRLF for endings:'native'; the File API converts lone CR too.
   test("endings: 'native' converts CRLF and lone CR to LF; File.webkitRelativePath", async () => {
     const { run } = await createGlueContext();
-    assert.equal(await run<Promise<string>>(`new Blob(['a\\r\\nb\\rc\\n'], { endings: 'native' }).text()`), 'a\nb\nc\n');
+    assert.equal(
+      await run<Promise<string>>(
+        `new Blob(['a\\r\\nb\\rc\\n'], { endings: 'native' }).text()`,
+      ),
+      'a\nb\nc\n',
+    );
     assert.equal(run(`new File([], 'x').webkitRelativePath`), '');
   });
 
@@ -90,19 +100,40 @@ describe('Blob / File (NET-14)', () => {
     // result come right before load (Node reports DONE during progress).
     assert.deepEqual(JSON.parse(JSON.stringify(out)), [
       'readAsArrayBuffer sync state 1',
-      [['loadstart:1:0/3', 'progress:1:3/3', 'load:2:3/3', 'loadend:2:3/3'], [104, 195, 169]],
+      [
+        ['loadstart:1:0/3', 'progress:1:3/3', 'load:2:3/3', 'loadend:2:3/3'],
+        [104, 195, 169],
+      ],
       'readAsText sync state 1',
-      [['loadstart:1:0/3', 'progress:1:3/3', 'load:2:3/3', 'loadend:2:3/3'], 'hé'],
+      [
+        ['loadstart:1:0/3', 'progress:1:3/3', 'load:2:3/3', 'loadend:2:3/3'],
+        'hé',
+      ],
       'readAsText sync state 1',
-      [['loadstart:1:0/4', 'progress:1:4/4', 'load:2:4/4', 'loadend:2:4/4'], 'A'],
+      [
+        ['loadstart:1:0/4', 'progress:1:4/4', 'load:2:4/4', 'loadend:2:4/4'],
+        'A',
+      ],
       'readAsText sync state 1',
-      [['loadstart:1:0/1', 'progress:1:1/1', 'load:2:1/1', 'loadend:2:1/1'], 'é'],
+      [
+        ['loadstart:1:0/1', 'progress:1:1/1', 'load:2:1/1', 'loadend:2:1/1'],
+        'é',
+      ],
       'readAsDataURL sync state 1',
-      [['loadstart:1:0/3', 'progress:1:3/3', 'load:2:3/3', 'loadend:2:3/3'], 'data:text/plain;base64,aMOp'],
+      [
+        ['loadstart:1:0/3', 'progress:1:3/3', 'load:2:3/3', 'loadend:2:3/3'],
+        'data:text/plain;base64,aMOp',
+      ],
       'readAsDataURL sync state 1',
-      [['loadstart:1:0/5', 'progress:1:5/5', 'load:2:5/5', 'loadend:2:5/5'], 'data:application/octet-stream;base64,AAECA/8='],
+      [
+        ['loadstart:1:0/5', 'progress:1:5/5', 'load:2:5/5', 'loadend:2:5/5'],
+        'data:application/octet-stream;base64,AAECA/8=',
+      ],
       'readAsBinaryString sync state 1',
-      [['loadstart:1:0/3', 'progress:1:3/3', 'load:2:3/3', 'loadend:2:3/3'], 'hÃ©'],
+      [
+        ['loadstart:1:0/3', 'progress:1:3/3', 'load:2:3/3', 'loadend:2:3/3'],
+        'hÃ©',
+      ],
       'InvalidStateError',
       ['abort', 'loadend'],
       2,
@@ -114,13 +145,20 @@ describe('Blob / File (NET-14)', () => {
   });
 
   test('blob URL store: create, resolve (fragment ignored), revoke (NET-14)', async () => {
-    const { run, g } = await createGlueContext({ config: { url: 'https://app.local/index.html?a=1' } });
+    const { run, g } = await createGlueContext({
+      config: { url: 'https://app.local/index.html?a=1' },
+    });
     const reg = g[Symbol.for('iwn.glue') as unknown as string] as {
       blobUrls: { resolve(u: string): unknown };
       blobBytes(b: unknown): Uint8Array;
     };
-    const url = run<string>(`globalThis.u = URL.createObjectURL(new Blob(['abc'], { type: 'text/x' })); u`);
-    const hit = reg.blobUrls.resolve(url + '#frag') as { type: string; size: number };
+    const url = run<string>(
+      `globalThis.u = URL.createObjectURL(new Blob(['abc'], { type: 'text/x' })); u`,
+    );
+    const hit = reg.blobUrls.resolve(url + '#frag') as {
+      type: string;
+      size: number;
+    };
     assert.equal(hit.type, 'text/x');
     assert.deepEqual(Array.from(reg.blobBytes(hit)), [97, 98, 99]);
     run(`URL.revokeObjectURL(u)`);
@@ -132,22 +170,30 @@ describe('Blob / File (NET-14)', () => {
     const store = new Map<string, { bytes: Uint8Array; type: string }>();
     const { natives } = fakeNatives({
       blobUrls: {
-        register: (url: string, bytes: Uint8Array, type: string) => store.set(url, { bytes, type }),
+        register: (url: string, bytes: Uint8Array, type: string) =>
+          store.set(url, { bytes, type }),
         revoke: (url: string) => store.delete(url),
         resolve: (url: string) => store.get(url) ?? null,
       },
     });
     const a = await createGlueContext({ natives });
     const b = await createGlueContext({ natives });
-    const url = a.run<string>(`URL.createObjectURL(new Blob(['shared'], { type: 'text/plain' }))`);
+    const url = a.run<string>(
+      `URL.createObjectURL(new Blob(['shared'], { type: 'text/plain' }))`,
+    );
     assert.equal(store.size, 1);
     // Another global (a worker, on device) resolves the URL through the native store.
     b.g.u = url;
-    const text = await b.run<Promise<string>>(`globalThis[Symbol.for('iwn.glue')].blobUrls.resolve(u).text()`);
+    const text = await b.run<Promise<string>>(
+      `globalThis[Symbol.for('iwn.glue')].blobUrls.resolve(u).text()`,
+    );
     assert.equal(text, 'shared');
     a.g.u = url;
     a.run(`URL.revokeObjectURL(u)`);
-    assert.equal(b.run(`globalThis[Symbol.for('iwn.glue')].blobUrls.resolve(u)`), null);
+    assert.equal(
+      b.run(`globalThis[Symbol.for('iwn.glue')].blobUrls.resolve(u)`),
+      null,
+    );
   });
 });
 
@@ -191,7 +237,18 @@ describe('structuredClone (TMR-3, WRK-5 value set)', () => {
       return out;
     `).finally(() => compareMessages(false));
     // DataCloneError wording differs between engines; compare everything else including clone messages.
-    const strip = (v: unknown): unknown => JSON.parse(JSON.stringify(v, (k, x) => (k === 'message' && typeof x === 'string' && /could not be cloned|Uncloneable|cannot be cloned|Symbol\(|is not a function/i.test(x) ? '<engine>' : x)));
+    const strip = (v: unknown): unknown =>
+      JSON.parse(
+        JSON.stringify(v, (k, x) =>
+          k === 'message' &&
+          typeof x === 'string' &&
+          /could not be cloned|Uncloneable|cannot be cloned|Symbol\(|is not a function/i.test(
+            x,
+          )
+            ? '<engine>'
+            : x,
+        ),
+      );
     assert.deepEqual(strip(r.glue), strip(r.node));
   });
 
@@ -234,8 +291,20 @@ describe('structuredClone (TMR-3, WRK-5 value set)', () => {
       })()
     `);
     assert.deepEqual(Array.from(out), [
-      true, 'a/b', 'xyz', true, 'n.txt', 7, 'q',
-      'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError',
+      true,
+      'a/b',
+      'xyz',
+      true,
+      'n.txt',
+      7,
+      'q',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
+      'DataCloneError',
     ]);
   });
 
@@ -249,7 +318,9 @@ describe('structuredClone (TMR-3, WRK-5 value set)', () => {
       },
     });
     const { run } = await createGlueContext({ natives });
-    const r = run<{ cloned: number; transfer: number }>(`structuredClone(5, { transfer: [] })`);
+    const r = run<{ cloned: number; transfer: number }>(
+      `structuredClone(5, { transfer: [] })`,
+    );
     assert.equal(calls.clone, 1);
     assert.equal(r.cloned, 5);
   });

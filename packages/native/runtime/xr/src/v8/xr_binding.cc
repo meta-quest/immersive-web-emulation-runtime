@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // V8 binding of the XR module: globalThis.__iwn.xr, the FramePump the core's event loop runs on the main JS thread,
 // the `shot` debug method (DBG-SHOT) and the `xr` stats section (DBG-STATS). Written from the V8 embedder headers
 // (v8-function-callback.h, v8-array-buffer.h, v8-json.h) and runtime/core's runtime.h contract.

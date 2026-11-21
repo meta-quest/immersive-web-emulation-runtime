@@ -12,7 +12,15 @@ examples/**/node_modules
 examples/**/pnpm-lock.yaml
 examples/basic/cap.min.js
 packages/**/node_modules
-packages/native
+# @iwer/native: generated files (each has a --check generator) and verbatim upstream test data
+packages/native/compat/data
+packages/native/web/webgl/gen
+packages/native/runtime/gl/gen/binding-table.mjs
+packages/native/runtime/gl/README.md
+packages/native/web/glue/test/fixtures
+packages/native/web/canvas2d/test/golden
+packages/native/**/.bridge-build
+packages/native/**/*.inc
 packages/sem/captures
 packages/sem/src/generated
 packages/sem/src/registry.ts

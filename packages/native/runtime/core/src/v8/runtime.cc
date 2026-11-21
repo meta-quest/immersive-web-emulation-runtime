@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The main isolate: engine setup, the page context, the event loop hooks, error and rejection reporting,
 // lifecycle, reload and teardown. Written from the V8 embedder guide/headers and HTML §8.1 (event loop,
 // "report the exception", unhandled rejections), against docs/spec/01..03 and 14.

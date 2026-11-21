@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // WebGL 2 binding generator (spec GL-PERF-1). Reads:
 //   - the NDK GLES 3.2 headers (GLES3/gl32.h, GLES2/gl2ext.h): C signatures + enum values,
 //   - the WebGL IDL (gen/idl/*.idl, Chromium revision in gen/idl/REVISION) + EXTRA_IDL from the binding table,
@@ -12,10 +19,22 @@
 //
 // Environment: IWN_NDK_SYSROOT overrides the header location (default: the sysroot of $ANDROID_NDK_HOME's toolchain).
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseIdl, flatten, resolveType, overloadLength, typeToString } from './lib/idl.mjs';
+import {
+  parseIdl,
+  flatten,
+  resolveType,
+  overloadLength,
+  typeToString,
+} from './lib/idl.mjs';
 import { parseGles } from './lib/gles.mjs';
 import * as table from './binding-table.mjs';
 
@@ -25,7 +44,10 @@ const pkgDir = join(glDir, '..', '..');
 const webDir = join(pkgDir, 'web', 'webgl');
 
 const DEFAULT_SYSROOT = process.env.ANDROID_NDK_HOME
-  ? join(process.env.ANDROID_NDK_HOME, 'toolchains/llvm/prebuilt/linux-x86_64/sysroot')
+  ? join(
+      process.env.ANDROID_NDK_HOME,
+      'toolchains/llvm/prebuilt/linux-x86_64/sysroot',
+    )
   : '';
 
 const HEADER = (tool) =>
@@ -33,16 +55,30 @@ const HEADER = (tool) =>
 
 function readRevision() {
   const f = join(here, 'idl', 'REVISION');
-  return existsSync(f) ? readFileSync(f, 'utf8').match(/^commit (\w+)/m)[1].slice(0, 12) : 'unknown';
+  return existsSync(f)
+    ? readFileSync(f, 'utf8')
+        .match(/^commit (\w+)/m)[1]
+        .slice(0, 12)
+    : 'unknown';
 }
 
 // ---------------------------------------------------------------------------------------------- inputs
 
-export function loadInputs(sysroot = process.env.IWN_NDK_SYSROOT || DEFAULT_SYSROOT) {
+export function loadInputs(
+  sysroot = process.env.IWN_NDK_SYSROOT || DEFAULT_SYSROOT,
+) {
   const inc = join(sysroot, 'usr', 'include');
   const gles = parseGles([
-    { file: 'GLES3/gl32.h', text: readFileSync(join(inc, 'GLES3/gl32.h'), 'utf8'), ext: false },
-    { file: 'GLES2/gl2ext.h', text: readFileSync(join(inc, 'GLES2/gl2ext.h'), 'utf8'), ext: true },
+    {
+      file: 'GLES3/gl32.h',
+      text: readFileSync(join(inc, 'GLES3/gl32.h'), 'utf8'),
+      ext: false,
+    },
+    {
+      file: 'GLES2/gl2ext.h',
+      text: readFileSync(join(inc, 'GLES2/gl2ext.h'), 'utf8'),
+      ext: true,
+    },
   ]);
   const idlDir = join(here, 'idl');
   const sources = readdirSync(idlDir)
@@ -57,12 +93,39 @@ export function loadInputs(sysroot = process.env.IWN_NDK_SYSROOT || DEFAULT_SYSR
 // ---------------------------------------------------------------------------------------------- natives model
 
 const SCALAR = {
-  GLenum: 'u32', GLuint: 'u32', GLbitfield: 'u32', GLint: 'i32', GLsizei: 'i32', GLfloat: 'f32', GLclampf: 'f32',
-  GLboolean: 'bool', GLintptr: 'f64', GLsizeiptr: 'f64', GLint64: 'f64', GLuint64: 'f64', GLubyte: 'u32',
-  GLshort: 'i32', GLushort: 'u32', GLbyte: 'i32',
+  GLenum: 'u32',
+  GLuint: 'u32',
+  GLbitfield: 'u32',
+  GLint: 'i32',
+  GLsizei: 'i32',
+  GLfloat: 'f32',
+  GLclampf: 'f32',
+  GLboolean: 'bool',
+  GLintptr: 'f64',
+  GLsizeiptr: 'f64',
+  GLint64: 'f64',
+  GLuint64: 'f64',
+  GLubyte: 'u32',
+  GLshort: 'i32',
+  GLushort: 'u32',
+  GLbyte: 'i32',
 };
-const CTYPE = { u32: 'uint32_t', i32: 'int32_t', f32: 'float', f64: 'double', bool: 'bool', void: 'void' };
-const RET = { void: 'void', GLenum: 'u32', GLuint: 'u32', GLint: 'i32', GLboolean: 'bool', GLbitfield: 'u32' };
+const CTYPE = {
+  u32: 'uint32_t',
+  i32: 'int32_t',
+  f32: 'float',
+  f64: 'double',
+  bool: 'bool',
+  void: 'void',
+};
+const RET = {
+  void: 'void',
+  GLenum: 'u32',
+  GLuint: 'u32',
+  GLint: 'i32',
+  GLboolean: 'bool',
+  GLbitfield: 'u32',
+};
 
 export function nativeName(glName) {
   const n = glName.slice(2);
@@ -71,7 +134,11 @@ export function nativeName(glName) {
 
 function classifyPointer(fn, p) {
   if (p.type === 'const GLchar*') return 'string';
-  if (p.type === 'const void*' && (p.name === 'indices' || p.name === 'pointer')) return 'offset';
+  if (
+    p.type === 'const void*' &&
+    (p.name === 'indices' || p.name === 'pointer')
+  )
+    return 'offset';
   if (p.type.startsWith('const ')) return 'in';
   if (p.type.endsWith('*')) return 'out';
   throw new Error(`unclassified pointer ${fn}.${p.name}`);
@@ -84,16 +151,36 @@ export function buildNatives({ gles }) {
     const fn = gles.functions[glName];
     if (!fn) throw new Error(`GL_NATIVES: ${glName} not in the GLES headers`);
     const name = nativeName(glName);
-    const genMatch = /^glGen(\w+)s$/.exec(glName) || /^glGenQueries$/.exec(glName);
-    const delMatch = /^glDelete(\w+)s$/.exec(glName) || /^glDeleteQueries$/.exec(glName);
+    const genMatch =
+      /^glGen(\w+)s$/.exec(glName) || /^glGenQueries$/.exec(glName);
+    const delMatch =
+      /^glDelete(\w+)s$/.exec(glName) || /^glDeleteQueries$/.exec(glName);
     if (genMatch && fn.params.length === 2) {
       const obj = glName === 'glGenQueries' ? 'Query' : genMatch[1];
-      natives.push({ name: `gen${obj}`, gl: glName, kind: 'gen1', args: [], ret: 'u32', fast: true });
+      natives.push({
+        name: `gen${obj}`,
+        gl: glName,
+        kind: 'gen1',
+        args: [],
+        ret: 'u32',
+        fast: true,
+      });
       continue;
     }
-    if (delMatch && fn.params.length === 2 && fn.params[1].type === 'const GLuint*') {
+    if (
+      delMatch &&
+      fn.params.length === 2 &&
+      fn.params[1].type === 'const GLuint*'
+    ) {
       const obj = glName === 'glDeleteQueries' ? 'Query' : delMatch[1];
-      natives.push({ name: `delete${obj}`, gl: glName, kind: 'delete1', args: [{ name: 'name', kind: 'u32' }], ret: 'void', fast: true });
+      natives.push({
+        name: `delete${obj}`,
+        gl: glName,
+        kind: 'delete1',
+        args: [{ name: 'name', kind: 'u32' }],
+        ret: 'void',
+        fast: true,
+      });
       continue;
     }
     const args = [];
@@ -110,16 +197,48 @@ export function buildNatives({ gles }) {
     }
     const ret = RET[fn.ret];
     if (!ret) throw new Error(`unsupported return type ${fn.ret} of ${glName}`);
-    natives.push({ name, gl: glName, kind: 'gl', args, ret, fast: !slowOnly, ext: fn.ext });
+    natives.push({
+      name,
+      gl: glName,
+      kind: 'gl',
+      args,
+      ret,
+      fast: !slowOnly,
+      ext: fn.ext,
+    });
     if (table.GL_POINTERS.pbo.includes(glName)) {
-      const pargs = args.map((a) => (a.kind === 'in' || a.kind === 'out' ? { ...a, kind: 'offset', need: undefined } : a));
-      natives.push({ name: `${name}Offset`, gl: glName, kind: 'gl', args: pargs, ret, fast: true, ext: fn.ext, pboOf: name });
+      const pargs = args.map((a) =>
+        a.kind === 'in' || a.kind === 'out'
+          ? { ...a, kind: 'offset', need: undefined }
+          : a,
+      );
+      natives.push({
+        name: `${name}Offset`,
+        gl: glName,
+        kind: 'gl',
+        args: pargs,
+        ret,
+        fast: true,
+        ext: fn.ext,
+        pboOf: name,
+      });
     }
   }
   for (const c of table.COMPOSITES) {
     const args = c.args.map(([name, kind]) => ({ name, kind }));
-    const slowOnly = c.ret === 'any' || args.some((a) => a.kind === 'string' || a.kind === 'strings' || a.kind === 'any');
-    natives.push({ name: c.name, kind: 'composite', args, ret: c.ret, fast: !slowOnly, doc: c.doc });
+    const slowOnly =
+      c.ret === 'any' ||
+      args.some(
+        (a) => a.kind === 'string' || a.kind === 'strings' || a.kind === 'any',
+      );
+    natives.push({
+      name: c.name,
+      kind: 'composite',
+      args,
+      ret: c.ret,
+      fast: !slowOnly,
+      doc: c.doc,
+    });
   }
   const seen = new Set();
   for (const n of natives) {
@@ -132,13 +251,18 @@ export function buildNatives({ gles }) {
 // ---------------------------------------------------------------------------------------------- C++ output
 
 function cParamDecl(fn) {
-  return fn.params.length ? fn.params.map((p) => `${p.type} ${p.name}`).join(', ') : 'void';
+  return fn.params.length
+    ? fn.params.map((p) => `${p.type} ${p.name}`).join(', ')
+    : 'void';
 }
 
 function apiFunctions({ gles }) {
   // Every GLES 3.2 core function plus the extension functions the natives use.
   const core = Object.entries(gles.functions).filter(([, f]) => !f.ext);
-  const ext = table.GL_NATIVES.filter((n) => gles.functions[n].ext).map((n) => [n, gles.functions[n]]);
+  const ext = table.GL_NATIVES.filter((n) => gles.functions[n].ext).map((n) => [
+    n,
+    gles.functions[n],
+  ]);
   return [...core, ...ext];
 }
 
@@ -151,8 +275,12 @@ function genApiHeader(inputs) {
   lines.push('');
   lines.push('namespace iwn::gl {');
   lines.push('');
-  lines.push('// One pointer per GLES entry point. Core ES 3.2 functions are resolved at load; extension');
-  lines.push('// functions may stay null when the driver lacks the extension (callers check `has*`).');
+  lines.push(
+    '// One pointer per GLES entry point. Core ES 3.2 functions are resolved at load; extension',
+  );
+  lines.push(
+    '// functions may stay null when the driver lacks the extension (callers check `has*`).',
+  );
   lines.push('struct GlApi {');
   for (const [name, f] of fns) {
     const ret = f.ret;
@@ -163,13 +291,23 @@ function genApiHeader(inputs) {
   lines.push(`inline constexpr int kGlApiCount = ${fns.length};`);
   lines.push('extern const char* const kGlApiNames[kGlApiCount];');
   lines.push('');
-  lines.push('// The process-wide table the natives call through (function pointers are context-independent on');
-  lines.push('// Android/EGL). Fill it with LoadGlApi() before registering the natives.');
+  lines.push(
+    '// The process-wide table the natives call through (function pointers are context-independent on',
+  );
+  lines.push(
+    '// Android/EGL). Fill it with LoadGlApi() before registering the natives.',
+  );
   lines.push('GlApi& Api();');
   lines.push('');
-  lines.push('// Resolves every entry with `getProc` (eglGetProcAddress, dlsym, or a test recorder).');
-  lines.push('// Returns the number of core entries that stayed null (0 on a conformant ES 3.2 driver).');
-  lines.push('int LoadGlApi(GlApi* api, void* (*getProc)(const char* name, void* user), void* user);');
+  lines.push(
+    '// Resolves every entry with `getProc` (eglGetProcAddress, dlsym, or a test recorder).',
+  );
+  lines.push(
+    '// Returns the number of core entries that stayed null (0 on a conformant ES 3.2 driver).',
+  );
+  lines.push(
+    'int LoadGlApi(GlApi* api, void* (*getProc)(const char* name, void* user), void* user);',
+  );
   lines.push('');
   lines.push('}  // namespace iwn::gl');
   return lines.join('\n') + '\n';
@@ -196,8 +334,12 @@ function genApiSource(inputs) {
   lines.push('  return api;');
   lines.push('}');
   lines.push('');
-  lines.push('int LoadGlApi(GlApi* api, void* (*getProc)(const char*, void*), void* user) {');
-  lines.push('  static_assert(sizeof(GlApi) == sizeof(void*) * kGlApiCount, "GlApi layout");');
+  lines.push(
+    'int LoadGlApi(GlApi* api, void* (*getProc)(const char*, void*), void* user) {',
+  );
+  lines.push(
+    '  static_assert(sizeof(GlApi) == sizeof(void*) * kGlApiCount, "GlApi layout");',
+  );
   lines.push('  void** slots = reinterpret_cast<void**>(api);');
   lines.push('  int missing = 0;');
   lines.push('  for (int i = 0; i < kGlApiCount; ++i) {');
@@ -215,7 +357,11 @@ function fastArgs(n) {
   const out = ['v8::Local<v8::Object> /*receiver*/'];
   for (const a of n.args) {
     if (a.kind === 'in' || a.kind === 'out') {
-      out.push(`v8::Local<v8::Value> ${a.name}_view`, `uint32_t ${a.name}_off`, `uint32_t ${a.name}_bytes`);
+      out.push(
+        `v8::Local<v8::Value> ${a.name}_view`,
+        `uint32_t ${a.name}_off`,
+        `uint32_t ${a.name}_bytes`,
+      );
     } else if (a.kind === 'offset') {
       out.push(`double ${a.name}`);
     } else {
@@ -226,17 +372,24 @@ function fastArgs(n) {
 }
 
 function defaultReturn(ret) {
-  return ret === 'void' ? 'return;' : ret === 'bool' ? 'return false;' : 'return 0;';
+  return ret === 'void'
+    ? 'return;'
+    : ret === 'bool'
+      ? 'return false;'
+      : 'return 0;';
 }
 
 function glCallArgs(n, gl) {
   return gl.params
     .map((p, i) => {
       const a = n.args[i];
-      if (a.kind === 'in' || a.kind === 'out') return `reinterpret_cast<${p.type}>(${a.name}_span.data + ${a.name}_off)`;
-      if (a.kind === 'offset') return `reinterpret_cast<${p.type}>(static_cast<uintptr_t>(${a.name}))`;
+      if (a.kind === 'in' || a.kind === 'out')
+        return `reinterpret_cast<${p.type}>(${a.name}_span.data + ${a.name}_off)`;
+      if (a.kind === 'offset')
+        return `reinterpret_cast<${p.type}>(static_cast<uintptr_t>(${a.name}))`;
       if (a.kind === 'string') return `${a.name}_str.c_str()`;
-      if (a.kind === 'bool') return `static_cast<GLboolean>(${a.name} ? GL_TRUE : GL_FALSE)`;
+      if (a.kind === 'bool')
+        return `static_cast<GLboolean>(${a.name} ? GL_TRUE : GL_FALSE)`;
       if (a.kind === 'f64') return `static_cast<${p.type}>(${a.name})`;
       return a.name;
     })
@@ -247,9 +400,16 @@ function viewChecks(n, write, slow) {
   const lines = [];
   for (const a of n.args) {
     if (a.kind !== 'in' && a.kind !== 'out') continue;
-    const fn = a.kind === 'out' ? (slow ? 'WritableViewSlow' : 'WritableView') : 'ReadableView';
+    const fn =
+      a.kind === 'out'
+        ? slow
+          ? 'WritableViewSlow'
+          : 'WritableView'
+        : 'ReadableView';
     lines.push(`  alignas(16) uint8_t ${a.name}_storage[kInlineViewStorage];`);
-    lines.push(`  const ViewSpan ${a.name}_span = ${fn}(${a.name}_view, ${a.name}_storage);`);
+    lines.push(
+      `  const ViewSpan ${a.name}_span = ${fn}(${a.name}_view, ${a.name}_storage);`,
+    );
     const nullOk = a.need?.startsWith('?');
     const needExpr = nullOk ? a.need.slice(1) : a.need;
     const need = !a.need
@@ -286,23 +446,32 @@ function slowArgDecls(n) {
         lines.push(`  const double ${a.name} = ArgF64(info, ${i++});`);
         break;
       case 'string':
-        lines.push(`  const std::string ${a.name}_str = ArgString(info, ${i++});`);
+        lines.push(
+          `  const std::string ${a.name}_str = ArgString(info, ${i++});`,
+        );
         break;
       case 'strings':
-        lines.push(`  const std::vector<std::string> ${a.name} = ArgStrings(info, ${i++});`);
+        lines.push(
+          `  const std::vector<std::string> ${a.name} = ArgStrings(info, ${i++});`,
+        );
         break;
       case 'any':
         lines.push(`  v8::Local<v8::Value> ${a.name} = info[${i++}];`);
         break;
       default:
-        lines.push(`  const ${CTYPE[a.kind]} ${a.name} = Arg${a.kind[0].toUpperCase()}${a.kind.slice(1)}(info, ${i++});`);
+        lines.push(
+          `  const ${CTYPE[a.kind]} ${a.name} = Arg${a.kind[0].toUpperCase()}${a.kind.slice(1)}(info, ${i++});`,
+        );
     }
   }
   return lines;
 }
 
 function jsArity(n) {
-  return n.args.reduce((s, a) => s + (a.kind === 'in' || a.kind === 'out' ? 3 : 1), 0);
+  return n.args.reduce(
+    (s, a) => s + (a.kind === 'in' || a.kind === 'out' ? 3 : 1),
+    0,
+  );
 }
 
 function setReturn(n, expr) {
@@ -332,7 +501,8 @@ function compositeCallArgs(n, { slow }) {
   const out = [];
   if (usesV8(n)) out.push('info.GetIsolate()');
   for (const a of n.args) {
-    if (a.kind === 'in' || a.kind === 'out') out.push(`${a.name}_span.data + ${a.name}_off`, `${a.name}_bytes`);
+    if (a.kind === 'in' || a.kind === 'out')
+      out.push(`${a.name}_span.data + ${a.name}_off`, `${a.name}_bytes`);
     else if (a.kind === 'string') out.push(`${a.name}_str`);
     else out.push(a.name);
   }
@@ -343,11 +513,15 @@ function compositeDecl(n) {
   const params = [];
   if (usesV8(n)) params.push('v8::Isolate* isolate');
   for (const a of n.args) {
-    if (a.kind === 'in') params.push(`const uint8_t* ${a.name}`, `uint32_t ${a.name}_bytes`);
-    else if (a.kind === 'out') params.push(`uint8_t* ${a.name}`, `uint32_t ${a.name}_bytes`);
+    if (a.kind === 'in')
+      params.push(`const uint8_t* ${a.name}`, `uint32_t ${a.name}_bytes`);
+    else if (a.kind === 'out')
+      params.push(`uint8_t* ${a.name}`, `uint32_t ${a.name}_bytes`);
     else if (a.kind === 'string') params.push(`const std::string& ${a.name}`);
-    else if (a.kind === 'strings') params.push(`const std::vector<std::string>& ${a.name}`);
-    else if (a.kind === 'offset' || a.kind === 'f64') params.push(`double ${a.name}`);
+    else if (a.kind === 'strings')
+      params.push(`const std::vector<std::string>& ${a.name}`);
+    else if (a.kind === 'offset' || a.kind === 'f64')
+      params.push(`double ${a.name}`);
     else if (a.kind === 'any') params.push(`v8::Local<v8::Value> ${a.name}`);
     else params.push(`${CTYPE[a.kind]} ${a.name}`);
   }
@@ -360,10 +534,18 @@ function genNativesSource(inputs, natives) {
   const { gles } = inputs;
   const L = [];
   L.push(HEADER('generate.mjs'));
-  L.push('// V8 natives for the WebGL binding: for each entry a fast-API C function (called directly from');
-  L.push('// optimized JS, no allocation, no JS re-entry) and a slow FunctionCallback with the same effect.');
-  L.push('// Typed arrays arrive as (view, byteOffset, byteLength) and are bounds-checked against the view; the');
-  L.push('// JS layer (web/webgl) has already applied WebGL validation and recorded any error.');
+  L.push(
+    '// V8 natives for the WebGL binding: for each entry a fast-API C function (called directly from',
+  );
+  L.push(
+    '// optimized JS, no allocation, no JS re-entry) and a slow FunctionCallback with the same effect.',
+  );
+  L.push(
+    '// Typed arrays arrive as (view, byteOffset, byteLength) and are bounds-checked against the view; the',
+  );
+  L.push(
+    '// JS layer (web/webgl) has already applied WebGL validation and recorded any error.',
+  );
   L.push('');
   L.push('#include <cstdint>');
   L.push('#include <string>');
@@ -380,7 +562,9 @@ function genNativesSource(inputs, natives) {
   L.push('');
   for (const n of natives) {
     const gl = n.gl ? gles.functions[n.gl] : null;
-    L.push(`// ${n.name}(${n.args.map((a) => `${a.name}: ${a.kind}`).join(', ')}) -> ${n.ret}${n.gl ? `   [${n.gl}${n.pboOf ? ', buffer offset' : ''}]` : '   [composite]'}`);
+    L.push(
+      `// ${n.name}(${n.args.map((a) => `${a.name}: ${a.kind}`).join(', ')}) -> ${n.ret}${n.gl ? `   [${n.gl}${n.pboOf ? ', buffer offset' : ''}]` : '   [composite]'}`,
+    );
     // fast
     if (n.fast) {
       const ret = CTYPE[n.ret];
@@ -389,13 +573,21 @@ function genNativesSource(inputs, natives) {
       L.push(...viewChecks(n, false, false));
       L.push(...emitBody(n, gl, false));
       L.push('}');
-      L.push(`const v8::CFunction kC_${n.name} = v8::CFunction::Make(Fast_${n.name});`);
+      L.push(
+        `const v8::CFunction kC_${n.name} = v8::CFunction::Make(Fast_${n.name});`,
+      );
     }
     // slow
-    L.push(`void Slow_${n.name}(const v8::FunctionCallbackInfo<v8::Value>& info) {`);
+    L.push(
+      `void Slow_${n.name}(const v8::FunctionCallbackInfo<v8::Value>& info) {`,
+    );
     L.push('  CountCall();');
     L.push(...slowArgDecls(n));
-    L.push(...viewChecks(n, false, true).map((l) => l.replace(/return( false| 0)?;/, 'return;')));
+    L.push(
+      ...viewChecks(n, false, true).map((l) =>
+        l.replace(/return( false| 0)?;/, 'return;'),
+      ),
+    );
     L.push(...emitBody(n, gl, true));
     L.push('}');
     L.push('');
@@ -406,7 +598,9 @@ function genNativesSource(inputs, natives) {
   L.push('extern const int kNativeCount;');
   L.push('const NativeDesc kNatives[] = {');
   for (const n of natives) {
-    L.push(`    {"${n.name}", Slow_${n.name}, ${n.fast ? `&kC_${n.name}` : 'nullptr'}, ${jsArity(n)}},`);
+    L.push(
+      `    {"${n.name}", Slow_${n.name}, ${n.fast ? `&kC_${n.name}` : 'nullptr'}, ${jsArity(n)}},`,
+    );
   }
   L.push('};');
   L.push(`const int kNativeCount = ${natives.length};`);
@@ -426,17 +620,23 @@ function genNativesSource(inputs, natives) {
       lines.push(`  if (name_v != 0) Api().${n.gl.slice(2)}(1, &name_v);`);
     } else if (n.kind === 'gl') {
       const call = `Api().${n.gl.slice(2)}(${glCallArgs(n, gl)})`;
-      if (/^gl(Get|Is|CheckFramebufferStatus)/.test(n.gl)) lines.push('  Stats().syncQueries++;');
+      if (/^gl(Get|Is|CheckFramebufferStatus)/.test(n.gl))
+        lines.push('  Stats().syncQueries++;');
       if (n.gl === 'glGetError') lines.push('  Stats().getErrorCalls++;');
       if (gl.ext) {
-        lines.push(`  if (!Api().${n.gl.slice(2)}) { Stats().rejected++; ${slow ? 'return;' : defaultReturn(n.ret)} }`);
+        lines.push(
+          `  if (!Api().${n.gl.slice(2)}) { Stats().rejected++; ${slow ? 'return;' : defaultReturn(n.ret)} }`,
+        );
       }
       const post = table.GL_POST?.[n.gl];
       if (n.ret === 'void') {
         lines.push(`  ${call};`);
         if (post) lines.push(`  ${post}`);
       } else if (post) throw new Error(`GL_POST on a non-void native: ${n.gl}`);
-      else if (slow) lines.push(setReturn(n, n.ret === 'bool' ? `${call} != GL_FALSE` : call));
+      else if (slow)
+        lines.push(
+          setReturn(n, n.ret === 'bool' ? `${call} != GL_FALSE` : call),
+        );
       else lines.push(retWrap(n, call));
     } else {
       const d = compositeDecl(n);
@@ -450,7 +650,9 @@ function genNativesSource(inputs, natives) {
 function genCompositeHeaderFragment(natives) {
   const L = [];
   L.push(HEADER('generate.mjs'));
-  L.push('// Declarations of the hand-written composite natives (implemented in src/composites.cc and');
+  L.push(
+    '// Declarations of the hand-written composite natives (implemented in src/composites.cc and',
+  );
   L.push('// src/gl_v8_composites.cc). Included by src/composites.h.');
   L.push('#pragma once');
   L.push('');
@@ -458,7 +660,9 @@ function genCompositeHeaderFragment(natives) {
   L.push('#include <string>');
   L.push('#include <vector>');
   L.push('');
-  L.push('namespace v8 { class Isolate; class Value; template <class T> class Local; }');
+  L.push(
+    'namespace v8 { class Isolate; class Value; template <class T> class Local; }',
+  );
   L.push('');
   L.push('namespace iwn::gl::composite {');
   for (const n of natives.filter((x) => x.kind === 'composite' && !usesV8(x))) {
@@ -478,33 +682,65 @@ function genCompositeHeaderFragment(natives) {
 
 // ---------------------------------------------------------------------------------------------- TS output
 
-const TS_KIND = { u32: 'number', i32: 'number', f32: 'number', f64: 'number', bool: 'boolean', offset: 'number', string: 'string', strings: 'string[]', any: 'unknown' };
-const TS_RET = { void: 'void', u32: 'number', i32: 'number', f64: 'number', bool: 'boolean', any: 'any' };
+const TS_KIND = {
+  u32: 'number',
+  i32: 'number',
+  f32: 'number',
+  f64: 'number',
+  bool: 'boolean',
+  offset: 'number',
+  string: 'string',
+  strings: 'string[]',
+  any: 'unknown',
+};
+const TS_RET = {
+  void: 'void',
+  u32: 'number',
+  i32: 'number',
+  f64: 'number',
+  bool: 'boolean',
+  any: 'any',
+};
 
 function genNativesTs(natives) {
   const L = [];
   L.push(HEADER('generate.mjs'));
   L.push('/* eslint-disable */');
   L.push('');
-  L.push('/** A typed-array view argument: (view, byteOffset, byteLength), bounds-checked natively. */');
+  L.push(
+    '/** A typed-array view argument: (view, byteOffset, byteLength), bounds-checked natively. */',
+  );
   L.push('export type NativeView = ArrayBufferView | null;');
   L.push('');
-  L.push('/** `globalThis.__iwn.gl`: the natives the WebGL binding calls (runtime/gl). */');
+  L.push(
+    '/** `globalThis.__iwn.gl`: the natives the WebGL binding calls (runtime/gl). */',
+  );
   L.push('export interface GlNatives {');
   for (const n of natives) {
     const params = [];
     for (const a of n.args) {
-      if (a.kind === 'in' || a.kind === 'out') params.push(`${a.name}: NativeView`, `${a.name}Off: number`, `${a.name}Bytes: number`);
+      if (a.kind === 'in' || a.kind === 'out')
+        params.push(
+          `${a.name}: NativeView`,
+          `${a.name}Off: number`,
+          `${a.name}Bytes: number`,
+        );
       else params.push(`${a.name}: ${TS_KIND[a.kind]}`);
     }
-    const tag = n.gl ? `${n.gl}${n.pboOf ? ' (buffer offset)' : ''}` : `composite${n.doc ? `: ${n.doc}` : ''}`;
+    const tag = n.gl
+      ? `${n.gl}${n.pboOf ? ' (buffer offset)' : ''}`
+      : `composite${n.doc ? `: ${n.doc}` : ''}`;
     L.push(`  /** ${tag}${n.fast ? '' : ' (slow path only)'} */`);
     L.push(`  ${n.name}(${params.join(', ')}): ${TS_RET[n.ret]};`);
   }
   L.push('}');
   L.push('');
-  L.push('/** Every native name with its JS arity and whether it has a fast-API path. */');
-  L.push('export const NATIVES: ReadonlyArray<readonly [name: string, arity: number, fast: boolean]> = [');
+  L.push(
+    '/** Every native name with its JS arity and whether it has a fast-API path. */',
+  );
+  L.push(
+    'export const NATIVES: ReadonlyArray<readonly [name: string, arity: number, fast: boolean]> = [',
+  );
   for (const n of natives) L.push(`  ['${n.name}', ${jsArity(n)}, ${n.fast}],`);
   L.push('];');
   return L.join('\n') + '\n';
@@ -527,7 +763,9 @@ function interfaceShape(idl, name) {
 // Browser (WebXR: makeXRCompatible).
 const SHIPPED_FEATURES = new Set(['RuntimeEnabled=WebXR']);
 function shipped(member) {
-  return !member.ext.some((e) => e.startsWith('RuntimeEnabled') && !SHIPPED_FEATURES.has(e));
+  return !member.ext.some(
+    (e) => e.startsWith('RuntimeEnabled') && !SHIPPED_FEATURES.has(e),
+  );
 }
 function shippedOps(idl, name) {
   return flatten(idl, name).ops.filter(shipped);
@@ -549,13 +787,40 @@ function genIdlTs(idl) {
   L.push('');
   const ifaces = ['WebGLRenderingContext', 'WebGL2RenderingContext'];
   const extIfaces = new Set();
-  for (const [, [iface]] of Object.entries({ ...table.EXTENSIONS, ...table.EXTENSIONS_WEBGL1 })) if (iface) extIfaces.add(iface);
-  const objects = ['WebGLObject', 'WebGLBuffer', 'WebGLFramebuffer', 'WebGLProgram', 'WebGLQuery', 'WebGLRenderbuffer', 'WebGLSampler', 'WebGLShader', 'WebGLSync', 'WebGLTexture', 'WebGLTransformFeedback', 'WebGLUniformLocation', 'WebGLVertexArrayObject', 'WebGLVertexArrayObjectOES', 'WebGLTimerQueryEXT', 'WebGLActiveInfo', 'WebGLShaderPrecisionFormat', 'WebGLContextEvent'];
+  for (const [, [iface]] of Object.entries({
+    ...table.EXTENSIONS,
+    ...table.EXTENSIONS_WEBGL1,
+  }))
+    if (iface) extIfaces.add(iface);
+  const objects = [
+    'WebGLObject',
+    'WebGLBuffer',
+    'WebGLFramebuffer',
+    'WebGLProgram',
+    'WebGLQuery',
+    'WebGLRenderbuffer',
+    'WebGLSampler',
+    'WebGLShader',
+    'WebGLSync',
+    'WebGLTexture',
+    'WebGLTransformFeedback',
+    'WebGLUniformLocation',
+    'WebGLVertexArrayObject',
+    'WebGLVertexArrayObjectOES',
+    'WebGLTimerQueryEXT',
+    'WebGLActiveInfo',
+    'WebGLShaderPrecisionFormat',
+    'WebGLContextEvent',
+  ];
   L.push('export const IDL: Readonly<Record<string, IdlShape>> = {');
   for (const name of [...ifaces, ...[...extIfaces].sort(), ...objects]) {
     const shape = interfaceShape(idl, name);
-    shape.ops = shape.ops.filter(([n]) => shippedOps(idl, name).some((o) => o.name === n));
-    const consts = shape.consts.map(([n, v]) => `['${n}', ${hexOrDec(v)}]`).join(', ');
+    shape.ops = shape.ops.filter(([n]) =>
+      shippedOps(idl, name).some((o) => o.name === n),
+    );
+    const consts = shape.consts
+      .map(([n, v]) => `['${n}', ${hexOrDec(v)}]`)
+      .join(', ');
     const ops = shape.ops.map(([n, l]) => `['${n}', ${l}]`).join(', ');
     const attrs = shape.attrs.map(([n, r]) => `['${n}', ${r}]`).join(', ');
     L.push(`  ${name}: {`);
@@ -566,23 +831,39 @@ function genIdlTs(idl) {
   }
   L.push('};');
   L.push('');
-  L.push('/** has(name): the driver exposes GL extension `name`; es32: the context is OpenGL ES 3.2. */');
-  L.push('export type Availability = (has: (name: string) => boolean, es32: boolean) => boolean;');
+  L.push(
+    '/** has(name): the driver exposes GL extension `name`; es32: the context is OpenGL ES 3.2. */',
+  );
+  L.push(
+    'export type Availability = (has: (name: string) => boolean, es32: boolean) => boolean;',
+  );
   L.push('');
   const extTable = (t) =>
     Object.entries(t)
-      .map(([k, [iface, expr]]) => `  ${k}: ['${iface}', (has, es32) => ${expr}],`)
+      .map(
+        ([k, [iface, expr]]) => `  ${k}: ['${iface}', (has, es32) => ${expr}],`,
+      )
       .join('\n');
-  L.push('/** extension name -> [IDL interface, driver capability it needs] (GL-23) */');
-  L.push('export const EXTENSIONS_WEBGL2: Readonly<Record<string, readonly [string, Availability]>> = {');
+  L.push(
+    '/** extension name -> [IDL interface, driver capability it needs] (GL-23) */',
+  );
+  L.push(
+    'export const EXTENSIONS_WEBGL2: Readonly<Record<string, readonly [string, Availability]>> = {',
+  );
   L.push(extTable(table.EXTENSIONS));
   L.push('};');
-  L.push('export const EXTENSIONS_WEBGL1: Readonly<Record<string, readonly [string, Availability]>> = {');
+  L.push(
+    'export const EXTENSIONS_WEBGL1: Readonly<Record<string, readonly [string, Availability]>> = {',
+  );
   L.push(extTable(table.EXTENSIONS_WEBGL1));
   L.push('};');
   L.push('');
-  L.push('/** IDL operations implemented by generated code (methods.gen.ts); all others are hand-written. */');
-  L.push(`export const DIRECT_OPS: readonly string[] = ${JSON.stringify(Object.keys(table.DIRECT).filter((k) => !table.DIRECT[k].custom))};`);
+  L.push(
+    '/** IDL operations implemented by generated code (methods.gen.ts); all others are hand-written. */',
+  );
+  L.push(
+    `export const DIRECT_OPS: readonly string[] = ${JSON.stringify(Object.keys(table.DIRECT).filter((k) => !table.DIRECT[k].custom))};`,
+  );
   return L.join('\n') + '\n';
 }
 
@@ -595,21 +876,30 @@ function genEnumsTs(idl) {
   const L = [];
   L.push(HEADER('generate.mjs'));
   L.push('/* eslint-disable */');
-  L.push('// Every constant of the WebGL 1/2 contexts and the supported extensions, as module constants.');
+  L.push(
+    '// Every constant of the WebGL 1/2 contexts and the supported extensions, as module constants.',
+  );
   L.push('');
   const seen = new Map();
   const ifaces = ['WebGLRenderingContext', 'WebGL2RenderingContext'];
-  for (const [, [iface]] of Object.entries({ ...table.EXTENSIONS, ...table.EXTENSIONS_WEBGL1 })) if (iface) ifaces.push(iface);
+  for (const [, [iface]] of Object.entries({
+    ...table.EXTENSIONS,
+    ...table.EXTENSIONS_WEBGL1,
+  }))
+    if (iface) ifaces.push(iface);
   for (const name of ifaces) {
     for (const c of flatten(idl, name).consts) {
       if (seen.has(c.name)) {
-        if (seen.get(c.name) !== c.value) throw new Error(`constant ${c.name} has two values`);
+        if (seen.get(c.name) !== c.value)
+          throw new Error(`constant ${c.name} has two values`);
         continue;
       }
       seen.set(c.name, c.value);
     }
   }
-  for (const [n, v] of [...seen].sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : 1))) {
+  for (const [n, v] of [...seen].sort(
+    (a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : 1),
+  )) {
     L.push(`export const ${n} = ${hexOrDec(v)};`);
   }
   return L.join('\n') + '\n';
@@ -648,9 +938,20 @@ function convExpr(idl, type, v) {
 }
 
 const OBJECT_KIND = {
-  WebGLBuffer: 1, WebGLFramebuffer: 2, WebGLProgram: 3, WebGLRenderbuffer: 4, WebGLShader: 5, WebGLTexture: 6,
-  WebGLQuery: 7, WebGLSampler: 8, WebGLSync: 9, WebGLTransformFeedback: 10, WebGLVertexArrayObject: 11,
-  WebGLUniformLocation: 12, WebGLTimerQueryEXT: 7, WebGLVertexArrayObjectOES: 11,
+  WebGLBuffer: 1,
+  WebGLFramebuffer: 2,
+  WebGLProgram: 3,
+  WebGLRenderbuffer: 4,
+  WebGLShader: 5,
+  WebGLTexture: 6,
+  WebGLQuery: 7,
+  WebGLSampler: 8,
+  WebGLSync: 9,
+  WebGLTransformFeedback: 10,
+  WebGLVertexArrayObject: 11,
+  WebGLUniformLocation: 12,
+  WebGLTimerQueryEXT: 7,
+  WebGLVertexArrayObjectOES: 11,
 };
 
 function genMethodsTs(inputs, natives) {
@@ -661,23 +962,30 @@ function genMethodsTs(inputs, natives) {
   L.push('/* eslint-disable */');
   L.push("import type { GlNatives } from './natives.gen.ts';");
   L.push('');
-  L.push('/** What a generated method needs from the context (implemented in web/webgl/context.ts). */');
+  L.push(
+    '/** What a generated method needs from the context (implemented in web/webgl/context.ts). */',
+  );
   L.push('export interface DirectHost {');
   L.push('  readonly _n: GlNatives;');
   L.push('  /** true when calls must be no-ops (context lost) */');
   L.push('  _skip(): boolean;');
-  L.push('  /** GL name of a WebGL object argument; -1 after recording INVALID_OPERATION (foreign/deleted); throws TypeError for a wrong type */');
+  L.push(
+    '  /** GL name of a WebGL object argument; -1 after recording INVALID_OPERATION (foreign/deleted); throws TypeError for a wrong type */',
+  );
   L.push('  _nm(value: unknown, kind: number, nullable: boolean): number;');
   L.push('}');
   L.push('');
-  L.push('/** Object kinds for DirectHost._nm (same numbering as web/webgl/objects.ts). */');
+  L.push(
+    '/** Object kinds for DirectHost._nm (same numbering as web/webgl/objects.ts). */',
+  );
   L.push(`export const OBJECT_KIND = ${JSON.stringify(OBJECT_KIND)} as const;`);
   L.push('');
   const toInt64At = L.length;
   L.push('export const directMethods = {');
   const contextOps = new Map();
   for (const iface of ['WebGLRenderingContext', 'WebGL2RenderingContext']) {
-    for (const op of shippedOps(idl, iface)) if (!contextOps.has(op.name)) contextOps.set(op.name, op);
+    for (const op of shippedOps(idl, iface))
+      if (!contextOps.has(op.name)) contextOps.set(op.name, op);
   }
   const extOps = [];
   for (const [key, spec] of Object.entries(table.DIRECT)) {
@@ -697,26 +1005,39 @@ function genMethodsTs(inputs, natives) {
     const params = op.args.map((a) => `, ${a.name}: any`).join('');
     const body = [];
     const callArgs = [];
-    body.push(`    if (this._skip()) return${native.ret === 'void' ? '' : ' ' + defaultJs(op)};`);
+    body.push(
+      `    if (this._skip()) return${native.ret === 'void' ? '' : ' ' + defaultJs(op)};`,
+    );
     for (const a of op.args) {
       const t = resolveType(idl, a.type);
       const conv = convExpr(idl, a.type, a.name);
       if (conv === null) {
         const kind = OBJECT_KIND[t.name];
-        body.push(`    const ${a.name}_n = this._nm(${a.name}, ${kind}, ${!!t.nullable});`);
-        body.push(`    if (${a.name}_n < 0) return${native.ret === 'void' ? '' : ' ' + defaultJs(op)};`);
+        body.push(
+          `    const ${a.name}_n = this._nm(${a.name}, ${kind}, ${!!t.nullable});`,
+        );
+        body.push(
+          `    if (${a.name}_n < 0) return${native.ret === 'void' ? '' : ' ' + defaultJs(op)};`,
+        );
         callArgs.push(`${a.name}_n`);
       } else {
         callArgs.push(conv);
       }
     }
-    if (native.args.length !== callArgs.length) throw new Error(`DIRECT: arity mismatch for ${key}`);
+    if (native.args.length !== callArgs.length)
+      throw new Error(`DIRECT: arity mismatch for ${key}`);
     const call = `this._n.${native.name}(${callArgs.join(', ')})`;
     body.push(native.ret === 'void' ? `    ${call};` : `    return ${call};`);
     const target = ext ? extOps : L;
     const hostType = ext ? '{ _gl: DirectHost }' : 'DirectHost';
-    const lines = [`  ${op.name}(this: ${hostType}${params}): ${native.ret === 'void' ? 'void' : 'any'} {`];
-    if (ext) lines.push('    const gl = this._gl;', ...body.map((b) => b.replace(/this\./g, 'gl.')));
+    const lines = [
+      `  ${op.name}(this: ${hostType}${params}): ${native.ret === 'void' ? 'void' : 'any'} {`,
+    ];
+    if (ext)
+      lines.push(
+        '    const gl = this._gl;',
+        ...body.map((b) => b.replace(/this\./g, 'gl.')),
+      );
     else lines.push(...body);
     lines.push('  },');
     if (ext) extOps.push({ iface: ext, lines });
@@ -725,10 +1046,20 @@ function genMethodsTs(inputs, natives) {
   L.push('};');
   L.push('');
   if (L.some((l) => l.includes('toInt64('))) {
-    L.splice(toInt64At, 0, 'function toInt64(v: unknown): number {', '  const n = Math.trunc(Number(v));', '  return Number.isFinite(n) ? n : 0;', '}', '');
+    L.splice(
+      toInt64At,
+      0,
+      'function toInt64(v: unknown): number {',
+      '  const n = Math.trunc(Number(v));',
+      '  return Number.isFinite(n) ? n : 0;',
+      '}',
+      '',
+    );
   }
   L.push('/** Generated methods of extension objects, by IDL interface. */');
-  L.push('export const directExtensionMethods: Record<string, Record<string, Function>> = {');
+  L.push(
+    'export const directExtensionMethods: Record<string, Record<string, Function>> = {',
+  );
   const byIface = new Map();
   for (const e of extOps) {
     if (!byIface.has(e.iface)) byIface.set(e.iface, []);
@@ -764,8 +1095,11 @@ export function checkCoverage(inputs) {
     .map((f) => readFileSync(join(webDir, f), 'utf8'))
     .join('\n');
   const handWritten = new Set();
-  for (const m of sources.matchAll(/^\s+(\w+)\s*\(\s*this\s*:/gm)) handWritten.add(m[1]);
-  const direct = new Set(Object.keys(table.DIRECT).filter((k) => !table.DIRECT[k].custom));
+  for (const m of sources.matchAll(/^\s+(\w+)\s*\(\s*this\s*:/gm))
+    handWritten.add(m[1]);
+  const direct = new Set(
+    Object.keys(table.DIRECT).filter((k) => !table.DIRECT[k].custom),
+  );
   const missing = [];
   let generated = 0;
   let custom = 0;
@@ -782,11 +1116,22 @@ export function checkCoverage(inputs) {
       check(iface, op.name, op.name);
     }
   }
-  const ifaces = new Set([...Object.values(table.EXTENSIONS), ...Object.values(table.EXTENSIONS_WEBGL1)].map((e) => e[0]).filter(Boolean));
+  const ifaces = new Set(
+    [
+      ...Object.values(table.EXTENSIONS),
+      ...Object.values(table.EXTENSIONS_WEBGL1),
+    ]
+      .map((e) => e[0])
+      .filter(Boolean),
+  );
   for (const iface of ifaces) {
-    for (const op of shippedOps(idl, iface)) check(iface, `${iface}.${op.name}`, op.name);
+    for (const op of shippedOps(idl, iface))
+      check(iface, `${iface}.${op.name}`, op.name);
   }
-  if (missing.length) throw new Error(`coverage: IDL operations neither generated nor hand-written: ${missing.join(', ')}`);
+  if (missing.length)
+    throw new Error(
+      `coverage: IDL operations neither generated nor hand-written: ${missing.join(', ')}`,
+    );
   return { generated, custom };
 }
 
@@ -799,8 +1144,12 @@ export function generate(inputs = loadInputs()) {
     files: {
       [join(glDir, 'generated', 'gl_api.gen.h')]: genApiHeader(inputs),
       [join(glDir, 'generated', 'gl_api.gen.cc')]: genApiSource(inputs),
-      [join(glDir, 'generated', 'gl_natives.gen.cc')]: genNativesSource(inputs, natives),
-      [join(glDir, 'generated', 'gl_composites.gen.h')]: genCompositeHeaderFragment(natives),
+      [join(glDir, 'generated', 'gl_natives.gen.cc')]: genNativesSource(
+        inputs,
+        natives,
+      ),
+      [join(glDir, 'generated', 'gl_composites.gen.h')]:
+        genCompositeHeaderFragment(natives),
       [join(webDir, 'gen', 'natives.gen.ts')]: genNativesTs(natives),
       [join(webDir, 'gen', 'idl.gen.ts')]: genIdlTs(inputs.idl),
       [join(webDir, 'gen', 'methods.gen.ts')]: genMethodsTs(inputs, natives),
@@ -826,8 +1175,12 @@ function main() {
     }
   }
   const fast = natives.filter((n) => n.fast).length;
-  process.stdout.write(`${natives.length} natives (${fast} with a fast-API path)\n`);
-  process.stdout.write(`IDL coverage: ${coverage.generated} generated WebGL methods, ${coverage.custom} hand-written\n`);
+  process.stdout.write(
+    `${natives.length} natives (${fast} with a fast-API path)\n`,
+  );
+  process.stdout.write(
+    `IDL coverage: ${coverage.generated} generated WebGL methods, ${coverage.custom} hand-written\n`,
+  );
   if (check && stale) process.exit(1);
 }
 

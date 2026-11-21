@@ -47,7 +47,8 @@ interface Row {
 }
 
 /** Every column but the body. */
-const META = 'id, url, method, req_headers, resp_type, resp_status, resp_status_text, resp_url, resp_redirected, resp_headers';
+const META =
+  'id, url, method, req_headers, resp_type, resp_status, resp_status_text, resp_url, resp_redirected, resp_headers';
 
 const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS caches (name TEXT PRIMARY KEY, seq INTEGER NOT NULL)',
@@ -69,28 +70,53 @@ class Db {
   #open(): Promise<number> {
     this.#handle ??= (async () => {
       const h = this.#natives.sqlOpen('cache', 'caches.sqlite');
-      const r = await this.#run(h, SCHEMA.map((sql) => [sql, []]), false);
+      const r = await this.#run(
+        h,
+        SCHEMA.map((sql) => [sql, []]),
+        false,
+      );
       const err = r.find((x) => x.error);
       if (err) throw new Error(err.error);
       return h;
     })();
     return this.#handle;
   }
-  #run(h: number, stmts: Array<[string, SqlValue[]]>, readOnly: boolean, atomic = false): Promise<SqlResult[]> {
+  #run(
+    h: number,
+    stmts: Array<[string, SqlValue[]]>,
+    readOnly: boolean,
+    atomic = false,
+  ): Promise<SqlResult[]> {
     return new Promise((resolve) =>
-      this.#natives.sqlExec(h, stmts.map((s) => s[0]), stmts.map((s) => s[1]), readOnly, resolve, atomic),
+      this.#natives.sqlExec(
+        h,
+        stmts.map((s) => s[0]),
+        stmts.map((s) => s[1]),
+        readOnly,
+        resolve,
+        atomic,
+      ),
     );
   }
   /**
    * Runs statements in order (serialised with every other cache operation). `transaction`: all or
    * nothing (native atomic batch: a failing statement rolls back the ones before it).
    */
-  exec(stmts: Array<[string, SqlValue[]]>, opts: { transaction?: boolean; readOnly?: boolean } = {}): Promise<SqlResult[]> {
+  exec(
+    stmts: Array<[string, SqlValue[]]>,
+    opts: { transaction?: boolean; readOnly?: boolean } = {},
+  ): Promise<SqlResult[]> {
     const job = this.#queue.then(async () => {
       const h = await this.#open();
-      const results = await this.#run(h, stmts, !!opts.readOnly, !!opts.transaction);
+      const results = await this.#run(
+        h,
+        stmts,
+        !!opts.readOnly,
+        !!opts.transaction,
+      );
       const failed = results.find((r) => r.error !== undefined);
-      if (failed) throw domError(`Cache storage error: ${failed.error}`, 'UnknownError');
+      if (failed)
+        throw domError(`Cache storage error: ${failed.error}`, 'UnknownError');
       return results;
     });
     this.#queue = job.catch(() => {});
@@ -108,7 +134,10 @@ function domError(message: string, name: string): Error {
 
 function getRequestCtor(): typeof Request {
   const R = (globalThis as { Request?: typeof Request }).Request;
-  if (!R) throw new TypeError('Cache API needs Request (install the net prelude first)');
+  if (!R)
+    throw new TypeError(
+      'Cache API needs Request (install the net prelude first)',
+    );
   return R;
 }
 
@@ -136,21 +165,29 @@ function headerPairs(h: Headers): Array<[string, string]> {
 }
 
 function varyNames(respHeaders: Array<[string, string]>): string[] {
-  const vary = respHeaders.filter(([n]) => n === 'vary').map(([, v]) => v).join(',');
+  const vary = respHeaders
+    .filter(([n]) => n === 'vary')
+    .map(([, v]) => v)
+    .join(',');
   return vary
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 }
 
-function headerValue(pairs: Array<[string, string]>, name: string): string | null {
+function headerValue(
+  pairs: Array<[string, string]>,
+  name: string,
+): string | null {
   const vals = pairs.filter(([n]) => n === name).map(([, v]) => v);
   return vals.length ? vals.join(', ') : null;
 }
 
 /** "request matches cached item" (Service Workers §5.4.3 query cache). */
 function matches(query: Request, row: Row, opts: CacheQueryOptions): boolean {
-  const qUrl = opts.ignoreSearch ? stripSearch(query.url) : stripHash(query.url);
+  const qUrl = opts.ignoreSearch
+    ? stripSearch(query.url)
+    : stripHash(query.url);
   const rUrl = opts.ignoreSearch ? stripSearch(row.url) : stripHash(row.url);
   if (qUrl !== rUrl) return false;
   if (opts.ignoreVary) return true;
@@ -159,7 +196,8 @@ function matches(query: Request, row: Row, opts: CacheQueryOptions): boolean {
   const qHeaders = headerPairs(query.headers);
   for (const name of varyNames(respHeaders)) {
     if (name === '*') return false;
-    if (headerValue(storedReq, name) !== headerValue(qHeaders, name)) return false;
+    if (headerValue(storedReq, name) !== headerValue(qHeaders, name))
+      return false;
   }
   return true;
 }
@@ -178,8 +216,18 @@ export class Cache {
   /** Matching entries' metadata (no bodies). */
   async #rows(query: Request | null, opts: CacheQueryOptions): Promise<Row[]> {
     const stmts: Array<[string, SqlValue[]]> = query
-      ? [[`SELECT ${META} FROM entries WHERE cache = ? AND url_nosearch = ? ORDER BY id`, [this.#name, stripSearch(query.url)]]]
-      : [[`SELECT ${META} FROM entries WHERE cache = ? ORDER BY id`, [this.#name]]];
+      ? [
+          [
+            `SELECT ${META} FROM entries WHERE cache = ? AND url_nosearch = ? ORDER BY id`,
+            [this.#name, stripSearch(query.url)],
+          ],
+        ]
+      : [
+          [
+            `SELECT ${META} FROM entries WHERE cache = ? ORDER BY id`,
+            [this.#name],
+          ],
+        ];
     const [r] = await this.#db.exec(stmts, { readOnly: true });
     const rows = (r.rows ?? []) as unknown as Row[];
     if (!query) return rows;
@@ -212,13 +260,22 @@ export class Cache {
     });
   }
 
-  async match(request: RequestInfo | URL, options: CacheQueryOptions = {}): Promise<Response | undefined> {
+  async match(
+    request: RequestInfo | URL,
+    options: CacheQueryOptions = {},
+  ): Promise<Response | undefined> {
     const rows = await this.#rows(toRequest(request), options ?? {});
     return rows.length ? (await this.#responses([rows[0]]))[0] : undefined;
   }
 
-  async matchAll(request?: RequestInfo | URL, options: CacheQueryOptions = {}): Promise<Response[]> {
-    const rows = await this.#rows(request === undefined ? null : toRequest(request), options ?? {});
+  async matchAll(
+    request?: RequestInfo | URL,
+    options: CacheQueryOptions = {},
+  ): Promise<Response[]> {
+    const rows = await this.#rows(
+      request === undefined ? null : toRequest(request),
+      options ?? {},
+    );
     return this.#responses(rows);
   }
 
@@ -229,13 +286,19 @@ export class Cache {
   async addAll(requests: Iterable<RequestInfo | URL>): Promise<void> {
     const reqs = [...requests].map(toRequest);
     for (const r of reqs) {
-      if (!/^https?:$/.test(new URL(r.url).protocol)) throw new TypeError(`Cache.addAll: unsupported scheme in ${r.url}`);
-      if (r.method !== 'GET') throw new TypeError('Cache.addAll: only GET requests can be cached');
+      if (!/^https?:$/.test(new URL(r.url).protocol))
+        throw new TypeError(`Cache.addAll: unsupported scheme in ${r.url}`);
+      if (r.method !== 'GET')
+        throw new TypeError('Cache.addAll: only GET requests can be cached');
     }
     const responses = await Promise.all(reqs.map((r) => this.#net().fetch(r)));
     for (const resp of responses) {
-      if (!resp.ok) throw new TypeError(`Cache.addAll: request failed with status ${resp.status}`);
-      if (varyNames(headerPairs(resp.headers)).includes('*')) throw new TypeError('Cache.addAll: Vary: * cannot be cached');
+      if (!resp.ok)
+        throw new TypeError(
+          `Cache.addAll: request failed with status ${resp.status}`,
+        );
+      if (varyNames(headerPairs(resp.headers)).includes('*'))
+        throw new TypeError('Cache.addAll: Vary: * cannot be cached');
     }
     await this.#putAll(reqs.map((r, i) => [r, responses[i]]));
   }
@@ -243,11 +306,18 @@ export class Cache {
   async put(request: RequestInfo | URL, response: Response): Promise<void> {
     const req = toRequest(request);
     const scheme = new URL(req.url).protocol;
-    if (scheme !== 'http:' && scheme !== 'https:') throw new TypeError(`Cache.put: unsupported scheme ${scheme}`);
-    if (req.method !== 'GET') throw new TypeError('Cache.put: only GET requests can be cached');
-    if (response.status === 206) throw new TypeError('Cache.put: partial (206) responses cannot be cached');
-    if (varyNames(headerPairs(response.headers)).includes('*')) throw new TypeError('Cache.put: Vary: * cannot be cached');
-    if (response.bodyUsed) throw new TypeError('Cache.put: response body is already used');
+    if (scheme !== 'http:' && scheme !== 'https:')
+      throw new TypeError(`Cache.put: unsupported scheme ${scheme}`);
+    if (req.method !== 'GET')
+      throw new TypeError('Cache.put: only GET requests can be cached');
+    if (response.status === 206)
+      throw new TypeError(
+        'Cache.put: partial (206) responses cannot be cached',
+      );
+    if (varyNames(headerPairs(response.headers)).includes('*'))
+      throw new TypeError('Cache.put: Vary: * cannot be cached');
+    if (response.bodyUsed)
+      throw new TypeError('Cache.put: response body is already used');
     await this.#putAll([[req, response]]);
   }
 
@@ -256,14 +326,16 @@ export class Cache {
       pairs.map(async ([req, resp]) => ({
         req,
         resp,
-        body: resp.body === null ? null : new Uint8Array(await resp.arrayBuffer()),
+        body:
+          resp.body === null ? null : new Uint8Array(await resp.arrayBuffer()),
       })),
     );
     // Replace entries the new request matches (same URL, Vary-compatible), then insert. Only rows with
     // the same URL are looked at, and only their metadata.
     const stmts: Array<[string, SqlValue[]]> = [];
     for (const { req, resp, body } of prepared) {
-      for (const row of await this.#rows(req, {})) stmts.push(['DELETE FROM entries WHERE id = ?', [row.id]]);
+      for (const row of await this.#rows(req, {}))
+        stmts.push(['DELETE FROM entries WHERE id = ?', [row.id]]);
       stmts.push([
         `INSERT INTO entries (cache, url, url_nosearch, method, req_headers, resp_type, resp_status, resp_status_text,
            resp_url, resp_redirected, resp_headers, body) VALUES (?, ?, ?, 'GET', ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -282,21 +354,41 @@ export class Cache {
         ],
       ]);
     }
-    stmts.push(['INSERT OR IGNORE INTO caches (name, seq) VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM caches))', [this.#name]]);
+    stmts.push([
+      'INSERT OR IGNORE INTO caches (name, seq) VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM caches))',
+      [this.#name],
+    ]);
     await this.#db.exec(stmts, { transaction: true });
   }
 
-  async delete(request: RequestInfo | URL, options: CacheQueryOptions = {}): Promise<boolean> {
+  async delete(
+    request: RequestInfo | URL,
+    options: CacheQueryOptions = {},
+  ): Promise<boolean> {
     const rows = await this.#rows(toRequest(request), options ?? {});
     if (!rows.length) return false;
-    await this.#db.exec(rows.map((r) => ['DELETE FROM entries WHERE id = ?', [r.id]]), { transaction: true });
+    await this.#db.exec(
+      rows.map((r) => ['DELETE FROM entries WHERE id = ?', [r.id]]),
+      { transaction: true },
+    );
     return true;
   }
 
-  async keys(request?: RequestInfo | URL, options: CacheQueryOptions = {}): Promise<Request[]> {
-    const rows = await this.#rows(request === undefined ? null : toRequest(request), options ?? {});
+  async keys(
+    request?: RequestInfo | URL,
+    options: CacheQueryOptions = {},
+  ): Promise<Request[]> {
+    const rows = await this.#rows(
+      request === undefined ? null : toRequest(request),
+      options ?? {},
+    );
     const R = getRequestCtor();
-    return rows.map((r) => new R(r.url, { headers: JSON.parse(r.req_headers) as Array<[string, string]> }));
+    return rows.map(
+      (r) =>
+        new R(r.url, {
+          headers: JSON.parse(r.req_headers) as Array<[string, string]>,
+        }),
+    );
   }
 
   get [Symbol.toStringTag](): string {
@@ -309,19 +401,34 @@ const INTERNAL = Symbol('cache-internal');
 export class CacheStorage {
   #db: Db;
   #net: () => NetRegistryLike;
-  constructor(token: symbol, natives: StorageNatives, net: () => NetRegistryLike) {
+  constructor(
+    token: symbol,
+    natives: StorageNatives,
+    net: () => NetRegistryLike,
+  ) {
     if (token !== INTERNAL) throw new TypeError('Illegal constructor');
     this.#db = new Db(natives);
     this.#net = net;
   }
 
   async #names(): Promise<string[]> {
-    const [r] = await this.#db.exec([['SELECT name FROM caches ORDER BY seq', []]], { readOnly: true });
+    const [r] = await this.#db.exec(
+      [['SELECT name FROM caches ORDER BY seq', []]],
+      { readOnly: true },
+    );
     return (r.rows ?? []).map((row) => String(row.name));
   }
 
-  async match(request: RequestInfo | URL, options: CacheQueryOptions & { cacheName?: string } = {}): Promise<Response | undefined> {
-    const names = options?.cacheName !== undefined ? ((await this.has(options.cacheName)) ? [options.cacheName] : []) : await this.#names();
+  async match(
+    request: RequestInfo | URL,
+    options: CacheQueryOptions & { cacheName?: string } = {},
+  ): Promise<Response | undefined> {
+    const names =
+      options?.cacheName !== undefined
+        ? (await this.has(options.cacheName))
+          ? [options.cacheName]
+          : []
+        : await this.#names();
     for (const name of names) {
       const r = await (await this.open(name)).match(request, options);
       if (r) return r;
@@ -335,9 +442,17 @@ export class CacheStorage {
 
   async open(name: string): Promise<Cache> {
     name = String(name);
-    await this.#db.exec([['INSERT OR IGNORE INTO caches (name, seq) VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM caches))', [name]]], {
-      transaction: true,
-    });
+    await this.#db.exec(
+      [
+        [
+          'INSERT OR IGNORE INTO caches (name, seq) VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM caches))',
+          [name],
+        ],
+      ],
+      {
+        transaction: true,
+      },
+    );
     return new Cache(INTERNAL, name, this.#db, this.#net);
   }
 
@@ -363,6 +478,9 @@ export class CacheStorage {
   }
 }
 
-export function createCacheStorage(natives: StorageNatives, net: () => NetRegistryLike): CacheStorage {
+export function createCacheStorage(
+  natives: StorageNatives,
+  net: () => NetRegistryLike,
+): CacheStorage {
   return new CacheStorage(INTERNAL, natives, net);
 }

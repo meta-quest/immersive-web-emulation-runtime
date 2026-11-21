@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Regression tests: thin strokes under a non-uniform transform (true geometry, bounded dash work), banded
 // rasterisation (same coverage as one pass, bounded memory), non-finite paths, cell sum overflow, the dot of a
 // leading zero-length dash, and the colour-glyph PNG size cap.

@@ -29,18 +29,27 @@ const fontDir = resolve(here, '../../../runtime/canvas2d/fonts');
 const pw = process.env.PLAYWRIGHT_CORE;
 const chromePath = process.env.CHROME;
 if (!pw || !chromePath) {
-  console.error('Set PLAYWRIGHT_CORE (playwright-core package dir) and CHROME (chrome-headless-shell binary).');
+  console.error(
+    'Set PLAYWRIGHT_CORE (playwright-core package dir) and CHROME (chrome-headless-shell binary).',
+  );
   process.exit(2);
 }
 const { chromium } = await import(pathToFileURL(join(pw, 'index.mjs')).href);
 
 const caseSource = readFileSync(caseFile, 'utf8');
-const regular = readFileSync(join(fontDir, 'Roboto-Regular.ttf')).toString('base64');
+const regular = readFileSync(join(fontDir, 'Roboto-Regular.ttf')).toString(
+  'base64',
+);
 const bold = readFileSync(join(fontDir, 'Roboto-Bold.ttf')).toString('base64');
 
 const browser = await chromium.launch({
   executablePath: chromePath,
-  args: ['--disable-gpu', '--font-render-hinting=none', '--force-color-profile=srgb', '--disable-lcd-text'],
+  args: [
+    '--disable-gpu',
+    '--font-render-hinting=none',
+    '--force-color-profile=srgb',
+    '--disable-lcd-text',
+  ],
 });
 try {
   const page = await browser.newPage();
@@ -48,7 +57,9 @@ try {
   const result = await page.evaluate(
     async ({ caseSource, regular, bold }) => {
       const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      const mod = await import(`data:text/javascript;base64,${btoa(unescape(encodeURIComponent(caseSource)))}`);
+      const mod = await import(
+        `data:text/javascript;base64,${btoa(unescape(encodeURIComponent(caseSource)))}`
+      );
       const r = new FontFace('IwnTest', bytes(regular), { weight: '400' });
       const b = new FontFace('IwnTest', bytes(bold), { weight: '700' });
       // A family with only the regular face: bold and italic requests are synthesized.
@@ -68,7 +79,8 @@ try {
       };
       const toB64 = (u8) => {
         let s = '';
-        for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+        for (let i = 0; i < u8.length; i += 0x8000)
+          s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
         return btoa(s);
       };
       const images = [];
@@ -84,7 +96,13 @@ try {
           error = String(e);
         }
         const d = ctx.getImageData(0, 0, c.w, c.h).data;
-        images.push({ name: c.name, w: c.w, h: c.h, data: toB64(new Uint8Array(d.buffer)), error });
+        images.push({
+          name: c.name,
+          w: c.w,
+          h: c.h,
+          data: toB64(new Uint8Array(d.buffer)),
+          error,
+        });
       }
       const ctx = document.createElement('canvas').getContext('2d');
       const metrics = mod.metricCases.map((m) => {
@@ -106,8 +124,14 @@ try {
     const px = new Uint8Array(Buffer.from(img.data, 'base64'));
     writeFileSync(join(outDir, `${img.name}.png`), encodePng(px, img.w, img.h));
   }
-  writeFileSync(join(outDir, 'metrics.json'), JSON.stringify({ chrome: result.ua, metrics: result.metrics }, null, 1) + '\n');
-  console.log(`wrote ${result.images.length} goldens and ${result.metrics.length} metric rows to ${outDir} (${result.ua})`);
+  writeFileSync(
+    join(outDir, 'metrics.json'),
+    JSON.stringify({ chrome: result.ua, metrics: result.metrics }, null, 1) +
+      '\n',
+  );
+  console.log(
+    `wrote ${result.images.length} goldens and ${result.metrics.length} metric rows to ${outDir} (${result.ua})`,
+  );
 } finally {
   await browser.close();
 }

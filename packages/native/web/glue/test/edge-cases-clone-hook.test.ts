@@ -14,13 +14,20 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { createDeviceContext, createGlueContext, fakeNatives } from './harness.ts';
+import {
+  createDeviceContext,
+  createGlueContext,
+  fakeNatives,
+} from './harness.ts';
 
 const REG = `globalThis[Symbol.for('iwn.glue')]`;
 const tick = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** A hook like the device's clone.cc today: V8's serializer, but a refused value comes back undefined. */
-function lossyCloneNatives(): { natives: Record<string, unknown>; calls: { n: number } } {
+function lossyCloneNatives(): {
+  natives: Record<string, unknown>;
+  calls: { n: number };
+} {
   const calls = { n: 0 };
   const { natives } = fakeNatives({
     clone: {
@@ -55,20 +62,37 @@ describe('a native clone hook that returns undefined instead of throwing (TMR-3,
     const { natives, calls } = lossyCloneNatives();
     const { run } = await createGlueContext({ natives });
     for (const [name, expr] of UNCLONEABLE) {
-      const r = run(`(() => { try { const v = structuredClone(${expr}); return 'returned ' + String(v); } catch (e) { return e.name + ':' + (e instanceof DOMException); } })()`);
+      const r = run(
+        `(() => { try { const v = structuredClone(${expr}); return 'returned ' + String(v); } catch (e) { return e.name + ':' + (e instanceof DOMException); } })()`,
+      );
       assert.equal(r, 'DataCloneError:true', name);
     }
     assert.ok(calls.n > 0, 'plain-looking graphs went to the hook');
     // Legitimate undefined results stay as they are.
-    assert.equal(run(`structuredClone(undefined) === undefined && structuredClone({ a: undefined }).hasOwnProperty('a')`), true);
+    assert.equal(
+      run(
+        `structuredClone(undefined) === undefined && structuredClone({ a: undefined }).hasOwnProperty('a')`,
+      ),
+      true,
+    );
   });
 
   test('callers of structuredClone inherit the error: history.pushState and performance.mark', async () => {
     const { natives } = lossyCloneNatives();
     const { run } = await createGlueContext({ natives });
-    assert.equal(run(`try { history.pushState({ f() {} }, ''); 'no throw' } catch (e) { e.name }`), 'DataCloneError');
+    assert.equal(
+      run(
+        `try { history.pushState({ f() {} }, ''); 'no throw' } catch (e) { e.name }`,
+      ),
+      'DataCloneError',
+    );
     assert.equal(run(`history.state`), null);
-    assert.equal(run(`try { performance.mark('m', { detail: Symbol() }); 'no throw' } catch (e) { e.name }`), 'DataCloneError');
+    assert.equal(
+      run(
+        `try { performance.mark('m', { detail: Symbol() }); 'no throw' } catch (e) { e.name }`,
+      ),
+      'DataCloneError',
+    );
   });
 
   test('a Proxy whose traps throw is a DataCloneError, not the trap error (V8 runs no traps)', async () => {
@@ -92,7 +116,9 @@ describe('a native clone hook that returns undefined instead of throwing (TMR-3,
     const { natives } = lossyCloneNatives();
     const { run } = await createGlueContext({ natives });
     assert.equal(
-      run(`{ class E extends Error { get [Symbol.toStringTag]() { return 'Custom'; } } const c = structuredClone(new E('m', { cause: new Blob(['c']) })); c.cause instanceof Blob }`),
+      run(
+        `{ class E extends Error { get [Symbol.toStringTag]() { return 'Custom'; } } const c = structuredClone(new E('m', { cause: new Blob(['c']) })); c.cause instanceof Blob }`,
+      ),
       true,
     );
   });
@@ -101,7 +127,9 @@ describe('a native clone hook that returns undefined instead of throwing (TMR-3,
     const { natives } = lossyCloneNatives();
     const { run } = await createGlueContext({ natives });
     assert.equal(
-      run(`const ab = new ArrayBuffer(8); let n; try { structuredClone({ ab, f() {} }, { transfer: [ab] }); } catch (e) { n = e.name; } n + ':' + ab.detached + ':' + ab.byteLength`),
+      run(
+        `const ab = new ArrayBuffer(8); let n; try { structuredClone({ ab, f() {} }, { transfer: [ab] }); } catch (e) { n = e.name; } n + ':' + ab.detached + ':' + ab.byteLength`,
+      ),
       'DataCloneError:false:8',
     );
   });
@@ -119,7 +147,9 @@ describe('same-document reload idioms (DOM-5, PROC-8)', () => {
       const { run } = await createGlueContext({
         natives: { ...base.natives, app },
         config: { url: 'https://app.local/index.html?a=1' },
-        preset: { console: { warn: (m: string) => warnings.push(m), error() {} } },
+        preset: {
+          console: { warn: (m: string) => warnings.push(m), error() {} },
+        },
       });
       run(`location.assign(location.href)`);
       run(`location.replace(location.href)`);
@@ -131,14 +161,18 @@ describe('same-document reload idioms (DOM-5, PROC-8)', () => {
       // Another document still needs app.navigate.
       run(`location.assign('/other.html')`);
       assert.equal(reloads.length, 4);
-      if (withNavigate) assert.deepEqual(navigates, ['https://app.local/other.html']);
+      if (withNavigate)
+        assert.deepEqual(navigates, ['https://app.local/other.html']);
       else assert.equal(warnings.length, 1);
     });
   }
 });
 
 describe('structuredClone routing: arrays (TMR-3)', () => {
-  function routedNatives(): { natives: Record<string, unknown>; seen: unknown[] } {
+  function routedNatives(): {
+    natives: Record<string, unknown>;
+    seen: unknown[];
+  } {
     const seen: unknown[] = [];
     const { natives } = fakeNatives({
       clone: {
@@ -154,11 +188,23 @@ describe('structuredClone routing: arrays (TMR-3)', () => {
   test('platform objects stored as named properties of short arrays take the JS path', async () => {
     const { natives, seen } = routedNatives();
     const { run } = await createGlueContext({ natives });
-    assert.equal(run(`{ const a = [1, 2]; a.blob = new Blob(['q']); const c = structuredClone(a); c.blob instanceof Blob && c.length === 2 }`), true);
-    assert.equal(run(`{ const a = [1]; a.u = new URL('https://x/'); try { structuredClone(a); 'cloned' } catch (e) { e.name } }`), 'DataCloneError');
+    assert.equal(
+      run(
+        `{ const a = [1, 2]; a.blob = new Blob(['q']); const c = structuredClone(a); c.blob instanceof Blob && c.length === 2 }`,
+      ),
+      true,
+    );
+    assert.equal(
+      run(
+        `{ const a = [1]; a.u = new URL('https://x/'); try { structuredClone(a); 'cloned' } catch (e) { e.name } }`,
+      ),
+      'DataCloneError',
+    );
     // Non-enumerable indices do not shift the named-property scan.
     assert.equal(
-      run(`{ const a = [1, 2, 3]; Object.defineProperty(a, 0, { value: 1, enumerable: false }); a.b = new Blob(['z']); structuredClone(a).b instanceof Blob }`),
+      run(
+        `{ const a = [1, 2, 3]; Object.defineProperty(a, 0, { value: 1, enumerable: false }); a.b = new Blob(['z']); structuredClone(a).b instanceof Blob }`,
+      ),
       true,
     );
     assert.equal(run(`structuredClone([1, [2, { x: 3 }]])[1][1].x`), 3);
@@ -168,15 +214,32 @@ describe('structuredClone routing: arrays (TMR-3)', () => {
   test('a run of holes switches to the existing keys and still finds what follows', async () => {
     const { natives, seen } = routedNatives();
     const { run } = await createGlueContext({ natives });
-    assert.equal(run(`{ const a = [1]; a[200000] = new Blob(['q']); structuredClone(a)[200000] instanceof Blob }`), true);
-    assert.equal(run(`{ const a = [1]; a.length = 300000; a.blob = new Blob(['q']); structuredClone(a).blob instanceof Blob }`), true);
     assert.equal(
-      run(`{ const a = [1]; a[150000] = 2; Object.defineProperty(a, 250000, { get() { return 1; }, enumerable: true }); structuredClone(a)[250000] }`),
+      run(
+        `{ const a = [1]; a[200000] = new Blob(['q']); structuredClone(a)[200000] instanceof Blob }`,
+      ),
+      true,
+    );
+    assert.equal(
+      run(
+        `{ const a = [1]; a.length = 300000; a.blob = new Blob(['q']); structuredClone(a).blob instanceof Blob }`,
+      ),
+      true,
+    );
+    assert.equal(
+      run(
+        `{ const a = [1]; a[150000] = 2; Object.defineProperty(a, 250000, { get() { return 1; }, enumerable: true }); structuredClone(a)[250000] }`,
+      ),
       1,
     );
     assert.equal(seen.length, 0);
     // Long dense arrays are walked by index (no Object.keys) and still reach nested platform objects.
-    assert.equal(run(`{ const a = Array.from({ length: 100000 }, (_, i) => i); a[99999] = { b: new Blob(['x']) }; structuredClone(a)[99999].b instanceof Blob }`), true);
+    assert.equal(
+      run(
+        `{ const a = Array.from({ length: 100000 }, (_, i) => i); a[99999] = { b: new Blob(['x']) }; structuredClone(a)[99999].b instanceof Blob }`,
+      ),
+      true,
+    );
   });
 });
 
@@ -187,7 +250,14 @@ describe('the JS clone path against V8 (TMR-3)', () => {
     const make = async () =>
       createGlueContext(
         native
-          ? { natives: fakeNatives({ clone: { structuredClone: (v: unknown, t: unknown[]) => structuredClone(v, { transfer: t as never }) } }).natives }
+          ? {
+              natives: fakeNatives({
+                clone: {
+                  structuredClone: (v: unknown, t: unknown[]) =>
+                    structuredClone(v, { transfer: t as never }),
+                },
+              }).natives,
+            }
           : { natives: fakeNatives().natives },
       );
 
@@ -209,16 +279,38 @@ describe('the JS clone path against V8 (TMR-3)', () => {
         `new Intl.Segmenter('en').segment('a b')`,
         `(() => { const r = Proxy.revocable({}, {}); r.revoke(); return r.proxy; })()`,
       ]) {
-        assert.equal(run(`try { structuredClone([${expr}, new Blob([])]); 'cloned' } catch (e) { e.name }`), 'DataCloneError', expr);
-        assert.equal(run(`try { structuredClone(${expr}); 'cloned' } catch (e) { e.name }`), 'DataCloneError', `${expr} alone`);
+        assert.equal(
+          run(
+            `try { structuredClone([${expr}, new Blob([])]); 'cloned' } catch (e) { e.name }`,
+          ),
+          'DataCloneError',
+          expr,
+        );
+        assert.equal(
+          run(
+            `try { structuredClone(${expr}); 'cloned' } catch (e) { e.name }`,
+          ),
+          'DataCloneError',
+          `${expr} alone`,
+        );
       }
       // A plain object that only claims to be one clones as data.
-      assert.equal(run(`JSON.stringify(structuredClone([{ [Symbol.toStringTag]: 'Arguments', a: 1 }, new Blob([])])[0])`), '{"a":1}');
+      assert.equal(
+        run(
+          `JSON.stringify(structuredClone([{ [Symbol.toStringTag]: 'Arguments', a: 1 }, new Blob([])])[0])`,
+        ),
+        '{"a":1}',
+      );
     });
 
     test(`arrays keep their length, trailing holes included (${label})`, async () => {
       const { run } = await make();
-      assert.equal(run(`{ const a = [1, , 3]; a.length = 6; const [c] = structuredClone([a, new Blob([])]); [c.length, 1 in c, 5 in c, c[2]].join() }`), '6,false,false,3');
+      assert.equal(
+        run(
+          `{ const a = [1, , 3]; a.length = 6; const [c] = structuredClone([a, new Blob([])]); [c.length, 1 in c, 5 in c, c[2]].join() }`,
+        ),
+        '6,false,false,3',
+      );
     });
   }
 });
@@ -227,16 +319,21 @@ describe('blob URL store shared across globals (NET-15)', () => {
   test('a revoke in a worker removes the URL for the main thread too', async () => {
     const store = new Map<string, { bytes: Uint8Array; type: string }>();
     const blobUrls = {
-      register: (url: string, bytes: Uint8Array, type: string) => store.set(url, { bytes: bytes.slice(), type }),
+      register: (url: string, bytes: Uint8Array, type: string) =>
+        store.set(url, { bytes: bytes.slice(), type }),
       revoke: (url: string) => store.delete(url),
       resolve: (url: string) => store.get(url) ?? null,
     };
-    const main = await createGlueContext({ natives: { ...fakeNatives().natives, blobUrls } });
+    const main = await createGlueContext({
+      natives: { ...fakeNatives().natives, blobUrls },
+    });
     const worker = await createGlueContext({
       natives: { ...fakeNatives().natives, blobUrls },
       config: { scope: 'worker', url: 'https://app.local/w.js' },
     });
-    const url = main.run<string>(`globalThis.u = URL.createObjectURL(new Blob(['abc'])); u`);
+    const url = main.run<string>(
+      `globalThis.u = URL.createObjectURL(new Blob(['abc'])); u`,
+    );
     worker.g.u = url;
     assert.equal(worker.run(`${REG}.blobUrls.resolve(u) !== null`), true);
     assert.equal(main.run(`${REG}.blobUrls.resolve(u) !== null`), true);
@@ -253,49 +350,94 @@ describe('navigator.permissions and DOM-1 window members', () => {
     const device = natives.device as { info(): Record<string, unknown> };
     const info = device.info;
     let micGranted = false;
-    natives.device = { info: () => ({ ...info(), grantedPermissions: micGranted ? ['microphone'] : [] }) };
+    natives.device = {
+      info: () => ({
+        ...info(),
+        grantedPermissions: micGranted ? ['microphone'] : [],
+      }),
+    };
     const { run } = await createGlueContext({ natives });
-    const q = (name: string) => run<Promise<string>>(`navigator.permissions.query({ name: '${name}' }).then((s) => s.state, (e) => e.name)`);
+    const q = (name: string) =>
+      run<Promise<string>>(
+        `navigator.permissions.query({ name: '${name}' }).then((s) => s.state, (e) => e.name)`,
+      );
     assert.equal(await q('xr-spatial-tracking'), 'granted');
     assert.equal(await q('camera'), 'prompt');
     assert.equal(await q('microphone'), 'prompt');
     micGranted = true;
     assert.equal(await q('microphone'), 'granted');
     assert.equal(await q('bogus-name'), 'TypeError');
-    const custom = await createGlueContext({ config: { permissions: { granted: ['geolocation'] } } });
-    assert.equal(await custom.run<Promise<string>>(`navigator.permissions.query({ name: 'geolocation' }).then((s) => s.state)`), 'granted');
-    assert.equal(await custom.run<Promise<string>>(`navigator.permissions.query({ name: 'xr-spatial-tracking' }).then((s) => s.state)`), 'prompt');
+    const custom = await createGlueContext({
+      config: { permissions: { granted: ['geolocation'] } },
+    });
+    assert.equal(
+      await custom.run<Promise<string>>(
+        `navigator.permissions.query({ name: 'geolocation' }).then((s) => s.state)`,
+      ),
+      'granted',
+    );
+    assert.equal(
+      await custom.run<Promise<string>>(
+        `navigator.permissions.query({ name: 'xr-spatial-tracking' }).then((s) => s.state)`,
+      ),
+      'prompt',
+    );
   });
 
-  test('query: a runtime prelude reports its own feature\'s grants (web/xr camera: camera once CAMERA + HEADSET_CAMERA)', async () => {
+  test("query: a runtime prelude reports its own feature's grants (web/xr camera: camera once CAMERA + HEADSET_CAMERA)", async () => {
     const { run } = await createGlueContext();
-    const q = (name: string) => run<Promise<string>>(`navigator.permissions.query({ name: '${name}' }).then((s) => s.state)`);
+    const q = (name: string) =>
+      run<Promise<string>>(
+        `navigator.permissions.query({ name: '${name}' }).then((s) => s.state)`,
+      );
     run(`var held = false; ${REG}.addPermissionSource(() => held ? ['camera'] : []);
       ${REG}.addPermissionSource(() => { throw new Error('a broken source'); });`);
     assert.equal(await q('camera'), 'prompt');
     run(`held = true`);
     assert.equal(await q('camera'), 'granted', 'asked at each query');
     assert.equal(await q('microphone'), 'prompt');
-    assert.equal(await q('xr-spatial-tracking'), 'granted', 'the packaged grants stay');
+    assert.equal(
+      await q('xr-spatial-tracking'),
+      'granted',
+      'the packaged grants stay',
+    );
   });
 
   test('top/parent/frames are the window, frameElement and opener null, name a settable string', async () => {
     const { run } = await createGlueContext();
-    assert.equal(run(`[top === window, parent === window, frames === window, frameElement, opener, JSON.stringify(name)].join()`), 'true,true,true,,,""');
+    assert.equal(
+      run(
+        `[top === window, parent === window, frames === window, frameElement, opener, JSON.stringify(name)].join()`,
+      ),
+      'true,true,true,,,""',
+    );
     assert.equal(run(`name = 42; typeof name + ':' + name`), 'string:42');
     assert.equal(run(`top = 1; top === window`), true);
-    const worker = await createGlueContext({ config: { scope: 'worker', url: 'https://app.local/w.js' } });
-    assert.equal(worker.run(`typeof top + typeof parent + typeof frameElement`), 'undefinedundefinedundefined');
+    const worker = await createGlueContext({
+      config: { scope: 'worker', url: 'https://app.local/w.js' },
+    });
+    assert.equal(
+      worker.run(`typeof top + typeof parent + typeof frameElement`),
+      'undefinedundefinedundefined',
+    );
   });
 });
 
 describe('small WebIDL conversions', () => {
   test('structuredClone transfer must be an iterable of objects', async () => {
     for (const native of [false, true]) {
-      const { run } = await createGlueContext(native ? { natives: lossyCloneNatives().natives } : {});
+      const { run } = await createGlueContext(
+        native ? { natives: lossyCloneNatives().natives } : {},
+      );
       for (const t of ['null', '5', '{}', "'ab'"]) {
         // A string is iterable, but its elements are not objects.
-        assert.equal(run(`try { structuredClone(1, { transfer: ${t} }); 'ok' } catch (e) { e.name }`), 'TypeError', `transfer: ${t}`);
+        assert.equal(
+          run(
+            `try { structuredClone(1, { transfer: ${t} }); 'ok' } catch (e) { e.name }`,
+          ),
+          'TypeError',
+          `transfer: ${t}`,
+        );
       }
       assert.equal(run(`structuredClone(1, { transfer: undefined })`), 1);
       assert.equal(run(`structuredClone(1, { transfer: new Set() })`), 1);
@@ -304,26 +446,71 @@ describe('small WebIDL conversions', () => {
 
   test('addEventListener converts the type before the null-callback return; pushState needs 2 arguments; randomUUID checks this', async () => {
     const { run } = await createGlueContext();
-    assert.equal(run(`try { addEventListener(Symbol(), null); 'ok' } catch (e) { e.name }`), 'TypeError');
-    assert.equal(run(`try { new EventTarget().addEventListener(Symbol(), null); 'ok' } catch (e) { e.name }`), 'TypeError');
-    assert.equal(run(`try { new EventTarget().addEventListener('x', 5); 'ok' } catch (e) { e.name }`), 'TypeError');
-    assert.equal(run(`try { history.pushState(); 'ok' } catch (e) { e.name }`), 'TypeError');
-    assert.equal(run(`try { history.replaceState({}); 'ok' } catch (e) { e.name }`), 'TypeError');
-    assert.equal(run(`try { history.pushState({}, Symbol()); 'ok' } catch (e) { e.name }`), 'TypeError');
+    assert.equal(
+      run(
+        `try { addEventListener(Symbol(), null); 'ok' } catch (e) { e.name }`,
+      ),
+      'TypeError',
+    );
+    assert.equal(
+      run(
+        `try { new EventTarget().addEventListener(Symbol(), null); 'ok' } catch (e) { e.name }`,
+      ),
+      'TypeError',
+    );
+    assert.equal(
+      run(
+        `try { new EventTarget().addEventListener('x', 5); 'ok' } catch (e) { e.name }`,
+      ),
+      'TypeError',
+    );
+    assert.equal(
+      run(`try { history.pushState(); 'ok' } catch (e) { e.name }`),
+      'TypeError',
+    );
+    assert.equal(
+      run(`try { history.replaceState({}); 'ok' } catch (e) { e.name }`),
+      'TypeError',
+    );
+    assert.equal(
+      run(`try { history.pushState({}, Symbol()); 'ok' } catch (e) { e.name }`),
+      'TypeError',
+    );
     assert.equal(run(`history.pushState({ a: 1 }, ''); history.state.a`), 1);
-    assert.equal(run(`try { const f = crypto.randomUUID; f(); 'ok' } catch (e) { e.name }`), 'TypeError');
-    assert.match(run<string>(`crypto.randomUUID()`), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.equal(
+      run(
+        `try { const f = crypto.randomUUID; f(); 'ok' } catch (e) { e.name }`,
+      ),
+      'TypeError',
+    );
+    assert.match(
+      run<string>(`crypto.randomUUID()`),
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
   });
 
   test('measure duration is a number; readAsText with a replacement label gives U+FFFD', async () => {
     const { run } = await createGlueContext();
-    assert.equal(run(`performance.measure('m', { start: 1, duration: '5' }).duration`), 5);
-    assert.equal(run(`try { performance.measure('m', { start: 1, duration: 'x' }); 'ok' } catch (e) { e.name }`), 'TypeError');
+    assert.equal(
+      run(`performance.measure('m', { start: 1, duration: '5' }).duration`),
+      5,
+    );
+    assert.equal(
+      run(
+        `try { performance.measure('m', { start: 1, duration: 'x' }); 'ok' } catch (e) { e.name }`,
+      ),
+      'TypeError',
+    );
     const read = (label: string, bytes: string) =>
-      run<Promise<string>>(`new Promise((res) => { const r = new FileReader(); r.onload = () => res(JSON.stringify(r.result)); r.readAsText(new Blob([${bytes}]), '${label}'); })`);
+      run<Promise<string>>(
+        `new Promise((res) => { const r = new FileReader(); r.onload = () => res(JSON.stringify(r.result)); r.readAsText(new Blob([${bytes}]), '${label}'); })`,
+      );
     assert.equal(await read('iso-2022-kr', `'AB'`), JSON.stringify('�'));
     assert.equal(await read('replacement', `''`), JSON.stringify(''));
-    assert.equal(await read('iso-2022-kr', `new Uint8Array([0xef, 0xbb, 0xbf, 0x41])`), JSON.stringify('A'));
+    assert.equal(
+      await read('iso-2022-kr', `new Uint8Array([0xef, 0xbb, 0xbf, 0x41])`),
+      JSON.stringify('A'),
+    );
   });
 });
 
@@ -358,8 +545,10 @@ describe('device-like boot: listener exceptions reach core.reportError', () => {
       t.dispatchEvent(new Event('x'));
     `);
     await tick();
-    assert.deepEqual(Array.from(run<string[]>(`ran`)), ["second"]);
-    const msgs = calls.reported.map((e) => `${(e as Error).name}:${(e as Error).message}`);
+    assert.deepEqual(Array.from(run<string[]>(`ran`)), ['second']);
+    const msgs = calls.reported.map(
+      (e) => `${(e as Error).name}:${(e as Error).message}`,
+    );
     assert.deepEqual(msgs, ['Error:boom']);
   });
 });

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Test image builders: encoders (lodepng, stb_image_write, libwebp), EXIF insertion, a tiny GIF writer and a PPM
 // reader, so tests generate their inputs instead of shipping binary fixtures.
 #pragma once

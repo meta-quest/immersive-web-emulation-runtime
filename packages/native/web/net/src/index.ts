@@ -5,7 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-export { installNet, NET_REGISTRY_KEY, type InstallNetOptions, type NetRegistry } from './install.ts';
+export {
+  installNet,
+  NET_REGISTRY_KEY,
+  type InstallNetOptions,
+  type NetRegistry,
+} from './install.ts';
 export { Headers } from './headers.ts';
 export { Request } from './request.ts';
 export { Response } from './response.ts';

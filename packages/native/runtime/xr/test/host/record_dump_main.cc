@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Writes a frame record with known contents, produced by the real native writer (FrameRecord + write_hand_input),
 // to a file. web/xr/test/record-roundtrip.test.ts loads it as the XRHostFrame and checks what IWER host mode makes
 // of it (XRF-2: XRView.transform.matrix, projectionMatrix, input poses and buttons).

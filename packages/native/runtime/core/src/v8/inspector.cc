@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The V8 inspector served over the loopback server: CDP discovery (/json*), one page target, sessions, pause loop,
 // --inspect-brk, Page-domain stand-ins (CDP-1..10). Written from v8-inspector.h and the Chrome DevTools Protocol
 // documentation (discovery endpoints, Runtime/Debugger/Page domains).

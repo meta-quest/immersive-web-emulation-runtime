@@ -198,10 +198,7 @@ export interface InjectionFinding {
 const INJECTION_KEY_SETS: { keys: RegExp[]; what: string }[] = [
   {
     what: 'IWSDK IWER emulator injection',
-    keys: [
-      /\buserAgentException\s*["']?\s*:/,
-      /\bactivation\s*["']?\s*:/,
-    ],
+    keys: [/\buserAgentException\s*["']?\s*:/, /\bactivation\s*["']?\s*:/],
   },
 ];
 

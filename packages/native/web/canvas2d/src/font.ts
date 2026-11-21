@@ -46,7 +46,14 @@ const GENERIC = new Set([
   'math',
   'fangsong',
 ]);
-const CSS_WIDE = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer', 'default']);
+const CSS_WIDE = new Set([
+  'inherit',
+  'initial',
+  'unset',
+  'revert',
+  'revert-layer',
+  'default',
+]);
 const STRETCH: Record<string, number> = {
   'ultra-condensed': 50,
   'extra-condensed': 62.5,
@@ -68,7 +75,14 @@ const ABSOLUTE_SIZES: Record<string, number> = {
   'xx-large': 32,
   'xxx-large': 48,
 };
-const SYSTEM_FONTS = new Set(['caption', 'icon', 'menu', 'message-box', 'small-caption', 'status-bar']);
+const SYSTEM_FONTS = new Set([
+  'caption',
+  'icon',
+  'menu',
+  'message-box',
+  'small-caption',
+  'status-bar',
+]);
 const UNIT_PX: Record<string, number> = {
   px: 1,
   pt: 4 / 3,
@@ -81,7 +95,10 @@ const UNIT_PX: Record<string, number> = {
 
 export const DEFAULT_FONT_SIZE = 10;
 
-type Tok = { kind: 'ident' | 'string' | 'comma' | 'slash' | 'other'; text: string };
+type Tok = {
+  kind: 'ident' | 'string' | 'comma' | 'slash' | 'other';
+  text: string;
+};
 
 function tokenize(s: string): Tok[] | null {
   const out: Tok[] = [];
@@ -123,7 +140,12 @@ function tokenize(s: string): Tok[] | null {
     let j = i;
     while (j < s.length && !' \t\n\r\f,/"\''.includes(s[j]!)) j++;
     const text = s.slice(i, j);
-    out.push({ kind: /^-?[a-zA-Z_\u0080-￿][\w\-\u0080-￿]*$/.test(text) ? 'ident' : 'other', text });
+    out.push({
+      kind: /^-?[a-zA-Z_\u0080-￿][\w\-\u0080-￿]*$/.test(text)
+        ? 'ident'
+        : 'other',
+      text,
+    });
     i = j;
   }
   return out;
@@ -173,14 +195,31 @@ function validLineHeight(t: Tok): boolean {
   const m = NUM_UNIT.exec(t.text.toLowerCase());
   if (!m) return false;
   const unit = m[2]!;
-  return parseFloat(m[1]!) >= 0 && (unit === '' || unit === '%' || unit in UNIT_PX || unit === 'em' || unit === 'rem' || unit === 'ex' || unit === 'ch');
+  return (
+    parseFloat(m[1]!) >= 0 &&
+    (unit === '' ||
+      unit === '%' ||
+      unit in UNIT_PX ||
+      unit === 'em' ||
+      unit === 'rem' ||
+      unit === 'ex' ||
+      unit === 'ch')
+  );
 }
 
 /** Parses a `font` value; null when invalid (the setter then ignores it). */
-export function parseFont(value: string, parentPx = DEFAULT_FONT_SIZE, parentWeight = 400): ParsedFont | null {
+export function parseFont(
+  value: string,
+  parentPx = DEFAULT_FONT_SIZE,
+  parentWeight = 400,
+): ParsedFont | null {
   const toks = tokenize(value);
   if (!toks || toks.length === 0) return null;
-  if (toks.length === 1 && toks[0]!.kind === 'ident' && SYSTEM_FONTS.has(toks[0]!.text.toLowerCase())) {
+  if (
+    toks.length === 1 &&
+    toks[0]!.kind === 'ident' &&
+    SYSTEM_FONTS.has(toks[0]!.text.toLowerCase())
+  ) {
     return {
       style: 'normal',
       smallCaps: false,
@@ -245,7 +284,10 @@ export function parseFont(value: string, parentPx = DEFAULT_FONT_SIZE, parentWei
       }
       return null;
     }
-    if (t.kind === 'other' && /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t.text)) {
+    if (
+      t.kind === 'other' &&
+      /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t.text)
+    ) {
       const w = parseFloat(t.text);
       if (weight !== null || !(w >= 1 && w <= 1000)) return null;
       weight = w;
@@ -335,12 +377,19 @@ function formatPx(v: number): string {
   return `${r}px`;
 }
 
-function serializeFamily(name: string, isGeneric: boolean, wasQuoted: boolean): string {
+function serializeFamily(
+  name: string,
+  isGeneric: boolean,
+  wasQuoted: boolean,
+): string {
   if (isGeneric) return name;
   if (wasQuoted) return `"${name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   const parts = name.split(' ');
   const plain = parts.every(
-    (p) => /^-?[a-zA-Z_\u0080-￿][\w\-\u0080-￿]*$/.test(p) && !GENERIC.has(p.toLowerCase()) && !CSS_WIDE.has(p.toLowerCase()),
+    (p) =>
+      /^-?[a-zA-Z_\u0080-￿][\w\-\u0080-￿]*$/.test(p) &&
+      !GENERIC.has(p.toLowerCase()) &&
+      !CSS_WIDE.has(p.toLowerCase()),
   );
   return plain ? name : `"${name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
@@ -354,10 +403,15 @@ function serializeFamily(name: string, isGeneric: boolean, wasQuoted: boolean): 
 export function serializeFont(f: ParsedFont): string {
   const parts: string[] = [];
   if (f.style !== 'normal') parts.push('italic');
-  if (f.weight !== 400) parts.push(f.weight === 700 ? 'bold' : String(f.weight));
+  if (f.weight !== 400)
+    parts.push(f.weight === 700 ? 'bold' : String(f.weight));
   if (f.smallCaps) parts.push('small-caps');
   parts.push(formatPx(f.sizePx));
-  parts.push(f.families.map((n, i) => serializeFamily(n, f.generic[i]!, !!f.quoted?.[i])).join(', '));
+  parts.push(
+    f.families
+      .map((n, i) => serializeFamily(n, f.generic[i]!, !!f.quoted?.[i]))
+      .join(', '),
+  );
   return parts.join(' ');
 }
 
@@ -401,7 +455,10 @@ function parseSpacingUncached(value: string): SpacingValue | null {
   const unit = m[2]!;
   if (unit === '') return v === 0 ? { normalized, px: 0, em: 0 } : null;
   if (unit in UNIT_PX) return { normalized, px: v * UNIT_PX[unit]!, em: 0 };
-  if (unit === 'em') return v === 0 ? { normalized, px: 0, em: 0 } : { normalized, px: 0, em: v };
+  if (unit === 'em')
+    return v === 0
+      ? { normalized, px: 0, em: 0 }
+      : { normalized, px: 0, em: v };
   if (unit === 'rem') return { normalized, px: v * DEFAULT_FONT_SIZE, em: 0 };
   return null;
 }

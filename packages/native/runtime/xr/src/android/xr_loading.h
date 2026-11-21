@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The loading screen's OpenXR side (iwn/xr/loading.h has the policy, placement, images and the frame plan). XR thread
 // only: static swapchains for the card (the app's splash image), the spinner and the opaque background colour (black
 // by default), filled once with GL in the XR thread's context, and the composition layers for each frame that shows

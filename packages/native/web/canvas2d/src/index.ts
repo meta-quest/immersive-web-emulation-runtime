@@ -7,7 +7,11 @@
 
 /** Canvas 2D (with text) for @iwer/native: see README.md in this directory. */
 
-export { installCanvas2D, type InstallCanvas2DOptions, type Canvas2DInstallResult } from './install.ts';
+export {
+  installCanvas2D,
+  type InstallCanvas2DOptions,
+  type Canvas2DInstallResult,
+} from './install.ts';
 export {
   CanvasHost,
   Canvas2DImageBitmap,

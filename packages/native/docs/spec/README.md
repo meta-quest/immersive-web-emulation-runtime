@@ -10,7 +10,7 @@ Status: draft. Requirements that depend on an open question say so; the question
 ## Conventions
 
 - **IDs.** Each requirement has a stable ID (`AREA-n`). Never renumber. Retire an ID by marking it
-  *withdrawn* and leave it in place.
+  _withdrawn_ and leave it in place.
 - **Strength.** MUST, SHOULD and MAY are used as in RFC 2119. "MUST, decision pending" means the
   behaviour is required but one choice in it is still open (see the open questions below).
 - **Check.** Every requirement ends with an acceptance check: a test (runtime unit test in Node, headless
@@ -23,37 +23,37 @@ Status: draft. Requirements that depend on an open question say so; the question
 
 ## Files
 
-| file | area | ID prefixes | milestone |
-|---|---|---|---|
-| [01-process-event-loop.md](01-process-event-loop.md) | process, threads, lifecycle, event loop, timers, window rAF | PROC, LOOP, TMR | M1 |
-| [02-modules-code-cache.md](02-modules-code-cache.md) | V8, ES modules, dynamic import, code cache, `Intl.Segmenter` | JS, MOD, CC | M1 |
-| [03-console-inspector-logging.md](03-console-inspector-logging.md) | console, logcat, CDP inspector | CON, LOG, CDP | M1 |
-| [04-fetch-assets-network-storage.md](04-fetch-assets-network-storage.md) | fetch over APK assets, network allowlist, URL, Blob, XHR, encoding, storage, crypto | NET, NET-STORE | M1 (assets, modules), M4 |
-| [05-workers.md](05-workers.md) | workers, structured clone, MessageChannel | WRK | M4 |
-| [06-images-canvas2d.md](06-images-canvas2d.md) | decode, `Image`, `ImageBitmap`, canvases, Canvas 2D **with text** | IMG, C2D | M4 |
-| [07-webgl2.md](07-webgl2.md) | WebGL 2 binding: objects, arguments, errors, state, shaders, extensions incl. MSAA multiview, binding perf | GL, GL-CTS, GL-PERF | M2 |
-| [08-openxr-session-frame.md](08-openxr-session-frame.md) | OpenXR instance/session lifecycle, idle presentation (no 2D panel), frame loop, swapchain, layers, rate, foveation, perf levels, spaces | XR-* | M3 |
-| [09-iwer-host-frame-record.md](09-iwer-host-frame-record.md) | IWER host mode: the shared frame record, input states, host backend, IWER as shipped | XRF | M3 |
-| [10-input.md](10-input.md) | controllers, hands, haptics | IN | M3 |
-| [11-audio.md](11-audio.md) | Web Audio, decode, real-time rules | AUD | M4 |
-| [12-browser-globals.md](12-browser-globals.md) | `window`, `document`, `navigator`, events, observers | DOM | M4 |
-| [13-packaging-config.md](13-packaging-config.md) | template APK, Node packer/signer, manifest, `iwsdk.config.json` section, size, `build:metavr`, skills, docs page, package constraints | PKG, PKG-CFG, PKG-SIZE | M5 (PKG-15 from M0) |
-| [14-debug-endpoint.md](14-debug-endpoint.md) | host debug endpoint: eval, shot, stats, info | DBG | M1 (eval), M3 (shot) |
-| [15-perf-budgets.md](15-perf-budgets.md) | the release gate: fps, GPU, CPU&GPU, JS, perf level, allocation, boot, first-sight, memory | PERF | M6 |
-| [16-known-gaps-and-regressions.md](16-known-gaps-and-regressions.md) | known failure modes → requirements; regression guards; headless runner and device suite | GAP, REG, HL | all |
+| file                                                                     | area                                                                                                                                    | ID prefixes            | milestone                |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------ |
+| [01-process-event-loop.md](01-process-event-loop.md)                     | process, threads, lifecycle, event loop, timers, window rAF                                                                             | PROC, LOOP, TMR        | M1                       |
+| [02-modules-code-cache.md](02-modules-code-cache.md)                     | V8, ES modules, dynamic import, code cache, `Intl.Segmenter`                                                                            | JS, MOD, CC            | M1                       |
+| [03-console-inspector-logging.md](03-console-inspector-logging.md)       | console, logcat, CDP inspector                                                                                                          | CON, LOG, CDP          | M1                       |
+| [04-fetch-assets-network-storage.md](04-fetch-assets-network-storage.md) | fetch over APK assets, network allowlist, URL, Blob, XHR, encoding, storage, crypto                                                     | NET, NET-STORE         | M1 (assets, modules), M4 |
+| [05-workers.md](05-workers.md)                                           | workers, structured clone, MessageChannel                                                                                               | WRK                    | M4                       |
+| [06-images-canvas2d.md](06-images-canvas2d.md)                           | decode, `Image`, `ImageBitmap`, canvases, Canvas 2D **with text**                                                                       | IMG, C2D               | M4                       |
+| [07-webgl2.md](07-webgl2.md)                                             | WebGL 2 binding: objects, arguments, errors, state, shaders, extensions incl. MSAA multiview, binding perf                              | GL, GL-CTS, GL-PERF    | M2                       |
+| [08-openxr-session-frame.md](08-openxr-session-frame.md)                 | OpenXR instance/session lifecycle, idle presentation (no 2D panel), frame loop, swapchain, layers, rate, foveation, perf levels, spaces | XR-\*                  | M3                       |
+| [09-iwer-host-frame-record.md](09-iwer-host-frame-record.md)             | IWER host mode: the shared frame record, input states, host backend, IWER as shipped                                                    | XRF                    | M3                       |
+| [10-input.md](10-input.md)                                               | controllers, hands, haptics                                                                                                             | IN                     | M3                       |
+| [11-audio.md](11-audio.md)                                               | Web Audio, decode, real-time rules                                                                                                      | AUD                    | M4                       |
+| [12-browser-globals.md](12-browser-globals.md)                           | `window`, `document`, `navigator`, events, observers                                                                                    | DOM                    | M4                       |
+| [13-packaging-config.md](13-packaging-config.md)                         | template APK, Node packer/signer, manifest, `iwsdk.config.json` section, size, `build:metavr`, skills, docs page, package constraints   | PKG, PKG-CFG, PKG-SIZE | M5 (PKG-15 from M0)      |
+| [14-debug-endpoint.md](14-debug-endpoint.md)                             | host debug endpoint: eval, shot, stats, info                                                                                            | DBG                    | M1 (eval), M3 (shot)     |
+| [15-perf-budgets.md](15-perf-budgets.md)                                 | the release gate: fps, GPU, CPU&GPU, JS, perf level, allocation, boot, first-sight, memory                                              | PERF                   | M6                       |
+| [16-known-gaps-and-regressions.md](16-known-gaps-and-regressions.md)     | known failure modes → requirements; regression guards; headless runner and device suite                                                 | GAP, REG, HL           | all                      |
 
 312 requirement IDs and table rows in total, 5 of them withdrawn.
 
 ## Milestone exit checks mapped to requirements
 
-| milestone | exit check | requirements that make it up |
-|---|---|---|
-| M1 V8 embedding | `hello-js` equivalent on device; DevTools attaches | PROC-1..9, LOOP-1..5, TMR-1..5, JS-1..6, MOD-1..9, CC-1..5, CON-1..4, LOG-1..2, CDP-1..6, CDP-8..10, NET-1..4, NET-9, NET-10, NET-12, NET-STORE-1..4, DBG-1, DBG-EVAL, DBG-STATS, DBG-6, DBG-7, HL-3, GAP-5, GAP-12, REG-4, REG-9, REG-20 |
-| M2 WebGL2 binding | gl-bench equivalent within GL-PERF-1; conformance subset green | GL-1..27, GL-CTS-1, GL-PERF-1..4, REG-19 |
-| M3 OpenXR + IWER host mode | showcase renders in both eyes; one render pass per frame | XR-*, XRF-*, IN-1..7, IN-9, GL-PERF-5, LOG-3, CDP-7, DBG-SHOT, DBG-STAGE, GAP-10, REG-6, REG-7, REG-17, REG-18 |
-| M4 browser surface | showcase parity incl. labels and audio; headless runner green | NET-5..8, NET-11, NET-13..16, WRK-*, IMG-*, C2D-*, AUD-*, DOM-*, HL-1..2, GAP-1, GAP-4, REG-1, REG-2, REG-5, REG-8, REG-10..16 |
-| M5 packaging | fresh IWSDK project → APK → installs and enters XR, no Android SDK | PKG-*, PKG-CFG-*, XRF-P-2, GAP-7, REG-3 |
-| M6 perf gate | targets met; 23 proto samples headless + device | PERF-*, PKG-SIZE-1, HL-4, GAP-2, GAP-3, GAP-6, GAP-8, GAP-9, GAP-11 |
+| milestone                  | exit check                                                         | requirements that make it up                                                                                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1 V8 embedding            | `hello-js` equivalent on device; DevTools attaches                 | PROC-1..9, LOOP-1..5, TMR-1..5, JS-1..6, MOD-1..9, CC-1..5, CON-1..4, LOG-1..2, CDP-1..6, CDP-8..10, NET-1..4, NET-9, NET-10, NET-12, NET-STORE-1..4, DBG-1, DBG-EVAL, DBG-STATS, DBG-6, DBG-7, HL-3, GAP-5, GAP-12, REG-4, REG-9, REG-20 |
+| M2 WebGL2 binding          | gl-bench equivalent within GL-PERF-1; conformance subset green     | GL-1..27, GL-CTS-1, GL-PERF-1..4, REG-19                                                                                                                                                                                                  |
+| M3 OpenXR + IWER host mode | showcase renders in both eyes; one render pass per frame           | XR-_, XRF-_, IN-1..7, IN-9, GL-PERF-5, LOG-3, CDP-7, DBG-SHOT, DBG-STAGE, GAP-10, REG-6, REG-7, REG-17, REG-18                                                                                                                            |
+| M4 browser surface         | showcase parity incl. labels and audio; headless runner green      | NET-5..8, NET-11, NET-13..16, WRK-_, IMG-_, C2D-_, AUD-_, DOM-\*, HL-1..2, GAP-1, GAP-4, REG-1, REG-2, REG-5, REG-8, REG-10..16                                                                                                           |
+| M5 packaging               | fresh IWSDK project → APK → installs and enters XR, no Android SDK | PKG-_, PKG-CFG-_, XRF-P-2, GAP-7, REG-3                                                                                                                                                                                                   |
+| M6 perf gate               | targets met; 23 proto samples headless + device                    | PERF-\*, PKG-SIZE-1, HL-4, GAP-2, GAP-3, GAP-6, GAP-8, GAP-9, GAP-11                                                                                                                                                                      |
 
 `XR-*` includes XR-IDLE-1..3 (the idle presentation), XR-LIFE-7 (apps that never offer a session),
 XR-LAYER-1 (quad and cylinder layers), XR-SEC-1 and XR-CAM-1 (the passthrough cameras). SHOULD and MAY
@@ -111,7 +111,7 @@ DBG-LOG, DBG-INPUT, DBG-RELOAD, DBG-8) are in no row.
    tolerated?
 10. **Scope:** the draft leaves a Meta Platform SDK provider (entitlement, leaderboards, achievements) out
     and records `immersive-ar` (passthrough, planes/meshes) as later (XR-AR-1). Confirm.
-11. **No 2D panel; what happens around sessions (XR-IDLE-*, XR-LIFE-5):** the draft has no 2D panel mode,
+11. **No 2D panel; what happens around sessions (XR-IDLE-\*, XR-LIFE-5):** the draft has no 2D panel mode,
     shows black (or an optional loading image) before the first WebXR frame and between sessions, and
     exits to home if the app ends its session and does not start another within 2 s. Alternatives: exit
     at once on `end()`, stay in the idle presentation indefinitely, or add a 2D panel mode (which would
@@ -140,7 +140,7 @@ On a test headset (Quest 3S, re-baselined; Quest 3 where available), same sessio
 
 Device checks drive a running app through the debug endpoint ([14](14-debug-endpoint.md), whose contract
 the perf and RPC tools rely on), the CDP inspector ([03](03-console-inspector-logging.md)) and the VrApi
-log line per second ([15](15-perf-budgets.md)). The headless runner (HL-*) boots the same runtime JS in
+log line per second ([15](15-perf-budgets.md)). The headless runner (HL-\*) boots the same runtime JS in
 Node with fake natives.
 
 ## Changing this spec

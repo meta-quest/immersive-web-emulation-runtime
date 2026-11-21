@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Per-pixel paint evaluation (solid colours, gradients, patterns, drawImage sources) into premultiplied RGBA8 rows.
 // Pixels are evaluated at their centres, mapped back from device space to the paint's space.
 #pragma once

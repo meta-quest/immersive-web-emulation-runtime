@@ -22,10 +22,19 @@ function call(gl: GL, name: string, ...args: unknown[]): unknown {
 }
 
 test('element draws past the end of the element buffer are INVALID_OPERATION', () => {
-  const gl = inst.createContext({ width: 16, height: 16 }, 'webgl2') as unknown as GL;
+  const gl = inst.createContext(
+    { width: 16, height: 16 },
+    'webgl2',
+  ) as unknown as GL;
   const eb = call(gl, 'createBuffer');
   call(gl, 'bindBuffer', gl.ELEMENT_ARRAY_BUFFER, eb);
-  call(gl, 'bufferData', gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(6), gl.STATIC_DRAW); // 12 bytes
+  call(
+    gl,
+    'bufferData',
+    gl.ELEMENT_ARRAY_BUFFER,
+    new Uint16Array(6),
+    gl.STATIC_DRAW,
+  ); // 12 bytes
   call(gl, 'getError');
   fake.reset();
   const cases: Array<[string, ...unknown[]]> = [
@@ -37,14 +46,31 @@ test('element draws past the end of the element buffer are INVALID_OPERATION', (
   ];
   for (const [name, ...a] of cases) {
     call(gl, name, ...a);
-    assert.equal(call(gl, 'getError'), gl.INVALID_OPERATION, `${name}(${a.join(', ')})`);
+    assert.equal(
+      call(gl, 'getError'),
+      gl.INVALID_OPERATION,
+      `${name}(${a.join(', ')})`,
+    );
   }
-  for (const name of ['drawElements', 'drawElementsInstanced', 'drawRangeElements']) {
+  for (const name of [
+    'drawElements',
+    'drawElementsInstanced',
+    'drawRangeElements',
+  ]) {
     assert.equal(fake.calls.get(name) ?? 0, 0, `${name} reached the driver`);
   }
   // In range, including draws that end exactly at the end of the buffer, passes the element check (the draw itself
   // still needs a program, which this test does not set up).
-  assert.equal(call(gl, '_elementsCheck', 6, gl.UNSIGNED_SHORT, 0, 'drawElements'), true);
-  assert.equal(call(gl, '_elementsCheck', 0, gl.UNSIGNED_SHORT, 12, 'drawElements'), true);
-  assert.equal(call(gl, '_elementsCheck', 3, gl.UNSIGNED_INT, 0, 'drawElements'), true);
+  assert.equal(
+    call(gl, '_elementsCheck', 6, gl.UNSIGNED_SHORT, 0, 'drawElements'),
+    true,
+  );
+  assert.equal(
+    call(gl, '_elementsCheck', 0, gl.UNSIGNED_SHORT, 12, 'drawElements'),
+    true,
+  );
+  assert.equal(
+    call(gl, '_elementsCheck', 3, gl.UNSIGNED_INT, 0, 'drawElements'),
+    true,
+  );
 });

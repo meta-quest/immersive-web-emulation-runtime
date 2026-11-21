@@ -21,5 +21,13 @@ const run = (cmd, args) => {
     process.exit(0);
   }
 };
-run('cmake', ['-S', src, '-B', out, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release']);
+run('cmake', [
+  '-S',
+  src,
+  '-B',
+  out,
+  '-G',
+  'Ninja',
+  '-DCMAKE_BUILD_TYPE=Release',
+]);
 run('ninja', ['-C', out, '-j', '8', 'iwn_net_bridge']);

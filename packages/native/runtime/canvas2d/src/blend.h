@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Compositing of a premultiplied source span onto a premultiplied destination span.
 // Formulas: W3C Compositing and Blending Level 1 (Porter-Duff operators, separable and non-separable blend modes),
 // which HTML's globalCompositeOperation refers to.

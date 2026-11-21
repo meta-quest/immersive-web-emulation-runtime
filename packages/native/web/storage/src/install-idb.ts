@@ -12,30 +12,52 @@
 
 import { Cache, CacheStorage, createCacheStorage } from './cache.ts';
 import { installIndexedDB } from './indexeddb.ts';
-import { define, installStorageManagerMethods, nativesFrom, type InstallStorageOptions } from './install.ts';
+import {
+  define,
+  installStorageManagerMethods,
+  nativesFrom,
+  type InstallStorageOptions,
+} from './install.ts';
 
 /** IndexedDB + Cache API (the opt-in prelude). */
-export function installIdbAndCaches(g: typeof globalThis, opts: InstallStorageOptions & { origin?: string } = {}): string[] {
+export function installIdbAndCaches(
+  g: typeof globalThis,
+  opts: InstallStorageOptions & { origin?: string } = {},
+): string[] {
   const natives = nativesFrom(g, opts);
-  const warn = opts.warn ?? ((m: string) => (g as { console?: Console }).console?.warn(m));
+  const warn =
+    opts.warn ?? ((m: string) => (g as { console?: Console }).console?.warn(m));
   if (!natives) {
-    warn('[iwer-native] IndexedDB/Cache API: no native storage module; not installed');
+    warn(
+      '[iwer-native] IndexedDB/Cache API: no native storage module; not installed',
+    );
     return [];
   }
-  const installed = installIndexedDB(g, natives, { origin: opts.origin ?? (g as { location?: { origin?: string } }).location?.origin });
+  const installed = installIndexedDB(g, natives, {
+    origin:
+      opts.origin ?? (g as { location?: { origin?: string } }).location?.origin,
+  });
   const net = () => {
-    const reg = (g as unknown as Record<symbol, unknown>)[Symbol.for('iwn.net')];
+    const reg = (g as unknown as Record<symbol, unknown>)[
+      Symbol.for('iwn.net')
+    ];
     if (!reg) throw new TypeError('Cache API needs the net prelude');
-    return reg as Parameters<typeof createCacheStorage>[1] extends () => infer R ? R : never;
+    return reg as Parameters<typeof createCacheStorage>[1] extends () => infer R
+      ? R
+      : never;
   };
   const caches = createCacheStorage(natives, net);
   define(g, 'caches', caches, true);
   define(g, 'CacheStorage', CacheStorage);
   define(g, 'Cache', Cache);
   installed.push('caches', 'CacheStorage', 'Cache');
-  const nav = (g as unknown as { navigator?: Record<string, unknown> }).navigator;
+  const nav = (g as unknown as { navigator?: Record<string, unknown> })
+    .navigator;
   if (nav) {
-    installStorageManagerMethods(nav, { persist: () => Promise.resolve(true), persisted: () => Promise.resolve(true) });
+    installStorageManagerMethods(nav, {
+      persist: () => Promise.resolve(true),
+      persisted: () => Promise.resolve(true),
+    });
     installed.push('navigator.storage.persist');
   }
   return installed;

@@ -78,7 +78,17 @@ describe('Event / EventTarget (DOM-2)', () => {
       log.push(e.BUBBLING_PHASE, e.NONE, Event.CAPTURING_PHASE);
       log;
     `);
-    assert.deepEqual(Array.from(log), ['capture:2:true', 'bubble:2', 'InvalidStateError', 11, true, 'f', 3, 0, 1]);
+    assert.deepEqual(Array.from(log), [
+      'capture:2:true',
+      'bubble:2',
+      'InvalidStateError',
+      11,
+      true,
+      'f',
+      3,
+      0,
+      1,
+    ]);
   });
 
   test('Event and CustomEvent fields match Node', async () => {
@@ -126,9 +136,20 @@ describe('Event / EventTarget (DOM-2)', () => {
       log;
     `);
     assert.deepEqual(Array.from(log), [
-      'cap:root:1', 'cap:mid:1', 'cap:leaf:2', 'bub:leaf:2', 'bub:mid:3', 'bub:root:3', '|',
-      'cap:root:1', 'cap:mid:1', 'cap:leaf:2', 'bub:leaf:2', '|',
-      'mid-stop', '0',
+      'cap:root:1',
+      'cap:mid:1',
+      'cap:leaf:2',
+      'bub:leaf:2',
+      'bub:mid:3',
+      'bub:root:3',
+      '|',
+      'cap:root:1',
+      'cap:mid:1',
+      'cap:leaf:2',
+      'bub:leaf:2',
+      '|',
+      'mid-stop',
+      '0',
     ]);
   });
 
@@ -165,7 +186,11 @@ describe('Event / EventTarget (DOM-2)', () => {
       again.push(String(n));
       again;
     `);
-    assert.deepEqual(Array.from(again), ['console:Uncaught Error: in-handler', 'console:Uncaught Error: first', '1']);
+    assert.deepEqual(Array.from(again), [
+      'console:Uncaught Error: in-handler',
+      'console:Uncaught Error: first',
+      '1',
+    ]);
   });
 
   test('on<event> handler attributes keep registration order and honour return false', async () => {
@@ -182,7 +207,13 @@ describe('Event / EventTarget (DOM-2)', () => {
       ac.signal.onabort = 5; out.push(String(ac.signal.onabort));
       out;
     `);
-    assert.deepEqual(Array.from(out), ['listener1', 'handler-v2:true:abort', 'listener2', 'true', 'null']);
+    assert.deepEqual(Array.from(out), [
+      'listener1',
+      'handler-v2:true:abort',
+      'listener2',
+      'true',
+      'null',
+    ]);
   });
 
   test('window is an EventTarget; ErrorEvent / PromiseRejectionEvent / MessageEvent / ProgressEvent fields (HTML, XHR)', async () => {
@@ -206,8 +237,30 @@ describe('Event / EventTarget (DOM-2)', () => {
       out;
     `);
     assert.deepEqual(Array.from(out), [
-      'm', 'f.js', 3, 4, 1, '[object ErrorEvent]', true, 'r', true, 'TypeError',
-      'd', 'o', 'l', null, 0, true, 5, 10, 'function', 'function', true, true, true, 1,
+      'm',
+      'f.js',
+      3,
+      4,
+      1,
+      '[object ErrorEvent]',
+      true,
+      'r',
+      true,
+      'TypeError',
+      'd',
+      'o',
+      'l',
+      null,
+      0,
+      true,
+      5,
+      10,
+      'function',
+      'function',
+      true,
+      true,
+      true,
+      1,
     ]);
   });
 
@@ -254,7 +307,8 @@ describe('DOMException (DOM-10)', () => {
        globalThis.Error = new Proxy(E, { construct(t, a, nt) { __errorArgs.push(a[0]); return Reflect.construct(t, a, nt); } });`,
       ctx,
     );
-    (vm.runInContext('globalThis', ctx) as Record<string, unknown>).__iwn = fakeNatives().natives;
+    (vm.runInContext('globalThis', ctx) as Record<string, unknown>).__iwn =
+      fakeNatives().natives;
     (await glueScript()).runInContext(ctx);
     const r = vm.runInContext(
       `(() => {
@@ -273,15 +327,18 @@ describe('DOMException (DOM-10)', () => {
       })()`,
       ctx,
     ) as Record<string, unknown>;
-    assert.deepEqual({ ...r }, {
-      passed: true,
-      head: 'NotSupportedError: The requested XRSession mode is not supported.',
-      emptyHead: 'AbortError',
-      own: '',
-      accessor: true,
-      message: 'The requested XRSession mode is not supported.',
-      str: 'NotSupportedError: The requested XRSession mode is not supported.',
-    });
+    assert.deepEqual(
+      { ...r },
+      {
+        passed: true,
+        head: 'NotSupportedError: The requested XRSession mode is not supported.',
+        emptyHead: 'AbortError',
+        own: '',
+        accessor: true,
+        message: 'The requested XRSession mode is not supported.',
+        str: 'NotSupportedError: The requested XRSession mode is not supported.',
+      },
+    );
   });
 });
 
@@ -362,9 +419,16 @@ describe('queueMicrotask (TMR-3)', () => {
 
   test('uses the native microtask hook when present', async () => {
     let n = 0;
-    const { natives } = await import('./harness.ts').then((h) => h.fakeNatives({
-      loop: { queueMicrotask: (cb: () => void) => { n++; queueMicrotask(cb); } },
-    }));
+    const { natives } = await import('./harness.ts').then((h) =>
+      h.fakeNatives({
+        loop: {
+          queueMicrotask: (cb: () => void) => {
+            n++;
+            queueMicrotask(cb);
+          },
+        },
+      }),
+    );
     const { run } = await createGlueContext({ natives });
     await run<Promise<void>>(`new Promise((r) => queueMicrotask(r))`);
     assert.equal(n, 1);

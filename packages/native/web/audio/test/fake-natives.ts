@@ -26,18 +26,36 @@ export class FakeNatives implements AudioNatives {
   contexts = new Map<number, FakeContext>();
   buffers = new Map<number, { channels: Float32Array[]; sampleRate: number }>();
   events: Array<number | string | null> = [];
-  decodes: Array<{ ctx: number; data: ArrayBuffer; requestId: number; targetRate: number; bytes: Uint8Array }> = [];
+  decodes: Array<{
+    ctx: number;
+    data: ArrayBuffer;
+    requestId: number;
+    targetRate: number;
+    bytes: Uint8Array;
+  }> = [];
   handler: ((ev: Array<number | string | null>) => void) | null = null;
   push = false;
   submits = 0;
   #nextCtx = 1;
   #nextBuf = 1;
 
-  createContext(kind: 0 | 1, sampleRate: number, _channels: number, _length: number, _hint: number): [number, number, Float64Array, Float32Array] {
+  createContext(
+    kind: 0 | 1,
+    sampleRate: number,
+    _channels: number,
+    _length: number,
+    _hint: number,
+  ): [number, number, Float64Array, Float32Array] {
     const id = this.#nextCtx++;
     const rate = sampleRate || 48000;
     const c: FakeContext = {
-      id, kind, sampleRate: rate, shared: new Float64Array(16), params: new Float32Array(65536), batches: [], released: false,
+      id,
+      kind,
+      sampleRate: rate,
+      shared: new Float64Array(16),
+      params: new Float32Array(65536),
+      batches: [],
+      released: false,
     };
     this.contexts.set(id, c);
     if (kind === 0) {
@@ -60,21 +78,41 @@ export class FakeNatives implements AudioNatives {
   startRendering(_ctx: number): boolean {
     return true;
   }
-  createBuffer(channels: number, length: number, sampleRate: number): [number, ...Float32Array[]] {
+  createBuffer(
+    channels: number,
+    length: number,
+    sampleRate: number,
+  ): [number, ...Float32Array[]] {
     const id = this.#nextBuf++;
-    const chans = Array.from({ length: channels }, () => new Float32Array(length));
+    const chans = Array.from(
+      { length: channels },
+      () => new Float32Array(length),
+    );
     this.buffers.set(id, { channels: chans, sampleRate });
     return [id, ...chans];
   }
-  takeBuffer(id: number): [number, number, number, number, ...Float32Array[]] | null {
+  takeBuffer(
+    id: number,
+  ): [number, number, number, number, ...Float32Array[]] | null {
     const b = this.buffers.get(id);
     if (!b) return null;
-    return [id, b.channels.length, b.channels[0].length, b.sampleRate, ...b.channels];
+    return [
+      id,
+      b.channels.length,
+      b.channels[0].length,
+      b.sampleRate,
+      ...b.channels,
+    ];
   }
   releaseBuffer(id: number): void {
     this.buffers.delete(id);
   }
-  decode(ctx: number, data: ArrayBuffer, requestId: number, targetRate: number): void {
+  decode(
+    ctx: number,
+    data: ArrayBuffer,
+    requestId: number,
+    targetRate: number,
+  ): void {
     const bytes = new Uint8Array(data.slice(0));
     // Detach like the real module.
     (data as ArrayBuffer & { transfer(): ArrayBuffer }).transfer();
@@ -86,7 +124,9 @@ export class FakeNatives implements AudioNatives {
     this.events = [];
     return e;
   }
-  setEventHandler(fn: ((events: Array<number | string | null>) => void) | null): boolean {
+  setEventHandler(
+    fn: ((events: Array<number | string | null>) => void) | null,
+  ): boolean {
     this.handler = fn;
     return this.push;
   }
@@ -95,7 +135,17 @@ export class FakeNatives implements AudioNatives {
   }
   analyserTime(): void {}
   analyserFreq(): void {}
-  biquadResponse(_t: number, _sr: number, _f: number, _d: number, _q: number, _g: number, freqs: Float32Array, mag: Float32Array, phase: Float32Array): void {
+  biquadResponse(
+    _t: number,
+    _sr: number,
+    _f: number,
+    _d: number,
+    _q: number,
+    _g: number,
+    freqs: Float32Array,
+    mag: Float32Array,
+    phase: Float32Array,
+  ): void {
     mag.fill(1);
     phase.fill(0);
     void freqs;
@@ -107,7 +157,16 @@ export class FakeNatives implements AudioNatives {
     return performance.now() + 1000;
   }
   stats(): AudioStats {
-    return { realtimeContexts: 0, offlineContexts: 0, xruns: 0, renderLoad: 0, liveNodes: 0, liveBuffers: this.buffers.size, pendingDecodes: 0, pausedReasons: 0 };
+    return {
+      realtimeContexts: 0,
+      offlineContexts: 0,
+      xruns: 0,
+      renderLoad: 0,
+      liveNodes: 0,
+      liveBuffers: this.buffers.size,
+      pendingDecodes: 0,
+      pausedReasons: 0,
+    };
   }
   setOutputPaused(_reason: number, _paused: boolean): void {}
 
@@ -147,9 +206,21 @@ export class FakeNatives implements AudioNatives {
 }
 
 const ARGS: Record<number, number> = {
-  [Op.CreateNode]: 10, [Op.Connect]: 4, [Op.ConnectParam]: 3, [Op.Disconnect]: 4, [Op.DisconnectParam]: 3,
-  [Op.ReleaseNode]: 1, [Op.ParamEvent]: 7, [Op.ParamCancel]: 3, [Op.SetProp]: 3, [Op.SetBuffer]: 2,
-  [Op.Start]: 4, [Op.Stop]: 2, [Op.PeriodicWave]: 3, [Op.ContextState]: 2, [Op.ParamRate]: 2,
+  [Op.CreateNode]: 10,
+  [Op.Connect]: 4,
+  [Op.ConnectParam]: 3,
+  [Op.Disconnect]: 4,
+  [Op.DisconnectParam]: 3,
+  [Op.ReleaseNode]: 1,
+  [Op.ParamEvent]: 7,
+  [Op.ParamCancel]: 3,
+  [Op.SetProp]: 3,
+  [Op.SetBuffer]: 2,
+  [Op.Start]: 4,
+  [Op.Stop]: 2,
+  [Op.PeriodicWave]: 3,
+  [Op.ContextState]: 2,
+  [Op.ParamRate]: 2,
 };
 
 /** Splits a word stream into commands. */

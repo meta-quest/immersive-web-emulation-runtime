@@ -65,7 +65,7 @@ export class DepthRecordView {
       height: 0,
       depthNear: 0,
       depthFar: 0,
-      rawValueToMeters: 1,  // a depth texture: metres = depthNear / (1 - d)
+      rawValueToMeters: 1, // a depth texture: metres = depthNear / (1 - d)
       viewCount: 2,
       views: this.data.subarray(VIEWS, VIEWS + 2 * VIEW_STRIDE),
     };

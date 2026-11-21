@@ -28,7 +28,10 @@ export const NET_REGISTRY_KEY: unique symbol = Symbol.for('iwn.net') as never;
 export interface NetRegistry {
   env: NetEnv;
   context: FetchContext;
-  fetch: (input: Request | string | URL, init?: RequestInitLike) => Promise<Response>;
+  fetch: (
+    input: Request | string | URL,
+    init?: RequestInitLike,
+  ) => Promise<Response>;
   /** Origins blocked so far this session (debug endpoint `stats`, headless runner report). */
   blockedOrigins(): string[];
   installed: string[];
@@ -56,15 +59,32 @@ export interface InstallNetOptions {
   mode?: 'missing' | 'all';
 }
 
-function define(g: object, name: string, value: unknown, installed: string[], mode: 'missing' | 'all'): void {
-  if (mode === 'missing' && (g as Record<string, unknown>)[name] !== undefined) return;
-  Object.defineProperty(g, name, { value, writable: true, configurable: true, enumerable: false });
+function define(
+  g: object,
+  name: string,
+  value: unknown,
+  installed: string[],
+  mode: 'missing' | 'all',
+): void {
+  if (mode === 'missing' && (g as Record<string, unknown>)[name] !== undefined)
+    return;
+  Object.defineProperty(g, name, {
+    value,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
   installed.push(name);
 }
 
-export function installNet(g: typeof globalThis, options: InstallNetOptions = {}): NetRegistry {
+export function installNet(
+  g: typeof globalThis,
+  options: InstallNetOptions = {},
+): NetRegistry {
   const natives =
-    options.natives !== undefined ? options.natives : ((g as { __iwn?: { net?: NetNatives } }).__iwn?.net ?? null);
+    options.natives !== undefined
+      ? options.natives
+      : ((g as { __iwn?: { net?: NetNatives } }).__iwn?.net ?? null);
   const mode = options.mode ?? 'missing';
   const env = makeEnv(g, natives, options.warn);
   const context = makeFetchContext(env);
@@ -72,7 +92,10 @@ export function installNet(g: typeof globalThis, options: InstallNetOptions = {}
   setWebSocketContext(context);
   setXhrContext(context);
   const installed = installStreams(g);
-  const fetch = function fetch(input: Request | string | URL, init?: RequestInitLike): Promise<Response> {
+  const fetch = function fetch(
+    input: Request | string | URL,
+    init?: RequestInitLike,
+  ): Promise<Response> {
     return fetchWith(context, input, init);
   };
   define(g, 'fetch', fetch, installed, mode);
@@ -89,7 +112,11 @@ export function installNet(g: typeof globalThis, options: InstallNetOptions = {}
   define(g, 'XMLHttpRequestUpload', XMLHttpRequestUpload, installed, mode);
   const nav = (g as { navigator?: object }).navigator;
   if (nav && !('onLine' in nav)) {
-    Object.defineProperty(nav, 'onLine', { get: () => true, configurable: true, enumerable: true });
+    Object.defineProperty(nav, 'onLine', {
+      get: () => true,
+      configurable: true,
+      enumerable: true,
+    });
   }
   const registry: NetRegistry = {
     env,
@@ -99,7 +126,8 @@ export function installNet(g: typeof globalThis, options: InstallNetOptions = {}
     installed,
     makeResponse(init) {
       const headers = new Headers();
-      for (const [n, v] of init.headers) headerList(headers).push([n.toLowerCase(), v]);
+      for (const [n, v] of init.headers)
+        headerList(headers).push([n.toLowerCase(), v]);
       return makeResponse({
         type: init.type,
         status: init.status,
@@ -113,6 +141,9 @@ export function installNet(g: typeof globalThis, options: InstallNetOptions = {}
       });
     },
   };
-  Object.defineProperty(g, NET_REGISTRY_KEY, { value: registry, configurable: true });
+  Object.defineProperty(g, NET_REGISTRY_KEY, {
+    value: registry,
+    configurable: true,
+  });
   return registry;
 }

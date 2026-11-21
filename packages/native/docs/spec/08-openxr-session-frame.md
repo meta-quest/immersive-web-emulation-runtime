@@ -23,20 +23,20 @@ the world initializer's `xr.offer` option) and its `layers` example; IWER `src/h
 Android loader-init and instance-create structures (VM and activity), enabling `XR_KHR_opengl_es_enable`
 and every optional extension it uses only when enumerated. Missing optional extensions degrade
 features (logged once), never fail startup.
-*Check:* the LOG-2 line lists the enabled extensions; a run with an extension artificially withheld
+_Check:_ the LOG-2 line lists the enabled extensions; a run with an extension artificially withheld
 (debug switch) still enters XR.
 
 **XR-INIT-2 (MUST).** The GLES 3.2 context is created against the requirements from
 `xrGetOpenGLESGraphicsRequirementsKHR` and bound to the session; no window surface is needed while in XR
 (a tiny pbuffer or surfaceless context is fine).
-*Check:* boot log; no EGL errors.
+_Check:_ boot log; no EGL errors.
 
 **XR-INIT-3 (MUST).** `navigator.xr.isSessionSupported('immersive-vr')` resolves true when an HMD system
 exists; `'inline'` always resolves true (WebXR: inline sessions are always supported; Chromium does the
 same), and inline sessions are IWER's with no native support beyond window rAF (TMR-5); `'immersive-ar'`
 resolves true only when passthrough is available and the AR feature set is implemented (later milestone,
 XR-AR-*).
-*Check:* runtime test of the three answers; `immersive-vr` true on device.
+*Check:\* runtime test of the three answers; `immersive-vr` true on device.
 
 ## Session lifecycle (OpenXR state ↔ WebXR)
 
@@ -46,31 +46,31 @@ Supported at M3: `viewer`, `local`, `local-floor`, `bounded-floor`, `layers`, `h
 Quest Browser foveation-level feature strings; `plane-detection`, `mesh-detection`, `anchors`, `hit-test` and
 `depth-sensing` only when the native side reports support for each (XR-PERM-1). A second request while one session is active rejects with
 `InvalidStateError`. User activation is not required (there is no page gesture in a packaged app).
-*Check:* IWER host-mode tests plus a device test of each case.
+_Check:_ IWER host-mode tests plus a device test of each case.
 
 **XR-LIFE-2 (MUST).** `offerSession(mode, init)` (IWSDK calls it at boot unless `xr.offer` is `'none'`):
 by default the offer is granted as soon as the OpenXR session is ready (IWER host mode's
 `autoGrantOfferedSession`); the app is already immersive and there is no "Enter VR" button. A config
-switch (and its launch-extra override, PKG-CFG-3) selects *explicit-grant mode*: the offer is held and the
+switch (and its launch-extra override, PKG-CFG-3) selects _explicit-grant mode_: the offer is held and the
 runtime stays in the idle presentation (XR-IDLE-1) until JS calls one grant function the runtime
 documents, which grants the offer through IWER's `grantOfferedSession()`. The use is attaching DevTools or
 a test driver and setting things up (breakpoints in session-start code, probes) before the session starts,
 without changing the bundle. Our perf tool does not use this mode; it holds the offer with its own
 injected script (DBG-STAGE).
-*Check:* the showcase enters XR with no user action; the same APK launched with explicit-grant mode on
+_Check:_ the showcase enters XR with no user action; the same APK launched with explicit-grant mode on
 stays in the idle presentation for 10 s (no session, window rAF running), then an `eval` that calls the
 documented grant function enters the session within 5 s; calling it with no offer pending is a no-op.
 
 **XR-LIFE-3 (MUST).** The native session follows OpenXR's state machine: `xrBeginSession` on `READY`,
 frame loop while `SYNCHRONIZED`/`VISIBLE`/`FOCUSED`, `xrEndSession` on `STOPPING`, instance teardown or
 re-creation on `LOSS_PENDING`, process exit on `EXITING`. Every state change is logged.
-*Check:* logs across doff/don, system menu, quit.
+_Check:_ logs across doff/don, system menu, quit.
 
 **XR-LIFE-4 (MUST).** WebXR `visibilityState` maps from OpenXR: `FOCUSED` → `visible`, `VISIBLE` →
 `visible-blurred` (system UI over the app), `SYNCHRONIZED`/`STOPPING`/idle → `hidden`; each change fires
 `visibilitychange` once. While `hidden` the session's rAF callbacks do not run (as in browsers); while
 `visible-blurred` they run and input sources are removed silently (HOST-INPUT semantics).
-*Check:* open the system menu during XR: `visible-blurred`, frames continue, sources gone; close it:
+_Check:_ open the system menu during XR: `visible-blurred`, frames continue, sources gone; close it:
 `visible`, sources return without spurious select events.
 
 **XR-LIFE-5 (MUST).** `session.end()` called by the app: if called inside a frame callback the current
@@ -81,14 +81,14 @@ configurable grace period (default 2 s; decision pending, README open question 1
 exit (`xrRequestExitSession`) and the app closes to the system home, so the user is never left in an
 empty scene. A system-initiated end (quit, `EXITING`, `LOSS_PENDING`) fires the same `end` and never
 calls back into a dead session.
-*Check:* call `end()` inside a rAF callback and from a timer; both end cleanly; a `requestSession` within
+_Check:_ call `end()` inside a rAF callback and from a timer; both end cleanly; a `requestSession` within
 the grace period re-enters; with no re-request the app exits to home after the grace period.
 
 ## Before the first WebXR frame and between sessions (no flat panel)
 
 The runtime has no 2D panel mode in this release: every app is an immersive-start VR app (PKG-8).
-Earlier drafts said "flat panel" or "flat frames" for this state; it is now called the *idle
-presentation*.
+Earlier drafts said "flat panel" or "flat frames" for this state; it is now called the _idle
+presentation_.
 
 **XR-IDLE-1 (MUST, with a SHOULD part).** From the moment the OpenXR session is running until the first
 WebXR frame (boot, module compile, a held offer), and between WebXR sessions (XR-LIFE-5), the runtime keeps
@@ -98,6 +98,7 @@ background, a passthrough layer while the user comes from passthrough. With the 
 No such frame is left without an opaque or passthrough layer: what the system shows behind one is not the app's
 choice. The app's first projection layer hands over (a short cross-fade). No app JS runs in this loop other than
 window rAF callbacks and tasks.
+
 - MUST: the system never reports the app as unresponsive and never closes it, even while one long
   synchronous JS task occupies the main JS thread (evaluating the showcase's 6.8 MB entry chunk, which
   took ~6 s to compile in the headless runner, or IWSDK's `World.create`); and whenever the main JS thread
@@ -105,21 +106,21 @@ window rAF callbacks and tasks.
 - SHOULD: frames keep coming at the display rate during such long JS tasks too (the loading screen stays
   steady). This means idle-presentation frames must not wait for the JS thread; which thread issues them is
   the implementer's choice within OpenXR's threading rules (PROC-1).
-*Check:* launch the showcase cold: no system "not responding" prompt or close during boot; `stats` boot
-marks show frames submitted before the first WebXR frame, and the stats report the longest gap between
-submitted frames during boot (recorded; SHOULD target ≤ 2 frame periods); a recording of a launch shows the
-splash and spinner on the configured background until the app's first frame, with no empty frame.
+  _Check:_ launch the showcase cold: no system "not responding" prompt or close during boot; `stats` boot
+  marks show frames submitted before the first WebXR frame, and the stats report the longest gap between
+  submitted frames during boot (recorded; SHOULD target ≤ 2 frame periods); a recording of a launch shows the
+  splash and spinner on the configured background until the app's first frame, with no empty frame.
 
 **XR-IDLE-2 (MUST).** In the idle presentation, window `requestAnimationFrame` is driven by the OpenXR
 frame loop (one callback round per `xrWaitFrame`, at the display rate; TMR-5). `window.innerWidth/
 innerHeight` and canvas drawing buffers keep fixed, documented values (DOM-3); drawing to a WebGL
 context's default framebuffer here is allowed and is not displayed.
-*Check:* window rAF count per second equals the display rate before entering XR.
+_Check:_ window rAF count per second equals the display rate before entering XR.
 
 **XR-IDLE-3 (MUST).** Moving between the idle presentation and a WebXR session needs no new OpenXR
 session, no new GL context and no app reload; the first WebXR frame follows the grant within two display
 frames.
-*Check:* boot marks "session granted" → "first XR frame" ≤ 2 frame periods.
+_Check:_ boot marks "session granted" → "first XR frame" ≤ 2 frame periods.
 
 **XR-LIFE-7 (MUST, decision pending).** An app that never offers or requests an immersive session (IWSDK
 with `xr.offer: 'none'` or `xr: false`, or an app that waits for a click on a DOM "Enter VR" button that
@@ -132,14 +133,14 @@ when the build serves the inspector or the debug endpoint (debug builds, and bui
 inspector flag such as our perf tool's staged build, whose injected script holds the offer where the
 runtime cannot see it; DBG-STAGE); the error line is still logged. The developer page (PKG-14) states that apps
 must offer or request a session on their own.
-*Check:* pack a test app built with IWSDK `xr.offer: 'none'` as a plain release build: the error line
+_Check:_ pack a test app built with IWSDK `xr.offer: 'none'` as a plain release build: the error line
 appears at ~10 s and the app exits to home at the timeout; as a debug build it logs the line and stays; the
 showcase never logs the line.
 
 **XR-LIFE-6 (SHOULD).** Session start applies, before the first frame: the colour space (Rec. 709 /
 the browser's choice, via `XR_FB_color_space`), the configured or app-requested refresh rate, foveation
 (XR-FOV-1), and performance levels (XR-PERF-1).
-*Check:* the first VrApi line after entering XR shows the chosen rate, foveation level and CPU/GPU levels.
+_Check:_ the first VrApi line after entering XR shows the chosen rate, foveation level and CPU/GPU levels.
 
 ## The frame loop
 
@@ -149,23 +150,23 @@ locate views (and input, [10](10-input.md)) for the predicted display time → a
 swapchain image → write the frame record ([09](09-iwer-host-frame-record.md)) → invoke, through IWER, the callbacks the session has queued, then window rAF callbacks → frame-end GL work (invalidation GL-PERF-5, re-pointing
 for the next frame if needed) → release the image → `xrEndFrame` with the layers and the same predicted
 display time. No JS runs between release and `xrEndFrame`.
-*Check:* a GL/XR call trace for one frame in the debug build matches the order.
+_Check:_ a GL/XR call trace for one frame in the debug build matches the order.
 
 **XR-LOOP-2 (MUST).** When `xrWaitFrame` reports `shouldRender = false`, the runtime calls `xrBeginFrame`
 and `xrEndFrame` with no layers and does not run session rAF callbacks (window rAF and tasks still run).
-*Check:* induce it (proximity off / system overlay transitions); no callbacks for those frames, no
+_Check:_ induce it (proximity off / system overlay transitions); no callbacks for those frames, no
 OpenXR validation errors.
 
 **XR-LOOP-3 (MUST).** Exceptions thrown by an XR rAF callback are reported (LOOP-4 path) and do not skip
 the rest of the frame: later callbacks run and the frame is submitted.
-*Check:* a callback that throws every frame; frames continue at full rate.
+_Check:_ a callback that throws every frame; frames continue at full rate.
 
 **XR-LOOP-4 (MUST).** Frame pacing: tasks, timers, GC work and code-cache writes run after `xrEndFrame`
 and before the next `xrWaitFrame` returns, so they do not delay a frame's JS (see PERF-JS-*). Observable
 outcome: garbage-collection pause time falls mostly outside the frame callbacks (PERF-GC-1), and no frame
 is late because of GC or code-cache work. How this is achieved is the implementer's choice within V8
 15.5's public embedder API, documented with the runtime.
-*Check:* the DBG-STATS GC pause split shows ≥ 95 % of pause time outside frame callbacks; no stale frames
+*Check:\* the DBG-STATS GC pause split shows ≥ 95 % of pause time outside frame callbacks; no stale frames
 attributable to GC over a 5-minute run (VrApi stale 0).
 
 **XR-LOOP-5 (MUST).** The frame record's predicted display time (09) is OpenXR's predicted display time
@@ -174,7 +175,7 @@ converted to the `performance.now()` clock (TMR-4), strictly increasing, and is 
 mode passes; today that is the same predicted display time. Quest Browser instead passes the frame's start
 time and exposes the prediction only as `predictedDisplayTime`. Whether IWER should match Quest Browser is
 README open question 12; until it is decided, the check below is written for the predicted time.
-*Check:* recorded deltas equal the refresh period ± jitter, never ≤ 0; at callback entry `time −
+_Check:_ recorded deltas equal the refresh period ± jitter, never ≤ 0; at callback entry `time −
 performance.now()` lies between −1 and +3 frame periods.
 
 ## Swapchain and projection layer
@@ -185,7 +186,7 @@ swapchain with `arraySize = 2` (multiview); `'texture'` → one swapchain with b
 size = recommended per-eye size × `scaleFactor` (clamped to the maximum); 1 mip level, sample count 1
 (MSAA comes from the multisampled multiview attachment, GL-24). The colour format renders colours that
 match Quest Browser (verify with XR-COL-1). Later layers in the same session reuse it.
-*Check:* LOG-2 swapchain line; three's render target sizes equal Quest Browser's for the same
+_Check:_ LOG-2 swapchain line; three's render target sizes equal Quest Browser's for the same
 `scaleFactor` (compare `layer.textureWidth/Height`).
 
 **XR-SC-2 (MUST).** `XRWebGLBinding.getViewSubImage(layer, view)` returns, for each eye, a sub-image
@@ -194,7 +195,7 @@ acquired for the current frame (browsers hand out one opaque texture), `imageInd
 texture-array, `viewport` the full layer (texture-array) or that eye's half ('texture'). Framebuffers the
 app attached that texture to keep rendering into the current image every frame without the app
 re-attaching. `depthStencilTexture` is `null` when the layer has no depth swapchain.
-*Check:* an app that attaches once at session start renders every frame to the right image (no
+_Check:_ an app that attaches once at session start renders every frame to the right image (no
 flicker, the symptom of rendering into a stale image); XR screenshots on 10
 consecutive frames all show the scene.
 
@@ -202,12 +203,12 @@ consecutive frames all show the scene.
 whose colour is the current swapchain image, `framebufferWidth/Height`, `getViewport(view)` side by side,
 `ignoreDepthValues` true unless depth is submitted, `fixedFoveation` settable; drawing to it outside a
 frame callback is ignored, as WebXR specifies for opaque framebuffers.
-*Check:* a three app with `layers` not requested renders in both eyes.
+_Check:_ a three app with `layers` not requested renders in both eyes.
 
 **XR-SC-4 (MUST).** Exactly one projection layer per frame for a VR session, with both views' pose and fov
 taken from the same `xrLocateViews` result that was handed to JS for that frame, plus the session's quad
 and cylinder layers (XR-LAYER-1) in `renderState.layers` order.
-*Check:* a fixed cube does not swim when the head moves (human check on device, once per milestone);
+_Check:_ a fixed cube does not swim when the head moves (human check on device, once per milestone);
 `xrEndFrame` validation layer clean.
 
 **XR-LAYER-1 (MUST).** Quad and cylinder composition layers (WebXR Layers), as IWSDK core's `XRLayerSystem`
@@ -237,7 +238,7 @@ only quad or cylinder layers (no projection layer) ends the loading screen like 
 content yet, an unlocated space or a shape OpenXR rejects is left out of that frame; the compositor's layer limit
 (`maxLayerCount`) cuts the end of the list. `destroy()` releases the swapchain; the session's end releases all.
 Equirect and cube layers are absent (IWSDK does not use them).
-*Check:* proto-layers (IWSDK 1.0.0 and 1.1.0) runs on device at full rate with no exception, its quad and cylinder
+_Check:_ proto-layers (IWSDK 1.0.0 and 1.1.0) runs on device at full rate with no exception, its quad and cylinder
 layers submitted every frame (`xr.layers` in DBG-STATS, LOG-2's layer swapchain lines); a system capture (Meta's
 capture service, which unlike DBG-SHOT includes composition layers) shows them, and shows each eye its region of
 every stereo layout.
@@ -245,7 +246,7 @@ every stereo layout.
 **XR-COL-1 (MUST).** Colour parity: a test scene with known sRGB patches (three, `outputColorSpace =
 SRGBColorSpace`) shows the same encoded values in an XR screenshot of the runtime and of Quest Browser
 on the same headset, ±2 per channel.
-*Check:* DBG-SHOT readback vs a Quest Browser capture through the same readback path where possible, or
+_Check:_ DBG-SHOT readback vs a Quest Browser capture through the same readback path where possible, or
 the compositor mirror for both.
 
 ## Refresh rate, foveation, performance levels
@@ -254,7 +255,7 @@ the compositor mirror for both.
 `session.frameRate`, `updateTargetFrameRate(rate)` resolves after the runtime confirms the change (and
 fires `frameratechange`), and rejects with `InvalidStateError` after end and for a rate not in the list
 (as Quest Browser does).
-*Check:* request 90 then 72; both resolve; VrApi line shows the rate.
+_Check:_ request 90 then 72; both resolve; VrApi line shows the rate.
 
 **XR-FOV-1 (MUST).** `fixedFoveation` (0..1) on projection layers and `XRWebGLLayer` maps to the
 runtime's fixed foveation levels (none/low/medium/high) through `XR_FB_foveation` profiles applied to the
@@ -262,18 +263,18 @@ swapchain; the Quest Browser feature strings `low-`/`medium-`/`high-fixed-foveat
 value; a config default applies when the app sets nothing. Foveation is applied before the first frame is
 submitted. Reading `fixedFoveation` returns the value set (or the effective one if the runtime overrode
 it).
-*Check:* VrApi `Fov` field changes with the setting; the first VrApi line shows the configured level.
+_Check:_ VrApi `Fov` field changes with the setting; the first VrApi line shows the configured level.
 
 **XR-PERF-1 (MUST).** CPU/GPU performance levels start at the level Quest Browser uses for the same
 content (CPU level 2 in the baseline measurements; GPU per the runtime default), and adapt upward on missed
 frames over a window (and back down after sustained headroom) through `XR_EXT_performance_settings`; they
 are never pinned at the maximum by default. (Regression guard: pinning CPU level 4 costs power and heat for nothing; GAP-6.)
-*Check:* the showcase holds 72 Hz with VrApi showing CPU level ≤ 2 throughout a 7-view sweep
+_Check:_ the showcase holds 72 Hz with VrApi showing CPU level ≤ 2 throughout a 7-view sweep
 (PERF-LVL-1); forcing a heavy view raises the level within 2 s and stale frames stop.
 
 **XR-PERF-2 (SHOULD).** A thermal/performance notification from the runtime (`XR_EXT_performance_settings`
 events) is logged and reflected in the stats line.
-*Check:* log line when the runtime reports a level change.
+_Check:_ log line when the runtime reports a level change.
 
 ## Reference spaces
 
@@ -281,14 +282,14 @@ events) is logged and reflected in the stats line.
 `local` origin at the head position and yaw at session start (follows recenter); `local-floor` has the same horizontal origin and heading as `local`, with its origin height at the floor (from the stage; if no stage is defined, an estimated floor —
 the documented default — below `local`); `bounded-floor` is the stage with `boundsGeometry` (at least 4 floor points in clockwise order viewed from above, as WebXR requires) and is unsupported (request rejects) if no boundary is set;
 `unbounded` rejects with `NotSupportedError`. `getOffsetReferenceSpace` composes transforms.
-*Check:* stand at a marked spot facing a marked wall, launch: an object at (0, 0, −1) in `local-floor` sits
+_Check:_ stand at a marked spot facing a marked wall, launch: an object at (0, 0, −1) in `local-floor` sits
 on the real floor 1 m ahead (human check, once per milestone); compare `getViewerPose(local-floor)` height
 with Quest Browser on the same spot (±2 cm).
 
 **XR-SPACE-2 (MUST).** Recenter (`XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING`) fires `reset` on
 each affected reference space (with `transform` when known) and `local`/`local-floor` follow the new
 origin from the next frame.
-*Check:* long-press the Meta button to recenter during XR; `reset` fires once per live space.
+_Check:_ long-press the Meta button to recenter during XR; `reset` fires once per live space.
 
 ## Depth, Space Warp, AR (later milestones, recorded now)
 
@@ -296,7 +297,7 @@ origin from the next frame.
 the layer requests depth and the app writes it, keeping the path to `XR_FB_space_warp` (motion vector +
 depth swapchains) open: nothing in the frame record or swapchain management may assume one colour image
 only.
-*Check:* design review of the record (XRF-*) shows room for depth/motion texture names.
+_Check:_ design review of the record (XRF-\*) shows room for depth/motion texture names.
 
 **XR-AR-1 (MUST for `immersive-ar`; MAY, later, for the rest).** `immersive-ar` over `XR_FB_passthrough`
 (passthrough composited beneath the app's projection layer, blended by alpha; `environmentBlendMode
@@ -304,7 +305,7 @@ only.
 when the resolved features include passthrough (`world.xr.mode: "ar"` implies it), and only then is
 `isSessionSupported('immersive-ar')` true. `plane-detection`/`mesh-detection` and `hit-test` from the scene model
 (XR-AR-2); `anchors` (XR-ANCHOR-1).
-*Check:* packer tests (`xr.immersiveAr` with and without passthrough); a device run of an AR sample gets past
+_Check:_ packer tests (`xr.immersiveAr` with and without passthrough); a device run of an AR sample gets past
 `isSessionSupported`.
 
 **XR-PERM-1 (MUST).** Android runtime permissions (protection level "dangerous": `com.oculus.permission.USE_SCENE`
@@ -326,7 +327,7 @@ runtime code asks through the same function (`__iwnXR.requestPermissions`). Inst
 (`USE_ANCHOR_API`, hand tracking) need no dialog; eye tracking (`com.oculus.permission.EYE_TRACKING`, on newer OS
 versions also `horizonos.permission.EYE_TRACKING`) is a runtime permission and must be asked for like the others once
 gaze tracking is granted.
-*Check:* web/xr tests (granted, denied, required, optional, asked once, undeclared, inline, request order, overlapping
+_Check:_ web/xr tests (granted, denied, required, optional, asked once, undeclared, inline, request order, overlapping
 requests); host tests of the wait and of the request order; a device run with the permission not granted at install.
 
 **XR-AR-2 (MUST when offered).** `plane-detection`, `mesh-detection` and `hit-test` come from the headset's room
@@ -357,7 +358,7 @@ later path). Without
 `com.oculus.permission.USE_ANCHOR_API` in the manifest the runtime offers none of the scene extensions, so the
 three features are not offered at all (required: `NotSupportedError`); the packer declares both permissions for
 each of them.
-*Check:* IWER host-mode tests (hit test), web/xr tests (planes, meshes, labels, hit test, empty room), host tests of
+_Check:_ IWER host-mode tests (hit test), web/xr tests (planes, meshes, labels, hit test, empty room), host tests of
 the scene model against a fake runtime (`iwn_xr_android_tests`: re-query, failed query, teardown), a device run
 reading `__iwnXR.scene()` and the `xr.scene` stats section.
 
@@ -382,7 +383,7 @@ while the same UUID is being restored rejects with `InvalidStateError`, as in Qu
 case. A refused creation's space is destroyed with it. At most 64 anchors live at a time. The
 manifest needs `com.oculus.permission.USE_ANCHOR_API` (a normal permission, no prompt), which the packer adds for the
 `anchors` feature.
-*Check:* web/xr and IWER host-mode tests of each call; host tests of the XR-thread side against a fake runtime
+*Check:\* web/xr and IWER host-mode tests of each call; host tests of the XR-thread side against a fake runtime
 (`iwn_xr_android_tests`: erase of a restored anchor, erase then delete, refused creation, restore and erase at once);
 device: grant, refusal and persistence paths without tracking; create, locate, persist, relaunch and restore by UUID
 on a headset that tracks in 6DoF.
@@ -405,7 +406,7 @@ occlusion shaders use), `depthNear`/`depthFar` as OpenXR reports them (`depthFar
 `normDepthBufferFromNormView`, and `null` for frames without an image. With `matchDepthView` (the default, as in
 Chromium) the depth is laid out in the eye's render view of this frame, as Quest Browser 156 does it: each frame a pass
 on the page's WebGL 2 context carries every pixel's ray, at the far plane, into the depth view and copies the raw depth
-found there (the far plane where the depth view does not reach) into a 2-layer DEPTH_COMPONENT16 texture of the
+found there (the far plane where the depth view does not reach) into a 2-layer DEPTH*COMPONENT16 texture of the
 context's own, restoring all GL state it touches; the depth information then has the view's own `projectionMatrix`
 and `transform`. Pages that sample depth by screen position (IWSDK) need this, because the image comes from the depth
 cameras' pose at their own rate (about 30 Hz). With `matchDepthView: false` (or WebGL 1) the texture is one
@@ -418,7 +419,7 @@ still in flight is collected (as the colour swapchain waits); a JS frame that ou
 first-sight compile) may sample an image the runtime has already released, which can show wrong occlusion in that
 frame. It needs `com.oculus.permission.USE_SCENE`, asked for before the session gets the feature (XR-PERM-1); without it
 the provider is refused and every frame has no depth. `XRWebGLDepthInformation` is a global in host mode.
-*Check:* web/xr and IWER host tests (negotiation, matched and raw geometry with turned heads, the reprojection pass's
+\_Check:* web/xr and IWER host tests (negotiation, matched and raw geometry with turned heads, the reprojection pass's
 state restore, the record round trip, a second session); device: proto-occlusion shows virtual objects cut by real
 ones, the `xr-depth` log line reports the per-frame acquire cost. The display rate with occlusion in view follows the
 page's GPU cost from frame to frame, which the live depth changes 30 times a second; Quest Browser shows the same (the
@@ -427,7 +428,7 @@ measurements are in the depth commit's test plan).
 **XR-SEC-1 (MUST NOT).** No secondary views, no `dom-overlay`, and no camera access for an app that does not
 declare the camera (XR-CAM-1); requesting the views or `dom-overlay` as required rejects, as optional, dropped.
 Without the declaration `navigator.mediaDevices` is absent (DOM-4).
-*Check:* tests.
+_Check:_ tests.
 
 **XR-CAM-1 (SHOULD).** An app that declares the camera (`native.features.camera`, or IWSDK's
 `world.features.camera`, PKG-8) gets `navigator.mediaDevices` over the headset's passthrough cameras (Horizon OS
@@ -446,7 +447,7 @@ that cannot open again ends its tracks. A disabled track (`enabled = false`) ren
 plays such a stream (`srcObject`; readyState steps, `play()`, `videoWidth`/`videoHeight`,
 `requestVideoFrameCallback`), and `texImage2D`/`texSubImage2D`, `drawImage` and `createImageBitmap` take its
 newest frame (GL-17), or while paused the frame it stopped at (its first if it never played); an `ImageBitmap`,
-clone or transfer of a frame is a copy, so held frames never stall the camera. Frames are YUV_420_888 converted to
+clone or transfer of a frame is a copy, so held frames never stall the camera. Frames are YUV*420_888 converted to
 RGBA8 off the JS thread into AHardwareBuffers that WebGL copies on the GPU (into RGBA8 or unsized
 RGBA/UNSIGNED_BYTE levels; a `texSubImage2D` that does not fit its level is `INVALID_VALUE`). The camera needs
 `android.permission.CAMERA` and `horizonos.permission.HEADSET_CAMERA` (runtime permissions the user grants). Until
@@ -454,7 +455,7 @@ both are held, `enumerateDevices()` gives one `videoinput` with an empty `device
 (Media Capture and Streams' device information exposure) and the runtime reads no camera list (Horizon OS keeps a
 list read before the grant empty until the app restarts); once both are held,
 `navigator.permissions.query({ name: 'camera' })` answers `granted` (DOM-4).
-*Check:* unit tests (constraints, permissions before and after the grant, shared cameras, the page's visibility,
+\_Check:* unit tests (constraints, permissions before and after the grant, shared cameras, the page's visibility,
 stream/track lifecycle, disabled tracks, `<video>` playback and pause, uploads and their bounds, recycled frames
 copied for keeping); proto-camera from D122713586 unchanged on a Quest 3 shows the camera feed in its mirror at
 30 Hz and holds the display rate; a probe page grants at `getUserMedia` after an early `enumerateDevices`, holds

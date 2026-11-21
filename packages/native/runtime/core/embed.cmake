@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # Embeds a text file as a C++ string: cmake -DIN=<file> -DOUT=<cc> -DSYMBOL=<name> -P embed.cmake
 # Uses a raw string literal split into chunks (compilers limit single literals to ~64 KB).
 file(READ "${IN}" content)

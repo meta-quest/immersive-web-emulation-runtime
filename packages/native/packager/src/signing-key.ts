@@ -255,9 +255,14 @@ export function checkIdentity(identity: SigningIdentity): void {
     type !== 'rsa' &&
     !(
       type === 'ec' &&
-      ['prime256v1', 'secp384r1', 'secp521r1', 'P-256', 'P-384', 'P-521'].includes(
-        curve ?? '',
-      )
+      [
+        'prime256v1',
+        'secp384r1',
+        'secp521r1',
+        'P-256',
+        'P-384',
+        'P-521',
+      ].includes(curve ?? '')
     )
   )
     throw new SigningKeyError(

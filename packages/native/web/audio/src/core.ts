@@ -41,21 +41,32 @@ export interface Env {
   now: () => number;
   hub: Hub;
   /** Wraps native buffer storage in the install's AudioBuffer class. */
-  wrapBuffer: (native: [number, number, number, number, ...Float32Array[]]) => unknown;
+  wrapBuffer: (
+    native: [number, number, number, number, ...Float32Array[]],
+  ) => unknown;
   /** Called once when the first AudioContext of this install is created. */
   onFirstContext?: () => unknown;
   /** The install's AudioBuffer class (what apps see as `AudioBuffer`). */
-  AudioBuffer: new (options: { numberOfChannels?: number; length: number; sampleRate: number }) => unknown;
+  AudioBuffer: new (options: {
+    numberOfChannels?: number;
+    length: number;
+    sampleRate: number;
+  }) => unknown;
 }
 
-export function makeEnv(natives: AudioNatives, options: WebAudioOptions = {}): Env {
+export function makeEnv(
+  natives: AudioNatives,
+  options: WebAudioOptions = {},
+): Env {
   const env = {
     natives,
     log: options.log ?? ((m: string) => console.warn(m)),
     urlOf:
       options.urlOf ??
       ((data: ArrayBuffer) => {
-        const map = (globalThis as { __iwnResourceUrls?: WeakMap<object, string> }).__iwnResourceUrls;
+        const map = (
+          globalThis as { __iwnResourceUrls?: WeakMap<object, string> }
+        ).__iwnResourceUrls;
         return map?.get(data);
       }),
     now: options.now ?? (() => globalThis.performance.now()),
@@ -109,7 +120,11 @@ export class Core {
   readonly slotGeneration = new Uint16Array(PARAM_CAPACITY);
   readonly #flushBound = (): void => this.flush();
 
-  constructor(env: Env, created: [number, number, Float64Array, Float32Array], offline: boolean) {
+  constructor(
+    env: Env,
+    created: [number, number, Float64Array, Float32Array],
+    offline: boolean,
+  ) {
     this.env = env;
     this.id = created[0];
     this.sampleRate = created[1];
@@ -161,7 +176,19 @@ export class Core {
    * arguments instead of a rest array: automation calls run every frame (three.js issues 9 ramps
    * per frame for its AudioListener) and must not allocate (PERF-ALLOC-1).
    */
-  cmd(op: number, a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, g = 0, h = 0, i = 0, j = 0): void {
+  cmd(
+    op: number,
+    a = 0,
+    b = 0,
+    c = 0,
+    d = 0,
+    e = 0,
+    f = 0,
+    g = 0,
+    h = 0,
+    i = 0,
+    j = 0,
+  ): void {
     if (this.dead) return;
     const n = ARG_COUNT[op];
     const w = this.#reserve(1 + n);
@@ -181,7 +208,11 @@ export class Core {
   }
 
   /** A command whose last fixed argument is followed by trailing values (curves, periodic waves). */
-  cmdWithValues(head: ArrayLike<number>, values: ArrayLike<number>, values2?: ArrayLike<number>): void {
+  cmdWithValues(
+    head: ArrayLike<number>,
+    values: ArrayLike<number>,
+    values2?: ArrayLike<number>,
+  ): void {
     if (this.dead) return;
     const total = head.length + values.length + (values2 ? values2.length : 0);
     const w = this.#reserve(total);
@@ -209,7 +240,10 @@ export class Core {
     let id = this.#freeIds.pop();
     if (id === undefined) {
       if (this.#nextId >= NODE_CAPACITY) {
-        throw domError('NotSupportedError', 'too many live AudioNodes in this context');
+        throw domError(
+          'NotSupportedError',
+          'too many live AudioNodes in this context',
+        );
       }
       id = this.#nextId++;
     }
@@ -222,7 +256,10 @@ export class Core {
       } else {
         if (this.#nextSlot + paramCount > PARAM_CAPACITY) {
           this.#freeIds.push(id);
-          throw domError('NotSupportedError', 'too many live AudioParams in this context');
+          throw domError(
+            'NotSupportedError',
+            'too many live AudioParams in this context',
+          );
         }
         slot = this.#nextSlot;
         this.#nextSlot += paramCount;
@@ -238,7 +275,9 @@ export class Core {
   #nodeRegistry: FinalizationRegistry<number> | null = null;
   /** Releases node `id` on the render side once `node` is garbage collected. */
   trackNode(node: object, id: number): void {
-    (this.#nodeRegistry ??= new FinalizationRegistry<number>((freedId) => this.release(freedId))).register(node, id);
+    (this.#nodeRegistry ??= new FinalizationRegistry<number>((freedId) =>
+      this.release(freedId),
+    )).register(node, id);
   }
 
   /** The JS node object was garbage collected. */
@@ -257,7 +296,9 @@ export class Core {
       this.#nodeSlots.delete(id);
       const count = s % 64;
       const base = (s - count) / 64;
-      for (let k = 0; k < count; k++) this.slotGeneration[base + k] = (this.slotGeneration[base + k] + 1) & 0xffff;
+      for (let k = 0; k < count; k++)
+        this.slotGeneration[base + k] =
+          (this.slotGeneration[base + k] + 1) & 0xffff;
       let list = this.#freeSlots.get(count);
       if (!list) this.#freeSlots.set(count, (list = []));
       list.push(base);
@@ -266,7 +307,12 @@ export class Core {
   }
 
   waiting(): boolean {
-    return this.playing.size > 0 || this.pendingState > 0 || this.rendering || this.pendingFrees > 0;
+    return (
+      this.playing.size > 0 ||
+      this.pendingState > 0 ||
+      this.rendering ||
+      this.pendingFrees > 0
+    );
   }
 }
 
@@ -278,11 +324,13 @@ export function bindContext(context: object, core: Core): void {
 }
 
 export function coreOf(context: unknown): Core {
-  const core = typeof context === 'object' && context !== null ? contextCores.get(context) : undefined;
+  const core =
+    typeof context === 'object' && context !== null
+      ? contextCores.get(context)
+      : undefined;
   if (!core) throw new TypeError('argument is not a BaseAudioContext');
   return core;
 }
-
 
 /**
  * Receives native events (pushed as tasks when the host provides hooks, otherwise polled while
@@ -389,7 +437,8 @@ export class Hub {
 
   #promiseWaiting(): boolean {
     if (this.decodes.size > 0) return true;
-    for (const c of this.#liveCores()) if (c.pendingState > 0 || c.rendering) return true;
+    for (const c of this.#liveCores())
+      if (c.pendingState > 0 || c.rendering) return true;
     return false;
   }
 
@@ -419,7 +468,13 @@ export class Hub {
     }
   }
 
-  #route(type: number, ctx: number, a: number, b: number, msg: string | null): void {
+  #route(
+    type: number,
+    ctx: number,
+    a: number,
+    b: number,
+    msg: string | null,
+  ): void {
     if (type === EventType.DecodeDone || type === EventType.DecodeError) {
       const req = this.decodes.get(a);
       if (!req) {

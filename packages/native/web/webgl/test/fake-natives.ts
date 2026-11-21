@@ -46,18 +46,47 @@ const LIMITS: Record<number, number> = {
 };
 
 const EXTENSIONS = [
-  'GL_EXT_color_buffer_float', 'GL_EXT_color_buffer_half_float', 'GL_EXT_float_blend', 'GL_OES_texture_float_linear',
-  'GL_EXT_texture_filter_anisotropic', 'GL_KHR_parallel_shader_compile', 'GL_EXT_disjoint_timer_query',
-  'GL_KHR_texture_compression_astc_ldr', 'GL_OVR_multiview', 'GL_OVR_multiview2',
-  'GL_OVR_multiview_multisampled_render_to_texture', 'GL_EXT_multisampled_render_to_texture', 'GL_EXT_clip_control',
-  'GL_EXT_texture_norm16', 'GL_EXT_robustness',
+  'GL_EXT_color_buffer_float',
+  'GL_EXT_color_buffer_half_float',
+  'GL_EXT_float_blend',
+  'GL_OES_texture_float_linear',
+  'GL_EXT_texture_filter_anisotropic',
+  'GL_KHR_parallel_shader_compile',
+  'GL_EXT_disjoint_timer_query',
+  'GL_KHR_texture_compression_astc_ldr',
+  'GL_OVR_multiview',
+  'GL_OVR_multiview2',
+  'GL_OVR_multiview_multisampled_render_to_texture',
+  'GL_EXT_multisampled_render_to_texture',
+  'GL_EXT_clip_control',
+  'GL_EXT_texture_norm16',
+  'GL_EXT_robustness',
 ];
 
 const TYPES: Record<string, number> = {
-  float: 0x1406, vec2: 0x8b50, vec3: 0x8b51, vec4: 0x8b52, int: 0x1404, ivec2: 0x8b53, ivec3: 0x8b54, ivec4: 0x8b55,
-  bool: 0x8b56, uint: 0x1405, uvec2: 0x8dc6, uvec3: 0x8dc7, uvec4: 0x8dc8, mat2: 0x8b5a, mat3: 0x8b5b, mat4: 0x8b5c,
-  sampler2D: 0x8b5e, samplerCube: 0x8b60, sampler3D: 0x8b5f, sampler2DArray: 0x8dc1, sampler2DShadow: 0x8b62,
-  usampler2D: 0x8dd2, isampler2D: 0x8dca,
+  float: 0x1406,
+  vec2: 0x8b50,
+  vec3: 0x8b51,
+  vec4: 0x8b52,
+  int: 0x1404,
+  ivec2: 0x8b53,
+  ivec3: 0x8b54,
+  ivec4: 0x8b55,
+  bool: 0x8b56,
+  uint: 0x1405,
+  uvec2: 0x8dc6,
+  uvec3: 0x8dc7,
+  uvec4: 0x8dc8,
+  mat2: 0x8b5a,
+  mat3: 0x8b5b,
+  mat4: 0x8b5c,
+  sampler2D: 0x8b5e,
+  samplerCube: 0x8b60,
+  sampler3D: 0x8b5f,
+  sampler2DArray: 0x8dc1,
+  sampler2DShadow: 0x8b62,
+  usampler2D: 0x8dd2,
+  isampler2D: 0x8dca,
 };
 
 /** Scan `uniform T name[N];` and vertex `in T name;` declarations (enough for headless runs). */
@@ -142,9 +171,13 @@ export function createFakeNatives(): FakeGl {
       const binds = bound.get(p as number) ?? new Map<string, number>();
       const used = new Set(binds.values());
       let loc = 0;
-      for (const [name, type] of scan(vs, /(?:^|\n)\s*(?:layout\s*\([^)]*\)\s*)?(in|attribute)\s+(?:(?:highp|mediump|lowp)\s+)?(\w+)\s+([^;]+);/g)) {
+      for (const [name, type] of scan(
+        vs,
+        /(?:^|\n)\s*(?:layout\s*\([^)]*\)\s*)?(in|attribute)\s+(?:(?:highp|mediump|lowp)\s+)?(\w+)\s+([^;]+);/g,
+      )) {
         let l = binds.get(name);
-        const slots = type === 0x8b5c ? 4 : type === 0x8b5b ? 3 : type === 0x8b5a ? 2 : 1; // mat4/3/2 columns
+        const slots =
+          type === 0x8b5c ? 4 : type === 0x8b5b ? 3 : type === 0x8b5a ? 2 : 1; // mat4/3/2 columns
         if (l === undefined) {
           const free = (at: number): boolean => {
             for (let k = 0; k < slots; k++) if (used.has(at + k)) return false;
@@ -161,12 +194,26 @@ export function createFakeNatives(): FakeGl {
       const seen = new Set<string>();
       let uloc = 0;
       for (const src of srcs) {
-        for (const [name, type, n] of scan(src, /(?:^|\n)\s*(uniform)\s+(?:(?:highp|mediump|lowp)\s+)?(\w+)\s+([^;]+);/g)) {
+        for (const [name, type, n] of scan(
+          src,
+          /(?:^|\n)\s*(uniform)\s+(?:(?:highp|mediump|lowp)\s+)?(\w+)\s+([^;]+);/g,
+        )) {
           if (seen.has(name)) continue;
           seen.add(name);
           const size = n || 1;
-          const locs = size > 1 ? Array.from({ length: size }, (_, i) => uloc + i) : uloc;
-          uniforms.push(n ? `${name}[0]` : name, type, size, locs, -1, -1, -1, -1, 0);
+          const locs =
+            size > 1 ? Array.from({ length: size }, (_, i) => uloc + i) : uloc;
+          uniforms.push(
+            n ? `${name}[0]` : name,
+            type,
+            size,
+            locs,
+            -1,
+            -1,
+            -1,
+            -1,
+            0,
+          );
           uloc += size;
         }
       }

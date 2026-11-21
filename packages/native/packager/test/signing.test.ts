@@ -222,11 +222,16 @@ process.stdout.write(JSON.stringify({ created: id.created, fp: m.certificateFing
     );
   });
   test('unsupported key types are refused by checkIdentity (before packing)', () => {
-    const rsa = loadOrCreateDebugIdentity({ configDir: path.join(scratch, 'rsa') });
+    const rsa = loadOrCreateDebugIdentity({
+      configDir: path.join(scratch, 'rsa'),
+    });
     for (const type of ['dsa', 'ed25519'] as const) {
       const { privateKey } =
         type === 'dsa'
-          ? generateKeyPairSync('dsa', { modulusLength: 2048, divisorLength: 256 })
+          ? generateKeyPairSync('dsa', {
+              modulusLength: 2048,
+              divisorLength: 256,
+            })
           : generateKeyPairSync('ed25519');
       assert.throws(
         () =>

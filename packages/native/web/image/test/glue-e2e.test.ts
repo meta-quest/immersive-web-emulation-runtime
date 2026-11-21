@@ -24,9 +24,18 @@ const requireFromGlue = createRequire(join(webDir, 'glue', 'package.json'));
 
 async function bundles(): Promise<{ glue: string; image: string }> {
   type BuildResult = { outputFiles?: { text: string }[] };
-  const { build } = requireFromGlue('esbuild') as { build(options: object): Promise<BuildResult> };
-  const { buildOptions } = (await import(join(webDir, 'glue', 'build.mjs'))) as { buildOptions: object };
-  const glue = await build({ ...buildOptions, minify: true, write: false, outfile: 'glue.min.js' } as never);
+  const { build } = requireFromGlue('esbuild') as {
+    build(options: object): Promise<BuildResult>;
+  };
+  const { buildOptions } = (await import(
+    join(webDir, 'glue', 'build.mjs')
+  )) as { buildOptions: object };
+  const glue = await build({
+    ...buildOptions,
+    minify: true,
+    write: false,
+    outfile: 'glue.min.js',
+  } as never);
   const image = await build({
     entryPoints: [join(here, '..', 'entry.ts')],
     bundle: true,
@@ -38,13 +47,21 @@ async function bundles(): Promise<{ glue: string; image: string }> {
     outfile: 'image.min.js',
     logLevel: 'warning',
   });
-  return { glue: glue.outputFiles![0]!.text, image: image.outputFiles![0]!.text };
+  return {
+    glue: glue.outputFiles![0]!.text,
+    image: image.outputFiles![0]!.text,
+  };
 }
 
 test('structuredClone / transfer of ImageData and ImageBitmap through the real glue (WRK-5)', async () => {
   const { glue, image } = await bundles();
   const natives = createFakeImageNatives();
-  const ctx = vm.createContext({ __iwn: { image: natives }, setTimeout, clearTimeout, console });
+  const ctx = vm.createContext({
+    __iwn: { image: natives },
+    setTimeout,
+    clearTimeout,
+    console,
+  });
   vm.runInContext(glue, ctx, { filename: 'glue.min.js' });
   vm.runInContext(image, ctx, { filename: 'image.min.js' });
   (ctx as Record<string, unknown>).png = encodePng(4, 4, corners());
@@ -85,9 +102,17 @@ test('structuredClone / transfer of ImageData and ImageBitmap through the real g
   });
   assert.equal(r.nestedSame, true);
   assert.equal(r.defaultAlphaPremultiplied, true);
-  assert.deepEqual(r.cloneBitmap, { isImageBitmap: true, w: 4, sourceStillOpen: true });
+  assert.deepEqual(r.cloneBitmap, {
+    isImageBitmap: true,
+    w: 4,
+    sourceStillOpen: true,
+  });
   assert.equal(r.afterCloneClosed, 4);
-  assert.deepEqual(r.transfer, { isImageBitmap: true, w: 4, sourceDetached: true });
+  assert.deepEqual(r.transfer, {
+    isImageBitmap: true,
+    w: 4,
+    sourceDetached: true,
+  });
   assert.equal(r.detachedClone, 'DataCloneError');
   assert.equal(r.dupTransfer, 'DataCloneError');
 });

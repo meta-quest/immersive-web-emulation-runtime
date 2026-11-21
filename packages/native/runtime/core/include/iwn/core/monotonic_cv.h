@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // A condition variable whose timed waits run on CLOCK_MONOTONIC.
 //
 // Why: the runtime is built for API 29, and libc++ uses pthread_cond_clockwait(CLOCK_MONOTONIC) only from API 30

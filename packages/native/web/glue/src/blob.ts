@@ -12,7 +12,12 @@
 
 import { type DOMException, domException } from './dom-exception.ts';
 import { base64Encode } from './base64.ts';
-import { bytesToLatin1, TextDecoder, getEncoding, utf8Encode } from './encoding.ts';
+import {
+  bytesToLatin1,
+  TextDecoder,
+  getEncoding,
+  utf8Encode,
+} from './encoding.ts';
 
 export { base64Encode };
 import {
@@ -22,7 +27,15 @@ import {
   ProgressEvent,
 } from './events.ts';
 import type { GlueNatives } from './natives.ts';
-import { bytesOf, enumerable, isBufferSource, setLength, tag, toDOMString, toUSVString } from './util.ts';
+import {
+  bytesOf,
+  enumerable,
+  isBufferSource,
+  setLength,
+  tag,
+  toDOMString,
+  toUSVString,
+} from './util.ts';
 
 export interface BlobPropertyBag {
   type?: string;
@@ -62,16 +75,26 @@ export class Blob {
   #bytes: Uint8Array;
   #type: string;
 
-  constructor(blobParts?: Iterable<unknown> | null, options?: BlobPropertyBag | null) {
+  constructor(
+    blobParts?: Iterable<unknown> | null,
+    options?: BlobPropertyBag | null,
+  ) {
     this.#type = '';
     this.#bytes = EMPTY;
     if (blobParts === (MAKE as unknown)) return;
-    if (options != null && typeof options !== 'object' && typeof options !== 'function') {
+    if (
+      options != null &&
+      typeof options !== 'object' &&
+      typeof options !== 'function'
+    ) {
       throw new TypeError(
         "Failed to construct 'Blob': The provided value is not of type 'BlobPropertyBag'.",
       );
     }
-    const endings = options?.endings === undefined ? 'transparent' : toDOMString(options.endings, "Failed to construct 'Blob'");
+    const endings =
+      options?.endings === undefined
+        ? 'transparent'
+        : toDOMString(options.endings, "Failed to construct 'Blob'");
     if (endings !== 'transparent' && endings !== 'native') {
       throw new TypeError(
         `Failed to construct 'Blob': The provided value '${endings}' is not a valid enum value of type EndingType.`,
@@ -88,7 +111,8 @@ export class Blob {
     }
     if (
       typeof blobParts !== 'object' ||
-      typeof (blobParts as { [Symbol.iterator]?: unknown })[Symbol.iterator] !== 'function'
+      typeof (blobParts as { [Symbol.iterator]?: unknown })[Symbol.iterator] !==
+        'function'
     ) {
       throw new TypeError(
         "Failed to construct 'Blob': The provided value cannot be converted to a sequence.",
@@ -211,7 +235,15 @@ function toLongLong(v: unknown): number {
   return Number(BigInt.asIntN(64, BigInt(t)));
 }
 tag(Blob, 'Blob');
-enumerable(Blob, ['size', 'type', 'slice', 'arrayBuffer', 'bytes', 'text', 'stream']);
+enumerable(Blob, [
+  'size',
+  'type',
+  'slice',
+  'arrayBuffer',
+  'bytes',
+  'text',
+  'stream',
+]);
 
 /** The bytes of a Blob, without copying. Do not mutate. */
 export function blobBytes(blob: Blob): Uint8Array {
@@ -226,7 +258,11 @@ export function blobFromBytes(bytes: Uint8Array, type = ''): Blob {
 export class File extends Blob {
   #name: string;
   #lastModified: number;
-  constructor(fileBits: Iterable<unknown>, fileName: string, options?: FilePropertyBag | null) {
+  constructor(
+    fileBits: Iterable<unknown>,
+    fileName: string,
+    options?: FilePropertyBag | null,
+  ) {
     if (arguments.length < 2) {
       throw new TypeError(
         `Failed to construct 'File': 2 arguments required, but only ${arguments.length} present.`,
@@ -234,7 +270,10 @@ export class File extends Blob {
     }
     super(fileBits, options);
     this.#name = toUSVString(fileName, "Failed to construct 'File'");
-    this.#lastModified = options?.lastModified === undefined ? Date.now() : toLongLong(options.lastModified);
+    this.#lastModified =
+      options?.lastModified === undefined
+        ? Date.now()
+        : toLongLong(options.lastModified);
   }
   get name(): string {
     return this.#name;
@@ -254,7 +293,9 @@ enumerable(File, ['name', 'lastModified', 'webkitRelativePath']);
 // FileReader (File API §7)
 
 function queueTask(fn: () => void): void {
-  const st = (globalThis as { setTimeout?: (cb: () => void, ms: number) => unknown }).setTimeout;
+  const st = (
+    globalThis as { setTimeout?: (cb: () => void, ms: number) => unknown }
+  ).setTimeout;
   if (typeof st === 'function') st(fn, 0);
   else Promise.resolve().then(fn);
 }
@@ -352,7 +393,10 @@ export class FileReader extends EventTarget {
           result = packageData(bytes, kind, type, encoding);
         } catch (e) {
           this.#state = 2;
-          this.#error = domException(String((e as Error)?.message ?? e), 'NotReadableError');
+          this.#error = domException(
+            String((e as Error)?.message ?? e),
+            'NotReadableError',
+          );
           this.#fire('error');
           if (this.#state !== 1) this.#fire('loadend');
           return;
@@ -360,7 +404,8 @@ export class FileReader extends EventTarget {
         this.#state = 2;
         this.#result = result;
         this.#fire('load', bytes.length, bytes.length);
-        if (this.#state !== 1) this.#fire('loadend', bytes.length, bytes.length);
+        if (this.#state !== 1)
+          this.#fire('loadend', bytes.length, bytes.length);
       });
     });
   }
@@ -370,8 +415,18 @@ for (const [k, v] of [
   ['LOADING', 1],
   ['DONE', 2],
 ] as const) {
-  Object.defineProperty(FileReader.prototype, k, { value: v, enumerable: true, writable: false, configurable: false });
-  Object.defineProperty(FileReader, k, { value: v, enumerable: true, writable: false, configurable: false });
+  Object.defineProperty(FileReader.prototype, k, {
+    value: v,
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
+  Object.defineProperty(FileReader, k, {
+    value: v,
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
 }
 tag(FileReader, 'FileReader');
 enumerable(FileReader, [
@@ -384,7 +439,14 @@ enumerable(FileReader, [
   'readAsDataURL',
   'abort',
 ]);
-for (const t of ['loadstart', 'progress', 'load', 'abort', 'error', 'loadend']) {
+for (const t of [
+  'loadstart',
+  'progress',
+  'load',
+  'abort',
+  'error',
+  'loadend',
+]) {
   defineEventHandler(FileReader.prototype, t);
 }
 
@@ -406,13 +468,20 @@ function packageData(
       // charset parameter, then UTF-8.
       let label = 'utf-8';
       let e: string | null = null;
-      if (encoding !== undefined) e = getEncoding(toDOMString(encoding, "Failed to execute 'readAsText' on 'FileReader'"));
+      if (encoding !== undefined)
+        e = getEncoding(
+          toDOMString(
+            encoding,
+            "Failed to execute 'readAsText' on 'FileReader'",
+          ),
+        );
       if (e === null) {
         const charset = /;\s*charset\s*=\s*(?:"([^"]*)"|([^;\s]*))/i.exec(type);
         if (charset) e = getEncoding(charset[1] ?? charset[2] ?? '');
       }
       if (e !== null) label = e;
-      if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) label = 'utf-8';
+      if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
+        label = 'utf-8';
       else if (bytes[0] === 0xfe && bytes[1] === 0xff) label = 'utf-16be';
       else if (bytes[0] === 0xff && bytes[1] === 0xfe) label = 'utf-16le';
       // Encoding §14.1: the replacement decoder emits one U+FFFD for non-empty input, then stops

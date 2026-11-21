@@ -14,7 +14,13 @@
 
 import type { DeviceInfo, GlueConfig } from './natives.ts';
 import { defineEventHandler, EventTarget } from './events.ts';
-import { enumerable, illegalConstructor, INTERNAL, tag, toDOMString } from './util.ts';
+import {
+  enumerable,
+  illegalConstructor,
+  INTERNAL,
+  tag,
+  toDOMString,
+} from './util.ts';
 
 export const RUNTIME_TOKEN = 'IWERNative';
 
@@ -43,7 +49,11 @@ export const QUEST_BROWSER_TOKENS = {
  */
 export function buildUserAgent(config: GlueConfig, info: DeviceInfo): string {
   const policy = config.userAgent ?? 'honest';
-  if (typeof policy === 'object' && policy && typeof policy.literal === 'string') {
+  if (
+    typeof policy === 'object' &&
+    policy &&
+    typeof policy.literal === 'string'
+  ) {
     return policy.literal;
   }
   const rel = info.androidRelease ?? '14';
@@ -138,8 +148,13 @@ export class Permissions {
     this.#granted = granted ?? (() => new Set());
   }
   query(descriptor: { name: string }): Promise<PermissionStatus> {
-    if (!(this instanceof Permissions)) return Promise.reject(new TypeError('Illegal invocation'));
-    if (descriptor == null || typeof descriptor !== 'object' || descriptor.name === undefined) {
+    if (!(this instanceof Permissions))
+      return Promise.reject(new TypeError('Illegal invocation'));
+    if (
+      descriptor == null ||
+      typeof descriptor !== 'object' ||
+      descriptor.name === undefined
+    ) {
       return Promise.reject(
         new TypeError(
           "Failed to execute 'query' on 'Permissions': Failed to read the 'name' property from 'PermissionDescriptor': Required member is undefined.",
@@ -148,7 +163,10 @@ export class Permissions {
     }
     let name: string;
     try {
-      name = toDOMString(descriptor.name, "Failed to execute 'query' on 'Permissions'");
+      name = toDOMString(
+        descriptor.name,
+        "Failed to execute 'query' on 'Permissions'",
+      );
     } catch (e) {
       return Promise.reject(e);
     }
@@ -323,13 +341,19 @@ for (const name of [
   'permissions',
   'storage',
 ]) {
-  Object.defineProperty(WorkerNavigator.prototype, name, Object.getOwnPropertyDescriptor(Navigator.prototype, name)!);
+  Object.defineProperty(
+    WorkerNavigator.prototype,
+    name,
+    Object.getOwnPropertyDescriptor(Navigator.prototype, name)!,
+  );
 }
 Object.setPrototypeOf(WorkerNavigator.prototype, Object.prototype);
 tag(WorkerNavigator, 'WorkerNavigator');
 
 /** Permissions an app of this runtime holds without a prompt when the config does not list them. */
-export const DEFAULT_GRANTED_PERMISSIONS: readonly string[] = ['xr-spatial-tracking'];
+export const DEFAULT_GRANTED_PERMISSIONS: readonly string[] = [
+  'xr-spatial-tracking',
+];
 
 export function createNavigator(
   config: GlueConfig,
@@ -342,11 +366,16 @@ export function createNavigator(
   // default DEFAULT_GRANTED_PERMISSIONS) plus Android runtime grants the host reports in device.info() or a
   // runtime prelude reports for its own feature (GlueRegistry.addPermissionSource).
   const configured = new Set(
-    Array.isArray(config.permissions?.granted) ? config.permissions.granted.map(String) : DEFAULT_GRANTED_PERMISSIONS,
+    Array.isArray(config.permissions?.granted)
+      ? config.permissions.granted.map(String)
+      : DEFAULT_GRANTED_PERMISSIONS,
   );
   const granted = (): ReadonlySet<string> => {
     const reported = info().grantedPermissions;
-    const extra = [...(Array.isArray(reported) ? reported : []), ...runtimeGrants()];
+    const extra = [
+      ...(Array.isArray(reported) ? reported : []),
+      ...runtimeGrants(),
+    ];
     if (extra.length === 0) return configured;
     const all = new Set(configured);
     for (const p of extra) all.add(String(p));

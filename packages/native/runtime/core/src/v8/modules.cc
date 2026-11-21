@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // ES module loading (ECMA-262 module records, HTML "fetch a module script graph" and "resolve a module specifier")
 // over the app's dist, data: and blob: URLs, with a V8 code cache (V8 ScriptCompiler::CachedData). MOD-1..6, CC-1..4.
 #include <pthread.h>

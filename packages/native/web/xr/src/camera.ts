@@ -63,10 +63,17 @@ export interface CameraNatives {
     width: number,
     height: number,
     frameRate: number,
-  ): Promise<{ stream: number; width: number; height: number; frameRate: number }>;
+  ): Promise<{
+    stream: number;
+    width: number;
+    height: number;
+    frameRate: number;
+  }>;
   frame(stream: number): CameraFrameInfo | null;
   close(stream: number): void;
-  setFrameHandler(handler: ((stream: number, ended: boolean) => void) | null): void;
+  setFrameHandler(
+    handler: ((stream: number, ended: boolean) => void) | null,
+  ): void;
 }
 
 export interface CameraOptions {
@@ -109,7 +116,8 @@ function numberConstraint(v: unknown): Range | null {
   if (typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
   const out: Range = {};
-  for (const k of ['exact', 'ideal', 'min', 'max'] as const) if (typeof o[k] === 'number') out[k] = o[k] as number;
+  for (const k of ['exact', 'ideal', 'min', 'max'] as const)
+    if (typeof o[k] === 'number') out[k] = o[k] as number;
   return out;
 }
 
@@ -141,8 +149,14 @@ function distance(value: number, ideal: number | undefined): number {
  * Picks the camera, size and frame rate for `video` (true or MediaTrackConstraints). Returns the settings, or the
  * name of a required constraint no camera satisfies (OverconstrainedError.constraint).
  */
-export function selectCameraSettings(devices: CameraDevice[], video: unknown): CameraSettings | { constraint: string } {
-  const c = (video && typeof video === 'object' ? video : {}) as Record<string, unknown>;
+export function selectCameraSettings(
+  devices: CameraDevice[],
+  video: unknown,
+): CameraSettings | { constraint: string } {
+  const c = (video && typeof video === 'object' ? video : {}) as Record<
+    string,
+    unknown
+  >;
   const width = numberConstraint(c.width);
   const height = numberConstraint(c.height);
   const frameRate = numberConstraint(c.frameRate);
@@ -186,8 +200,12 @@ export function selectCameraSettings(devices: CameraDevice[], video: unknown): C
           distance(h, height?.ideal ?? DEFAULT_IDEAL.height) +
           distance(fps, frameRate?.ideal ?? DEFAULT_IDEAL.frameRate) +
           distance(w / h, aspectRatio?.ideal) +
-          (deviceId?.ideal && !deviceId.ideal.includes(device.deviceId) ? 1 : 0) +
-          (facingMode?.ideal && !facingMode.ideal.includes(device.facing) ? 1 : 0);
+          (deviceId?.ideal && !deviceId.ideal.includes(device.deviceId)
+            ? 1
+            : 0) +
+          (facingMode?.ideal && !facingMode.ideal.includes(device.facing)
+            ? 1
+            : 0);
         // ties keep the earlier camera (left), size and rate
         if (d < bestDistance) {
           bestDistance = d;
@@ -197,7 +215,14 @@ export function selectCameraSettings(devices: CameraDevice[], video: unknown): C
     }
   }
   if (best) return best;
-  for (const k of ['deviceId', 'facingMode', 'width', 'height', 'aspectRatio', 'frameRate']) {
+  for (const k of [
+    'deviceId',
+    'facingMode',
+    'width',
+    'height',
+    'aspectRatio',
+    'frameRate',
+  ]) {
     if (failed.has(k)) return { constraint: k };
   }
   return { constraint: '' };
@@ -216,13 +241,22 @@ function domException(g: Global, message: string, name: string): Error {
 const INTERNAL = Symbol('iwn.camera.internal');
 
 /** Installs navigator.mediaDevices and the MediaStream classes when the app declared the camera; false otherwise. */
-export function installCamera(g: Global, natives: CameraNatives, options: CameraOptions = {}): boolean {
+export function installCamera(
+  g: Global,
+  natives: CameraNatives,
+  options: CameraOptions = {},
+): boolean {
   // strictly true: a stand-in whose every property is truthy (the compat inventory's) must not count as a declaration
   if (natives.declared !== true) return false;
   const EventTargetBase = g.EventTarget as typeof EventTarget;
   const EventCtor = g.Event as typeof Event;
   const nav = g.navigator as object | undefined;
-  if (typeof EventTargetBase !== 'function' || typeof EventCtor !== 'function' || !nav) return false;
+  if (
+    typeof EventTargetBase !== 'function' ||
+    typeof EventCtor !== 'function' ||
+    !nav
+  )
+    return false;
   const uuid = (): string => {
     const c = g.crypto as { randomUUID?: () => string } | undefined;
     if (typeof c?.randomUUID === 'function') return c.randomUUID();
@@ -235,7 +269,9 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
     const r = g.reportError as ((e: unknown) => void) | undefined;
     if (typeof r === 'function') r(e);
   };
-  const now = (): number => (g.performance as { now?: () => number } | undefined)?.now?.() ?? Date.now();
+  const now = (): number =>
+    (g.performance as { now?: () => number } | undefined)?.now?.() ??
+    Date.now();
 
   /** Event handler IDL attributes (onended, ...) over addEventListener. */
   const handlers = (proto: object, names: string[]) => {
@@ -248,11 +284,14 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
           return (this[key] as { fn: unknown } | undefined)?.fn ?? null;
         },
         set(this: EventTarget & Record<symbol, unknown>, fn: unknown) {
-          const old = this[key] as { fn: unknown; wrapper: (e: Event) => void } | undefined;
+          const old = this[key] as
+            | { fn: unknown; wrapper: (e: Event) => void }
+            | undefined;
           if (old) this.removeEventListener(name, old.wrapper);
           this[key] = undefined;
           if (typeof fn !== 'function') return;
-          const wrapper = (e: Event) => (fn as (e: Event) => void).call(this, e);
+          const wrapper = (e: Event) =>
+            (fn as (e: Event) => void).call(this, e);
           this[key] = { fn, wrapper };
           this.addEventListener(name, wrapper);
         },
@@ -270,13 +309,29 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
     }
   };
   // The core folds the activity's lifecycle and the XR session's into document.visibilityState.
-  const doc = g.document as (EventTarget & { visibilityState?: unknown }) | undefined;
+  const doc = g.document as
+    | (EventTarget & { visibilityState?: unknown })
+    | undefined;
   const hidden = (): boolean => doc?.visibilityState === 'hidden';
 
   // ---- one open camera, shared by its tracks (clones, and every getUserMedia for that camera) ----
 
-  type HandleFrame = { kind: 'handle'; origin: 'video'; handle: object; width: number; height: number; premultiplied: false };
-  type PixelsFrame = { kind: 'pixels'; origin: 'video'; width: number; height: number; premultiplied: false; data: Uint8Array };
+  type HandleFrame = {
+    kind: 'handle';
+    origin: 'video';
+    handle: object;
+    width: number;
+    height: number;
+    premultiplied: false;
+  };
+  type PixelsFrame = {
+    kind: 'pixels';
+    origin: 'video';
+    width: number;
+    height: number;
+    premultiplied: false;
+    data: Uint8Array;
+  };
 
   class CameraSource {
     refs = 1;
@@ -298,7 +353,11 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
     readonly tracks = new Set<MediaStreamTrackImpl>();
     readonly device: CameraDevice;
     readonly settings: { width: number; height: number; frameRate: number };
-    constructor(stream: number, device: CameraDevice, settings: { width: number; height: number; frameRate: number }) {
+    constructor(
+      stream: number,
+      device: CameraDevice,
+      settings: { width: number; height: number; frameRate: number },
+    ) {
       this.stream = stream;
       this.device = device;
       this.settings = settings;
@@ -312,7 +371,14 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
       if (this.black?.width !== f.width || this.black.height !== f.height) {
         const data = new Uint8Array(f.width * f.height * 4);
         for (let i = 3; i < data.length; i += 4) data[i] = 255;
-        this.black = { kind: 'pixels', origin: 'video', width: f.width, height: f.height, premultiplied: false, data };
+        this.black = {
+          kind: 'pixels',
+          origin: 'video',
+          width: f.width,
+          height: f.height,
+          premultiplied: false,
+          data,
+        };
       }
       return this.black;
     }
@@ -353,7 +419,14 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
       const previous = this.current;
       if (!this.firstNs) this.firstNs = f.timestampNs;
       const { handle, width, height } = f;
-      this.current = { kind: 'handle', origin: 'video', handle, width, height, premultiplied: false };
+      this.current = {
+        kind: 'handle',
+        origin: 'video',
+        handle,
+        width,
+        height,
+        premultiplied: false,
+      };
       this.serial = f.serial;
       this.frames++;
       this.width = f.width;
@@ -390,7 +463,9 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
         (e: { message?: string } | undefined) => {
           this.reopening = false;
           if (this.ended) return;
-          console.warn(`@iwer/native: camera ${this.device.deviceId} could not open again: ${e?.message ?? String(e)}`);
+          console.warn(
+            `@iwer/native: camera ${this.device.deviceId} could not open again: ${e?.message ?? String(e)}`,
+          );
           this.end(true);
         },
       );
@@ -536,7 +611,8 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
     }
     /** @internal: the source was muted or unmuted (the page's visibility). */
     _muted(muted: boolean): void {
-      if (this.#state === 'live') this.dispatchEvent(new EventCtor(muted ? 'mute' : 'unmute'));
+      if (this.#state === 'live')
+        this.dispatchEvent(new EventCtor(muted ? 'mute' : 'unmute'));
     }
     /** @internal: the feed a <video> plays (MEDIA_FEED via MediaStream): the source's frames, black while disabled. */
     _feed(): object | null {
@@ -580,10 +656,17 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
     #tracks: MediaStreamTrackImpl[] = [];
     constructor(init?: unknown) {
       super();
-      const list = init instanceof MediaStreamImpl ? init.getTracks() : Array.isArray(init) ? init : [];
+      const list =
+        init instanceof MediaStreamImpl
+          ? init.getTracks()
+          : Array.isArray(init)
+            ? init
+            : [];
       for (const t of list) {
         if (!(t instanceof MediaStreamTrackImpl)) {
-          throw new TypeError("Failed to construct 'MediaStream': parameter 1 is not a sequence of MediaStreamTrack.");
+          throw new TypeError(
+            "Failed to construct 'MediaStream': parameter 1 is not a sequence of MediaStreamTrack.",
+          );
         }
         if (!this.#tracks.includes(t)) this.#tracks.push(t);
       }
@@ -636,7 +719,8 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
 
   // ---- devices ----
 
-  const groupIdOf = (d: CameraDevice): string => `iwer-native-camera-${d.position >= 0 ? 'passthrough' : d.deviceId}`;
+  const groupIdOf = (d: CameraDevice): string =>
+    `iwer-native-camera-${d.position >= 0 ? 'passthrough' : d.deviceId}`;
   const capabilitiesOf = (d: CameraDevice): Record<string, unknown> => {
     const ws = d.sizes.map(([w]) => w);
     const hs = d.sizes.map(([, h]) => h);
@@ -648,7 +732,10 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
       width: { min: Math.min(...ws), max: Math.max(...ws) },
       height: { min: Math.min(...hs), max: Math.max(...hs) },
       aspectRatio: { min: Math.min(...ratios), max: Math.max(...ratios) },
-      frameRate: { min: rs.length ? Math.min(...rs) : 30, max: rs.length ? Math.max(...rs) : 30 },
+      frameRate: {
+        min: rs.length ? Math.min(...rs) : 30,
+        max: rs.length ? Math.max(...rs) : 30,
+      },
       facingMode: d.facing ? [d.facing] : [],
       resizeMode: ['none'],
     };
@@ -674,7 +761,12 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
       return this.#d ? groupIdOf(this.#d) : '';
     }
     toJSON(): object {
-      return { deviceId: this.deviceId, kind: this.kind, label: this.label, groupId: this.groupId };
+      return {
+        deviceId: this.deviceId,
+        kind: this.kind,
+        label: this.label,
+        groupId: this.groupId,
+      };
     }
     get [Symbol.toStringTag](): string {
       return 'MediaDeviceInfo';
@@ -721,7 +813,11 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
     if (devices.length === 0) {
       // Horizon OS lists no passthrough camera to an app without its camera permissions
       if (natives.hidden?.()) {
-        throw domException(g, 'Permission denied (the camera permissions are not granted)', 'NotAllowedError');
+        throw domException(
+          g,
+          'Permission denied (the camera permissions are not granted)',
+          'NotAllowedError',
+        );
       }
       throw domException(g, 'Requested device not found', 'NotFoundError');
     }
@@ -733,7 +829,11 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
       const s = running.get(d.deviceId);
       if (!s) return d;
       const { width, height, frameRate } = s.settings;
-      return { ...d, sizes: [[width, height]], frameRates: [[frameRate, frameRate]] };
+      return {
+        ...d,
+        sizes: [[width, height]],
+        frameRates: [[frameRate, frameRate]],
+      };
     });
     const picked = selectCameraSettings(candidates, video);
     if ('constraint' in picked) {
@@ -743,33 +843,61 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
       });
       throw new OverconstrainedErrorImpl(
         picked.constraint,
-        'No camera satisfies the constraints' + (open.length ? ` (open cameras run in one mode: ${open.join(', ')})` : ''),
+        'No camera satisfies the constraints' +
+          (open.length
+            ? ` (open cameras run in one mode: ${open.join(', ')})`
+            : ''),
       );
     }
-    const constraints = video && typeof video === 'object' ? { ...(video as object) } : {};
+    const constraints =
+      video && typeof video === 'object' ? { ...(video as object) } : {};
     const shared = running.get(picked.device.deviceId);
     if (shared) {
       shared.refs++;
       const { width, height, frameRate } = shared.settings;
-      console.info(`@iwer/native: camera ${shared.device.deviceId} is open: shared at ${width}x${height}@${frameRate}`);
-      return new MediaStreamImpl([new MediaStreamTrackImpl(INTERNAL, shared, constraints)]);
+      console.info(
+        `@iwer/native: camera ${shared.device.deviceId} is open: shared at ${width}x${height}@${frameRate}`,
+      );
+      return new MediaStreamImpl([
+        new MediaStreamTrackImpl(INTERNAL, shared, constraints),
+      ]);
     }
     const t0 = now();
-    let opened: { stream: number; width: number; height: number; frameRate: number };
+    let opened: {
+      stream: number;
+      width: number;
+      height: number;
+      frameRate: number;
+    };
     try {
-      opened = await natives.open(picked.device.deviceId, picked.width, picked.height, picked.frameRate);
+      opened = await natives.open(
+        picked.device.deviceId,
+        picked.width,
+        picked.height,
+        picked.frameRate,
+      );
     } catch (e) {
       const err = e as { name?: string; message?: string };
-      throw domException(g, err?.message ?? String(e), err?.name ?? 'NotReadableError');
+      throw domException(
+        g,
+        err?.message ?? String(e),
+        err?.name ?? 'NotReadableError',
+      );
     }
     const { width, height, frameRate } = opened;
-    const source = new CameraSource(opened.stream, picked.device, { width, height, frameRate });
+    const source = new CameraSource(opened.stream, picked.device, {
+      width,
+      height,
+      frameRate,
+    });
     console.info(
       `@iwer/native: camera ${picked.device.deviceId} (${picked.device.label}) ` +
         `${opened.width}x${opened.height}@${opened.frameRate} ` +
         `opened in ${Math.round(now() - t0)} ms`,
     );
-    const stream = new MediaStreamImpl([new MediaStreamTrackImpl(INTERNAL, source, constraints)]);
+    const stream = new MediaStreamImpl([
+      new MediaStreamTrackImpl(INTERNAL, source, constraints),
+    ]);
     if (hidden()) source.suspend(); // the page went hidden while it opened: muted until it is visible
     return stream;
   };
@@ -782,8 +910,11 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
     enumerateDevices(): Promise<MediaDeviceInfoImpl[]> {
       // §9.2 (device information exposure): before the camera permissions, one anonymous videoinput, and the
       // system's camera list is not read (CameraNatives.permitted)
-      if (permission() === false) return Promise.resolve([new InputDeviceInfoImpl(INTERNAL, null)]);
-      return Promise.resolve(listDevices().map((d) => new InputDeviceInfoImpl(INTERNAL, d)));
+      if (permission() === false)
+        return Promise.resolve([new InputDeviceInfoImpl(INTERNAL, null)]);
+      return Promise.resolve(
+        listDevices().map((d) => new InputDeviceInfoImpl(INTERNAL, d)),
+      );
     }
     getSupportedConstraints(): Record<string, boolean> {
       return {
@@ -797,7 +928,10 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
         groupId: true,
       };
     }
-    async getUserMedia(constraints?: { video?: unknown; audio?: unknown }): Promise<MediaStreamImpl> {
+    async getUserMedia(constraints?: {
+      video?: unknown;
+      audio?: unknown;
+    }): Promise<MediaStreamImpl> {
       const c = constraints ?? {};
       if (typeof c !== 'object') {
         throw new TypeError(
@@ -811,13 +945,21 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
         );
       }
       if (c.audio) {
-        throw domException(g, 'Requested device not found (no microphone capture in @iwer/native)', 'NotFoundError');
+        throw domException(
+          g,
+          'Requested device not found (no microphone capture in @iwer/native)',
+          'NotFoundError',
+        );
       }
       if (options.requestPermission && !(await options.requestPermission())) {
         throw domException(g, 'Permission denied', 'NotAllowedError');
       }
       if (permission() === false) {
-        throw domException(g, 'Permission denied (the camera permissions are not granted)', 'NotAllowedError');
+        throw domException(
+          g,
+          'Permission denied (the camera permissions are not granted)',
+          'NotAllowedError',
+        );
       }
       const run = queue.then(() => openStream(c.video));
       queue = run.catch(() => undefined);
@@ -831,7 +973,12 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
 
   const named = (name: string, C: object) => {
     Object.defineProperty(C, 'name', { value: name });
-    Object.defineProperty(g, name, { configurable: true, writable: true, enumerable: false, value: C });
+    Object.defineProperty(g, name, {
+      configurable: true,
+      writable: true,
+      enumerable: false,
+      value: C,
+    });
   };
   named('MediaStream', MediaStreamImpl);
   named('MediaStreamTrack', MediaStreamTrackImpl);
@@ -851,7 +998,9 @@ export function installCamera(g: Global, natives: CameraNatives, options: Camera
     get: () => mediaDevices,
   });
   // DOM-4: navigator.permissions.query({ name: 'camera' }) answers 'granted' once both camera permissions are held.
-  const glue = (g as unknown as Record<symbol, unknown>)[Symbol.for('iwn.glue')] as
+  const glue = (g as unknown as Record<symbol, unknown>)[
+    Symbol.for('iwn.glue')
+  ] as
     | { addPermissionSource?: (source: () => readonly string[]) => void }
     | undefined;
   glue?.addPermissionSource?.(() => (permission() === true ? ['camera'] : []));

@@ -23,7 +23,8 @@ export const VERSION_AT = 0;
 export const COUNT_AT = 1;
 export const NAMES_AT = 4;
 export const ENTRIES_AT = NAMES_AT + MAX_LAYER_SWAPCHAINS;
-export const LAYER_BUFFER_WORDS = ENTRIES_AT + MAX_LAYER_ENTRIES * LAYER_ENTRY_WORDS;
+export const LAYER_BUFFER_WORDS =
+  ENTRIES_AT + MAX_LAYER_ENTRIES * LAYER_ENTRY_WORDS;
 
 // entry words
 export const E_KIND = 0;
@@ -88,7 +89,9 @@ export class LayerBuffer {
 
   /** The image layer swapchain `id` draws into next, 0 for none. */
   nameOf(id: number): number {
-    return id >= 1 && id <= MAX_LAYER_SWAPCHAINS ? this.u32[NAMES_AT + id - 1] : 0;
+    return id >= 1 && id <= MAX_LAYER_SWAPCHAINS
+      ? this.u32[NAMES_AT + id - 1]
+      : 0;
   }
 
   /** IWER's submitLayers: the frame's list, in order (no allocation). */
@@ -104,7 +107,12 @@ export class LayerBuffer {
       const l = list[i];
       const at = ENTRIES_AT + count * LAYER_ENTRY_WORDS;
       count++;
-      u32[at + E_KIND] = l.kind === 'projection' ? KIND_PROJECTION : l.kind === 'quad' ? KIND_QUAD : KIND_CYLINDER;
+      u32[at + E_KIND] =
+        l.kind === 'projection'
+          ? KIND_PROJECTION
+          : l.kind === 'quad'
+            ? KIND_QUAD
+            : KIND_CYLINDER;
       u32[at + E_ID] = l.id;
       u32[at + E_FLAGS] =
         (l.listed ? FLAG_LISTED : 0) |

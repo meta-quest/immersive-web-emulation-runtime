@@ -92,13 +92,35 @@ export function defineImageElement(
   Base: new () => object = env.EventTarget as unknown as new () => object,
 ): ImageElementClasses {
   const baseProto = Base.prototype as Record<string, unknown>;
-  const baseSet = typeof baseProto.setAttribute === 'function' ? (baseProto.setAttribute as Function) : null;
-  const baseGet = typeof baseProto.getAttribute === 'function' ? (baseProto.getAttribute as Function) : null;
-  const baseRemove = typeof baseProto.removeAttribute === 'function' ? (baseProto.removeAttribute as Function) : null;
-  const baseHas = typeof baseProto.hasAttribute === 'function' ? (baseProto.hasAttribute as Function) : null;
+  const baseSet =
+    typeof baseProto.setAttribute === 'function'
+      ? (baseProto.setAttribute as Function)
+      : null;
+  const baseGet =
+    typeof baseProto.getAttribute === 'function'
+      ? (baseProto.getAttribute as Function)
+      : null;
+  const baseRemove =
+    typeof baseProto.removeAttribute === 'function'
+      ? (baseProto.removeAttribute as Function)
+      : null;
+  const baseHas =
+    typeof baseProto.hasAttribute === 'function'
+      ? (baseProto.hasAttribute as Function)
+      : null;
 
-  const OWN = new Set(['src', 'width', 'height', 'crossorigin', 'decoding', 'loading', 'referrerpolicy',
-    'fetchpriority', 'ismap', ...STRING_ATTRS.map(([, a]) => a)]);
+  const OWN = new Set([
+    'src',
+    'width',
+    'height',
+    'crossorigin',
+    'decoding',
+    'loading',
+    'referrerpolicy',
+    'fetchpriority',
+    'ismap',
+    ...STRING_ATTRS.map(([, a]) => a),
+  ]);
 
   const settleWaiters = (s: ImageSlot, error: unknown | null) => {
     const waiters = s.waiters;
@@ -119,7 +141,13 @@ export function defineImageElement(
     const s = slotOf(el);
     const generation = ++s.generation;
     // A pending decode() rejects when the request is replaced.
-    settleWaiters(s, s.env.domException('The source image cannot be decoded (src changed).', 'EncodingError'));
+    settleWaiters(
+      s,
+      s.env.domException(
+        'The source image cannot be decoded (src changed).',
+        'EncodingError',
+      ),
+    );
     if (s.inflight) {
       s.env.cancel(s.inflight);
       s.inflight = null;
@@ -154,11 +182,16 @@ export function defineImageElement(
     const env = s.env;
     const options = { applyExif: true, alpha: 0 as const };
     (async () => {
-      await null;  // HTML awaits a stable state: no fetch or parse work inside the src setter
+      await null; // HTML awaits a stable state: no fetch or parse work inside the src setter
       if (s.generation !== generation) return null;
-      const loaded = await loadImageBytes(src, env, crossOrigin, { allowBase64: true });
+      const loaded = await loadImageBytes(src, env, crossOrigin, {
+        allowBase64: true,
+      });
       if (s.generation !== generation) return null;
-      const job = 'base64' in loaded ? env.decodeBase64!(loaded.base64, options) : env.decode(loaded.bytes, options);
+      const job =
+        'base64' in loaded
+          ? env.decodeBase64!(loaded.base64, options)
+          : env.decode(loaded.bytes, options);
       s.inflight = job;
       const handle = await job;
       return { handle, url: loaded.url };
@@ -195,7 +228,13 @@ export function defineImageElement(
         }
         env.queueTask(() => {
           if (s.generation !== generation) return;
-          settleWaiters(s, env.domException(`The source image cannot be decoded: ${String((error as Error)?.message ?? error)}`, 'EncodingError'));
+          settleWaiters(
+            s,
+            env.domException(
+              `The source image cannot be decoded: ${String((error as Error)?.message ?? error)}`,
+              'EncodingError',
+            ),
+          );
           fire(el, 'error');
         });
       },
@@ -213,7 +252,8 @@ export function defineImageElement(
     const s = slotOf(el);
     if (value === null) s.attrs.delete(name);
     else s.attrs.set(name, value);
-    if (name === 'src' || (name === 'crossorigin' && s.attrs.has('src'))) update(el);
+    if (name === 'src' || (name === 'crossorigin' && s.attrs.has('src')))
+      update(el);
   };
 
   class HTMLImageElement extends (Base as new () => object) {
@@ -251,7 +291,9 @@ export function defineImageElement(
     get crossOrigin(): string | null {
       const v = slotOf(this).attrs.get('crossorigin');
       if (v === undefined) return null;
-      return v.toLowerCase() === 'use-credentials' ? 'use-credentials' : 'anonymous';
+      return v.toLowerCase() === 'use-credentials'
+        ? 'use-credentials'
+        : 'anonymous';
     }
     set crossOrigin(value: string | null) {
       setAttr(this, 'crossorigin', value === null ? null : String(value));
@@ -264,7 +306,9 @@ export function defineImageElement(
       setAttr(this, 'decoding', String(value));
     }
     get loading(): string {
-      return (slotOf(this).attrs.get('loading') ?? '').toLowerCase() === 'lazy' ? 'lazy' : 'eager';
+      return (slotOf(this).attrs.get('loading') ?? '').toLowerCase() === 'lazy'
+        ? 'lazy'
+        : 'eager';
     }
     set loading(value: string) {
       setAttr(this, 'loading', String(value));
@@ -328,9 +372,16 @@ export function defineImageElement(
       const s = slotOf(this);
       if (s.state === 'available' && !s.pendingLoad) return Promise.resolve();
       if (s.state === 'loading' || s.pendingLoad) {
-        return new Promise<void>((resolve, reject) => s.waiters.push({ resolve, reject }));
+        return new Promise<void>((resolve, reject) =>
+          s.waiters.push({ resolve, reject }),
+        );
       }
-      return Promise.reject(s.env.domException('The source image cannot be decoded.', 'EncodingError'));
+      return Promise.reject(
+        s.env.domException(
+          'The source image cannot be decoded.',
+          'EncodingError',
+        ),
+      );
     }
 
     // Attribute API: the reflected names are kept here; others go to the base element if it has an attribute API.
@@ -363,13 +414,20 @@ export function defineImageElement(
       if (s.state !== 'available' || !s.handle || s.handle.width === 0) {
         throw s.env.domException(
           s.state === 'broken'
-            ? 'The HTMLImageElement provided is in the \'broken\' state.'
+            ? "The HTMLImageElement provided is in the 'broken' state."
             : 'The HTMLImageElement provided is not fully loaded.',
           'InvalidStateError',
         );
       }
       const h = s.handle;
-      return { kind: 'handle', origin: 'image', width: h.width, height: h.height, premultiplied: h.premultiplied, handle: h };
+      return {
+        kind: 'handle',
+        origin: 'image',
+        width: h.width,
+        height: h.height,
+        premultiplied: h.premultiplied,
+        handle: h,
+      };
     }
   }
 
@@ -391,7 +449,11 @@ export function defineImageElement(
   // Element identity, unless the base element already provides it.
   const defineIfMissing = (name: string, value: unknown) => {
     if (!(name in baseProto)) {
-      Object.defineProperty(HTMLImageElement.prototype, name, { get: () => value, configurable: true, enumerable: true });
+      Object.defineProperty(HTMLImageElement.prototype, name, {
+        get: () => value,
+        configurable: true,
+        enumerable: true,
+      });
     }
   };
   defineIfMissing('tagName', 'IMG');
@@ -408,13 +470,20 @@ export function defineImageElement(
   // Image(): a named constructor whose prototype is HTMLImageElement.prototype (new Image() instanceof
   // HTMLImageElement, Image.prototype === HTMLImageElement.prototype).
   const Image = function Image(this: unknown, width?: number, height?: number) {
-    if (!new.target) throw new TypeError("Failed to construct 'Image': Please use the 'new' operator.");
+    if (!new.target)
+      throw new TypeError(
+        "Failed to construct 'Image': Please use the 'new' operator.",
+      );
     const el = new HTMLImageElement(CREATE);
     if (width !== undefined) (el as unknown as { width: number }).width = width;
-    if (height !== undefined) (el as unknown as { height: number }).height = height;
+    if (height !== undefined)
+      (el as unknown as { height: number }).height = height;
     return el;
   } as unknown as new (width?: number, height?: number) => object;
-  Object.defineProperty(Image, 'prototype', { value: HTMLImageElement.prototype, writable: false });
+  Object.defineProperty(Image, 'prototype', {
+    value: HTMLImageElement.prototype,
+    writable: false,
+  });
 
   return {
     HTMLImageElement,

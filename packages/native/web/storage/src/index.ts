@@ -7,8 +7,18 @@
 
 export { installStorage, type InstallStorageOptions } from './install.ts';
 export { installIdbAndCaches } from './install-idb.ts';
-export { Storage, createStorage, createLocalStorage, DEFAULT_QUOTA_UNITS } from './web-storage.ts';
+export {
+  Storage,
+  createStorage,
+  createLocalStorage,
+  DEFAULT_QUOTA_UNITS,
+} from './web-storage.ts';
 export { installIndexedDB, IDB_GLOBALS } from './indexeddb.ts';
 export { CacheStorage, Cache, createCacheStorage } from './cache.ts';
 export { makeOpenDatabase } from './websql.ts';
-export type { StorageNatives, SqlResult, SqlValue, SqlArea } from './natives.ts';
+export type {
+  StorageNatives,
+  SqlResult,
+  SqlValue,
+  SqlArea,
+} from './natives.ts';

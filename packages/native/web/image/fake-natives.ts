@@ -16,7 +16,12 @@
 
 import { inflateSync } from 'node:zlib';
 import { forgivingBase64 } from './load.ts';
-import type { ImageNatives, NativeImageErrorCode, NativeImageHandle, NativeProcessOptions } from './natives.ts';
+import type {
+  ImageNatives,
+  NativeImageErrorCode,
+  NativeImageHandle,
+  NativeProcessOptions,
+} from './natives.ts';
 
 interface Pixels {
   width: number;
@@ -34,19 +39,29 @@ class FakeHandle implements NativeImageHandle {
 
 const MAX_DIMENSION = 16384;
 
-function fail(code: NativeImageErrorCode, message: string): Error & { code: NativeImageErrorCode } {
+function fail(
+  code: NativeImageErrorCode,
+  message: string,
+): Error & { code: NativeImageErrorCode } {
   return Object.assign(new Error(`image: ${code}: ${message}`), { code });
 }
 
 function u32be(b: Uint8Array, o: number): number {
-  return ((b[o]! << 24) | (b[o + 1]! << 16) | (b[o + 2]! << 8) | b[o + 3]!) >>> 0;
+  return (
+    ((b[o]! << 24) | (b[o + 1]! << 16) | (b[o + 2]! << 8) | b[o + 3]!) >>> 0
+  );
 }
 
 export function decodePng(bytes: Uint8Array): Pixels {
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  if (bytes.length < 8 || sig.some((v, i) => bytes[i] !== v)) throw fail('unsupported', 'not a PNG');
+  if (bytes.length < 8 || sig.some((v, i) => bytes[i] !== v))
+    throw fail('unsupported', 'not a PNG');
   let pos = 8;
-  let width = 0, height = 0, depth = 0, type = 0, interlace = 0;
+  let width = 0,
+    height = 0,
+    depth = 0,
+    type = 0,
+    interlace = 0;
   let palette: Uint8Array | null = null;
   let trns: Uint8Array | null = null;
   const idat: Uint8Array[] = [];
@@ -62,7 +77,8 @@ export function decodePng(bytes: Uint8Array): Pixels {
       type = body[9]!;
       interlace = body[12]!;
       if (width === 0 || height === 0) throw fail('corrupt', 'zero size');
-      if (width > MAX_DIMENSION || height > MAX_DIMENSION) throw fail('too-large', `${width}x${height}`);
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION)
+        throw fail('too-large', `${width}x${height}`);
     } else if (kind === 'PLTE') palette = body;
     else if (kind === 'tRNS') trns = body;
     else if (kind === 'IDAT') idat.push(body);
@@ -71,8 +87,11 @@ export function decodePng(bytes: Uint8Array): Pixels {
   }
   if (!width || idat.length === 0) throw fail('corrupt', 'missing IHDR/IDAT');
   if (interlace) throw fail('unsupported', 'interlaced PNG (fake natives)');
-  if (depth !== 8 && depth !== 16) throw fail('unsupported', `bit depth ${depth} (fake natives)`);
-  const channels = ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 } as Record<number, number>)[type];
+  if (depth !== 8 && depth !== 16)
+    throw fail('unsupported', `bit depth ${depth} (fake natives)`);
+  const channels = ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 } as Record<number, number>)[
+    type
+  ];
   if (!channels) throw fail('corrupt', `colour type ${type}`);
   let raw: Uint8Array;
   try {
@@ -82,7 +101,8 @@ export function decodePng(bytes: Uint8Array): Pixels {
   }
   const bpp = (channels * depth) / 8;
   const stride = width * bpp;
-  if (raw.length < (stride + 1) * height) throw fail('corrupt', 'short image data');
+  if (raw.length < (stride + 1) * height)
+    throw fail('corrupt', 'short image data');
   const cur = new Uint8Array(stride);
   const prev = new Uint8Array(stride);
   const out = new Uint8Array(width * height * 4);
@@ -99,7 +119,9 @@ export function decodePng(bytes: Uint8Array): Pixels {
       else if (filter === 3) v += (a + b) >> 1;
       else if (filter === 4) {
         const p = a + b - c;
-        const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+        const pa = Math.abs(p - a),
+          pb = Math.abs(p - b),
+          pc = Math.abs(p - c);
         v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
       } else if (filter !== 0) throw fail('corrupt', `filter ${filter}`);
       cur[i] = v & 0xff;
@@ -107,15 +129,31 @@ export function decodePng(bytes: Uint8Array): Pixels {
     for (let x = 0; x < width; x++) {
       const s = (k: number) => cur[(x * channels + k) * (depth / 8)]!; // high byte for 16-bit
       const o = (y * width + x) * 4;
-      if (type === 0) { out[o] = out[o + 1] = out[o + 2] = s(0); out[o + 3] = 255; }
-      else if (type === 2) { out[o] = s(0); out[o + 1] = s(1); out[o + 2] = s(2); out[o + 3] = 255; }
-      else if (type === 3) {
+      if (type === 0) {
+        out[o] = out[o + 1] = out[o + 2] = s(0);
+        out[o + 3] = 255;
+      } else if (type === 2) {
+        out[o] = s(0);
+        out[o + 1] = s(1);
+        out[o + 2] = s(2);
+        out[o + 3] = 255;
+      } else if (type === 3) {
         const idx = s(0);
-        if (!palette || idx * 3 + 2 >= palette.length) throw fail('corrupt', 'palette index');
-        out[o] = palette[idx * 3]!; out[o + 1] = palette[idx * 3 + 1]!; out[o + 2] = palette[idx * 3 + 2]!;
+        if (!palette || idx * 3 + 2 >= palette.length)
+          throw fail('corrupt', 'palette index');
+        out[o] = palette[idx * 3]!;
+        out[o + 1] = palette[idx * 3 + 1]!;
+        out[o + 2] = palette[idx * 3 + 2]!;
         out[o + 3] = trns && idx < trns.length ? trns[idx]! : 255;
-      } else if (type === 4) { out[o] = out[o + 1] = out[o + 2] = s(0); out[o + 3] = s(1); }
-      else { out[o] = s(0); out[o + 1] = s(1); out[o + 2] = s(2); out[o + 3] = s(3); }
+      } else if (type === 4) {
+        out[o] = out[o + 1] = out[o + 2] = s(0);
+        out[o + 3] = s(1);
+      } else {
+        out[o] = s(0);
+        out[o + 1] = s(1);
+        out[o + 2] = s(2);
+        out[o + 3] = s(3);
+      }
     }
     prev.set(cur);
   }
@@ -125,7 +163,11 @@ export function decodePng(bytes: Uint8Array): Pixels {
 const RAW_MAGIC = 'IWNRAW1\0';
 
 /** Encodes the fake natives' raw test format. */
-export function encodeRawTestImage(width: number, height: number, rgba: Uint8Array): Uint8Array {
+export function encodeRawTestImage(
+  width: number,
+  height: number,
+  rgba: Uint8Array,
+): Uint8Array {
   const out = new Uint8Array(16 + rgba.length);
   for (let i = 0; i < 8; i++) out[i] = RAW_MAGIC.charCodeAt(i);
   const dv = new DataView(out.buffer);
@@ -136,13 +178,24 @@ export function encodeRawTestImage(width: number, height: number, rgba: Uint8Arr
 }
 
 function decodeAny(bytes: Uint8Array): Pixels {
-  if (bytes.length >= 16 && String.fromCharCode(...bytes.subarray(0, 8)) === RAW_MAGIC) {
+  if (
+    bytes.length >= 16 &&
+    String.fromCharCode(...bytes.subarray(0, 8)) === RAW_MAGIC
+  ) {
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const width = dv.getUint32(8, true), height = dv.getUint32(12, true);
+    const width = dv.getUint32(8, true),
+      height = dv.getUint32(12, true);
     if (width === 0 || height === 0) throw fail('corrupt', 'zero size');
-    if (width > MAX_DIMENSION || height > MAX_DIMENSION) throw fail('too-large', `${width}x${height}`);
-    if (bytes.length < 16 + width * height * 4) throw fail('corrupt', 'short raw image');
-    return { width, height, data: bytes.slice(16, 16 + width * height * 4), premultiplied: false };
+    if (width > MAX_DIMENSION || height > MAX_DIMENSION)
+      throw fail('too-large', `${width}x${height}`);
+    if (bytes.length < 16 + width * height * 4)
+      throw fail('corrupt', 'short raw image');
+    return {
+      width,
+      height,
+      data: bytes.slice(16, 16 + width * height * 4),
+      premultiplied: false,
+    };
   }
   return decodePng(bytes);
 }
@@ -162,7 +215,8 @@ function convertAlpha(p: Pixels, want: 0 | 1 | 2): Pixels {
   for (let i = 0; i < d.length; i += 4) {
     const a = d[i + 3]!;
     if (a === 255) continue;
-    for (let c = 0; c < 3; c++) d[i + c] = toPre ? premul(d[i + c]!, a) : unpremul(d[i + c]!, a);
+    for (let c = 0; c < 3; c++)
+      d[i + c] = toPre ? premul(d[i + c]!, a) : unpremul(d[i + c]!, a);
   }
   return { ...p, data: d, premultiplied: toPre };
 }
@@ -174,9 +228,13 @@ export function processPixels(src: Pixels, o: NativeProcessOptions): Pixels {
     const d = new Uint8Array(cw * ch * 4);
     for (let y = 0; y < ch; y++) {
       for (let x = 0; x < cw; x++) {
-        const sx = cx + x, sy = cy + y;
+        const sx = cx + x,
+          sy = cy + y;
         if (sx < 0 || sy < 0 || sx >= p.width || sy >= p.height) continue;
-        d.set(p.data.subarray((sy * p.width + sx) * 4, (sy * p.width + sx) * 4 + 4), (y * cw + x) * 4);
+        d.set(
+          p.data.subarray((sy * p.width + sx) * 4, (sy * p.width + sx) * 4 + 4),
+          (y * cw + x) * 4,
+        );
       }
     }
     p = { ...p, width: cw, height: ch, data: d };
@@ -192,17 +250,29 @@ export function processPixels(src: Pixels, o: NativeProcessOptions): Pixels {
         for (let c = 0; c < 4; c++) {
           let v: number;
           if (o.quality === 0) {
-            const sx = Math.min(pre.width - 1, Math.floor(((x + 0.5) * pre.width) / rw));
-            const sy = Math.min(pre.height - 1, Math.floor(((y + 0.5) * pre.height) / rh));
+            const sx = Math.min(
+              pre.width - 1,
+              Math.floor(((x + 0.5) * pre.width) / rw),
+            );
+            const sy = Math.min(
+              pre.height - 1,
+              Math.floor(((y + 0.5) * pre.height) / rh),
+            );
             v = pre.data[(sy * pre.width + sx) * 4 + c]!;
           } else {
             const fx = Math.max(0, ((x + 0.5) * pre.width) / rw - 0.5);
             const fy = Math.max(0, ((y + 0.5) * pre.height) / rh - 0.5);
-            const x0 = Math.min(pre.width - 1, Math.floor(fx)), y0 = Math.min(pre.height - 1, Math.floor(fy));
-            const x1 = Math.min(pre.width - 1, x0 + 1), y1 = Math.min(pre.height - 1, y0 + 1);
-            const tx = fx - x0, ty = fy - y0;
-            const at = (xx: number, yy: number) => pre.data[(yy * pre.width + xx) * 4 + c]!;
-            v = (at(x0, y0) * (1 - tx) + at(x1, y0) * tx) * (1 - ty) + (at(x0, y1) * (1 - tx) + at(x1, y1) * tx) * ty;
+            const x0 = Math.min(pre.width - 1, Math.floor(fx)),
+              y0 = Math.min(pre.height - 1, Math.floor(fy));
+            const x1 = Math.min(pre.width - 1, x0 + 1),
+              y1 = Math.min(pre.height - 1, y0 + 1);
+            const tx = fx - x0,
+              ty = fy - y0;
+            const at = (xx: number, yy: number) =>
+              pre.data[(yy * pre.width + xx) * 4 + c]!;
+            v =
+              (at(x0, y0) * (1 - tx) + at(x1, y0) * tx) * (1 - ty) +
+              (at(x0, y1) * (1 - tx) + at(x1, y1) * tx) * ty;
           }
           d[(y * rw + x) * 4 + c] = Math.round(v);
         }
@@ -214,7 +284,11 @@ export function processPixels(src: Pixels, o: NativeProcessOptions): Pixels {
   if (o.flipY) {
     const d = new Uint8Array(p.data.length);
     const row = p.width * 4;
-    for (let y = 0; y < p.height; y++) d.set(p.data.subarray((p.height - 1 - y) * row, (p.height - y) * row), y * row);
+    for (let y = 0; y < p.height; y++)
+      d.set(
+        p.data.subarray((p.height - 1 - y) * row, (p.height - y) * row),
+        y * row,
+      );
     p = { ...p, data: d };
   }
   return convertAlpha(p, o.alpha ?? 0);
@@ -243,14 +317,21 @@ export function createFakeImageNatives(): FakeImageNatives {
     h.height = p.height;
     h.premultiplied = p.premultiplied;
     let opaque = true;
-    for (let i = 3; i < p.data.length; i += 4) if (p.data[i] !== 255) { opaque = false; break; }
+    for (let i = 3; i < p.data.length; i += 4)
+      if (p.data[i] !== 255) {
+        opaque = false;
+        break;
+      }
     h.opaque = opaque;
     store.set(h, p);
     live++;
     return h;
   };
   // Pending jobs by promise, for cancel(): settling removes the entry; a cancelled job never runs.
-  const jobs = new Map<Promise<unknown>, { reject(e: unknown): void; timer: ReturnType<typeof setTimeout> }>();
+  const jobs = new Map<
+    Promise<unknown>,
+    { reject(e: unknown): void; timer: ReturnType<typeof setTimeout> }
+  >();
   const later = <T>(fn: () => T): Promise<T> => {
     pending++;
     let settle!: { resolve(v: T): void; reject(e: unknown): void };
@@ -271,7 +352,8 @@ export function createFakeImageNatives(): FakeImageNatives {
   };
   const live_ = (h: NativeImageHandle, op: string): Pixels => {
     const p = store.get(h);
-    if (!p || h.width === 0) throw new TypeError(`image.${op}: not a live image handle`);
+    if (!p || h.width === 0)
+      throw new TypeError(`image.${op}: not a live image handle`);
     return p;
   };
   const detach = (h: NativeImageHandle) => {
@@ -280,7 +362,9 @@ export function createFakeImageNatives(): FakeImageNatives {
     (h as FakeHandle).height = 0;
   };
   const bytesOf = (v: ArrayBuffer | ArrayBufferView): Uint8Array =>
-    v instanceof ArrayBuffer ? new Uint8Array(v) : new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+    v instanceof ArrayBuffer
+      ? new Uint8Array(v)
+      : new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
 
   const natives: FakeImageNatives = {
     version: 2,
@@ -313,7 +397,10 @@ export function createFakeImageNatives(): FakeImageNatives {
     fromPixels(rgba, width, height, premultiplied, options) {
       calls.push({ op: 'fromPixels', options });
       const b = bytesOf(rgba);
-      if (b.length !== width * height * 4) throw new TypeError('image.fromPixels: pixel buffer size does not match');
+      if (b.length !== width * height * 4)
+        throw new TypeError(
+          'image.fromPixels: pixel buffer size does not match',
+        );
       const snap: Pixels = { width, height, data: b.slice(), premultiplied };
       return later(() => make(processPixels(snap, options)));
     },
@@ -326,7 +413,10 @@ export function createFakeImageNatives(): FakeImageNatives {
       return make(live_(handle, 'share'));
     },
     readPixels(handle, premultiplied) {
-      const p = convertAlpha(live_(handle, 'readPixels'), premultiplied ? 1 : 2);
+      const p = convertAlpha(
+        live_(handle, 'readPixels'),
+        premultiplied ? 1 : 2,
+      );
       return new Uint8ClampedArray(p.data);
     },
     close(handle) {
@@ -352,7 +442,15 @@ export function createFakeImageNatives(): FakeImageNatives {
       return 0;
     },
     stats() {
-      return { pending, queued: 0, threads: 1, handles: live, bytes: 0, parked: parked.size, backends: ['fake'] };
+      return {
+        pending,
+        queued: 0,
+        threads: 1,
+        handles: live,
+        bytes: 0,
+        parked: parked.size,
+        backends: ['fake'],
+      };
     },
     pixelsOf(handle) {
       return store.get(handle) ?? null;

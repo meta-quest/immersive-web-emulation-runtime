@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Reference JPEG decoding/encoding with libjpeg-turbo (test-only; the decoder behind Skia / AImageDecoder and
 // Chromium). Defaults as those decoders use them: JDCT_ISLOW, fancy upsampling on.
 #include "jpeg_ref.h"

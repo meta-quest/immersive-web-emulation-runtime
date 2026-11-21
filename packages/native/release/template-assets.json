@@ -38,6 +38,9 @@
   "licenses": [
     { "from": "THIRD_PARTY_NOTICES.txt", "to": "iwn/licenses/NOTICES.txt" },
     { "from": "LICENSE", "to": "iwn/licenses/LICENSE.txt" },
-    { "from": "web/glue/dist/glue.NOTICES.txt", "to": "iwn/licenses/glue.NOTICES.txt" }
+    {
+      "from": "web/glue/dist/glue.NOTICES.txt",
+      "to": "iwn/licenses/glue.NOTICES.txt"
+    }
   ]
 }

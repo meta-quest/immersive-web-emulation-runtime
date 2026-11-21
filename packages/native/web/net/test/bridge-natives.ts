@@ -8,23 +8,38 @@
 // NetNatives backed by the real C++ net core (runtime/net, iwn_net_bridge over stdio). The bridge is
 // built by scripts/build-bridge.mjs (npm pretest) into .bridge-build/.
 
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import {
+  spawn,
+  spawnSync,
+  type ChildProcessWithoutNullStreams,
+} from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
-import type { NativeHttpRequest, NativeSyncResponse, NetConfig, NetNatives } from '../src/natives.ts';
+import type {
+  NativeHttpRequest,
+  NativeSyncResponse,
+  NetConfig,
+  NetNatives,
+} from '../src/natives.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const BRIDGE = process.env.IWN_NET_BRIDGE ?? join(here, '..', '.bridge-build', 'iwn_net_bridge');
+export const BRIDGE =
+  process.env.IWN_NET_BRIDGE ??
+  join(here, '..', '.bridge-build', 'iwn_net_bridge');
 export const bridgeAvailable = existsSync(BRIDGE);
 
 const b64 = (s: string | Uint8Array): string => {
-  const buf = typeof s === 'string' ? Buffer.from(s, 'utf8') : Buffer.from(s.buffer, s.byteOffset, s.byteLength);
+  const buf =
+    typeof s === 'string'
+      ? Buffer.from(s, 'utf8')
+      : Buffer.from(s.buffer, s.byteOffset, s.byteLength);
   return buf.length ? buf.toString('base64') : '-';
 };
-const unb64 = (s: string): Buffer => (s === '-' ? Buffer.alloc(0) : Buffer.from(s, 'base64'));
+const unb64 = (s: string): Buffer =>
+  s === '-' ? Buffer.alloc(0) : Buffer.from(s, 'base64');
 const toArrayBuffer = (b: Buffer): ArrayBuffer => {
   const ab = new ArrayBuffer(b.length);
   new Uint8Array(ab).set(b);
@@ -69,25 +84,52 @@ export class BridgeNatives implements NetNatives {
     this.#proc = spawn(BRIDGE, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     if (opts.worker) {
       const once = (line: string): string[] => {
-        const r = spawnSync(BRIDGE, [...args, '--once'], { input: line + '\n', encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+        const r = spawnSync(BRIDGE, [...args, '--once'], {
+          input: line + '\n',
+          encoding: 'utf8',
+          maxBuffer: 256 * 1024 * 1024,
+        });
         return r.stdout.split('\n').filter(Boolean);
       };
       this.httpSync = (req): NativeSyncResponse => {
         let body = '-';
         if (req.body) {
-          const v = ArrayBuffer.isView(req.body) ? new Uint8Array(req.body.buffer, req.body.byteOffset, req.body.byteLength) : new Uint8Array(req.body);
+          const v = ArrayBuffer.isView(req.body)
+            ? new Uint8Array(
+                req.body.buffer,
+                req.body.byteOffset,
+                req.body.byteLength,
+              )
+            : new Uint8Array(req.body);
           body = b64(v);
         }
         const lines = once(
           `H 1 ${b64(req.url)} ${b64(req.method)} ${req.redirect} ${req.timeoutMs ?? 0} ${b64(req.headers.join('\0'))} ${body} ${req.totalTimeoutMs ?? 0}`,
         );
-        const out = { status: 0, statusText: '', headers: [] as string[], url: '', flags: 0, body: new ArrayBuffer(0) };
+        const out = {
+          status: 0,
+          statusText: '',
+          headers: [] as string[],
+          url: '',
+          flags: 0,
+          body: new ArrayBuffer(0),
+        };
         for (const l of lines) {
           const f = l.split(' ');
-          if (f[0] === 'x') return { errorKind: f[2], errorMessage: unb64(f[3]).toString('utf8') };
+          if (f[0] === 'x')
+            return {
+              errorKind: f[2],
+              errorMessage: unb64(f[3]).toString('utf8'),
+            };
           if (f[0] === 'h') {
             const flat = unb64(f[4]).toString('utf8');
-            Object.assign(out, { status: Number(f[2]), statusText: unb64(f[3]).toString('utf8'), headers: flat ? flat.split('\0') : [], url: unb64(f[5]).toString('utf8'), flags: Number(f[6]) });
+            Object.assign(out, {
+              status: Number(f[2]),
+              statusText: unb64(f[3]).toString('utf8'),
+              headers: flat ? flat.split('\0') : [],
+              url: unb64(f[5]).toString('utf8'),
+              flags: Number(f[6]),
+            });
           }
           if (f[0] === 'd') out.body = toArrayBuffer(unb64(f[2]));
         }
@@ -97,7 +139,11 @@ export class BridgeNatives implements NetNatives {
         const [l] = once(`A 1 ${b64(urlPath)}`);
         const f = l.split(' ');
         const status = Number(f[2]);
-        return { status, buffer: status === 200 ? toArrayBuffer(unb64(f[4])) : null, mime: unb64(f[3]).toString('utf8') };
+        return {
+          status,
+          buffer: status === 200 ? toArrayBuffer(unb64(f[4])) : null,
+          mime: unb64(f[3]).toString('utf8'),
+        };
       };
     }
     const rl = createInterface({ input: this.#proc.stdout });
@@ -128,24 +174,47 @@ export class BridgeNatives implements NetNatives {
     return this.#config;
   }
 
-  readAsset(urlPath: string, cb: (status: number, buffer: ArrayBuffer | null, mime: string, mapped: boolean) => void): void {
+  readAsset(
+    urlPath: string,
+    cb: (
+      status: number,
+      buffer: ArrayBuffer | null,
+      mime: string,
+      mapped: boolean,
+    ) => void,
+  ): void {
     const id = this.#next++;
     this.#handlers.set(id, (f) => {
       this.#handlers.delete(id);
       const status = Number(f[2]);
-      cb(status, status === 200 ? toArrayBuffer(unb64(f[4])) : null, unb64(f[3]).toString('utf8'), f[5] === '1');
+      cb(
+        status,
+        status === 200 ? toArrayBuffer(unb64(f[4])) : null,
+        unb64(f[3]).toString('utf8'),
+        f[5] === '1',
+      );
     });
     this.#send(`A ${id} ${b64(urlPath)}`);
   }
 
-  httpStart(req: NativeHttpRequest, onEvent: (type: number, ...args: unknown[]) => void): number {
+  httpStart(
+    req: NativeHttpRequest,
+    onEvent: (type: number, ...args: unknown[]) => void,
+  ): number {
     const id = this.#next++;
     this.#handlers.set(id, (f) => {
       switch (f[0]) {
         case 'h': {
           const flat = unb64(f[4]).toString('utf8');
           const headers = flat.length ? flat.split('\0') : [];
-          onEvent(1, Number(f[2]), unb64(f[3]).toString('utf8'), headers, unb64(f[5]).toString('utf8'), Number(f[6]));
+          onEvent(
+            1,
+            Number(f[2]),
+            unb64(f[3]).toString('utf8'),
+            headers,
+            unb64(f[5]).toString('utf8'),
+            Number(f[6]),
+          );
           break;
         }
         case 'd':
@@ -163,10 +232,18 @@ export class BridgeNatives implements NetNatives {
     });
     let body = '-';
     if (req.body) {
-      const v = ArrayBuffer.isView(req.body) ? new Uint8Array(req.body.buffer, req.body.byteOffset, req.body.byteLength) : new Uint8Array(req.body);
+      const v = ArrayBuffer.isView(req.body)
+        ? new Uint8Array(
+            req.body.buffer,
+            req.body.byteOffset,
+            req.body.byteLength,
+          )
+        : new Uint8Array(req.body);
       body = b64(v);
     }
-    this.#send(`H ${id} ${b64(req.url)} ${b64(req.method)} ${req.redirect} ${req.timeoutMs ?? 0} ${b64(req.headers.join('\0'))} ${body}`);
+    this.#send(
+      `H ${id} ${b64(req.url)} ${b64(req.method)} ${req.redirect} ${req.timeoutMs ?? 0} ${b64(req.headers.join('\0'))} ${body}`,
+    );
     return id;
   }
 
@@ -178,15 +255,29 @@ export class BridgeNatives implements NetNatives {
     this.#send(`X ${id}`);
   }
 
-  wsConnect(url: string, protocols: string[], onEvent: (type: number, ...args: unknown[]) => void): number {
+  wsConnect(
+    url: string,
+    protocols: string[],
+    onEvent: (type: number, ...args: unknown[]) => void,
+  ): number {
     const id = this.#next++;
     this.#handlers.set(id, (f) => {
       switch (f[0]) {
         case 'o':
-          onEvent(1, unb64(f[2]).toString('utf8'), unb64(f[3]).toString('utf8'));
+          onEvent(
+            1,
+            unb64(f[2]).toString('utf8'),
+            unb64(f[3]).toString('utf8'),
+          );
           break;
         case 'm':
-          onEvent(2, f[2] === 't', f[2] === 't' ? unb64(f[3]).toString('utf8') : toArrayBuffer(unb64(f[3])));
+          onEvent(
+            2,
+            f[2] === 't',
+            f[2] === 't'
+              ? unb64(f[3]).toString('utf8')
+              : toArrayBuffer(unb64(f[3])),
+          );
           break;
         case 's':
           onEvent(3, Number(f[2]));
@@ -208,7 +299,9 @@ export class BridgeNatives implements NetNatives {
     if (typeof data === 'string') {
       this.#send(`S ${id} t ${b64(data)}`);
     } else {
-      const v = ArrayBuffer.isView(data) ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength) : new Uint8Array(data);
+      const v = ArrayBuffer.isView(data)
+        ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+        : new Uint8Array(data);
       this.#send(`S ${id} b ${b64(v)}`);
     }
   }

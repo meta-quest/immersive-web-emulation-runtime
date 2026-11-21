@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // V8 binding of the spatial anchors (android/xr_anchors.h, XR-ANCHOR-1): members of globalThis.__iwn.xr that web/xr's
 // anchor hooks call. Written from the V8 embedder headers like xr_binding.cc.
 //

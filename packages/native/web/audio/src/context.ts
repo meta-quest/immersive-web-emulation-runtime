@@ -47,15 +47,17 @@ function contentKey(data: ArrayBuffer): string {
 
 // A context collected before it was closed or finished rendering (e.g. an OfflineAudioContext
 // that never started). The held value must not reference the Core: it would keep it alive.
-const contextRegistry = new FinalizationRegistry<{ env: Env; id: number }>((held) => {
-  const ref = held.env.hub.cores.get(held.id);
-  if (ref && ref.deref() === undefined) held.env.hub.cores.delete(held.id);
-  try {
-    held.env.natives.releaseContext(held.id);
-  } catch {
-    // already gone
-  }
-});
+const contextRegistry = new FinalizationRegistry<{ env: Env; id: number }>(
+  (held) => {
+    const ref = held.env.hub.cores.get(held.id);
+    if (ref && ref.deref() === undefined) held.env.hub.cores.delete(held.id);
+    try {
+      held.env.natives.releaseContext(held.id);
+    } catch {
+      // already gone
+    }
+  },
+);
 
 /** BaseAudioContext: factories, decodeAudioData, state, listener, destination. */
 export class BaseAudioContext extends EventTarget implements CoreOwner {
@@ -65,12 +67,21 @@ export class BaseAudioContext extends EventTarget implements CoreOwner {
   #destination: AudioDestinationNode;
   #listener: AudioListener;
   #onstatechange: HandlerSlot;
-  #requests = new Map<number, { resolve: () => void; reject: (e: unknown) => void; desired: number }>();
+  #requests = new Map<
+    number,
+    { resolve: () => void; reject: (e: unknown) => void; desired: number }
+  >();
   #nextRequest = 1;
   /** Id of the first close request acknowledged (0: none). */
   #closeRequestId = 0;
 
-  constructor(token: symbol, env: Env, core: Core, destinationChannels: number, maxChannels: number) {
+  constructor(
+    token: symbol,
+    env: Env,
+    core: Core,
+    destinationChannels: number,
+    maxChannels: number,
+  ) {
     if (token !== INTERNAL) throw new TypeError('Illegal constructor');
     super();
     this.#env = env;
@@ -78,7 +89,13 @@ export class BaseAudioContext extends EventTarget implements CoreOwner {
     core.owner = this;
     bindContext(this, core);
     env.hub.register(core);
-    this.#destination = new AudioDestinationNode(INTERNAL, this, destinationChannels, maxChannels, core.offline);
+    this.#destination = new AudioDestinationNode(
+      INTERNAL,
+      this,
+      destinationChannels,
+      maxChannels,
+      core.offline,
+    );
     this.#listener = new AudioListener(INTERNAL, core);
     this.#onstatechange = new HandlerSlot(this, 'statechange');
     contextRegistry.register(this, { env, id: core.id }, this);
@@ -165,7 +182,8 @@ export class BaseAudioContext extends EventTarget implements CoreOwner {
       }
     }
     // Closed and acknowledged: the render side will never run again.
-    if (s === 'closed' && !this.#core.offline && this.#requests.size === 0) this._release();
+    if (s === 'closed' && !this.#core.offline && this.#requests.size === 0)
+      this._release();
   }
 
   /** @internal CoreOwner */
@@ -207,25 +225,57 @@ export class BaseAudioContext extends EventTarget implements CoreOwner {
   createChannelMerger(numberOfInputs = 6): ChannelMergerNode {
     return new ChannelMergerNode(this, { numberOfInputs });
   }
-  createPeriodicWave(real: ArrayLike<number>, imag: ArrayLike<number>, constraints: { disableNormalization?: boolean } = {}): PeriodicWave {
-    const opts: PeriodicWaveOptions = { real, imag, disableNormalization: constraints.disableNormalization };
-    if (real.length !== imag.length) throw domError('IndexSizeError', 'real and imag must have the same length');
+  createPeriodicWave(
+    real: ArrayLike<number>,
+    imag: ArrayLike<number>,
+    constraints: { disableNormalization?: boolean } = {},
+  ): PeriodicWave {
+    const opts: PeriodicWaveOptions = {
+      real,
+      imag,
+      disableNormalization: constraints.disableNormalization,
+    };
+    if (real.length !== imag.length)
+      throw domError(
+        'IndexSizeError',
+        'real and imag must have the same length',
+      );
     return new PeriodicWave(this, opts);
   }
-  createBuffer(numberOfChannels: number, length: number, sampleRate: number): AudioBuffer {
-    return new this.#env.AudioBuffer({ numberOfChannels, length, sampleRate }) as AudioBuffer;
+  createBuffer(
+    numberOfChannels: number,
+    length: number,
+    sampleRate: number,
+  ): AudioBuffer {
+    return new this.#env.AudioBuffer({
+      numberOfChannels,
+      length,
+      sampleRate,
+    }) as AudioBuffer;
   }
   createDynamicsCompressor(): never {
-    throw domError('NotSupportedError', 'DynamicsCompressorNode is not supported by this runtime');
+    throw domError(
+      'NotSupportedError',
+      'DynamicsCompressorNode is not supported by this runtime',
+    );
   }
   createWaveShaper(): never {
-    throw domError('NotSupportedError', 'WaveShaperNode is not supported by this runtime');
+    throw domError(
+      'NotSupportedError',
+      'WaveShaperNode is not supported by this runtime',
+    );
   }
   createIIRFilter(): never {
-    throw domError('NotSupportedError', 'IIRFilterNode is not supported by this runtime');
+    throw domError(
+      'NotSupportedError',
+      'IIRFilterNode is not supported by this runtime',
+    );
   }
   createScriptProcessor(): never {
-    throw domError('NotSupportedError', 'ScriptProcessorNode is not supported by this runtime');
+    throw domError(
+      'NotSupportedError',
+      'ScriptProcessorNode is not supported by this runtime',
+    );
   }
 
   /**
@@ -233,17 +283,31 @@ export class BaseAudioContext extends EventTarget implements CoreOwner {
    * WAV; AAC/M4A, FLAC, Opus through the platform decoders on device), resamples to the context
    * rate. Failures reject with EncodingError and are logged once per URL (AUD-9).
    */
-  decodeAudioData(audioData: ArrayBuffer, successCallback?: DecodeSuccess, errorCallback?: DecodeError): Promise<AudioBuffer> {
+  decodeAudioData(
+    audioData: ArrayBuffer,
+    successCallback?: DecodeSuccess,
+    errorCallback?: DecodeError,
+  ): Promise<AudioBuffer> {
     const env = this.#env;
     const fail = (e: DOMException): Promise<AudioBuffer> => {
-      if (typeof errorCallback === 'function') queueMicrotask(() => errorCallback(e));
+      if (typeof errorCallback === 'function')
+        queueMicrotask(() => errorCallback(e));
       return Promise.reject(e);
     };
     if (!(audioData instanceof ArrayBuffer)) {
-      return fail(new TypeError('decodeAudioData: argument must be an ArrayBuffer') as unknown as DOMException);
+      return fail(
+        new TypeError(
+          'decodeAudioData: argument must be an ArrayBuffer',
+        ) as unknown as DOMException,
+      );
     }
     if ((audioData as ArrayBuffer & { detached?: boolean }).detached) {
-      return fail(domError('DataCloneError', 'decodeAudioData: the ArrayBuffer is detached'));
+      return fail(
+        domError(
+          'DataCloneError',
+          'decodeAudioData: the ArrayBuffer is detached',
+        ),
+      );
     }
     const url = env.urlOf(audioData);
     const key = url ?? contentKey(audioData);
@@ -271,9 +335,14 @@ export class BaseAudioContext extends EventTarget implements CoreOwner {
         reject: (message: string) => {
           if (!loggedDecodeFailures.has(key)) {
             loggedDecodeFailures.add(key);
-            env.log(`[iwn.audio] decodeAudioData failed for ${url ?? `<${byteLength} bytes, url unknown>`}: ${message}`);
+            env.log(
+              `[iwn.audio] decodeAudioData failed for ${url ?? `<${byteLength} bytes, url unknown>`}: ${message}`,
+            );
           }
-          const err = domError('EncodingError', `Unable to decode audio data: ${message}`);
+          const err = domError(
+            'EncodingError',
+            `Unable to decode audio data: ${message}`,
+          );
           if (typeof errorCallback === 'function') {
             try {
               errorCallback(err);
@@ -315,13 +384,21 @@ export class AudioContext extends BaseAudioContext {
     if (options.sampleRate !== undefined) {
       rate = Number(options.sampleRate);
       if (!(rate >= 3000 && rate <= 768000)) {
-        throw domError('NotSupportedError', `sampleRate ${options.sampleRate} is outside [3000, 768000]`);
+        throw domError(
+          'NotSupportedError',
+          `sampleRate ${options.sampleRate} is outside [3000, 768000]`,
+        );
       }
     }
     let hint = 0;
     const lh = options.latencyHint;
     if (lh === 'playback' || (typeof lh === 'number' && lh >= 0.1)) hint = 1;
-    else if (lh !== undefined && lh !== 'interactive' && lh !== 'balanced' && typeof lh !== 'number') {
+    else if (
+      lh !== undefined &&
+      lh !== 'interactive' &&
+      lh !== 'balanced' &&
+      typeof lh !== 'number'
+    ) {
       throw new TypeError(`invalid latencyHint '${String(lh)}'`);
     }
     if (env.onFirstContext) {
@@ -346,21 +423,34 @@ export class AudioContext extends BaseAudioContext {
   }
   getOutputTimestamp(): { contextTime: number; performanceTime: number } {
     const ts = this._env.natives.outputTimestamp(this._core.id);
-    if (!ts) return { contextTime: this.currentTime, performanceTime: this._env.now() };
+    if (!ts)
+      return {
+        contextTime: this.currentTime,
+        performanceTime: this._env.now(),
+      };
     return { contextTime: ts[0], performanceTime: ts[1] - this.#offsetMs };
   }
   // close() moves the control-thread state to closed at once (spec), so a resume()/suspend()/
   // close() made while the close is still being acknowledged rejects too.
   resume(): Promise<void> {
-    if (this.state === 'closed' || this._core.dead) return Promise.reject(domError('InvalidStateError', 'the context is closed'));
+    if (this.state === 'closed' || this._core.dead)
+      return Promise.reject(
+        domError('InvalidStateError', 'the context is closed'),
+      );
     return this._requestState(1);
   }
   suspend(): Promise<void> {
-    if (this.state === 'closed' || this._core.dead) return Promise.reject(domError('InvalidStateError', 'the context is closed'));
+    if (this.state === 'closed' || this._core.dead)
+      return Promise.reject(
+        domError('InvalidStateError', 'the context is closed'),
+      );
     return this._requestState(0);
   }
   close(): Promise<void> {
-    if (this.state === 'closed' || this._core.dead) return Promise.reject(domError('InvalidStateError', 'the context is already closed'));
+    if (this.state === 'closed' || this._core.dead)
+      return Promise.reject(
+        domError('InvalidStateError', 'the context is already closed'),
+      );
     const done = this._requestState(2);
     // Hand the close request over now; later graph changes have no effect and must not queue
     // natively (nothing consumes them once the render side closed).
@@ -391,18 +481,43 @@ export class OfflineAudioContext extends BaseAudioContext {
   #resolve: ((b: AudioBuffer) => void) | null = null;
   #oncomplete: HandlerSlot;
 
-  constructor(contextOptionsOrChannels: OfflineAudioContextOptions | number, length?: number, sampleRate?: number) {
+  constructor(
+    contextOptionsOrChannels: OfflineAudioContextOptions | number,
+    length?: number,
+    sampleRate?: number,
+  ) {
     const env = (new.target as unknown as { [ENV]?: Env })[ENV];
     if (!env) throw new TypeError('Illegal constructor');
     let o: OfflineAudioContextOptions;
-    if (typeof contextOptionsOrChannels === 'object' && contextOptionsOrChannels !== null) o = contextOptionsOrChannels;
-    else o = { numberOfChannels: Number(contextOptionsOrChannels), length: Number(length), sampleRate: Number(sampleRate) };
-    const ch = o.numberOfChannels === undefined ? 1 : Math.trunc(Number(o.numberOfChannels));
+    if (
+      typeof contextOptionsOrChannels === 'object' &&
+      contextOptionsOrChannels !== null
+    )
+      o = contextOptionsOrChannels;
+    else
+      o = {
+        numberOfChannels: Number(contextOptionsOrChannels),
+        length: Number(length),
+        sampleRate: Number(sampleRate),
+      };
+    const ch =
+      o.numberOfChannels === undefined
+        ? 1
+        : Math.trunc(Number(o.numberOfChannels));
     const len = Math.trunc(Number(o.length));
     const sr = Number(o.sampleRate);
-    if (!(ch >= 1 && ch <= 32)) throw domError('NotSupportedError', `numberOfChannels ${o.numberOfChannels} is outside [1, 32]`);
-    if (!(len >= 1)) throw domError('NotSupportedError', 'length must be at least 1');
-    if (!(sr >= 3000 && sr <= 768000)) throw domError('NotSupportedError', `sampleRate ${o.sampleRate} is outside [3000, 768000]`);
+    if (!(ch >= 1 && ch <= 32))
+      throw domError(
+        'NotSupportedError',
+        `numberOfChannels ${o.numberOfChannels} is outside [1, 32]`,
+      );
+    if (!(len >= 1))
+      throw domError('NotSupportedError', 'length must be at least 1');
+    if (!(sr >= 3000 && sr <= 768000))
+      throw domError(
+        'NotSupportedError',
+        `sampleRate ${o.sampleRate} is outside [3000, 768000]`,
+      );
     let created: [number, number, Float64Array, Float32Array];
     try {
       created = env.natives.createContext(1, sr, ch, len, 0);
@@ -426,14 +541,22 @@ export class OfflineAudioContext extends BaseAudioContext {
   }
 
   startRendering(): Promise<AudioBuffer> {
-    if (this.#started) return Promise.reject(domError('InvalidStateError', 'startRendering() was already called'));
+    if (this.#started)
+      return Promise.reject(
+        domError('InvalidStateError', 'startRendering() was already called'),
+      );
     this.#started = true;
     const core = this._core;
     const env = this._env;
     core.flush();
     return new Promise<AudioBuffer>((resolve, reject) => {
       if (!env.natives.startRendering(core.id)) {
-        reject(domError('NotSupportedError', 'could not allocate the rendered buffer'));
+        reject(
+          domError(
+            'NotSupportedError',
+            'could not allocate the rendered buffer',
+          ),
+        );
         return;
       }
       this.#resolve = resolve;
@@ -445,11 +568,19 @@ export class OfflineAudioContext extends BaseAudioContext {
   }
 
   resume(): Promise<void> {
-    if (!this.#started) return Promise.reject(domError('InvalidStateError', 'rendering has not started'));
+    if (!this.#started)
+      return Promise.reject(
+        domError('InvalidStateError', 'rendering has not started'),
+      );
     return Promise.resolve();
   }
   suspend(_suspendTime?: number): Promise<void> {
-    return Promise.reject(domError('NotSupportedError', 'OfflineAudioContext.suspend() is not supported by this runtime'));
+    return Promise.reject(
+      domError(
+        'NotSupportedError',
+        'OfflineAudioContext.suspend() is not supported by this runtime',
+      ),
+    );
   }
 
   /** @internal CoreOwner */
@@ -465,7 +596,9 @@ export class OfflineAudioContext extends BaseAudioContext {
     this._setState('closed');
     const resolve = this.#resolve;
     this.#resolve = null;
-    this.dispatchEvent(new OfflineAudioCompletionEvent('complete', { renderedBuffer: buffer }));
+    this.dispatchEvent(
+      new OfflineAudioCompletionEvent('complete', { renderedBuffer: buffer }),
+    );
     resolve?.(buffer);
   }
 }

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Host tests for the V8-free GL core against a real ES 3.2 driver (Mesa llvmpipe, surfaceless EGL).
 // Run: build/gl-host/iwn_gl_tests   (exit code 0 = all passed)
 

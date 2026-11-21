@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Host tests for XR-thread code of src/android that makes OpenXR calls only, against the fake runtime of
 // fake_openxr.h (which behaves as Meta's where it matters): the scene model (XR-AR-2, xr_scene.cc) and spatial
 // anchors (XR-ANCHOR-1, xr_anchors.cc).

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Counters the GL module keeps natively (JS thread only, no atomics). Exposed to JS through the
 // `stats` native as a Float64Array in this field order (see web/webgl/stats.ts).
 #pragma once

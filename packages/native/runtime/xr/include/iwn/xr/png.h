@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // A small PNG writer for the eye-buffer screenshot (DBG-SHOT), V8-free: 8-bit RGBA, filter type 1 (Sub) on every
 // row, one zlib stream (the system zlib: NDK libz / the host's). Written from the PNG specification (W3C, 3rd ed.).
 #pragma once

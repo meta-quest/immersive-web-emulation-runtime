@@ -24,14 +24,46 @@ createServer((req, res) => {
   req.on('data', (c) => chunks.push(c));
   req.on('end', () => {
     res.setHeader('Content-Type', 'text/plain');
-    res.end(`${req.method} ${req.url} x-dev=${req.headers['x-dev']} body=${Buffer.concat(chunks)}`);
+    res.end(
+      `${req.method} ${req.url} x-dev=${req.headers['x-dev']} body=${Buffer.concat(chunks)}`,
+    );
   });
 }).listen(18080, '127.0.0.1');
 
 const dir = mkdtempSync(join(tmpdir(), 'iwn-selfsigned-'));
-execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, 'k.pem'), '-out', join(dir, 'c.pem'), '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdio: 'ignore' });
-createHttps({ key: readFileSync(join(dir, 'k.pem')), cert: readFileSync(join(dir, 'c.pem')) }, (req, res) => res.end('should never be reached')).listen(18443, '127.0.0.1');
+execFileSync(
+  'openssl',
+  [
+    'req',
+    '-x509',
+    '-newkey',
+    'rsa:2048',
+    '-nodes',
+    '-keyout',
+    join(dir, 'k.pem'),
+    '-out',
+    join(dir, 'c.pem'),
+    '-days',
+    '1',
+    '-subj',
+    '/CN=localhost',
+    '-addext',
+    'subjectAltName=DNS:localhost,IP:127.0.0.1',
+  ],
+  { stdio: 'ignore' },
+);
+createHttps(
+  {
+    key: readFileSync(join(dir, 'k.pem')),
+    cert: readFileSync(join(dir, 'c.pem')),
+  },
+  (req, res) => res.end('should never be reached'),
+).listen(18443, '127.0.0.1');
 
 const wss = new WebSocketServer({ host: '127.0.0.1', port: 18081 });
-wss.on('connection', (s) => s.on('message', (d, bin) => s.send(d, { binary: bin })));
-console.log('host servers ready: http 18080, https(self-signed) 18443, ws 18081');
+wss.on('connection', (s) =>
+  s.on('message', (d, bin) => s.send(d, { binary: bin })),
+);
+console.log(
+  'host servers ready: http 18080, https(self-signed) 18443, ws 18081',
+);

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Worker policy (WRK-1, WRK-4, WRK-9, WRK-12, PROC-4): config parsing, the live-worker limit, URL checks, script
 // fetching from a directory asset source and data: URLs, thread names.
 #include <cstdio>

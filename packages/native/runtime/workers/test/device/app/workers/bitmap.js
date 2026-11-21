@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // ImageBitmap arrives by transfer, is drawn with OffscreenCanvas 2D, comes back as a new bitmap (WRK-5, C2D in workers).
 onmessage = async (e) => {
   try {
@@ -14,9 +21,19 @@ onmessage = async (e) => {
     const imageData = ctx.getImageData(0, 0, 2, 2);
     const t2ib = c.transferToImageBitmap();
     const json = await (await fetch('../lib/data.json')).json();
-    postMessage({ w: bmp.width, h: bmp.height, px, back, json, imageData,
-      transferToImageBitmapIsImageBitmap: t2ib instanceof ImageBitmap }, [back]);
+    postMessage(
+      {
+        w: bmp.width,
+        h: bmp.height,
+        px,
+        back,
+        json,
+        imageData,
+        transferToImageBitmapIsImageBitmap: t2ib instanceof ImageBitmap,
+      },
+      [back],
+    );
   } catch (err) {
-    postMessage({ error: String(err && err.stack || err) });
+    postMessage({ error: String((err && err.stack) || err) });
   }
 };

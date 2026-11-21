@@ -19,7 +19,14 @@ import {
   type EventInit,
   EventTarget,
 } from './events.ts';
-import { enumerable, illegalConstructor, INTERNAL, setLength, tag, toDOMString } from './util.ts';
+import {
+  enumerable,
+  illegalConstructor,
+  INTERNAL,
+  setLength,
+  tag,
+  toDOMString,
+} from './util.ts';
 
 // ---------------------------------------------------------------------------------------------------
 // matchMedia
@@ -97,8 +104,12 @@ const DISCRETE: Record<string, string> = {
 };
 
 /** Range-capable features: their current value and how to parse a value written for them. */
-function rangeFeature(name: string, env: MediaEnv): { actual: number; parse: (v: string) => number | null } | null {
-  const int = (v: string): number | null => (/^\d+$/.test(v) ? Number(v) : null);
+function rangeFeature(
+  name: string,
+  env: MediaEnv,
+): { actual: number; parse: (v: string) => number | null } | null {
+  const int = (v: string): number | null =>
+    /^\d+$/.test(v) ? Number(v) : null;
   switch (name) {
     case 'width':
     case 'device-width':
@@ -120,7 +131,8 @@ function rangeFeature(name: string, env: MediaEnv): { actual: number; parse: (v:
   return null;
 }
 
-const RANGE_RE = /^([^<>=]+?)\s*(<=|>=|<|>|=)\s*([^<>=]+?)(?:\s*(<=|>=|<|>)\s*([^<>=]+?))?$/;
+const RANGE_RE =
+  /^([^<>=]+?)\s*(<=|>=|<|>|=)\s*([^<>=]+?)(?:\s*(<=|>=|<|>)\s*([^<>=]+?))?$/;
 const compare = (a: number, op: string, b: number): boolean => {
   switch (op) {
     case '<':
@@ -140,7 +152,14 @@ const compare = (a: number, op: string, b: number): boolean => {
 function evalRange(text: string, env: MediaEnv): boolean | null {
   const m = RANGE_RE.exec(text);
   if (!m) return null;
-  const [, a, op1, b, op2, c] = m as unknown as [string, string, string, string, string | undefined, string | undefined];
+  const [, a, op1, b, op2, c] = m as unknown as [
+    string,
+    string,
+    string,
+    string,
+    string | undefined,
+    string | undefined,
+  ];
   if (op2 !== undefined) {
     // value op name op value: both operators must point the same way.
     const lt = (o: string): boolean => o === '<' || o === '<=';
@@ -206,13 +225,19 @@ function evalFeature(text: string, env: MediaEnv): boolean | null {
     case 'resolution':
       return value === null ? true : cmp(env.dpr(), parseResolution(value));
     case '-webkit-device-pixel-ratio':
-      return value === null ? true : cmp(env.dpr(), value === '' ? null : Number(value));
+      return value === null
+        ? true
+        : cmp(env.dpr(), value === '' ? null : Number(value));
     case 'color':
-      return value === null ? true : cmp(8, Number.isInteger(Number(value)) ? Number(value) : null);
+      return value === null
+        ? true
+        : cmp(8, Number.isInteger(Number(value)) ? Number(value) : null);
     case 'color-index':
     case 'monochrome':
     case 'grid':
-      return value === null ? false : cmp(0, Number.isInteger(Number(value)) ? Number(value) : null);
+      return value === null
+        ? false
+        : cmp(0, Number.isInteger(Number(value)) ? Number(value) : null);
     case 'orientation':
       if (prefix || value === null) return value === null ? true : null;
       return value === (h >= w ? 'portrait' : 'landscape');
@@ -220,7 +245,8 @@ function evalFeature(text: string, env: MediaEnv): boolean | null {
       if (prefix) return null;
       if (name in DISCRETE) {
         const actual = DISCRETE[name]!;
-        if (value === null) return actual !== 'none' && actual !== 'no-preference';
+        if (value === null)
+          return actual !== 'none' && actual !== 'no-preference';
         return value === actual;
       }
       return null;
@@ -284,7 +310,11 @@ function evalCondition(cond: string, env: MediaEnv): Tri | null {
     if (!t.startsWith('(') || !t.endsWith(')')) return null;
     const inner = t.slice(1, -1).trim();
     let r: Tri | null;
-    if (inner.startsWith('(') || inner.startsWith('not ') || inner.startsWith('not(')) {
+    if (
+      inner.startsWith('(') ||
+      inner.startsWith('not ') ||
+      inner.startsWith('not(')
+    ) {
       r = evalCondition(inner, env);
       if (r === null) r = UNKNOWN; // <general-enclosed>
     } else {
@@ -292,8 +322,17 @@ function evalCondition(cond: string, env: MediaEnv): Tri | null {
     }
     values.push(r);
   }
-  if (ops[0] === 'or') return values.includes(true) ? true : values.includes(UNKNOWN) ? UNKNOWN : false;
-  return values.includes(false) ? false : values.includes(UNKNOWN) ? UNKNOWN : true;
+  if (ops[0] === 'or')
+    return values.includes(true)
+      ? true
+      : values.includes(UNKNOWN)
+        ? UNKNOWN
+        : false;
+  return values.includes(false)
+    ? false
+    : values.includes(UNKNOWN)
+      ? UNKNOWN
+      : true;
 }
 
 const MEDIA_TYPES: Record<string, boolean> = {
@@ -353,7 +392,10 @@ function serializeMedia(query: string): string {
     .join(', ');
 }
 
-export function evaluateMediaQueryList(query: string, env: MediaEnv): { media: string; matches: boolean } {
+export function evaluateMediaQueryList(
+  query: string,
+  env: MediaEnv,
+): { media: string; matches: boolean } {
   const lower = String(query).toLowerCase();
   if (lower.trim() === '') return { media: '', matches: true };
   const queries = splitTopLevel(lower, ',');
@@ -374,7 +416,10 @@ export function evaluateMediaQueryList(query: string, env: MediaEnv): { media: s
 export class MediaQueryListEvent extends Event {
   #media: string;
   #matches: boolean;
-  constructor(type: string, init?: (EventInit & { media?: string; matches?: boolean }) | null) {
+  constructor(
+    type: string,
+    init?: (EventInit & { media?: string; matches?: boolean }) | null,
+  ) {
     super(type, init);
     this.#media = init?.media === undefined ? '' : String(init.media);
     this.#matches = !!init?.matches;
@@ -413,10 +458,17 @@ export class MediaQueryList extends EventTarget {
   }
 }
 tag(MediaQueryList, 'MediaQueryList');
-enumerable(MediaQueryList, ['media', 'matches', 'addListener', 'removeListener']);
+enumerable(MediaQueryList, [
+  'media',
+  'matches',
+  'addListener',
+  'removeListener',
+]);
 defineEventHandler(MediaQueryList.prototype, 'change');
 
-export function createMatchMedia(env: MediaEnv): (query: string) => MediaQueryList {
+export function createMatchMedia(
+  env: MediaEnv,
+): (query: string) => MediaQueryList {
   return function matchMedia(query: string): MediaQueryList {
     if (arguments.length === 0) {
       throw new TypeError(
@@ -433,7 +485,12 @@ export function createMatchMedia(env: MediaEnv): (query: string) => MediaQueryLi
 export class PopStateEvent extends Event {
   #state: unknown;
   #hasUAVisualTransition: boolean;
-  constructor(type: string, init?: (EventInit & { state?: unknown; hasUAVisualTransition?: boolean }) | null) {
+  constructor(
+    type: string,
+    init?:
+      | (EventInit & { state?: unknown; hasUAVisualTransition?: boolean })
+      | null,
+  ) {
     super(type, init);
     this.#state = init?.state === undefined ? null : init.state;
     this.#hasUAVisualTransition = !!init?.hasUAVisualTransition;
@@ -452,7 +509,10 @@ enumerable(PopStateEvent, ['state', 'hasUAVisualTransition']);
 export class HashChangeEvent extends Event {
   #oldURL: string;
   #newURL: string;
-  constructor(type: string, init?: (EventInit & { oldURL?: string; newURL?: string }) | null) {
+  constructor(
+    type: string,
+    init?: (EventInit & { oldURL?: string; newURL?: string }) | null,
+  ) {
     super(type, init);
     this.#oldURL = init?.oldURL === undefined ? '' : String(init.oldURL);
     this.#newURL = init?.newURL === undefined ? '' : String(init.newURL);
@@ -490,7 +550,9 @@ export interface Navigation {
 }
 
 function queueTask(fn: () => void): void {
-  const st = (globalThis as { setTimeout?: (cb: () => void, ms: number) => unknown }).setTimeout;
+  const st = (
+    globalThis as { setTimeout?: (cb: () => void, ms: number) => unknown }
+  ).setTimeout;
   if (typeof st === 'function') st(fn, 0);
   else Promise.resolve().then(fn);
 }
@@ -521,15 +583,23 @@ function navigate(nav: Navigation, target: string, replace: boolean): void {
   try {
     next = new nav.URL(target, cur.href);
   } catch {
-    throw domException(`Failed to execute 'assign' on 'Location': '${target}' is not a valid URL.`, 'SyntaxError');
+    throw domException(
+      `Failed to execute 'assign' on 'Location': '${target}' is not a valid URL.`,
+      'SyntaxError',
+    );
   }
   if (next.origin !== cur.origin) {
-    nav.warn(`[iwer-native] navigation to another origin is ignored: ${next.href}`);
+    nav.warn(
+      `[iwer-native] navigation to another origin is ignored: ${next.href}`,
+    );
     return;
   }
   // HTML navigate: navigating to the current URL replaces the entry instead of pushing one.
   if (next.href === cur.href) replace = true;
-  if (withoutFragment(next) === withoutFragment(cur) && next.href.includes('#')) {
+  if (
+    withoutFragment(next) === withoutFragment(cur) &&
+    next.href.includes('#')
+  ) {
     // Navigate to a fragment: same document. popstate (state null) fires during the navigation,
     // hashchange in a later task when the fragment changed (HTML "update document for history step
     // application").
@@ -540,10 +610,16 @@ function navigate(nav: Navigation, target: string, replace: boolean): void {
       pushEntry(nav, { url: next.href, state: null });
     }
     nav.setURL(next.href);
-    dispatchTrusted(nav.windowTarget, new PopStateEvent('popstate', { state: null }));
+    dispatchTrusted(
+      nav.windowTarget,
+      new PopStateEvent('popstate', { state: null }),
+    );
     if (oldURL !== next.href) {
       queueTask(() => {
-        dispatchTrusted(nav.windowTarget, new HashChangeEvent('hashchange', { oldURL, newURL: next.href }));
+        dispatchTrusted(
+          nav.windowTarget,
+          new HashChangeEvent('hashchange', { oldURL, newURL: next.href }),
+        );
       });
     }
     return;
@@ -552,7 +628,11 @@ function navigate(nav: Navigation, target: string, replace: boolean): void {
   nav.reload(next.href);
 }
 
-const EMPTY_ORIGINS = Object.freeze({ length: 0, item: (_i: number): null => null, contains: (_s: string): boolean => false });
+const EMPTY_ORIGINS = Object.freeze({
+  length: 0,
+  item: (_i: number): null => null,
+  contains: (_s: string): boolean => false,
+});
 
 let locNav!: (l: Location) => Navigation;
 export class Location {
@@ -630,7 +710,11 @@ export class Location {
     navigate(this.#nav, href, false);
   }
   // [SameObject]: one empty DOMStringList-like object (a packaged app has no ancestors).
-  get ancestorOrigins(): { length: number; item(i: number): null; contains(s: string): boolean } {
+  get ancestorOrigins(): {
+    length: number;
+    item(i: number): null;
+    contains(s: string): boolean;
+  } {
     return EMPTY_ORIGINS;
   }
   assign(url: string): void {
@@ -648,7 +732,10 @@ export class Location {
   valueOf(): this {
     return this;
   }
-  #set(part: 'protocol' | 'host' | 'hostname' | 'port' | 'pathname' | 'search', v: string): void {
+  #set(
+    part: 'protocol' | 'host' | 'hostname' | 'port' | 'pathname' | 'search',
+    v: string,
+  ): void {
     const u = new this.#nav.URL(this.#nav.current().href);
     (u as unknown as Record<string, string>)[part] = String(v);
     navigate(this.#nav, u.href, false);
@@ -719,15 +806,29 @@ export class History {
       nav.index = target;
       const entry = nav.entries[target]!;
       nav.setURL(entry.url);
-      dispatchTrusted(nav.windowTarget, new PopStateEvent('popstate', { state: entry.state }));
+      dispatchTrusted(
+        nav.windowTarget,
+        new PopStateEvent('popstate', { state: entry.state }),
+      );
       const newU = new nav.URL(entry.url);
       const oldU = new nav.URL(oldURL);
-      if (newU.hash !== oldU.hash && withoutFragment(newU) === withoutFragment(oldU)) {
-        dispatchTrusted(nav.windowTarget, new HashChangeEvent('hashchange', { oldURL, newURL: entry.url }));
+      if (
+        newU.hash !== oldU.hash &&
+        withoutFragment(newU) === withoutFragment(oldU)
+      ) {
+        dispatchTrusted(
+          nav.windowTarget,
+          new HashChangeEvent('hashchange', { oldURL, newURL: entry.url }),
+        );
       }
     });
   }
-  #update(data: unknown, url: string | null | undefined, replace: boolean, _unused: string): void {
+  #update(
+    data: unknown,
+    url: string | null | undefined,
+    replace: boolean,
+    _unused: string,
+  ): void {
     const nav = this.#nav;
     const state = nav.clone(data);
     let href = nav.current().href;
@@ -764,7 +865,9 @@ tag(History, 'History');
 /** WebIDL steps of pushState/replaceState: two arguments required, `unused` is a DOMString. */
 function historyArgs(op: string, count: number, unused: unknown): void {
   if (count < 2) {
-    throw new TypeError(`Failed to execute '${op}' on 'History': 2 arguments required, but only ${count} present.`);
+    throw new TypeError(
+      `Failed to execute '${op}' on 'History': 2 arguments required, but only ${count} present.`,
+    );
   }
   toDOMString(unused, `Failed to execute '${op}' on 'History'`);
 }
@@ -858,7 +961,18 @@ export class WorkerLocation {
   }
 }
 tag(WorkerLocation, 'WorkerLocation');
-enumerable(WorkerLocation, ['href', 'origin', 'protocol', 'host', 'hostname', 'port', 'pathname', 'search', 'hash', 'toString']);
+enumerable(WorkerLocation, [
+  'href',
+  'origin',
+  'protocol',
+  'host',
+  'hostname',
+  'port',
+  'pathname',
+  'search',
+  'hash',
+  'toString',
+]);
 
 /** For other glue: the URL behind a WorkerLocation. */
 export function workerLocationHref(location: WorkerLocation): string {

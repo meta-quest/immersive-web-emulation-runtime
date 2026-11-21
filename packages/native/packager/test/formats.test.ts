@@ -340,7 +340,10 @@ describe('manifest rewrite (PKG-8)', () => {
     assert.equal(attrString(alias, 'label'), 'My App');
   });
   test('template contract: VR category, head tracking and OpenXR permission checked', () => {
-    assert.deepEqual(templateContractWarnings(decodeAxml(templateManifest())), []);
+    assert.deepEqual(
+      templateContractWarnings(decodeAxml(templateManifest())),
+      [],
+    );
     const doc = decodeAxml(templateManifest());
     doc.root.children = doc.root.children.filter(
       (c) =>

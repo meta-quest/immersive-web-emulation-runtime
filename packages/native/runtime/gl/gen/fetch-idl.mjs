@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Refreshes the vendored WebGL IDL files in gen/idl/ from Chromium's Blink tree (gitiles, base64 TEXT format)
 // at a pinned revision, and records the revision in gen/idl/REVISION.
 //
@@ -91,20 +98,25 @@ export const IDL_FILES = [
 ];
 
 function curl(url) {
-  return execFileSync('curl', ['-sSf', '--max-time', '60', url], { maxBuffer: 64 << 20 });
+  return execFileSync('curl', ['-sSf', '--max-time', '60', url], {
+    maxBuffer: 64 << 20,
+  });
 }
 
 function main() {
   mkdirSync(outDir, { recursive: true });
   const revFile = join(outDir, 'REVISION');
   let rev = process.argv[2];
-  if (!rev && existsSync(revFile)) rev = readFileSync(revFile, 'utf8').match(/^commit (\w+)/m)?.[1];
+  if (!rev && existsSync(revFile))
+    rev = readFileSync(revFile, 'utf8').match(/^commit (\w+)/m)?.[1];
   if (!rev) {
     const head = curl(`${BASE}/refs/heads/main?format=JSON`).toString('utf8');
     rev = JSON.parse(head.slice(head.indexOf('{'))).commit;
   }
   for (const file of IDL_FILES) {
-    const b64 = curl(`${BASE}/${rev}/${DIR}/${file}?format=TEXT`).toString('utf8');
+    const b64 = curl(`${BASE}/${rev}/${DIR}/${file}?format=TEXT`).toString(
+      'utf8',
+    );
     writeFileSync(join(outDir, file), Buffer.from(b64, 'base64'));
     process.stdout.write(`${file}\n`);
   }

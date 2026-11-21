@@ -39,15 +39,34 @@ export interface UpgradeOptions {
 }
 
 /** ESSL 1.00 extensions whose features are core in ESSL 3.00. */
-const UPGRADE_EXTS = ['GL_EXT_shader_texture_lod', 'GL_EXT_frag_depth', 'GL_EXT_draw_buffers'];
-const ESSL1_DIRECTIVE = (name: string): RegExp => new RegExp(`^[ \\t]*#[ \\t]*extension[ \\t]+${name}[ \\t]*:[ \\t]*(\\w+)[ \\t]*$`, 'm');
+const UPGRADE_EXTS = [
+  'GL_EXT_shader_texture_lod',
+  'GL_EXT_frag_depth',
+  'GL_EXT_draw_buffers',
+];
+const ESSL1_DIRECTIVE = (name: string): RegExp =>
+  new RegExp(
+    `^[ \\t]*#[ \\t]*extension[ \\t]+${name}[ \\t]*:[ \\t]*(\\w+)[ \\t]*$`,
+    'm',
+  );
 const TEXTURE_FUNCS: Record<string, string> = {
-  texture2DProjGradEXT: 'textureProjGrad', texture2DProjLodEXT: 'textureProjLod', texture2DGradEXT: 'textureGrad',
-  texture2DLodEXT: 'textureLod', textureCubeGradEXT: 'textureGrad', textureCubeLodEXT: 'textureLod',
-  texture2DProjLod: 'textureProjLod', texture2DLod: 'textureLod', textureCubeLod: 'textureLod',
-  texture2DProj: 'textureProj', texture2D: 'texture', textureCube: 'texture',
+  texture2DProjGradEXT: 'textureProjGrad',
+  texture2DProjLodEXT: 'textureProjLod',
+  texture2DGradEXT: 'textureGrad',
+  texture2DLodEXT: 'textureLod',
+  textureCubeGradEXT: 'textureGrad',
+  textureCubeLodEXT: 'textureLod',
+  texture2DProjLod: 'textureProjLod',
+  texture2DLod: 'textureLod',
+  textureCubeLod: 'textureLod',
+  texture2DProj: 'textureProj',
+  texture2D: 'texture',
+  textureCube: 'texture',
 };
-const TEXTURE_FUNC_RE = new RegExp(`\\b(${Object.keys(TEXTURE_FUNCS).join('|')})\\b`, 'g');
+const TEXTURE_FUNC_RE = new RegExp(
+  `\\b(${Object.keys(TEXTURE_FUNCS).join('|')})\\b`,
+  'g',
+);
 
 function isEssl100(code: string): boolean {
   const m = /^[ \t]*#[ \t]*version[ \t]+(\d+)/m.exec(code);
@@ -62,7 +81,11 @@ function isEssl100(code: string): boolean {
  * Limitation: app identifiers that are ESSL 3.00 keywords or built-in names (e.g. a variable named `texture`)
  * are not renamed, so such shaders still fail to compile.
  */
-export function upgradeEssl100(src: string, isVertex: boolean, maxDrawBuffers: number): string {
+export function upgradeEssl100(
+  src: string,
+  isVertex: boolean,
+  maxDrawBuffers: number,
+): string {
   const code = stripComments(src);
   let out = src.replace(/^([ \t]*#[ \t]*version[ \t]+100\b[^\n]*)$/m, '');
   const defines: string[] = [];
@@ -93,9 +116,15 @@ export function upgradeEssl100(src: string, isVertex: boolean, maxDrawBuffers: n
     } else if (/\bgl_FragColor\b/.test(code)) {
       out = out.replace(/\bgl_FragColor\b/g, 'webgl_FragColor');
       if (broadcast && n > 1) {
-        decls.push(`out highp vec4 webgl_FragData[${n}];`, 'highp vec4 webgl_FragColor;');
+        decls.push(
+          `out highp vec4 webgl_FragData[${n}];`,
+          'highp vec4 webgl_FragColor;',
+        );
         out = out.replace(/\bvoid(\s+)main(\s*)\(/g, 'void$1webgl_main$2(');
-        const copies = Array.from({ length: n }, (_v, i) => `webgl_FragData[${i}] = webgl_FragColor;`).join(' ');
+        const copies = Array.from(
+          { length: n },
+          (_v, i) => `webgl_FragData[${i}] = webgl_FragColor;`,
+        ).join(' ');
         out += `\nvoid main() { webgl_main(); ${copies} }\n`;
       } else {
         decls.push('out highp vec4 webgl_FragColor;');
@@ -103,17 +132,24 @@ export function upgradeEssl100(src: string, isVertex: boolean, maxDrawBuffers: n
     }
   }
   const head = [...defines, ...decls].join('\n');
-  return injectAfterDirectives('#version 300 es\n' + out, head ? head + '\n' : '', 1);
+  return injectAfterDirectives(
+    '#version 300 es\n' + out,
+    head ? head + '\n' : '',
+    1,
+  );
 }
 
-const MULTI_DRAW = /^[ \t]*#[ \t]*extension[ \t]+GL_ANGLE_multi_draw[ \t]*:[ \t]*\w+[ \t]*$/m;
+const MULTI_DRAW =
+  /^[ \t]*#[ \t]*extension[ \t]+GL_ANGLE_multi_draw[ \t]*:[ \t]*\w+[ \t]*$/m;
 const CLIP_CULL = /(#[ \t]*extension[ \t]+)GL_ANGLE_clip_cull_distance\b/g;
 const NUM_VIEWS = /layout\s*\(\s*num_views\s*=\s*(\d+)\s*\)\s*in\s*;/;
 const DRAW_ID = /\bgl_DrawID\b/;
 
 /** Strip comments for detection only (the source handed to the driver keeps them). */
 function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, '');
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, '');
 }
 
 /**
@@ -124,32 +160,62 @@ function stripComments(src: string): string {
 export type ExtensionGate = (glslName: string) => boolean;
 
 const GATED = [
-  'GL_OVR_multiview2', 'GL_OVR_multiview', 'GL_EXT_clip_cull_distance', 'GL_ANGLE_clip_cull_distance',
-  'GL_EXT_conservative_depth', 'GL_NV_shader_noperspective_interpolation', 'GL_OES_sample_variables',
-  'GL_OES_shader_multisample_interpolation', 'GL_EXT_blend_func_extended', 'GL_EXT_draw_buffers',
-  'GL_EXT_frag_depth', 'GL_EXT_shader_texture_lod', 'GL_OES_standard_derivatives',
-  'GL_ANGLE_shader_pixel_local_storage', 'GL_EXT_shader_framebuffer_fetch',
+  'GL_OVR_multiview2',
+  'GL_OVR_multiview',
+  'GL_EXT_clip_cull_distance',
+  'GL_ANGLE_clip_cull_distance',
+  'GL_EXT_conservative_depth',
+  'GL_NV_shader_noperspective_interpolation',
+  'GL_OES_sample_variables',
+  'GL_OES_shader_multisample_interpolation',
+  'GL_EXT_blend_func_extended',
+  'GL_EXT_draw_buffers',
+  'GL_EXT_frag_depth',
+  'GL_EXT_shader_texture_lod',
+  'GL_OES_standard_derivatives',
+  'GL_ANGLE_shader_pixel_local_storage',
+  'GL_EXT_shader_framebuffer_fetch',
 ];
 
 function gateExtensions(src: string, enabled: ExtensionGate): string {
   let out = src;
   for (const name of GATED) {
     if (!out.includes(name) || enabled(name)) continue;
-    const directive = new RegExp(`^([ \\t]*#[ \\t]*extension[ \\t]+${name}[ \\t]*:[ \\t]*)(\\w+)[ \\t]*$`, 'gm');
-    out = out.replace(directive, (_m, _pre, behavior: string) =>
-      behavior === 'require' ? `#error WebGL extension for ${name} is not enabled` : '',
+    const directive = new RegExp(
+      `^([ \\t]*#[ \\t]*extension[ \\t]+${name}[ \\t]*:[ \\t]*)(\\w+)[ \\t]*$`,
+      'gm',
     );
-    out = out.replace(new RegExp(`\\b${name}\\b`, 'g'), `webgl_disabled_${name.slice(3)}`);
+    out = out.replace(directive, (_m, _pre, behavior: string) =>
+      behavior === 'require'
+        ? `#error WebGL extension for ${name} is not enabled`
+        : '',
+    );
+    out = out.replace(
+      new RegExp(`\\b${name}\\b`, 'g'),
+      `webgl_disabled_${name.slice(3)}`,
+    );
   }
   return out;
 }
 
-export function rewriteShader(src: string, isVertex: boolean, enabled?: ExtensionGate, upgrade?: UpgradeOptions): RewriteResult {
+export function rewriteShader(
+  src: string,
+  isVertex: boolean,
+  enabled?: ExtensionGate,
+  upgrade?: UpgradeOptions,
+): RewriteResult {
   if (enabled) src = gateExtensions(src, enabled);
   let code = stripComments(src);
   const essl100 = isEssl100(code);
   let upgraded = false;
-  if (essl100 && upgrade && (upgrade.force || UPGRADE_EXTS.some((name) => ESSL1_DIRECTIVE(name).test(code) && !upgrade.driverHas(name)))) {
+  if (
+    essl100 &&
+    upgrade &&
+    (upgrade.force ||
+      UPGRADE_EXTS.some(
+        (name) => ESSL1_DIRECTIVE(name).test(code) && !upgrade.driverHas(name),
+      ))
+  ) {
     src = upgradeEssl100(src, isVertex, upgrade.maxDrawBuffers);
     code = stripComments(src);
     upgraded = true;
@@ -163,38 +229,59 @@ export function rewriteShader(src: string, isVertex: boolean, enabled?: Extensio
   // compiler that has it (three.js tests `defined(GL_ANGLE_multi_draw)` to pick its own fallback). GL_* macro
   // names are reserved, so the name is renamed to webgl_ANGLE_multi_draw everywhere and defined.
   if (hasMultiDraw) {
-    out = out.replace(MULTI_DRAW, '#define webgl_ANGLE_multi_draw 1').replace(/\bGL_ANGLE_multi_draw\b/g, 'webgl_ANGLE_multi_draw');
+    out = out
+      .replace(MULTI_DRAW, '#define webgl_ANGLE_multi_draw 1')
+      .replace(/\bGL_ANGLE_multi_draw\b/g, 'webgl_ANGLE_multi_draw');
   }
-  if (out.includes('GL_ANGLE_clip_cull_distance')) out = out.replace(CLIP_CULL, '$1GL_EXT_clip_cull_distance');
-  if (usesDrawId) out = injectAfterDirectives(out, 'uniform int webgl_DrawID;\n#define gl_DrawID webgl_DrawID\n');
+  if (out.includes('GL_ANGLE_clip_cull_distance'))
+    out = out.replace(CLIP_CULL, '$1GL_EXT_clip_cull_distance');
+  if (usesDrawId)
+    out = injectAfterDirectives(
+      out,
+      'uniform int webgl_DrawID;\n#define gl_DrawID webgl_DrawID\n',
+    );
   // OVR_multiview2 with num_views = 1: WebGL (ANGLE) lets such a program draw to ordinary single-view
   // framebuffers, GLES drivers reject it there. One view is the non-multiview case, so the layout qualifier is
   // dropped and gl_ViewID_OVR reads as view 0; the recorded numViews still drives draw validation (GL-24).
   if (numViews === 1) out = out.replace(NUM_VIEWS, '');
-  if (numViews === 1 && /\bgl_ViewID_OVR\b/.test(code)) out = injectAfterDirectives(out, '#define gl_ViewID_OVR 0u\n');
+  if (numViews === 1 && /\bgl_ViewID_OVR\b/.test(code))
+    out = injectAfterDirectives(out, '#define gl_ViewID_OVR 0u\n');
   if (essl100 && upgrade && enabled) {
     // WebGL 1: an enabled extension the driver lacks (or translates away) still reads as defined to the
     // preprocessor, as with a compiler that has it (CTS ext-shader-texture-lod `#ifdef GL_EXT_shader_texture_lod`).
     // GL_* macro names are reserved, so outside #extension lines the name is renamed to webgl_* and defined.
     for (const name of UPGRADE_EXTS) {
-      if (!code.includes(name) || !enabled(name) || upgrade.driverHas(name)) continue;
+      if (!code.includes(name) || !enabled(name) || upgrade.driverHas(name))
+        continue;
       const re = new RegExp(`\\b${name}\\b`);
       let hit = false;
       const lines = out.split('\n').map((l) => {
         if (/^[ \t]*#[ \t]*extension\b/.test(l) || !re.test(l)) return l;
         hit = true;
-        return l.replace(new RegExp(`\\b${name}\\b`, 'g'), `webgl_${name.slice(3)}`);
+        return l.replace(
+          new RegExp(`\\b${name}\\b`, 'g'),
+          `webgl_${name.slice(3)}`,
+        );
       });
-      if (hit) out = injectAfterDirectives(lines.join('\n'), `#define webgl_${name.slice(3)} 1\n`);
+      if (hit)
+        out = injectAfterDirectives(
+          lines.join('\n'),
+          `#define webgl_${name.slice(3)} 1\n`,
+        );
     }
     // WebGL 1.0: gl_MaxDrawBuffers is 1 unless WEBGL_draw_buffers is enabled (drivers report their own limit)
-    if (!enabled('GL_EXT_draw_buffers') && /\bgl_MaxDrawBuffers\b/.test(code)) out = out.replace(/\bgl_MaxDrawBuffers\b/g, '1');
+    if (!enabled('GL_EXT_draw_buffers') && /\bgl_MaxDrawBuffers\b/.test(code))
+      out = out.replace(/\bgl_MaxDrawBuffers\b/g, '1');
   }
   return { source: out, numViews, usesDrawId, essl100, upgraded };
 }
 
 /** Insert `text` after #version and every #extension directive that precedes the first other token. */
-function injectAfterDirectives(src: string, text: string, lineShift = 0): string {
+function injectAfterDirectives(
+  src: string,
+  text: string,
+  lineShift = 0,
+): string {
   const lines = src.split('\n');
   let insertAt = 0;
   let version300 = false;
@@ -229,5 +316,7 @@ function injectAfterDirectives(src: string, text: string, lineShift = 0): string
   // lineShift: lines the caller added above the app's first line.
   const lineDirective = version300 ? `#line ${insertAt + 1 - lineShift}\n` : '';
   lines.splice(insertAt, 0, text + lineDirective);
-  return lines.join('\n').replace(text + lineDirective + '\n', text + lineDirective);
+  return lines
+    .join('\n')
+    .replace(text + lineDirective + '\n', text + lineDirective);
 }

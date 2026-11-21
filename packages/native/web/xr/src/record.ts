@@ -12,7 +12,17 @@
 
 import type { XRHostFrame, XRHostInputState } from 'iwer/host';
 
-import { COUNTS, F32, F64, HAND_F32, HAND_U32, HAND_U8, LAYOUT_VERSION, RECORD_BYTES, U32 } from './layout.gen.ts';
+import {
+  COUNTS,
+  F32,
+  F64,
+  HAND_F32,
+  HAND_U32,
+  HAND_U8,
+  LAYOUT_VERSION,
+  RECORD_BYTES,
+  U32,
+} from './layout.gen.ts';
 
 const FLAG_SHOULD_RENDER = 1;
 const FLAG_BASE_IS_STAGE = 2;
@@ -68,15 +78,19 @@ export class FrameRecordView {
 
   constructor(buffer: ArrayBuffer) {
     if (buffer.byteLength < RECORD_BYTES) {
-      throw new RangeError(`frame record is ${buffer.byteLength} bytes; layout v${LAYOUT_VERSION} needs ${RECORD_BYTES}`);
+      throw new RangeError(
+        `frame record is ${buffer.byteLength} bytes; layout v${LAYOUT_VERSION} needs ${RECORD_BYTES}`,
+      );
     }
     this.buffer = buffer;
     this.u32 = new Uint32Array(buffer, 0, RECORD_BYTES / 4);
     this.f32 = new Float32Array(buffer, 0, RECORD_BYTES / 4);
     this.f64 = new Float64Array(buffer, 0, RECORD_BYTES / 8);
     this.u8 = new Uint8Array(buffer, 0, RECORD_BYTES);
-    const f32 = (index: number, count: number) => this.f32.subarray(index, index + count);
-    const u8 = (index: number, count: number) => this.u8.subarray(index, index + count);
+    const f32 = (index: number, count: number) =>
+      this.f32.subarray(index, index + count);
+    const u8 = (index: number, count: number) =>
+      this.u8.subarray(index, index + count);
     this.frame = {
       predictedDisplayTime: 0,
       shouldRender: false,
@@ -145,7 +159,9 @@ export class FrameRecordView {
     // the hand's own profile; browsers list it as a hand source without joints (hand profiles, hand gamepad), not as
     // the headset's controllers.
     const profile = this.u32[v.profile];
-    const pointer = mode === MODE_CONTROLLER && (profile < PROFILE_TOUCH || profile > PROFILE_TOUCH_PRO);
+    const pointer =
+      mode === MODE_CONTROLLER &&
+      (profile < PROFILE_TOUCH || profile > PROFILE_TOUCH_PRO);
     if (pointer) mode = MODE_HAND_POINTER;
     s.mode = mode;
     s.targetRayValid = (flags & INPUT_TARGET_RAY_VALID) !== 0;

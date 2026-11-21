@@ -22,18 +22,35 @@
  * protocol is absent and web/webgl reads the drawing buffer itself.
  */
 
-import { createContext2D, type Canvas2DContextBase, type ContextAttributes } from './context2d.ts';
+import {
+  createContext2D,
+  type Canvas2DContextBase,
+  type ContextAttributes,
+} from './context2d.ts';
 import { domException, unimplemented } from './errors.ts';
 import type { Canvas2DNatives, NativeSurface } from './natives.ts';
-import { IMAGE_SOURCE_SYMBOL, PIXELS_SYMBOL, type PixelData, SURFACE_SYMBOL } from './sources.ts';
+import {
+  IMAGE_SOURCE_SYMBOL,
+  PIXELS_SYMBOL,
+  type PixelData,
+  SURFACE_SYMBOL,
+} from './sources.ts';
 
 export type ContextFactory = (canvas: object, attrs: unknown) => object | null;
 const factories = new Map<string, ContextFactory>();
 
 /** The WebGL module's texImage2D source protocol key (web/webgl/tex-source.ts TEX_SOURCE). */
-export const TEX_SOURCE_SYMBOL: unique symbol = Symbol.for('iwn.texImageSource') as never;
+export const TEX_SOURCE_SYMBOL: unique symbol = Symbol.for(
+  'iwn.texImageSource',
+) as never;
 
-type WebGLPrelude = { createContext?: (canvas: object, type: 'webgl2' | 'webgl', attrs?: unknown) => object | null };
+type WebGLPrelude = {
+  createContext?: (
+    canvas: object,
+    type: 'webgl2' | 'webgl',
+    attrs?: unknown,
+  ) => object | null;
+};
 
 function webglFactory(type: 'webgl2' | 'webgl'): ContextFactory | null {
   const f = factories.get(type);
@@ -56,7 +73,10 @@ function readbackBuffer(bytes: number): Uint8Array {
 }
 
 /** The WebGL module registers 'webgl' / 'webgl2' here. */
-export function registerContextFactory(type: string, factory: ContextFactory): void {
+export function registerContextFactory(
+  type: string,
+  factory: ContextFactory,
+): void {
   factories.set(type, factory);
 }
 
@@ -91,12 +111,23 @@ export class Canvas2DImageBitmap {
     this.#px = null;
   }
   [PIXELS_SYMBOL](): PixelData | null {
-    if (!this.#px) throw domException('The image source is detached (ImageBitmap closed).', 'InvalidStateError');
+    if (!this.#px)
+      throw domException(
+        'The image source is detached (ImageBitmap closed).',
+        'InvalidStateError',
+      );
     return this.#px;
   }
   [IMAGE_SOURCE_SYMBOL](): object {
     const px = this[PIXELS_SYMBOL]()!;
-    return { kind: 'pixels', origin: 'bitmap', width: px.width, height: px.height, premultiplied: !!px.premultiplied, data: px.data };
+    return {
+      kind: 'pixels',
+      origin: 'bitmap',
+      width: px.width,
+      height: px.height,
+      premultiplied: !!px.premultiplied,
+      data: px.data,
+    };
   }
 }
 
@@ -118,7 +149,9 @@ export function enforceDimension(v: unknown, what: string): number {
   const n = Number(v);
   const t = Number.isFinite(n) ? Math.trunc(n) : NaN;
   if (!(t >= 0 && t <= 2 ** 32 - 1)) {
-    throw new TypeError(`${what}: Value is outside the 'unsigned long long' value range.`);
+    throw new TypeError(
+      `${what}: Value is outside the 'unsigned long long' value range.`,
+    );
   }
   return t + 0; // -0 -> 0
 }
@@ -126,13 +159,19 @@ export function enforceDimension(v: unknown, what: string): number {
 function base64(bytes: Uint8Array): string {
   const btoa = (globalThis as { btoa?: (s: string) => string }).btoa;
   let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   if (btoa) return btoa(bin);
   const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   let out = '';
   for (let i = 0; i < bytes.length; i += 3) {
-    const n = (bytes[i]! << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
-    out += A[(n >> 18) & 63]! + A[(n >> 12) & 63]! + (i + 1 < bytes.length ? A[(n >> 6) & 63]! : '=') + (i + 2 < bytes.length ? A[n & 63]! : '=');
+    const n =
+      (bytes[i]! << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
+    out +=
+      A[(n >> 18) & 63]! +
+      A[(n >> 12) & 63]! +
+      (i + 1 < bytes.length ? A[(n >> 6) & 63]! : '=') +
+      (i + 2 < bytes.length ? A[n & 63]! : '=');
   }
   return out;
 }
@@ -141,12 +180,23 @@ function base64(bytes: Uint8Array): string {
 interface WebGLLike {
   drawingBufferWidth: number;
   drawingBufferHeight: number;
-  readPixels(x: number, y: number, w: number, h: number, format: number, type: number, out: ArrayBufferView): void;
+  readPixels(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    format: number,
+    type: number,
+    out: ArrayBufferView,
+  ): void;
   getParameter(p: number): unknown;
   bindFramebuffer(target: number, fb: unknown): void;
   bindBuffer(target: number, buf: unknown): void;
   pixelStorei(p: number, v: number): void;
-  getContextAttributes(): { alpha?: boolean; premultipliedAlpha?: boolean } | null;
+  getContextAttributes(): {
+    alpha?: boolean;
+    premultipliedAlpha?: boolean;
+  } | null;
 }
 const GL_RGBA = 0x1908;
 const GL_UNSIGNED_BYTE = 0x1401;
@@ -166,12 +216,19 @@ function readWebGLCanvas(gl: WebGLLike): PixelData {
   const w = gl.drawingBufferWidth | 0;
   const h = gl.drawingBufferHeight | 0;
   const data = new Uint8Array(w * h * 4);
-  if (w === 0 || h === 0) return { data, width: w, height: h, premultiplied: true };
-  const webgl2 = gl.getParameter(GL_READ_FRAMEBUFFER_BINDING) !== undefined && typeof (gl as { blitFramebuffer?: unknown }).blitFramebuffer === 'function';
+  if (w === 0 || h === 0)
+    return { data, width: w, height: h, premultiplied: true };
+  const webgl2 =
+    gl.getParameter(GL_READ_FRAMEBUFFER_BINDING) !== undefined &&
+    typeof (gl as { blitFramebuffer?: unknown }).blitFramebuffer === 'function';
   const target = webgl2 ? GL_READ_FRAMEBUFFER : GL_FRAMEBUFFER;
-  const prevFb = gl.getParameter(webgl2 ? GL_READ_FRAMEBUFFER_BINDING : GL_FRAMEBUFFER_BINDING);
+  const prevFb = gl.getParameter(
+    webgl2 ? GL_READ_FRAMEBUFFER_BINDING : GL_FRAMEBUFFER_BINDING,
+  );
   const prevAlign = gl.getParameter(GL_PACK_ALIGNMENT) as number;
-  const prevPack = webgl2 ? gl.getParameter(GL_PIXEL_PACK_BUFFER_BINDING) : null;
+  const prevPack = webgl2
+    ? gl.getParameter(GL_PIXEL_PACK_BUFFER_BINDING)
+    : null;
   gl.bindFramebuffer(target, null);
   if (prevAlign !== 4) gl.pixelStorei(GL_PACK_ALIGNMENT, 4);
   if (prevPack) gl.bindBuffer(GL_PIXEL_PACK_BUFFER, null);
@@ -189,7 +246,9 @@ function readWebGLCanvas(gl: WebGLLike): PixelData {
     data.set(tmp, b);
   }
   const attrs = gl.getContextAttributes();
-  const premultiplied = attrs ? attrs.premultipliedAlpha !== false || attrs.alpha === false : true;
+  const premultiplied = attrs
+    ? attrs.premultipliedAlpha !== false || attrs.alpha === false
+    : true;
   return { data, width: w, height: h, premultiplied };
 }
 
@@ -201,11 +260,22 @@ export class CanvasHost {
   #height: number;
   #type: string | null = null;
   #ctx: object | null = null;
-  #surfaceInfo: { surface: NativeSurface; width: number; height: number } | null = null;
+  #surfaceInfo: {
+    surface: NativeSurface;
+    width: number;
+    height: number;
+  } | null = null;
   /** getContext of the element's original implementation (DOM module), used for types this module does not own. */
-  fallbackGetContext: ((type: string, attrs?: unknown) => object | null) | null = null;
+  fallbackGetContext:
+    | ((type: string, attrs?: unknown) => object | null)
+    | null = null;
 
-  constructor(owner: object, kind: 'element' | 'offscreen', width = 300, height = 150) {
+  constructor(
+    owner: object,
+    kind: 'element' | 'offscreen',
+    width = 300,
+    height = 150,
+  ) {
     this.owner = owner;
     this.kind = kind;
     this.#width = width;
@@ -216,19 +286,32 @@ export class CanvasHost {
     return this.#width;
   }
   set width(v: number) {
-    this.#width = this.kind === 'offscreen' ? enforceDimension(v, "Failed to set the 'width' property on 'OffscreenCanvas'") : toCanvasDimension(v, 300);
+    this.#width =
+      this.kind === 'offscreen'
+        ? enforceDimension(
+            v,
+            "Failed to set the 'width' property on 'OffscreenCanvas'",
+          )
+        : toCanvasDimension(v, 300);
     this.#resized();
   }
   get height(): number {
     return this.#height;
   }
   set height(v: number) {
-    this.#height = this.kind === 'offscreen' ? enforceDimension(v, "Failed to set the 'height' property on 'OffscreenCanvas'") : toCanvasDimension(v, 150);
+    this.#height =
+      this.kind === 'offscreen'
+        ? enforceDimension(
+            v,
+            "Failed to set the 'height' property on 'OffscreenCanvas'",
+          )
+        : toCanvasDimension(v, 150);
     this.#resized();
   }
 
   #resized(): void {
-    if (this.#type === '2d') (this.#ctx as Canvas2DContextBase)._resize(this.#width, this.#height);
+    if (this.#type === '2d')
+      (this.#ctx as Canvas2DContextBase)._resize(this.#width, this.#height);
   }
 
   get contextType(): string | null {
@@ -243,13 +326,22 @@ export class CanvasHost {
     if (this.#type !== null) return this.#type === type ? this.#ctx : null;
     if (type === '2d') {
       const n = natives;
-      if (!n) throw new TypeError("getContext('2d'): the Canvas 2D natives are not installed.");
-      const a = (attrs && typeof attrs === 'object' ? attrs : {}) as Partial<ContextAttributes>;
+      if (!n)
+        throw new TypeError(
+          "getContext('2d'): the Canvas 2D natives are not installed.",
+        );
+      const a = (
+        attrs && typeof attrs === 'object' ? attrs : {}
+      ) as Partial<ContextAttributes>;
       this.#ctx = createContext2D(this.kind, n, this.owner as never, a);
       this.#type = '2d';
       return this.#ctx;
     }
-    if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
+    if (
+      type === 'webgl' ||
+      type === 'webgl2' ||
+      type === 'experimental-webgl'
+    ) {
       const f = webglFactory(type === 'webgl2' ? 'webgl2' : 'webgl');
       const ctx = f ? f(this.owner, attrs) : this.#fallback(type, attrs);
       if (ctx) {
@@ -264,7 +356,8 @@ export class CanvasHost {
       this.#type = type;
       return other;
     }
-    if (type === 'bitmaprenderer') unimplemented("getContext('bitmaprenderer')");
+    if (type === 'bitmaprenderer')
+      unimplemented("getContext('bitmaprenderer')");
     return null;
   }
 
@@ -281,7 +374,8 @@ export class CanvasHost {
     const c = this.#ctx as Canvas2DContextBase;
     // Reused object (drawImage of a canvas every frame allocates nothing here).
     let info = this.#surfaceInfo;
-    if (!info) info = this.#surfaceInfo = { surface: c._surface, width: 0, height: 0 };
+    if (!info)
+      info = this.#surfaceInfo = { surface: c._surface, width: 0, height: 0 };
     info.surface = c._surface;
     info.width = this.#width;
     info.height = this.#height;
@@ -294,63 +388,126 @@ export class CanvasHost {
   }
 
   /** web/webgl TEX_SOURCE protocol: straight-alpha RGBA8, top row first, in the shared readback buffer. */
-  texSource(): { width: number; height: number; data: Uint8Array; premultiplied: boolean; isBitmap: boolean } {
+  texSource(): {
+    width: number;
+    height: number;
+    data: Uint8Array;
+    premultiplied: boolean;
+    isBitmap: boolean;
+  } {
     let w = this.#width;
     let h = this.#height;
     // A bitmap too large to exist uploads as 0x0 (no multi-GB buffer for pixels that were never stored).
     if (w * h > MAX_CANVAS_PIXELS) w = h = 0;
     const data = readbackBuffer(w * h * 4);
-    if (this.#type === '2d') natives!.readPixels((this.#ctx as Canvas2DContextBase)._surface, data, false, false);
+    if (this.#type === '2d')
+      natives!.readPixels(
+        (this.#ctx as Canvas2DContextBase)._surface,
+        data,
+        false,
+        false,
+      );
     else data.fill(0);
     return { width: w, height: h, data, premultiplied: false, isBitmap: false };
   }
 
   /** Pixels of the canvas (2D: read back; WebGL: the drawing buffer through the context's own API). */
   pixels(premultiplied = false): PixelData | null {
-    if (this.#width * this.#height > MAX_CANVAS_PIXELS && (this.#type === '2d' || this.#type === null)) {
+    if (
+      this.#width * this.#height > MAX_CANVAS_PIXELS &&
+      (this.#type === '2d' || this.#type === null)
+    ) {
       return { data: new Uint8Array(0), width: 0, height: 0, premultiplied };
     }
     if (this.#type === '2d') {
       const n = natives!;
       const data = new Uint8Array(this.#width * this.#height * 4);
-      n.readPixels((this.#ctx as Canvas2DContextBase)._surface, data, premultiplied, false);
+      n.readPixels(
+        (this.#ctx as Canvas2DContextBase)._surface,
+        data,
+        premultiplied,
+        false,
+      );
       return { data, width: this.#width, height: this.#height, premultiplied };
     }
-    const fn = this.#ctx && (this.#ctx as Record<symbol, unknown>)[PIXELS_SYMBOL];
-    if (typeof fn === 'function') return (fn as () => PixelData | null).call(this.#ctx);
-    if (this.#ctx && typeof (this.#ctx as WebGLLike).readPixels === 'function') return readWebGLCanvas(this.#ctx as WebGLLike);
+    const fn =
+      this.#ctx && (this.#ctx as Record<symbol, unknown>)[PIXELS_SYMBOL];
+    if (typeof fn === 'function')
+      return (fn as () => PixelData | null).call(this.#ctx);
+    if (this.#ctx && typeof (this.#ctx as WebGLLike).readPixels === 'function')
+      return readWebGLCanvas(this.#ctx as WebGLLike);
     // No context yet: a transparent black bitmap.
-    return { data: new Uint8Array(this.#width * this.#height * 4), width: this.#width, height: this.#height, premultiplied: true };
+    return {
+      data: new Uint8Array(this.#width * this.#height * 4),
+      width: this.#width,
+      height: this.#height,
+      premultiplied: true,
+    };
   }
 
   /** The image-source protocol (runtime/image/INTEROP.md §2/§4): upright pixels, premultiplied for 2D. */
   imageSource(): object {
     if (this.#width === 0 || this.#height === 0) {
-      throw domException('The canvas has a width or height of 0.', 'InvalidStateError');
+      throw domException(
+        'The canvas has a width or height of 0.',
+        'InvalidStateError',
+      );
     }
-    if (this.#width * this.#height > MAX_CANVAS_PIXELS && (this.#type === '2d' || this.#type === null)) {
-      throw domException('The canvas is too large to have a bitmap.', 'InvalidStateError');
+    if (
+      this.#width * this.#height > MAX_CANVAS_PIXELS &&
+      (this.#type === '2d' || this.#type === null)
+    ) {
+      throw domException(
+        'The canvas is too large to have a bitmap.',
+        'InvalidStateError',
+      );
     }
     if (this.#type !== '2d' && this.#type !== null) {
       const fn = (this.#ctx as Record<symbol, unknown>)[IMAGE_SOURCE_SYMBOL];
       if (typeof fn === 'function') return (fn as () => object).call(this.#ctx);
       const px = this.pixels(false)!;
-      return { kind: 'pixels', origin: 'webgl-canvas', width: px.width, height: px.height, premultiplied: !!px.premultiplied, data: px.data };
+      return {
+        kind: 'pixels',
+        origin: 'webgl-canvas',
+        width: px.width,
+        height: px.height,
+        premultiplied: !!px.premultiplied,
+        data: px.data,
+      };
     }
     const w = this.#width;
     const h = this.#height;
     const data = readbackBuffer(w * h * 4);
-    if (this.#type === '2d') natives!.readPixels((this.#ctx as Canvas2DContextBase)._surface, data, true, false);
+    if (this.#type === '2d')
+      natives!.readPixels(
+        (this.#ctx as Canvas2DContextBase)._surface,
+        data,
+        true,
+        false,
+      );
     else data.fill(0);
-    return { kind: 'pixels', origin: 'canvas', width: w, height: h, premultiplied: true, data };
+    return {
+      kind: 'pixels',
+      origin: 'canvas',
+      width: w,
+      height: h,
+      premultiplied: true,
+      data,
+    };
   }
 
-  #encode(type: unknown, quality: unknown): { bytes: Uint8Array; mime: string } | null {
+  #encode(
+    type: unknown,
+    quality: unknown,
+  ): { bytes: Uint8Array; mime: string } | null {
     if (this.#width === 0 || this.#height === 0) return null;
     const n = natives;
     if (!n) return null;
     const mime = typeof type === 'string' ? type.toLowerCase() : 'image/png';
-    const q = typeof quality === 'number' && quality >= 0 && quality <= 1 ? quality : -1;
+    const q =
+      typeof quality === 'number' && quality >= 0 && quality <= 1
+        ? quality
+        : -1;
     let surface: NativeSurface | null = null;
     let temp = false;
     if (this.#type === '2d') {
@@ -365,9 +522,29 @@ export class CanvasHost {
       st[3] = 1;
       st[6] = 1;
       st[7] = 9; // copy
-      n.drawPixels(surface, st, px.data, px.width, px.height, !!px.premultiplied, 0, 0, px.width, px.height, 0, 0, px.width, px.height, null);
+      n.drawPixels(
+        surface,
+        st,
+        px.data,
+        px.width,
+        px.height,
+        !!px.premultiplied,
+        0,
+        0,
+        px.width,
+        px.height,
+        0,
+        0,
+        px.width,
+        px.height,
+        null,
+      );
     }
-    const r = n.encode(surface, mime === 'image/jpeg' ? 'image/jpeg' : 'image/png', q);
+    const r = n.encode(
+      surface,
+      mime === 'image/jpeg' ? 'image/jpeg' : 'image/png',
+      q,
+    );
     if (temp) n.resize(surface, 0, 0);
     if (!r) return null;
     return { bytes: new Uint8Array(r[0]), mime: r[1] };
@@ -380,26 +557,52 @@ export class CanvasHost {
   }
 
   #blob(e: { bytes: Uint8Array; mime: string }): object {
-    const B = (globalThis as { Blob?: new (parts: unknown[], opts: { type: string }) => object }).Blob;
-    if (!B) throw domException('Blob is not available in this context.', 'NotSupportedError');
+    const B = (
+      globalThis as {
+        Blob?: new (parts: unknown[], opts: { type: string }) => object;
+      }
+    ).Blob;
+    if (!B)
+      throw domException(
+        'Blob is not available in this context.',
+        'NotSupportedError',
+      );
     return new B([e.bytes], { type: e.mime });
   }
 
-  toBlob(callback: (b: object | null) => void, type?: unknown, quality?: unknown): void {
-    if (typeof callback !== 'function') throw new TypeError("Failed to execute 'toBlob': parameter 1 is not a function.");
+  toBlob(
+    callback: (b: object | null) => void,
+    type?: unknown,
+    quality?: unknown,
+  ): void {
+    if (typeof callback !== 'function')
+      throw new TypeError(
+        "Failed to execute 'toBlob': parameter 1 is not a function.",
+      );
     const e = this.#encode(type, quality);
     const blob = e ? this.#blob(e) : null;
-    const schedule = (globalThis as { setTimeout?: (f: () => void, ms: number) => unknown }).setTimeout;
+    const schedule = (
+      globalThis as { setTimeout?: (f: () => void, ms: number) => unknown }
+    ).setTimeout;
     if (schedule) schedule(() => callback(blob), 0);
     else void Promise.resolve().then(() => callback(blob));
   }
 
-  convertToBlob(options?: { type?: string; quality?: number }): Promise<object> {
+  convertToBlob(options?: {
+    type?: string;
+    quality?: number;
+  }): Promise<object> {
     if (this.#width === 0 || this.#height === 0) {
-      return Promise.reject(domException('The canvas has no pixels (width or height is 0).', 'IndexSizeError'));
+      return Promise.reject(
+        domException(
+          'The canvas has no pixels (width or height is 0).',
+          'IndexSizeError',
+        ),
+      );
     }
     const e = this.#encode(options?.type, options?.quality);
-    if (!e) return Promise.reject(domException('Encoding failed.', 'EncodingError'));
+    if (!e)
+      return Promise.reject(domException('Encoding failed.', 'EncodingError'));
     try {
       return Promise.resolve(this.#blob(e));
     } catch (err) {
@@ -408,9 +611,14 @@ export class CanvasHost {
   }
 
   transferToImageBitmap(): object {
-    if (this.#type === null) throw domException('The canvas has no rendering context.', 'InvalidStateError');
+    if (this.#type === null)
+      throw domException(
+        'The canvas has no rendering context.',
+        'InvalidStateError',
+      );
     const px = this.pixels(true);
-    if (!px) throw domException('The canvas has no pixels.', 'InvalidStateError');
+    if (!px)
+      throw domException('The canvas has no pixels.', 'InvalidStateError');
     if (this.#type === '2d') {
       const old = (this.#ctx as Canvas2DContextBase)._takeSurface();
       natives!.resize(old, 0, 0);
@@ -432,7 +640,10 @@ export class OffscreenCanvas {
   #listeners = new Map<string, Set<(e: unknown) => void>>();
 
   constructor(width: number, height: number) {
-    if (arguments.length < 2) throw new TypeError("Failed to construct 'OffscreenCanvas': 2 arguments required.");
+    if (arguments.length < 2)
+      throw new TypeError(
+        "Failed to construct 'OffscreenCanvas': 2 arguments required.",
+      );
     const w = enforceDimension(width, "Failed to construct 'OffscreenCanvas'");
     const h = enforceDimension(height, "Failed to construct 'OffscreenCanvas'");
     hosts.set(this, new CanvasHost(this, 'offscreen', w, h));
@@ -452,7 +663,10 @@ export class OffscreenCanvas {
   getContext(type: string, options?: unknown): object | null {
     return hosts.get(this)!.getContext(type, options);
   }
-  convertToBlob(options?: { type?: string; quality?: number }): Promise<object> {
+  convertToBlob(options?: {
+    type?: string;
+    quality?: number;
+  }): Promise<object> {
     return hosts.get(this)!.convertToBlob(options);
   }
   transferToImageBitmap(): object {
@@ -473,7 +687,11 @@ export class OffscreenCanvas {
     for (const cb of this.#listeners.get(e.type) ?? []) cb.call(this, e);
     return true;
   }
-  [SURFACE_SYMBOL](): { surface: NativeSurface; width: number; height: number } | null {
+  [SURFACE_SYMBOL](): {
+    surface: NativeSurface;
+    width: number;
+    height: number;
+  } | null {
     return hosts.get(this)!.surface();
   }
   [PIXELS_SYMBOL](): PixelData | null {
@@ -491,7 +709,10 @@ function texSourceMethod(this: object): ReturnType<CanvasHost['texSource']> {
 }
 
 /** TEX_SOURCE as an accessor: the protocol method while the canvas is 2D (or has no context), absent for WebGL. */
-function defineTexSource(proto: object, get: (o: object) => CanvasHost | undefined): void {
+function defineTexSource(
+  proto: object,
+  get: (o: object) => CanvasHost | undefined,
+): void {
   Object.defineProperty(proto, TEX_SOURCE_SYMBOL, {
     configurable: true,
     enumerable: false,
@@ -512,7 +733,10 @@ defineTexSource(OffscreenCanvas.prototype, (o) => hosts.get(o));
 export function installCanvasElementSupport(proto: object): void {
   // Keep the DOM module's own getContext (if any) for context types this module does not create.
   const previous = (proto as { getContext?: unknown }).getContext;
-  const fallback = typeof previous === 'function' ? (previous as (type: string, attrs?: unknown) => object | null) : null;
+  const fallback =
+    typeof previous === 'function'
+      ? (previous as (type: string, attrs?: unknown) => object | null)
+      : null;
   const get = (el: object): CanvasHost => {
     let h = hosts.get(el);
     if (!h) {
@@ -523,7 +747,11 @@ export function installCanvasElementSupport(proto: object): void {
     return h;
   };
   const define = (name: PropertyKey, desc: PropertyDescriptor) =>
-    Object.defineProperty(proto, name, { configurable: true, enumerable: typeof name === 'string', ...desc });
+    Object.defineProperty(proto, name, {
+      configurable: true,
+      enumerable: typeof name === 'string',
+      ...desc,
+    });
   for (const dim of ['width', 'height'] as const) {
     define(dim, {
       get(this: object) {
@@ -531,7 +759,9 @@ export function installCanvasElementSupport(proto: object): void {
       },
       set(this: object, v: number) {
         get(this)[dim] = v;
-        const setAttr = (this as { setAttribute?: (k: string, v: string) => void }).setAttribute;
+        const setAttr = (
+          this as { setAttribute?: (k: string, v: string) => void }
+        ).setAttribute;
         if (typeof setAttr === 'function') {
           try {
             setAttr.call(this, dim, String(get(this)[dim]));
@@ -556,7 +786,12 @@ export function installCanvasElementSupport(proto: object): void {
   });
   define('toBlob', {
     writable: true,
-    value: function toBlob(this: object, cb: (b: object | null) => void, type?: string, quality?: number) {
+    value: function toBlob(
+      this: object,
+      cb: (b: object | null) => void,
+      type?: string,
+      quality?: number,
+    ) {
       get(this).toBlob(cb, type, quality);
     },
   });

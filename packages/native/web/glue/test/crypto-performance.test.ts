@@ -13,7 +13,8 @@ import { both, createGlueContext, fakeNatives } from './harness.ts';
 
 describe('crypto (NET-STORE-4)', () => {
   test('getRandomValues: types, limits, return value match Node; bytes come from the native hook', async () => {
-    const r = await both(`
+    const r = await both(
+      `
       const out = [];
       for (const C of [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, BigUint64Array]) {
         const a = new C(4); out.push(crypto.getRandomValues(a) === a);
@@ -30,14 +31,22 @@ describe('crypto (NET-STORE-4)', () => {
       out.push(Object.prototype.toString.call(crypto), typeof crypto.subtle, Object.prototype.toString.call(crypto.subtle));
       try { new Crypto(); } catch (e) { out.push(e.name); }
       return out;
-    `, { config: { subtle: 'digest' } });
+    `,
+      { config: { subtle: 'digest' } },
+    );
     assert.deepEqual(r.glue, r.node);
     const { natives, calls } = fakeNatives();
     const { run } = await createGlueContext({ natives });
-    const sub = Array.from(run<number[]>(`const a = new Uint8Array(16); crypto.getRandomValues(a.subarray(4, 8)); Array.from(a)`));
+    const sub = Array.from(
+      run<number[]>(
+        `const a = new Uint8Array(16); crypto.getRandomValues(a.subarray(4, 8)); Array.from(a)`,
+      ),
+    );
     assert.equal(calls.random, 1);
     // WebIDL: a non-view argument is a TypeError (Node throws TypeMismatchError here; Chromium TypeError).
-    assert.throws(() => run(`crypto.getRandomValues([1, 2])`), { name: 'TypeError' });
+    assert.throws(() => run(`crypto.getRandomValues([1, 2])`), {
+      name: 'TypeError',
+    });
     assert.deepEqual(sub.slice(0, 4), [0, 0, 0, 0]);
     assert.deepEqual(sub.slice(8), [0, 0, 0, 0, 0, 0, 0, 0]);
   });
@@ -45,28 +54,47 @@ describe('crypto (NET-STORE-4)', () => {
   test('without a native random source getRandomValues throws instead of using Math.random', async () => {
     const { natives } = fakeNatives({ crypto: undefined });
     const { run } = await createGlueContext({ natives });
-    assert.throws(() => run(`crypto.getRandomValues(new Uint8Array(4))`), { name: 'OperationError' });
+    assert.throws(() => run(`crypto.getRandomValues(new Uint8Array(4))`), {
+      name: 'OperationError',
+    });
     assert.throws(() => run(`crypto.randomUUID()`), { name: 'OperationError' });
     // Blob URLs only need ids unique within the store, so they work without the CSPRNG hook.
-    const urls = run<string[]>(`Array.from({ length: 200 }, () => URL.createObjectURL(new Blob(['x'])))`);
+    const urls = run<string[]>(
+      `Array.from({ length: 200 }, () => URL.createObjectURL(new Blob(['x'])))`,
+    );
     assert.equal(new Set(urls).size, 200);
     for (const u of urls) {
-      assert.match(u, /^blob:https:\/\/app\.local\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      assert.match(
+        u,
+        /^blob:https:\/\/app\.local\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
     }
     assert.equal(run(`URL.createObjectURL(new Blob(['x'])) !== null`), true);
   });
 
   test('randomUUID sets the version and variant bits on every id', async () => {
     const { run } = await createGlueContext();
-    const ids = run<string[]>(`Array.from({ length: 2000 }, () => crypto.randomUUID())`);
+    const ids = run<string[]>(
+      `Array.from({ length: 2000 }, () => crypto.randomUUID())`,
+    );
     assert.equal(new Set(ids).size, ids.length);
-    for (const u of ids) assert.match(u, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    for (const u of ids)
+      assert.match(
+        u,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
     // With 2000 ids every variant nibble (8, 9, a, b) shows up unless the variant code is broken.
-    assert.deepEqual([...new Set(ids.map((u) => u[19]))].sort(), ['8', '9', 'a', 'b']);
+    assert.deepEqual([...new Set(ids.map((u) => u[19]))].sort(), [
+      '8',
+      '9',
+      'a',
+      'b',
+    ]);
   });
 
   test('subtle.digest matches Node for SHA-1/256/384/512 on random inputs; errors', async () => {
-    const r = await both(`
+    const r = await both(
+      `
       const out = [];
       let seed = 1;
       const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) & 0xff;
@@ -84,7 +112,9 @@ describe('crypto (NET-STORE-4)', () => {
       const p = crypto.subtle.digest('SHA-256', buf); buf[0] = 9; // bytes are snapshotted at call time
       out.push(Array.from(new Uint8Array(await p)));
       return out;
-    `, { config: { subtle: 'digest' } });
+    `,
+      { config: { subtle: 'digest' } },
+    );
     assert.deepEqual(r.glue, r.node);
   });
 
@@ -96,7 +126,9 @@ describe('crypto (NET-STORE-4)', () => {
       assert.equal(off.run(`crypto.subtle ? 'has' : 'none'`), 'none');
     }
     const on = await createGlueContext({ config: { subtle: 'digest' } });
-    const name = await on.run<Promise<string>>(`crypto.subtle.importKey('raw', new Uint8Array(1), 'AES-GCM', false, []).catch((e) => e.name)`);
+    const name = await on.run<Promise<string>>(
+      `crypto.subtle.importKey('raw', new Uint8Array(1), 'AES-GCM', false, []).catch((e) => e.name)`,
+    );
     assert.equal(name, 'NotSupportedError');
   });
 });
@@ -104,7 +136,9 @@ describe('crypto (NET-STORE-4)', () => {
 describe('performance (TMR-4)', () => {
   test('now() and timeOrigin come from the native clock; monotonic over 10,000 calls', async () => {
     let t = 1000;
-    const { natives } = fakeNatives({ clock: { now: () => (t += 0.0125), timeOrigin: () => 1.7e12 } });
+    const { natives } = fakeNatives({
+      clock: { now: () => (t += 0.0125), timeOrigin: () => 1.7e12 },
+    });
     const { run } = await createGlueContext({ natives });
     const ok = run<boolean>(`
       let last = performance.now(), ok = true;
@@ -112,7 +146,10 @@ describe('performance (TMR-4)', () => {
       ok && performance.timeOrigin === 1.7e12 && JSON.stringify(performance.toJSON()) === '{"timeOrigin":1700000000000}';
     `);
     assert.equal(ok, true);
-    assert.ok(run<number>(`new Event('x').timeStamp`) > 1000, 'event.timeStamp uses the same clock');
+    assert.ok(
+      run<number>(`new Event('x').timeStamp`) > 1000,
+      'event.timeStamp uses the same clock',
+    );
   });
 
   test('mark / measure / getEntries* / clear* match Node (explicit timestamps)', async () => {
@@ -150,7 +187,11 @@ describe('performance (TMR-4)', () => {
     // User Timing: a negative timestamp, and non-empty options without start/end, are TypeErrors
     // (Node accepts both; Chromium and the spec throw).
     const { run } = await createGlueContext();
-    assert.throws(() => run(`performance.measure('x', { start: -1 })`), { name: 'TypeError' });
-    assert.throws(() => run(`performance.measure('x', { detail: 1 })`), { name: 'TypeError' });
+    assert.throws(() => run(`performance.measure('x', { start: -1 })`), {
+      name: 'TypeError',
+    });
+    assert.throws(() => run(`performance.measure('x', { detail: 1 })`), {
+      name: 'TypeError',
+    });
   });
 });

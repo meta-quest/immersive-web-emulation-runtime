@@ -31,8 +31,18 @@ export interface NetEnv {
 
 export const DEFAULT_ORIGIN = 'https://app.local';
 
-export function makeEnv(g: typeof globalThis, natives: NetNatives | null, warn?: (m: string) => void): NetEnv {
-  let config: NetConfig = { allow: [], debug: false, origin: DEFAULT_ORIGIN, userAgent: '', timeoutMs: 60000 };
+export function makeEnv(
+  g: typeof globalThis,
+  natives: NetNatives | null,
+  warn?: (m: string) => void,
+): NetEnv {
+  let config: NetConfig = {
+    allow: [],
+    debug: false,
+    origin: DEFAULT_ORIGIN,
+    userAgent: '',
+    timeoutMs: 60000,
+  };
   if (natives) {
     try {
       config = { ...config, ...natives.config() };
@@ -40,16 +50,22 @@ export function makeEnv(g: typeof globalThis, natives: NetNatives | null, warn?:
       // keep defaults
     }
   }
-  const glue = ((g as unknown as Record<symbol, unknown>)[Symbol.for('iwn.glue')] as GlueLike | undefined) ?? null;
+  const glue =
+    ((g as unknown as Record<symbol, unknown>)[Symbol.for('iwn.glue')] as
+      | GlueLike
+      | undefined) ?? null;
   return {
     natives,
     config,
     glue,
     baseURL() {
       const loc = (g as { location?: { href?: string } }).location;
-      return loc && typeof loc.href === 'string' && loc.href.startsWith('http') ? loc.href : config.origin + '/';
+      return loc && typeof loc.href === 'string' && loc.href.startsWith('http')
+        ? loc.href
+        : config.origin + '/';
     },
-    warn: warn ?? ((m: string) => (g as { console?: Console }).console?.warn(m)),
+    warn:
+      warn ?? ((m: string) => (g as { console?: Console }).console?.warn(m)),
   };
 }
 
@@ -62,7 +78,9 @@ export function domException(message: string, name: string): DOMException {
 }
 
 export function abortReason(signal: AbortSignal): unknown {
-  return signal.reason !== undefined ? signal.reason : domException('The operation was aborted.', 'AbortError');
+  return signal.reason !== undefined
+    ? signal.reason
+    : domException('The operation was aborted.', 'AbortError');
 }
 
 const encoder = new TextEncoder();
@@ -76,21 +94,35 @@ export function utf8Decode(bytes: Uint8Array): string {
 }
 
 export function isBufferSource(v: unknown): v is ArrayBuffer | ArrayBufferView {
-  return v instanceof ArrayBuffer || ArrayBuffer.isView(v) || Object.prototype.toString.call(v) === '[object ArrayBuffer]';
+  return (
+    v instanceof ArrayBuffer ||
+    ArrayBuffer.isView(v) ||
+    Object.prototype.toString.call(v) === '[object ArrayBuffer]'
+  );
 }
 
 export function bytesOf(v: ArrayBuffer | ArrayBufferView): Uint8Array {
-  if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  if (ArrayBuffer.isView(v))
+    return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
   return new Uint8Array(v);
 }
 
 /** Copy of a buffer source (Fetch: "a copy of the bytes held by the buffer source"). */
-export function copyBytes(v: ArrayBuffer | ArrayBufferView): Uint8Array<ArrayBuffer> {
+export function copyBytes(
+  v: ArrayBuffer | ArrayBufferView,
+): Uint8Array<ArrayBuffer> {
   return bytesOf(v).slice();
 }
 
-export function concatBytes(chunks: Uint8Array[], total?: number): Uint8Array<ArrayBuffer> {
-  if (chunks.length === 1 && chunks[0].byteOffset === 0 && chunks[0].byteLength === chunks[0].buffer.byteLength) {
+export function concatBytes(
+  chunks: Uint8Array[],
+  total?: number,
+): Uint8Array<ArrayBuffer> {
+  if (
+    chunks.length === 1 &&
+    chunks[0].byteOffset === 0 &&
+    chunks[0].byteLength === chunks[0].buffer.byteLength
+  ) {
     return chunks[0] as Uint8Array<ArrayBuffer>;
   }
   const n = total ?? chunks.reduce((s, c) => s + c.byteLength, 0);
@@ -104,7 +136,10 @@ export function concatBytes(chunks: Uint8Array[], total?: number): Uint8Array<Ar
 }
 
 /** The bytes of a Blob: the glue's zero-copy accessor when present, else blob.arrayBuffer(). */
-export async function blobToBytes(env: NetEnv, blob: Blob): Promise<Uint8Array> {
+export async function blobToBytes(
+  env: NetEnv,
+  blob: Blob,
+): Promise<Uint8Array> {
   if (env.glue?.blobBytes) {
     try {
       return env.glue.blobBytes(blob);

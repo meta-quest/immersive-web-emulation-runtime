@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The XR thread and its OpenXR objects. Written from the OpenXR 1.1 specification (session lifecycle §10, frame
 // submission §10.5, swapchains §9, spaces §7, composition layers §12) and the extension specifications named where
 // they are used (XR_KHR_opengl_es_enable, XR_KHR_android_create_instance, XR_KHR_loader_init_android,

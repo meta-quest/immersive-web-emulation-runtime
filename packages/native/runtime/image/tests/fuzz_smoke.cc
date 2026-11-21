@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Mutation fuzz smoke test for the decode pipeline (IMG-2). Build with -DIWN_IMAGE_SANITIZE=ON (ASan + UBSan) and
 // run for a time budget:  iwn_image_fuzz_smoke <seconds> [seed]
 // Seeds are generated PNG (all colour types, interlaced), JPEG (+EXIF), WebP (lossy, lossless, EXIF), GIF, BMP-ish

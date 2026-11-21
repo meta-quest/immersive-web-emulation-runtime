@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Real tracking -> the two XRHostInputState blocks of the frame record (docs/spec/09 XRF-IN-1..3, docs/spec/10
 // IN-1..7; contract: packages/iwer/HOST-INPUT.md). V8-free and OpenXR-call-free: the Android side samples OpenXR
 // actions and hand joints into ControllerSample / HandSample, and these functions turn them into the record's

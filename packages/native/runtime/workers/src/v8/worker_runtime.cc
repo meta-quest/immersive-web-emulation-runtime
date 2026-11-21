@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // A worker: its own thread, V8 isolate and event loop (WRK-1, JS-2). Written from HTML §10.2.4 ("run a worker":
 // fetch, run the script, enable the implicit port's message queue, the event loop until closing), §10.2.5 (runtime
 // script errors: the worker global first, then the Worker object), §10.3 (WorkerGlobalScope), §8.1.7 (event loop),

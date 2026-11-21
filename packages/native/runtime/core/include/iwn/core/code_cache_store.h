@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // On-disk store for V8 code caches (CC-1, CC-4), V8-free. One file per script URL in the app's private cache
 // directory. Each entry carries the source hash and V8's CachedDataVersionTag (version + flags), so any change to
 // either is a miss, plus a checksum of the payload so a truncated or corrupted file is detected and removed. The

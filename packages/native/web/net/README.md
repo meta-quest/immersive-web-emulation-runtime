@@ -29,12 +29,12 @@ surface for the 2026-10-23 alpha.
 
 ## Routing
 
-| URL | handled by |
-|---|---|
+| URL                                  | handled by                                                                                                                                                                                                                               |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | app origin (`https://app.local/...`) | the packaged dist via `readAsset` (NET-1..4): 200 with `Content-Type` from the NET-2 table, 404 response for missing files and paths outside the dist, 405 for methods other than GET/HEAD; the body is the native ArrayBuffer (no copy) |
-| `data:` | Fetch's data: URL processor (NET-12) |
-| `blob:` | the glue's blob URL store (`blobUrls.resolve`, NET-14/15); GET only |
-| other `http(s):` | the native HTTP client, only for origins in `native.network.allow` (NET-5); otherwise `TypeError` and one log line per origin naming the config key |
+| `data:`                              | Fetch's data: URL processor (NET-12)                                                                                                                                                                                                     |
+| `blob:`                              | the glue's blob URL store (`blobUrls.resolve`, NET-14/15); GET only                                                                                                                                                                      |
+| other `http(s):`                     | the native HTTP client, only for origins in `native.network.allow` (NET-5); otherwise `TypeError` and one log line per origin naming the config key                                                                                      |
 
 ## Documented differences from a browser (NET-7, NET-11)
 

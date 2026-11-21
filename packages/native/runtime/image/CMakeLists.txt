@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # runtime/image: image decode (AImageDecoder on Android, stb_image + libwebp as software backends), the
 # createImageBitmap pixel pipeline, and the V8 binding (globalThis.__iwn.image).
 #

@@ -30,7 +30,13 @@ export interface MatchElement {
 }
 
 type Attr = { name: string; op: string; value: string; ci: boolean };
-type Pseudo = { name: string; arg?: string; list?: Complex[]; a?: number; b?: number };
+type Pseudo = {
+  name: string;
+  arg?: string;
+  list?: Complex[];
+  a?: number;
+  b?: number;
+};
 interface Compound {
   tag: string | null; // null = any
   ids: string[];
@@ -108,7 +114,13 @@ class Parser {
     }
   }
   compound(): Compound {
-    const c: Compound = { tag: null, ids: [], classes: [], attrs: [], pseudos: [] };
+    const c: Compound = {
+      tag: null,
+      ids: [],
+      classes: [],
+      attrs: [],
+      pseudos: [],
+    };
     const start = this.i;
     if (this.s[this.i] === '*') {
       this.i++;
@@ -205,7 +217,12 @@ class Parser {
     if (close < 0) throw syntaxError(this.s);
     const arg = this.s.slice(this.i, close).trim();
     this.i = close + 1;
-    if (n === 'nth-child' || n === 'nth-last-child' || n === 'nth-of-type' || n === 'nth-last-of-type') {
+    if (
+      n === 'nth-child' ||
+      n === 'nth-last-child' ||
+      n === 'nth-of-type' ||
+      n === 'nth-last-of-type'
+    ) {
       const ab = parseNth(arg);
       if (!ab) throw syntaxError(this.s);
       return { name: n, a: ab[0], b: ab[1] };
@@ -215,10 +232,35 @@ class Parser {
 }
 
 const SIMPLE_PSEUDOS = new Set([
-  'first-child', 'last-child', 'only-child', 'first-of-type', 'last-of-type', 'only-of-type', 'root', 'scope',
-  'empty', 'checked', 'disabled', 'enabled', 'hover', 'focus', 'focus-visible', 'focus-within', 'active',
-  'visited', 'link', 'any-link', 'target', 'defined', 'required', 'optional', 'read-only', 'read-write',
-  'placeholder-shown', 'fullscreen', 'indeterminate',
+  'first-child',
+  'last-child',
+  'only-child',
+  'first-of-type',
+  'last-of-type',
+  'only-of-type',
+  'root',
+  'scope',
+  'empty',
+  'checked',
+  'disabled',
+  'enabled',
+  'hover',
+  'focus',
+  'focus-visible',
+  'focus-within',
+  'active',
+  'visited',
+  'link',
+  'any-link',
+  'target',
+  'defined',
+  'required',
+  'optional',
+  'read-only',
+  'read-write',
+  'placeholder-shown',
+  'fullscreen',
+  'indeterminate',
 ]);
 
 function parseNth(arg: string): [number, number] | null {
@@ -227,7 +269,12 @@ function parseNth(arg: string): [number, number] | null {
   if (s === 'even') return [2, 0];
   const m = /^([+-]?\d*)?n([+-]\d+)?$/.exec(s);
   if (m) {
-    const a = m[1] === undefined || m[1] === '' || m[1] === '+' ? 1 : m[1] === '-' ? -1 : parseInt(m[1], 10);
+    const a =
+      m[1] === undefined || m[1] === '' || m[1] === '+'
+        ? 1
+        : m[1] === '-'
+          ? -1
+          : parseInt(m[1], 10);
     return [a, m[2] ? parseInt(m[2], 10) : 0];
   }
   if (/^[+-]?\d+$/.test(s)) return [0, parseInt(s, 10)];
@@ -259,7 +306,9 @@ function attrMatches(el: MatchElement, a: Attr): boolean {
     case '=':
       return have === want;
     case '~=':
-      return want !== '' && !/\s/.test(want) && have.split(/\s+/).includes(want);
+      return (
+        want !== '' && !/\s/.test(want) && have.split(/\s+/).includes(want)
+      );
     case '|=':
       return have === want || have.startsWith(`${want}-`);
     case '^=':
@@ -273,10 +322,22 @@ function attrMatches(el: MatchElement, a: Attr): boolean {
   }
 }
 
-function elementIndex(el: MatchElement, fromEnd: boolean, ofType: boolean): number {
+function elementIndex(
+  el: MatchElement,
+  fromEnd: boolean,
+  ofType: boolean,
+): number {
   let n = 1;
-  for (let s = fromEnd ? el.nextElementSibling : el.previousElementSibling; s; s = fromEnd ? s.nextElementSibling : s.previousElementSibling) {
-    if (!ofType || (s.localName === el.localName && s.namespaceURI === el.namespaceURI)) n++;
+  for (
+    let s = fromEnd ? el.nextElementSibling : el.previousElementSibling;
+    s;
+    s = fromEnd ? s.nextElementSibling : s.previousElementSibling
+  ) {
+    if (
+      !ofType ||
+      (s.localName === el.localName && s.namespaceURI === el.namespaceURI)
+    )
+      n++;
   }
   return n;
 }
@@ -287,7 +348,11 @@ function nthMatches(index: number, a: number, b: number): boolean {
   return Number.isInteger(n) && n >= 0;
 }
 
-function pseudoMatches(el: MatchElement, p: Pseudo, scope: MatchElement | null): boolean {
+function pseudoMatches(
+  el: MatchElement,
+  p: Pseudo,
+  scope: MatchElement | null,
+): boolean {
   switch (p.name) {
     case 'not':
       return !p.list!.some((c) => matchComplex(el, c, scope));
@@ -305,7 +370,10 @@ function pseudoMatches(el: MatchElement, p: Pseudo, scope: MatchElement | null):
     case 'last-of-type':
       return elementIndex(el, true, true) === 1;
     case 'only-of-type':
-      return elementIndex(el, false, true) === 1 && elementIndex(el, true, true) === 1;
+      return (
+        elementIndex(el, false, true) === 1 &&
+        elementIndex(el, true, true) === 1
+      );
     case 'nth-child':
       return nthMatches(elementIndex(el, false, false), p.a!, p.b!);
     case 'nth-last-child':
@@ -324,7 +392,11 @@ function pseudoMatches(el: MatchElement, p: Pseudo, scope: MatchElement | null):
       const kids = el.childNodes;
       for (let i = 0; i < kids.length; i++) {
         const k = kids[i] as { nodeType: number; data?: string };
-        if (k.nodeType === 1 || ((k.nodeType === 3 || k.nodeType === 4) && k.data !== '')) return false;
+        if (
+          k.nodeType === 1 ||
+          ((k.nodeType === 3 || k.nodeType === 4) && k.data !== '')
+        )
+          return false;
       }
       return true;
     }
@@ -333,14 +405,24 @@ function pseudoMatches(el: MatchElement, p: Pseudo, scope: MatchElement | null):
     case 'disabled':
       return el.hasAttribute('disabled');
     case 'enabled':
-      return /^(button|input|select|textarea|option|optgroup|fieldset)$/.test(el.localName) && !el.hasAttribute('disabled');
+      return (
+        /^(button|input|select|textarea|option|optgroup|fieldset)$/.test(
+          el.localName,
+        ) && !el.hasAttribute('disabled')
+      );
     case 'required':
       return el.hasAttribute('required');
     case 'optional':
-      return /^(input|select|textarea)$/.test(el.localName) && !el.hasAttribute('required');
+      return (
+        /^(input|select|textarea)$/.test(el.localName) &&
+        !el.hasAttribute('required')
+      );
     case 'link':
     case 'any-link':
-      return (el.localName === 'a' || el.localName === 'area') && el.hasAttribute('href');
+      return (
+        (el.localName === 'a' || el.localName === 'area') &&
+        el.hasAttribute('href')
+      );
     case 'defined':
       return true;
     default:
@@ -348,10 +430,19 @@ function pseudoMatches(el: MatchElement, p: Pseudo, scope: MatchElement | null):
   }
 }
 
-function matchCompound(el: MatchElement, c: Compound, scope: MatchElement | null): boolean {
+function matchCompound(
+  el: MatchElement,
+  c: Compound,
+  scope: MatchElement | null,
+): boolean {
   if (c.tag !== null) {
     const name = isHTMLElement(el) ? el.localName : el.localName;
-    if (isHTMLElement(el) ? name !== c.tag : name !== c.tag && lower(name) !== c.tag) return false;
+    if (
+      isHTMLElement(el)
+        ? name !== c.tag
+        : name !== c.tag && lower(name) !== c.tag
+    )
+      return false;
   }
   for (const id of c.ids) if (el.id !== id) return false;
   if (c.classes.length) {
@@ -365,7 +456,12 @@ function matchCompound(el: MatchElement, c: Compound, scope: MatchElement | null
   return true;
 }
 
-function matchAt(el: MatchElement, cx: Complex, i: number, scope: MatchElement | null): boolean {
+function matchAt(
+  el: MatchElement,
+  cx: Complex,
+  i: number,
+  scope: MatchElement | null,
+): boolean {
   if (!matchCompound(el, cx.compounds[i]!, scope)) return false;
   if (i === 0) return true;
   const comb = cx.combinators[i - 1]!;
@@ -375,7 +471,8 @@ function matchAt(el: MatchElement, cx: Complex, i: number, scope: MatchElement |
       return !!p && matchAt(p, cx, i - 1, scope);
     }
     case ' ': {
-      for (let p = el.parentElement; p; p = p.parentElement) if (matchAt(p, cx, i - 1, scope)) return true;
+      for (let p = el.parentElement; p; p = p.parentElement)
+        if (matchAt(p, cx, i - 1, scope)) return true;
       return false;
     }
     case '+': {
@@ -383,19 +480,28 @@ function matchAt(el: MatchElement, cx: Complex, i: number, scope: MatchElement |
       return !!s && matchAt(s, cx, i - 1, scope);
     }
     case '~': {
-      for (let s = el.previousElementSibling; s; s = s.previousElementSibling) if (matchAt(s, cx, i - 1, scope)) return true;
+      for (let s = el.previousElementSibling; s; s = s.previousElementSibling)
+        if (matchAt(s, cx, i - 1, scope)) return true;
       return false;
     }
   }
   return false;
 }
 
-function matchComplex(el: MatchElement, cx: Complex, scope: MatchElement | null): boolean {
+function matchComplex(
+  el: MatchElement,
+  cx: Complex,
+  scope: MatchElement | null,
+): boolean {
   return matchAt(el, cx, cx.compounds.length - 1, scope);
 }
 
 /** Element.matches(): does `el` match any selector in the list? */
-export function matchesSelector(el: MatchElement, selector: string, scope: MatchElement | null = null): boolean {
+export function matchesSelector(
+  el: MatchElement,
+  selector: string,
+  scope: MatchElement | null = null,
+): boolean {
   const list = parseSelector(selector);
   for (const cx of list) if (matchComplex(el, cx, scope)) return true;
   return false;

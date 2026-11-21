@@ -75,7 +75,12 @@ export interface CompatServer {
 export function injectHtml(html: string, srcs: string[]): string {
   const tags = srcs.map((s) => `<script src="${s}"></script>`).join('');
   const m = /<head[^>]*>/i.exec(html);
-  if (m) return html.slice(0, m.index + m[0].length) + tags + html.slice(m.index + m[0].length);
+  if (m)
+    return (
+      html.slice(0, m.index + m[0].length) +
+      tags +
+      html.slice(m.index + m[0].length)
+    );
   return tags + html;
 }
 
@@ -84,12 +89,19 @@ export function injectHtml(html: string, srcs: string[]): string {
  * `importScripts(` and `import(` (dynamic import, valid in classic scripts) do not count.
  */
 export function looksLikeModule(src: string): boolean {
-  return /(^|[;\n}])\s*(import\s*[{*'"]|import\s+[\w$]+\s*(,|from\b)|export\s*[{*]|export\s+(default|const|let|var|function|class|async)\b)/.test(src) || /\bimport\.meta\b/.test(src);
+  return (
+    /(^|[;\n}])\s*(import\s*[{*'"]|import\s+[\w$]+\s*(,|from\b)|export\s*[{*]|export\s+(default|const|let|var|function|class|async)\b)/.test(
+      src,
+    ) || /\bimport\.meta\b/.test(src)
+  );
 }
 
 /** Length of a classic script's leading directive prologue ("use strict"; and friends, with comments). */
 export function directivePrologueLength(src: string): number {
-  const m = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(?:(['"])(?:(?!\1)[^\\\n])*\1\s*(?:;|\n)(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*)+/.exec(src);
+  const m =
+    /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(?:(['"])(?:(?!\1)[^\\\n])*\1\s*(?:;|\n)(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*)+/.exec(
+      src,
+    );
   return m ? m[0].length : 0;
 }
 
@@ -133,13 +145,20 @@ export async function startCompatServer(
           const chunks: Buffer[] = [];
           for await (const c of req) chunks.push(c as Buffer);
           opts.onReport(Buffer.concat(chunks).toString('utf8'));
-          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          res.writeHead(200, {
+            'content-type': 'application/json',
+            'cache-control': 'no-store',
+          });
           res.end(JSON.stringify({ phase: opts.phase?.() ?? 'boot' }));
           return;
         }
         if (name === 'worker-type') {
           const u = url.searchParams.get('url');
-          if (u) workerTypes.set(u.split('#')[0]!, url.searchParams.get('type') ?? 'classic');
+          if (u)
+            workerTypes.set(
+              u.split('#')[0]!,
+              url.searchParams.get('type') ?? 'classic',
+            );
           res.writeHead(204).end();
           return;
         }
@@ -175,29 +194,52 @@ export async function startCompatServer(
       const dest = String(req.headers['sec-fetch-dest'] ?? '');
       if (ext === '.html') {
         const html = await fsp.readFile(file, 'utf8');
-        res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
-        res.end(injectHtml(html, opts.injectScripts.map((n) => TOOL_PREFIX + n)));
+        res.writeHead(200, {
+          'content-type': type,
+          'cache-control': 'no-store',
+        });
+        res.end(
+          injectHtml(
+            html,
+            opts.injectScripts.map((n) => TOOL_PREFIX + n),
+          ),
+        );
         return;
       }
-      if ((dest === 'worker' || dest === 'sharedworker') && (ext === '.js' || ext === '.mjs')) {
+      if (
+        (dest === 'worker' || dest === 'sharedworker') &&
+        (ext === '.js' || ext === '.mjs')
+      ) {
         const src = await fsp.readFile(file, 'utf8');
         const full = `${origin}${url.pathname}${url.search}`;
         const registered = workerTypes.get(full);
-        if (!registered && isModuleImport(String(req.headers.referer ?? ''), origin)) {
+        if (
+          !registered &&
+          isModuleImport(String(req.headers.referer ?? ''), origin)
+        ) {
           // a static import of a module worker (HTML fetches those with the worker destination too): the worker's
           // entry already loaded the tracer, and importScripts would throw in a module worker
-          res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
+          res.writeHead(200, {
+            'content-type': type,
+            'cache-control': 'no-store',
+          });
           res.end(src);
           return;
         }
-        const kind = registered ?? (looksLikeModule(src) ? 'module' : 'classic');
+        const kind =
+          registered ?? (looksLikeModule(src) ? 'module' : 'classic');
         const tracer = JSON.stringify(TOOL_PREFIX + opts.workerTracer);
-        res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' });
+        res.writeHead(200, {
+          'content-type': type,
+          'cache-control': 'no-store',
+        });
         if (kind === 'module') res.end(`import ${tracer};${src}`);
         else {
           // after the directive prologue, so a leading "use strict" still makes the worker strict
           const n = directivePrologueLength(src);
-          res.end(`${src.slice(0, n)}importScripts(${tracer});\n${src.slice(n)}`);
+          res.end(
+            `${src.slice(0, n)}importScripts(${tracer});\n${src.slice(n)}`,
+          );
         }
         return;
       }
@@ -230,11 +272,14 @@ export async function startCompatServer(
   server.on('upgrade', (req, socket) => {
     try {
       const url = new URL(req.url ?? '/', 'http://x');
-      if (url.pathname === `${TOOL_PREFIX}ws-blocked`) opts.onWebSocketBlocked?.(url.searchParams.get('u') ?? '');
+      if (url.pathname === `${TOOL_PREFIX}ws-blocked`)
+        opts.onWebSocketBlocked?.(url.searchParams.get('u') ?? '');
     } catch {
       /* ignore */
     }
-    socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\ncontent-length: 0\r\n\r\n');
+    socket.end(
+      'HTTP/1.1 403 Forbidden\r\nconnection: close\r\ncontent-length: 0\r\n\r\n',
+    );
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as AddressInfo).port;

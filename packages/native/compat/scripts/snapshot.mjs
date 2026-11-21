@@ -20,7 +20,12 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..');
-const { writeSnapshot, defaultIwerHostFile } = await import(path.join(here, '..', 'src', 'surface.ts'));
+const { writeSnapshot, defaultIwerHostFile } = await import(
+  path.join(here, '..', 'src', 'surface.ts')
+);
 const { values } = parseArgs({ options: { 'iwer-host': { type: 'string' } } });
-const file = await writeSnapshot(root, values['iwer-host'] ?? defaultIwerHostFile(root));
+const file = await writeSnapshot(
+  root,
+  values['iwer-host'] ?? defaultIwerHostFile(root),
+);
 console.error(`wrote ${path.relative(process.cwd(), file)}`);

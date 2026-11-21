@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Cost and edge-case bounds: shadow work proportional to the shape (not the canvas), extreme stroke widths, culled
 // off-canvas dashes, dashes on enormous segments, overflowing edge slopes, the rasterizer's left-of-clip edge accumulation, hit testing on the path boundary, fonts.xml wght axes, colour emoji
 // (no CBDT copy, mip minification, independent of imageSmoothingEnabled) and bounded glyph caches.

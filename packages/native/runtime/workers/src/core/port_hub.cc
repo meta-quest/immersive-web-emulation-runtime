@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // PortHub: see port_hub.h. HTML §9.4 (message ports) and §10.2 (worker implicit ports).
 #include "iwn/workers/port_hub.h"
 

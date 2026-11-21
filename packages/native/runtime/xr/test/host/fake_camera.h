@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // A fake camera service for the host tests of src/android/xr_camera.cc (the passthrough cameras, XR-CAM-1), behind
 // the NDK camera API of fake_ndk/ (compiled in place of the NDK's headers). It behaves as Horizon OS does where that
 // code depends on it:

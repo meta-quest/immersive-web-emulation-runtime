@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Host tests for the V8-free XR core (HL-3): frame record layout and writer (XRF-1..5), input mapping (XRF-IN-1,
 // IN-2..6), pacing (XR-LOOP-5, PERF-JS-3), perf-level policy (XR-PERF-1), session-lifetime policy (XR-LIFE-4/5/7),
 // the runtime-permission wait and order (XR-PERM-1), config parsing, the PNG writer (DBG-SHOT), the

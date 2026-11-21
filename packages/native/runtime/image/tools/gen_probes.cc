@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Generates src/android_probes.inc: 2x1 images (red, blue) with EXIF orientation 6 as JPEG (APP1), PNG (eXIf)
 // and WebP (EXIF chunk). The Android backend decodes their headers once to learn, per format, whether AImageDecoder
 // applies EXIF orientation itself (reports 1x2) or not (2x1). On Quest (Android 14) it does for JPEG and WebP and

@@ -71,8 +71,14 @@ export class DOMException extends Error {
   // WebIDL: constructor(optional DOMString message = "", optional DOMString name = "Error"). Node also
   // takes a `{ name, cause }` options object; browsers stringify it, and so does this class.
   constructor(message?: string, name?: string) {
-    const m = message === undefined ? '' : toDOMString(message, "Failed to construct 'DOMException'");
-    const n = name === undefined ? 'Error' : toDOMString(name, "Failed to construct 'DOMException'");
+    const m =
+      message === undefined
+        ? ''
+        : toDOMString(message, "Failed to construct 'DOMException'");
+    const n =
+      name === undefined
+        ? 'Error'
+        : toDOMString(name, "Failed to construct 'DOMException'");
     // V8 15.5 writes the stack header ("NotSupportedError: <message>") from the message passed to Error's
     // constructor, not from the `message` accessor, so pass it: e.stack and the runtime's uncaught-error log keep the
     // explanation. Then drop the own data property Error() adds; WebIDL has `message` on the prototype only.
@@ -95,7 +101,10 @@ export class DOMException extends Error {
 }
 for (const [k, v] of CONSTANTS) {
   Object.defineProperty(DOMException, k, { value: v, enumerable: true });
-  Object.defineProperty(DOMException.prototype, k, { value: v, enumerable: true });
+  Object.defineProperty(DOMException.prototype, k, {
+    value: v,
+    enumerable: true,
+  });
 }
 for (const k of ['name', 'message', 'code']) {
   const d = Object.getOwnPropertyDescriptor(DOMException.prototype, k)!;

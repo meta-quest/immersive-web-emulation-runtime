@@ -142,7 +142,8 @@ export class PointerEvent extends MouseEvent {
     this.twist = n(init.twist);
     this.altitudeAngle = n(init.altitudeAngle, Math.PI / 2);
     this.azimuthAngle = n(init.azimuthAngle);
-    this.pointerType = init.pointerType === undefined ? '' : String(init.pointerType);
+    this.pointerType =
+      init.pointerType === undefined ? '' : String(init.pointerType);
     this.isPrimary = b(init.isPrimary);
     this.persistentDeviceId = n(init.persistentDeviceId);
   }
@@ -213,7 +214,11 @@ export class KeyboardEvent extends UIEvent {
   getModifierState(key: string): boolean {
     return modifierState(this, String(key));
   }
-  initKeyboardEvent(type: string, bubbles?: boolean, cancelable?: boolean): void {
+  initKeyboardEvent(
+    type: string,
+    bubbles?: boolean,
+    cancelable?: boolean,
+  ): void {
     (this as any).initEvent(type, bubbles, cancelable);
   }
   override get [Symbol.toStringTag](): string {
@@ -301,6 +306,15 @@ export class BeforeUnloadEvent extends BaseEvent {
 }
 
 export const UI_EVENTS: Record<string, unknown> = {
-  UIEvent, MouseEvent, PointerEvent, WheelEvent, KeyboardEvent, FocusEvent, InputEvent, CompositionEvent,
-  PageTransitionEvent, StorageEvent, BeforeUnloadEvent,
+  UIEvent,
+  MouseEvent,
+  PointerEvent,
+  WheelEvent,
+  KeyboardEvent,
+  FocusEvent,
+  InputEvent,
+  CompositionEvent,
+  PageTransitionEvent,
+  StorageEvent,
+  BeforeUnloadEvent,
 };

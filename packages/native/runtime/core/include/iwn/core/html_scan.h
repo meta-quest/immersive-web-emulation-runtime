@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Scans a Vite dist's index.html for what boot needs (MOD-1, MOD-7): scripts in document order (classic or module,
 // external or inline), modulepreload links, <base href> and <title>. This is a tag scanner, not an HTML parser:
 // it skips comments and raw-text elements correctly, which is enough for build output. The packer (PKG-5) does the

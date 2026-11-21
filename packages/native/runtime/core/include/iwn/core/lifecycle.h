@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Page lifecycle from Android activity callbacks (PROC-6, PROC-7), V8-free. Turns activity state changes into the
 // page events the bundle sees: document `visibilitychange` (with document.visibilityState), window `focus`/`blur`,
 // window `pagehide` on exit. An external "hidden" input lets the XR module fold in the OpenXR session state later

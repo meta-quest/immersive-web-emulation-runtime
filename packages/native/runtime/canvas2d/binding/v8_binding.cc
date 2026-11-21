@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // V8 binding for canvas2d: decodes arguments and wraps handles; every operation is in api.cc (shared with the
 // Node-API test addon, so headless tests exercise the same code as the device). Written against the V8 15.5
 // embedder API (v8.h): FunctionTemplate callbacks, ObjectTemplate internal fields, weak Globals for lifetime and

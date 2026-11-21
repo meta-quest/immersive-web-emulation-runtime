@@ -30,7 +30,13 @@ function viewLength(v: ArrayBufferView): number {
  * Element range [srcOffset, srcOffset + length) of `view` as a byte range from the view start, into `range`.
  * length 0 = to the end. Returns false (after recording INVALID_VALUE) when out of range.
  */
-export function viewRange(ctx: Ctx, view: ArrayBufferView, srcOffset: number, length: number, what: string): boolean {
+export function viewRange(
+  ctx: Ctx,
+  view: ArrayBufferView,
+  srcOffset: number,
+  length: number,
+  what: string,
+): boolean {
   const elems = viewLength(view);
   const bpe = (view as { BYTES_PER_ELEMENT?: number }).BYTES_PER_ELEMENT ?? 1;
   if (srcOffset < 0 || srcOffset > elems) {
@@ -70,11 +76,20 @@ export function u32List(ctx: Ctx, v: unknown, what: string): Uint32Array {
   return toScratch(ctx, v, 'u', what) as Uint32Array;
 }
 
-function toScratch(ctx: Ctx, v: unknown, kind: 'f' | 'i' | 'u', what: string): Float32Array | Int32Array | Uint32Array {
+function toScratch(
+  ctx: Ctx,
+  v: unknown,
+  kind: 'f' | 'i' | 'u',
+  what: string,
+): Float32Array | Int32Array | Uint32Array {
   let src: ArrayLike<unknown>;
   if (Array.isArray(v) || ArrayBuffer.isView(v)) {
     src = v as ArrayLike<unknown>;
-  } else if (v !== null && typeof v === 'object' && typeof (v as Iterable<unknown>)[Symbol.iterator] === 'function') {
+  } else if (
+    v !== null &&
+    typeof v === 'object' &&
+    typeof (v as Iterable<unknown>)[Symbol.iterator] === 'function'
+  ) {
     src = Array.from(v as Iterable<unknown>);
   } else {
     throw new TypeError(`${what}: argument is not a sequence`);
@@ -82,15 +97,22 @@ function toScratch(ctx: Ctx, v: unknown, kind: 'f' | 'i' | 'u', what: string): F
   const n = src.length;
   let out: Float32Array | Int32Array | Uint32Array;
   if (kind === 'f') {
-    if (ctx._f32Scratch.length < n) ctx._f32Scratch = new Float32Array(Math.max(n, ctx._f32Scratch.length * 2));
+    if (ctx._f32Scratch.length < n)
+      ctx._f32Scratch = new Float32Array(
+        Math.max(n, ctx._f32Scratch.length * 2),
+      );
     out = ctx._f32Scratch;
     for (let i = 0; i < n; i++) out[i] = +(src[i] as number);
   } else if (kind === 'i') {
-    if (ctx._i32Scratch.length < n) ctx._i32Scratch = new Int32Array(Math.max(n, ctx._i32Scratch.length * 2));
+    if (ctx._i32Scratch.length < n)
+      ctx._i32Scratch = new Int32Array(Math.max(n, ctx._i32Scratch.length * 2));
     out = ctx._i32Scratch;
     for (let i = 0; i < n; i++) out[i] = (src[i] as number) | 0;
   } else {
-    if (ctx._u32Scratch.length < n) ctx._u32Scratch = new Uint32Array(Math.max(n, ctx._u32Scratch.length * 2));
+    if (ctx._u32Scratch.length < n)
+      ctx._u32Scratch = new Uint32Array(
+        Math.max(n, ctx._u32Scratch.length * 2),
+      );
     out = ctx._u32Scratch;
     for (let i = 0; i < n; i++) out[i] = (src[i] as number) >>> 0;
   }
@@ -102,6 +124,9 @@ function toScratch(ctx: Ctx, v: unknown, kind: 'f' | 'i' | 'u', what: string): F
 export let scratchLength = 0;
 
 /** Element count of a list argument as converted by f32List & co. */
-export function listLength(original: unknown, converted: ArrayLike<number>): number {
+export function listLength(
+  original: unknown,
+  converted: ArrayLike<number>,
+): number {
   return original === converted ? converted.length : scratchLength;
 }

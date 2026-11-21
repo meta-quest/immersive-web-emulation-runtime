@@ -10,7 +10,12 @@
 // WebGL object interfaces and WebGLContextEvent go on the global, none are constructible by script. The
 // implementation is one set of method modules; internal helpers live on the shared Ctx prototype below.
 
-import { Ctx, type CanvasLike, type ContextAttributes, type ContextOptions } from './core.ts';
+import {
+  Ctx,
+  type CanvasLike,
+  type ContextAttributes,
+  type ContextOptions,
+} from './core.ts';
 import type { GlNatives } from './gen/natives.gen.ts';
 import { IDL } from './gen/idl.gen.ts';
 import { directMethods } from './gen/methods.gen.ts';
@@ -51,9 +56,19 @@ function installInternals(): void {
   internalsInstalled = true;
   const proto = Ctx.prototype as unknown as Record<string, unknown>;
   const hide = (k: string, v: unknown): void => {
-    Object.defineProperty(proto, k, { value: v, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(proto, k, {
+      value: v,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   };
-  for (const src of [stateInternals, framebufferInternals, programInternals, drawInternals]) {
+  for (const src of [
+    stateInternals,
+    framebufferInternals,
+    programInternals,
+    drawInternals,
+  ]) {
     for (const [k, v] of Object.entries(src)) hide(k, v);
   }
   for (const [k, v] of Object.entries(ALL)) if (k.startsWith('_')) hide(k, v);
@@ -64,7 +79,11 @@ export interface WebGLInstall {
   WebGL2RenderingContext: Function;
   WebGLRenderingContext: Function;
   /** Create a context for a canvas (what HTMLCanvasElement.getContext('webgl2' | 'webgl') calls). */
-  createContext(canvas: CanvasLike, type: 'webgl2' | 'webgl', attrs?: Partial<ContextAttributes>): Ctx | null;
+  createContext(
+    canvas: CanvasLike,
+    type: 'webgl2' | 'webgl',
+    attrs?: Partial<ContextAttributes>,
+  ): Ctx | null;
 }
 
 function illegalConstructor(name: string): Function {
@@ -76,18 +95,31 @@ function illegalConstructor(name: string): Function {
   return f;
 }
 
-function buildInterface(name: 'WebGL2RenderingContext' | 'WebGLRenderingContext'): Function {
+function buildInterface(
+  name: 'WebGL2RenderingContext' | 'WebGLRenderingContext',
+): Function {
   const shape = IDL[name];
   const ctor = illegalConstructor(name);
   const proto = Object.create(Ctx.prototype) as Record<PropertyKey, unknown>;
   for (const [op, length] of shape.ops) {
     const fn = ALL[op];
-    if (!fn) throw new Error(`@iwer/native webgl: ${name}.${op} is not implemented`);
+    if (!fn)
+      throw new Error(`@iwer/native webgl: ${name}.${op} is not implemented`);
     // WebIDL Function.length = the shortest overload's required arguments (identical in WebGL 1 and 2, so the
     // shared function object carries it; no wrapper on the call path).
-    if (fn.length !== length) Object.defineProperty(fn, 'length', { value: length, configurable: true });
-    if (fn.name !== op) Object.defineProperty(fn, 'name', { value: op, configurable: true });
-    Object.defineProperty(proto, op, { value: fn, writable: true, enumerable: true, configurable: true });
+    if (fn.length !== length)
+      Object.defineProperty(fn, 'length', {
+        value: length,
+        configurable: true,
+      });
+    if (fn.name !== op)
+      Object.defineProperty(fn, 'name', { value: op, configurable: true });
+    Object.defineProperty(proto, op, {
+      value: fn,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   }
   for (const [c, value] of shape.consts) {
     Object.defineProperty(proto, c, { value, enumerable: true });
@@ -95,11 +127,25 @@ function buildInterface(name: 'WebGL2RenderingContext' | 'WebGLRenderingContext'
   }
   for (const [attr] of shape.attrs) {
     const d = attributeAccessors[attr];
-    if (!d) throw new Error(`@iwer/native webgl: attribute ${name}.${attr} is not implemented`);
-    Object.defineProperty(proto, attr, { ...d, enumerable: true, configurable: true });
+    if (!d)
+      throw new Error(
+        `@iwer/native webgl: attribute ${name}.${attr} is not implemented`,
+      );
+    Object.defineProperty(proto, attr, {
+      ...d,
+      enumerable: true,
+      configurable: true,
+    });
   }
-  Object.defineProperty(proto, 'constructor', { value: ctor, writable: true, configurable: true });
-  Object.defineProperty(proto, Symbol.toStringTag, { value: name, configurable: true });
+  Object.defineProperty(proto, 'constructor', {
+    value: ctor,
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(proto, Symbol.toStringTag, {
+    value: name,
+    configurable: true,
+  });
   Object.defineProperty(ctor, 'prototype', { value: proto, writable: false });
   return ctor;
 }
@@ -117,10 +163,14 @@ const DEFAULT_ATTRS: ContextAttributes = {
   xrCompatible: false,
 };
 
-function readAttrs(a: Partial<ContextAttributes> | undefined | null): ContextAttributes {
+function readAttrs(
+  a: Partial<ContextAttributes> | undefined | null,
+): ContextAttributes {
   const o = { ...DEFAULT_ATTRS };
   if (a && typeof a === 'object') {
-    for (const k of Object.keys(DEFAULT_ATTRS) as Array<keyof ContextAttributes>) {
+    for (const k of Object.keys(DEFAULT_ATTRS) as Array<
+      keyof ContextAttributes
+    >) {
       const v = (a as Record<string, unknown>)[k];
       if (v === undefined) continue;
       if (k === 'powerPreference') {
@@ -139,23 +189,38 @@ function readAttrs(a: Partial<ContextAttributes> | undefined | null): ContextAtt
 
 /** WebGLContextEvent (extends Event when the runtime provides it). */
 function makeContextEventClass(global: Record<string, unknown>): Function {
-  const Base = (global.Event as (new (type: string, init?: object) => object) | undefined) ?? class {
-    type: string;
-    defaultPrevented = false;
-    cancelable: boolean;
-    constructor(type: string, init?: { cancelable?: boolean }) {
-      this.type = type;
-      this.cancelable = !!init?.cancelable;
-    }
-    preventDefault(): void {
-      if (this.cancelable) this.defaultPrevented = true;
-    }
-  };
-  class WebGLContextEvent extends (Base as new (type: string, init?: object) => object) {
+  const Base =
+    (global.Event as
+      | (new (type: string, init?: object) => object)
+      | undefined) ??
+    class {
+      type: string;
+      defaultPrevented = false;
+      cancelable: boolean;
+      constructor(type: string, init?: { cancelable?: boolean }) {
+        this.type = type;
+        this.cancelable = !!init?.cancelable;
+      }
+      preventDefault(): void {
+        if (this.cancelable) this.defaultPrevented = true;
+      }
+    };
+  class WebGLContextEvent extends (Base as new (
+    type: string,
+    init?: object,
+  ) => object) {
     readonly statusMessage: string;
-    constructor(type: string, init?: { statusMessage?: string; bubbles?: boolean; cancelable?: boolean }) {
+    constructor(
+      type: string,
+      init?: {
+        statusMessage?: string;
+        bubbles?: boolean;
+        cancelable?: boolean;
+      },
+    ) {
       super(String(type), init);
-      this.statusMessage = init?.statusMessage !== undefined ? String(init.statusMessage) : '';
+      this.statusMessage =
+        init?.statusMessage !== undefined ? String(init.statusMessage) : '';
     }
   }
   return WebGLContextEvent;
@@ -165,24 +230,56 @@ function makeContextEventClass(global: Record<string, unknown>): Function {
  * Install the WebGL interfaces on `global` and return the context factory. `natives` is
  * globalThis.__iwn.gl on device, the host test addon or a fake in Node.
  */
-export function installWebGL(global: Record<string, unknown>, natives: GlNatives, options: ContextOptions = {}): WebGLInstall {
+export function installWebGL(
+  global: Record<string, unknown>,
+  natives: GlNatives,
+  options: ContextOptions = {},
+): WebGLInstall {
   installInternals();
   const W2 = buildInterface('WebGL2RenderingContext');
   const W1 = buildInterface('WebGLRenderingContext');
   for (const [name, cls] of Object.entries(INTERFACE_CLASSES)) {
-    Object.defineProperty(global, name, { value: cls, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(global, name, {
+      value: cls,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   }
-  Object.defineProperty(global, 'WebGL2RenderingContext', { value: W2, writable: true, configurable: true });
-  Object.defineProperty(global, 'WebGLRenderingContext', { value: W1, writable: true, configurable: true });
-  Object.defineProperty(global, 'WebGLContextEvent', { value: makeContextEventClass(global), writable: true, configurable: true });
-  const createContext = (canvas: CanvasLike, type: 'webgl2' | 'webgl', attrs?: Partial<ContextAttributes>): Ctx | null => {
+  Object.defineProperty(global, 'WebGL2RenderingContext', {
+    value: W2,
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(global, 'WebGLRenderingContext', {
+    value: W1,
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(global, 'WebGLContextEvent', {
+    value: makeContextEventClass(global),
+    writable: true,
+    configurable: true,
+  });
+  const createContext = (
+    canvas: CanvasLike,
+    type: 'webgl2' | 'webgl',
+    attrs?: Partial<ContextAttributes>,
+  ): Ctx | null => {
     const v2 = type === 'webgl2';
     const ctx = Object.create((v2 ? W2 : W1).prototype) as Ctx;
     if (!ctx._init(natives, v2, canvas, readAttrs(attrs), options)) return null;
-    Object.defineProperty(canvas, '__iwnWebGLContext', { value: ctx, configurable: true });
+    Object.defineProperty(canvas, '__iwnWebGLContext', {
+      value: ctx,
+      configurable: true,
+    });
     return ctx;
   };
-  return { WebGL2RenderingContext: W2, WebGLRenderingContext: W1, createContext };
+  return {
+    WebGL2RenderingContext: W2,
+    WebGLRenderingContext: W1,
+    createContext,
+  };
 }
 
 export { INTERNAL };

@@ -22,10 +22,24 @@
 //    when enlarging).
 
 import type { ImageEnv } from './env.ts';
-import { bitmapHandle, isImageBitmap, wrapBitmap, type ImageBitmap } from './image-bitmap.ts';
-import { imageElementHandle, imageElementState, isImageElement } from './html-image-element.ts';
+import {
+  bitmapHandle,
+  isImageBitmap,
+  wrapBitmap,
+  type ImageBitmap,
+} from './image-bitmap.ts';
+import {
+  imageElementHandle,
+  imageElementState,
+  isImageElement,
+} from './html-image-element.ts';
 import { isNativeImageError, type NativeProcessOptions } from './natives.ts';
-import { isImageSourceProvider, isVideoLike, IMAGE_SOURCE, type PixelsDescriptor } from './source.ts';
+import {
+  isImageSourceProvider,
+  isVideoLike,
+  IMAGE_SOURCE,
+  type PixelsDescriptor,
+} from './source.ts';
 
 interface ImageBitmapOptions {
   imageOrientation?: string;
@@ -52,7 +66,9 @@ function enumValue<T extends readonly string[]>(
   if (value === undefined) return fallback;
   const s = String(value);
   if (!(allowed as readonly string[]).includes(s)) {
-    throw new TypeError(`${PREFIX}The provided value '${s}' is not a valid enum value of type ${type}.`);
+    throw new TypeError(
+      `${PREFIX}The provided value '${s}' is not a valid enum value of type ${type}.`,
+    );
   }
   return s as T[number];
 }
@@ -60,10 +76,15 @@ function enumValue<T extends readonly string[]>(
 // WebIDL [EnforceRange] unsigned long.
 function enforceUnsignedLong(value: unknown, name: string): number {
   const n = Number(value);
-  if (!Number.isFinite(n)) throw new TypeError(`${PREFIX}Value is not of type 'unsigned long' (${name}).`);
+  if (!Number.isFinite(n))
+    throw new TypeError(
+      `${PREFIX}Value is not of type 'unsigned long' (${name}).`,
+    );
   const t = Math.trunc(n);
   if (t < 0 || t > 4294967295) {
-    throw new TypeError(`${PREFIX}Value is outside the 'unsigned long' value range (${name}).`);
+    throw new TypeError(
+      `${PREFIX}Value is outside the 'unsigned long' value range (${name}).`,
+    );
   }
   return t;
 }
@@ -107,28 +128,59 @@ function parseArgs(env: ImageEnv, args: unknown[]): Parsed {
     }
     crop = [x, y, sw, sh];
   } else if (args.length >= 3) {
-    throw new TypeError(`${PREFIX}Valid arities are: [1, 2, 5, 6], but ${args.length} arguments provided.`);
+    throw new TypeError(
+      `${PREFIX}Valid arities are: [1, 2, 5, 6], but ${args.length} arguments provided.`,
+    );
   } else {
     optionsArg = args[1];
   }
   let options: ImageBitmapOptions = {};
   if (optionsArg !== undefined && optionsArg !== null) {
     if (typeof optionsArg !== 'object' && typeof optionsArg !== 'function') {
-      throw new TypeError(`${PREFIX}The provided value is not of type 'ImageBitmapOptions'.`);
+      throw new TypeError(
+        `${PREFIX}The provided value is not of type 'ImageBitmapOptions'.`,
+      );
     }
     options = optionsArg as ImageBitmapOptions;
   }
   // Dictionary members are read in lexicographic order (WebIDL).
-  enumValue(options.colorSpaceConversion, COLORSPACE, 'default', 'ColorSpaceConversion');
-  const orientation = enumValue(options.imageOrientation, ORIENTATION, 'from-image', 'ImageOrientation');
-  const premultiply = enumValue(options.premultiplyAlpha, PREMULTIPLY, 'default', 'PremultiplyAlpha');
+  enumValue(
+    options.colorSpaceConversion,
+    COLORSPACE,
+    'default',
+    'ColorSpaceConversion',
+  );
+  const orientation = enumValue(
+    options.imageOrientation,
+    ORIENTATION,
+    'from-image',
+    'ImageOrientation',
+  );
+  const premultiply = enumValue(
+    options.premultiplyAlpha,
+    PREMULTIPLY,
+    'default',
+    'PremultiplyAlpha',
+  );
   const resizeHeight =
-    options.resizeHeight === undefined ? undefined : enforceUnsignedLong(options.resizeHeight, 'resizeHeight');
-  const quality = enumValue(options.resizeQuality, QUALITY, 'low', 'ResizeQuality');
+    options.resizeHeight === undefined
+      ? undefined
+      : enforceUnsignedLong(options.resizeHeight, 'resizeHeight');
+  const quality = enumValue(
+    options.resizeQuality,
+    QUALITY,
+    'low',
+    'ResizeQuality',
+  );
   const resizeWidth =
-    options.resizeWidth === undefined ? undefined : enforceUnsignedLong(options.resizeWidth, 'resizeWidth');
+    options.resizeWidth === undefined
+      ? undefined
+      : enforceUnsignedLong(options.resizeWidth, 'resizeWidth');
   if (resizeWidth === 0 || resizeHeight === 0) {
-    throw env.domException(`${PREFIX}The resize width or height is 0.`, 'InvalidStateError');
+    throw env.domException(
+      `${PREFIX}The resize width or height is 0.`,
+      'InvalidStateError',
+    );
   }
   return {
     crop,
@@ -141,16 +193,34 @@ function parseArgs(env: ImageEnv, args: unknown[]): Parsed {
 }
 
 /** Output size when only one of resizeWidth/resizeHeight is given (HTML: ceil of the proportional size). */
-function resolveSize(p: Parsed, srcW: number, srcH: number): { w?: number; h?: number } {
+function resolveSize(
+  p: Parsed,
+  srcW: number,
+  srcH: number,
+): { w?: number; h?: number } {
   const sw = p.crop ? p.crop[2] : srcW;
   const sh = p.crop ? p.crop[3] : srcH;
-  if (p.resizeWidth !== undefined && p.resizeHeight !== undefined) return { w: p.resizeWidth, h: p.resizeHeight };
-  if (p.resizeWidth !== undefined) return { w: p.resizeWidth, h: Math.max(1, Math.ceil((sh * p.resizeWidth) / sw)) };
-  if (p.resizeHeight !== undefined) return { w: Math.max(1, Math.ceil((sw * p.resizeHeight) / sh)), h: p.resizeHeight };
+  if (p.resizeWidth !== undefined && p.resizeHeight !== undefined)
+    return { w: p.resizeWidth, h: p.resizeHeight };
+  if (p.resizeWidth !== undefined)
+    return {
+      w: p.resizeWidth,
+      h: Math.max(1, Math.ceil((sh * p.resizeWidth) / sw)),
+    };
+  if (p.resizeHeight !== undefined)
+    return {
+      w: Math.max(1, Math.ceil((sw * p.resizeHeight) / sh)),
+      h: p.resizeHeight,
+    };
   return {};
 }
 
-function processOptions(p: Parsed, srcW: number, srcH: number, encoded: boolean): NativeProcessOptions {
+function processOptions(
+  p: Parsed,
+  srcW: number,
+  srcH: number,
+  encoded: boolean,
+): NativeProcessOptions {
   const o: NativeProcessOptions = {
     applyExif: !(encoded && p.orientation === 'none'),
     flipY: p.orientation === 'flipY',
@@ -174,18 +244,36 @@ function processOptions(p: Parsed, srcW: number, srcH: number, encoded: boolean)
 // exactly width * height * 4 bytes.
 const MAX_SIDE = 32768;
 const MAX_PIXELS = 2 ** 28;
-function checkPixelsDescriptor(d: PixelsDescriptor, invalid: (msg: string) => unknown): void {
+function checkPixelsDescriptor(
+  d: PixelsDescriptor,
+  invalid: (msg: string) => unknown,
+): void {
   const { width: w, height: h, data } = d;
-  if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > MAX_SIDE || h > MAX_SIDE || w * h > MAX_PIXELS) {
-    throw invalid(`The source image size ${String(w)}x${String(h)} is outside 1..${MAX_SIDE} per side or ${MAX_PIXELS} pixels.`);
+  if (
+    !Number.isInteger(w) ||
+    !Number.isInteger(h) ||
+    w < 1 ||
+    h < 1 ||
+    w > MAX_SIDE ||
+    h > MAX_SIDE ||
+    w * h > MAX_PIXELS
+  ) {
+    throw invalid(
+      `The source image size ${String(w)}x${String(h)} is outside 1..${MAX_SIDE} per side or ${MAX_PIXELS} pixels.`,
+    );
   }
   if (!ArrayBuffer.isView(data) || data.byteLength !== w * h * 4) {
-    throw invalid('The source pixel data length does not match width * height * 4.');
+    throw invalid(
+      'The source pixel data length does not match width * height * 4.',
+    );
   }
 }
 
-export function makeCreateImageBitmap(env: ImageEnv): (...args: unknown[]) => Promise<ImageBitmap> {
-  const invalid = (msg: string) => env.domException(PREFIX + msg, 'InvalidStateError');
+export function makeCreateImageBitmap(
+  env: ImageEnv,
+): (...args: unknown[]) => Promise<ImageBitmap> {
+  const invalid = (msg: string) =>
+    env.domException(PREFIX + msg, 'InvalidStateError');
   const mapNativeError = (e: unknown): unknown =>
     isNativeImageError(e)
       ? invalid(
@@ -208,16 +296,26 @@ export function makeCreateImageBitmap(env: ImageEnv): (...args: unknown[]) => Pr
     // dimension is resolved natively from the crop/decoded size: decode first, then transform.
     if (env.isBlob(source)) {
       const bytes = await env.blobBytes(source);
-      const oneSided = (p.resizeWidth === undefined) !== (p.resizeHeight === undefined);
+      const oneSided =
+        (p.resizeWidth === undefined) !== (p.resizeHeight === undefined);
       try {
         if (!oneSided) {
-          return wrapBitmap(await env.decode(bytes, processOptions(p, 0, 0, true)), env.natives);
+          return wrapBitmap(
+            await env.decode(bytes, processOptions(p, 0, 0, true)),
+            env.natives,
+          );
         }
-        const first: NativeProcessOptions = { applyExif: p.orientation !== 'none', alpha: 0 };
+        const first: NativeProcessOptions = {
+          applyExif: p.orientation !== 'none',
+          alpha: 0,
+        };
         const decoded = await env.decode(bytes, first);
         try {
           return wrapBitmap(
-            await env.transform(decoded, { ...processOptions(p, decoded.width, decoded.height, false), applyExif: true }),
+            await env.transform(decoded, {
+              ...processOptions(p, decoded.width, decoded.height, false),
+              applyExif: true,
+            }),
             env.natives,
           );
         } finally {
@@ -229,13 +327,18 @@ export function makeCreateImageBitmap(env: ImageEnv): (...args: unknown[]) => Pr
     }
 
     if (isVideoLike(source)) {
-      throw new TypeError(`${PREFIX}Video sources are not supported by this runtime.`);
+      throw new TypeError(
+        `${PREFIX}Video sources are not supported by this runtime.`,
+      );
     }
 
     if (isImageBitmap(source)) {
       const h = bitmapHandle(source);
       if (!h) throw invalid('The image source is detached.');
-      return wrapBitmap(await env.transform(h, processOptions(p, h.width, h.height, false)), env.natives);
+      return wrapBitmap(
+        await env.transform(h, processOptions(p, h.width, h.height, false)),
+        env.natives,
+      );
     }
 
     if (isImageElement(source)) {
@@ -248,16 +351,24 @@ export function makeCreateImageBitmap(env: ImageEnv): (...args: unknown[]) => Pr
             : 'The HTMLImageElement provided is not fully loaded.',
         );
       }
-      return wrapBitmap(await env.transform(h, processOptions(p, h.width, h.height, false)), env.natives);
+      return wrapBitmap(
+        await env.transform(h, processOptions(p, h.width, h.height, false)),
+        env.natives,
+      );
     }
 
     if (isImageSourceProvider(source)) {
       const d = source[IMAGE_SOURCE]();
-      if (d.width === 0 || d.height === 0) throw invalid('The source image width or height is 0.');
+      if (d.width === 0 || d.height === 0)
+        throw invalid('The source image width or height is 0.');
       if (d.kind !== 'handle') checkPixelsDescriptor(d, invalid);
       const o = processOptions(p, d.width, d.height, false);
-      if (d.kind === 'handle') return wrapBitmap(await env.transform(d.handle, o), env.natives);
-      return wrapBitmap(await env.fromPixels(d.data, d.width, d.height, d.premultiplied, o), env.natives);
+      if (d.kind === 'handle')
+        return wrapBitmap(await env.transform(d.handle, o), env.natives);
+      return wrapBitmap(
+        await env.fromPixels(d.data, d.width, d.height, d.premultiplied, o),
+        env.natives,
+      );
     }
 
     throw new TypeError(

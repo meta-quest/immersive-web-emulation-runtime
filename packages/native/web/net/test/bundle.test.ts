@@ -28,8 +28,15 @@ let bridge: BridgeNatives | null = null;
 let ctx: vm.Context;
 
 async function netBundle(): Promise<string> {
-  const { buildOptions } = (await import(join(here, '..', 'build.mjs'))) as { buildOptions: Record<string, unknown> };
-  const r = await build({ ...buildOptions, minify: true, write: false, outfile: 'net.min.js' } as never);
+  const { buildOptions } = (await import(join(here, '..', 'build.mjs'))) as {
+    buildOptions: Record<string, unknown>;
+  };
+  const r = await build({
+    ...buildOptions,
+    minify: true,
+    write: false,
+    outfile: 'net.min.js',
+  } as never);
   return r.outputFiles![0]!.text;
 }
 
@@ -46,18 +53,36 @@ before(async () => {
     const b = bridge;
     natives.net = new Proxy(b, {
       get: (t, k) => {
-        if (k === 'wsConnect' || k === 'wsSend' || k === 'wsClose') return undefined;
+        if (k === 'wsConnect' || k === 'wsSend' || k === 'wsClose')
+          return undefined;
         const v = (t as unknown as Record<string | symbol, unknown>)[k];
         return typeof v === 'function' ? v.bind(t) : v;
       },
     });
   }
   ctx = vm.createContext({ setTimeout, clearTimeout, console, __iwn: natives });
-  if (haveGlue) vm.runInContext(readFileSync(gluePath, 'utf8'), ctx, { filename: 'glue.min.js' });
+  if (haveGlue)
+    vm.runInContext(readFileSync(gluePath, 'utf8'), ctx, {
+      filename: 'glue.min.js',
+    });
   else {
     // Without the glue, borrow the host's web globals the net layer needs.
-    for (const k of ['URL', 'URLSearchParams', 'TextEncoder', 'TextDecoder', 'EventTarget', 'Event', 'DOMException', 'AbortController', 'AbortSignal', 'Blob', 'queueMicrotask']) {
-      (ctx as Record<string, unknown>)[k] = (globalThis as Record<string, unknown>)[k];
+    for (const k of [
+      'URL',
+      'URLSearchParams',
+      'TextEncoder',
+      'TextDecoder',
+      'EventTarget',
+      'Event',
+      'DOMException',
+      'AbortController',
+      'AbortSignal',
+      'Blob',
+      'queueMicrotask',
+    ]) {
+      (ctx as Record<string, unknown>)[k] = (
+        globalThis as Record<string, unknown>
+      )[k];
     }
   }
   vm.runInContext(await netBundle(), ctx, { filename: 'net.min.js' });
@@ -72,11 +97,27 @@ test('the prelude installs the network globals in a bare context; WebSocket stay
     `['fetch','Headers','Request','Response','XMLHttpRequest','ReadableStream','WritableStream','TransformStream','WebSocket'].map((n) => typeof globalThis[n])`,
     ctx,
   ) as string[];
-  assert.deepEqual([...types], ['function', 'function', 'function', 'function', 'function', 'function', 'function', 'function', 'undefined']);
+  assert.deepEqual(
+    [...types],
+    [
+      'function',
+      'function',
+      'function',
+      'function',
+      'function',
+      'function',
+      'function',
+      'function',
+      'undefined',
+    ],
+  );
 });
 
 test('data: fetch and Response streams work inside the context', async () => {
-  const text = await vm.runInContext(`fetch('data:text/plain,inside').then((r) => r.text())`, ctx);
+  const text = await vm.runInContext(
+    `fetch('data:text/plain,inside').then((r) => r.text())`,
+    ctx,
+  );
   assert.equal(text, 'inside');
   const streamed = await vm.runInContext(
     `(async () => { const r = new Response('abc'); const rd = r.body.getReader(); const { value } = await rd.read(); return value.length + ':' + r.bodyUsed; })()`,
@@ -85,18 +126,26 @@ test('data: fetch and Response streams work inside the context', async () => {
   assert.equal(streamed, '3:true');
 });
 
-test('blob URLs from the glue resolve in fetch', { skip: haveGlue ? false : 'glue bundle not built' }, async () => {
-  const text = await vm.runInContext(
-    `(async () => { const u = URL.createObjectURL(new Blob(['from glue'], { type: 'text/x' })); const r = await fetch(u); const t = r.headers.get('content-type') + '|' + await r.text(); URL.revokeObjectURL(u); let failed = false; try { await fetch(u); } catch (e) { failed = e instanceof TypeError; } return t + '|' + failed; })()`,
-    ctx,
-  );
-  assert.equal(text, 'text/x|from glue|true');
-});
+test(
+  'blob URLs from the glue resolve in fetch',
+  { skip: haveGlue ? false : 'glue bundle not built' },
+  async () => {
+    const text = await vm.runInContext(
+      `(async () => { const u = URL.createObjectURL(new Blob(['from glue'], { type: 'text/x' })); const r = await fetch(u); const t = r.headers.get('content-type') + '|' + await r.text(); URL.revokeObjectURL(u); let failed = false; try { await fetch(u); } catch (e) { failed = e instanceof TypeError; } return t + '|' + failed; })()`,
+      ctx,
+    );
+    assert.equal(text, 'text/x|from glue|true');
+  },
+);
 
-test('assets through the real core from inside the context', { skip: bridgeAvailable ? false : 'bridge not built' }, async () => {
-  const out = await vm.runInContext(
-    `(async () => { const r = await fetch('/_app/x.js'); const b = await r.blob(); return r.status + ':' + b.size + ':' + b.type + ':' + (await fetch('/missing')).status; })()`,
-    ctx,
-  );
-  assert.equal(out, '200:20:text/javascript:404');
-});
+test(
+  'assets through the real core from inside the context',
+  { skip: bridgeAvailable ? false : 'bridge not built' },
+  async () => {
+    const out = await vm.runInContext(
+      `(async () => { const r = await fetch('/_app/x.js'); const b = await r.blob(); return r.status + ':' + b.size + ':' + b.type + ':' + (await fetch('/missing')).status; })()`,
+      ctx,
+    );
+    assert.equal(out, '200:20:text/javascript:404');
+  },
+);

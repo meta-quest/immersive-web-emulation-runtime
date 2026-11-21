@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Generates the frame record offsets for both sides of the native/JS boundary from layout/frame-record.json (XRF-4):
 //   runtime/xr/include/iwn/xr/frame_record_layout.gen.h   C++ byte offsets (the XR thread writes the record)
 //   web/xr/src/layout.gen.ts                              typed-array element indices (the adapter reads it)
@@ -24,23 +31,39 @@ const SIZE = { u8: 1, u32: 4, f32: 4, f64: 8 };
 const HANDS = ['left', 'right'];
 
 export function computeLayout(spec) {
-  if (!Number.isInteger(spec.version) || spec.version < 1) throw new Error('layout: version must be a positive integer');
+  if (!Number.isInteger(spec.version) || spec.version < 1)
+    throw new Error('layout: version must be a positive integer');
   const seen = new Set();
   for (const f of spec.fields) {
-    if (!SIZE[f.type]) throw new Error(`layout: field ${f.name} has unknown type ${f.type}`);
+    if (!SIZE[f.type])
+      throw new Error(`layout: field ${f.name} has unknown type ${f.type}`);
     if (seen.has(f.name)) throw new Error(`layout: duplicate field ${f.name}`);
     seen.add(f.name);
-    if (f.count !== undefined && (!Number.isInteger(f.count) || f.count < 1)) throw new Error(`layout: bad count for ${f.name}`);
+    if (f.count !== undefined && (!Number.isInteger(f.count) || f.count < 1))
+      throw new Error(`layout: bad count for ${f.name}`);
   }
-  if (spec.fields[0]?.name !== 'layoutVersion' || spec.fields[0].type !== 'u32') {
-    throw new Error('layout: the first field must be the u32 layoutVersion (XRF-4)');
+  if (
+    spec.fields[0]?.name !== 'layoutVersion' ||
+    spec.fields[0].type !== 'u32'
+  ) {
+    throw new Error(
+      'layout: the first field must be the u32 layoutVersion (XRF-4)',
+    );
   }
   const out = []; // { name, type, count, perHand, hand, offset, doc }
   let at = 0;
   const place = (f, hand) => {
     const size = SIZE[f.type];
     if (at % size !== 0) throw new Error(`layout: misaligned ${f.name}`);
-    out.push({ name: f.name, type: f.type, count: f.count ?? 1, perHand: !!f.perHand, hand, offset: at, doc: f.doc ?? '' });
+    out.push({
+      name: f.name,
+      type: f.type,
+      count: f.count ?? 1,
+      perHand: !!f.perHand,
+      hand,
+      offset: at,
+      doc: f.doc ?? '',
+    });
     at += size * (f.count ?? 1);
   };
   const four = (f) => SIZE[f.type] === 4;
@@ -48,9 +71,12 @@ export function computeLayout(spec) {
   at = Math.ceil(at / 8) * 8;
   for (const f of spec.fields) if (!f.perHand && f.type === 'f64') place(f);
   for (const hand of HANDS) {
-    for (const f of spec.fields) if (f.perHand && f.type === 'f64') throw new Error(`layout: per-hand f64 (${f.name}) is not supported`);
+    for (const f of spec.fields)
+      if (f.perHand && f.type === 'f64')
+        throw new Error(`layout: per-hand f64 (${f.name}) is not supported`);
     for (const f of spec.fields) if (f.perHand && four(f)) place(f, hand);
-    for (const f of spec.fields) if (f.perHand && f.type === 'u8') place(f, hand);
+    for (const f of spec.fields)
+      if (f.perHand && f.type === 'u8') place(f, hand);
     at = Math.ceil(at / 4) * 4;
   }
   for (const f of spec.fields) if (!f.perHand && f.type === 'u8') place(f);
@@ -81,15 +107,28 @@ export function renderCpp(layout) {
   for (const f of layout.fields) {
     if (done.has(f.name)) continue;
     done.add(f.name);
-    const doc = f.doc ? `  // ${f.type}${f.count > 1 ? `[${f.count}]` : ''}: ${f.doc}` : `  // ${f.type}${f.count > 1 ? `[${f.count}]` : ''}`;
+    const doc = f.doc
+      ? `  // ${f.type}${f.count > 1 ? `[${f.count}]` : ''}: ${f.doc}`
+      : `  // ${f.type}${f.count > 1 ? `[${f.count}]` : ''}`;
     if (f.perHand) {
-      const l = layout.fields.find((g) => g.name === f.name && g.hand === 'left');
-      const r = layout.fields.find((g) => g.name === f.name && g.hand === 'right');
-      lines.push(`inline constexpr size_t k${pascal(f.name)}[2] = {${l.offset}, ${r.offset}};${doc}`);
+      const l = layout.fields.find(
+        (g) => g.name === f.name && g.hand === 'left',
+      );
+      const r = layout.fields.find(
+        (g) => g.name === f.name && g.hand === 'right',
+      );
+      lines.push(
+        `inline constexpr size_t k${pascal(f.name)}[2] = {${l.offset}, ${r.offset}};${doc}`,
+      );
     } else {
-      lines.push(`inline constexpr size_t k${pascal(f.name)} = ${f.offset};${doc}`);
+      lines.push(
+        `inline constexpr size_t k${pascal(f.name)} = ${f.offset};${doc}`,
+      );
     }
-    if (f.count > 1) lines.push(`inline constexpr size_t k${pascal(f.name)}Count = ${f.count};`);
+    if (f.count > 1)
+      lines.push(
+        `inline constexpr size_t k${pascal(f.name)}Count = ${f.count};`,
+      );
   }
   lines.push('', '}  // namespace iwn::xr::layout', '');
   return lines.join('\n');
@@ -113,7 +152,10 @@ export function renderTs(layout) {
     Object.keys(o).length === 0
       ? '{} as const'
       : `{\n${Object.entries(o)
-          .map(([k, v]) => `  ${k}: ${Array.isArray(v) ? `[${v.join(', ')}] as const` : v},`)
+          .map(
+            ([k, v]) =>
+              `  ${k}: ${Array.isArray(v) ? `[${v.join(', ')}] as const` : v},`,
+          )
           .join('\n')}\n} as const`;
   return [
     '// Generated by runtime/xr/gen/generate-layout.mjs from runtime/xr/layout/frame-record.json. Do not edit.',
@@ -155,7 +197,9 @@ function main() {
     for (const [file, text] of outputs) {
       const current = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
       if (current !== text) {
-        console.error(`stale: ${path.relative(pkgDir, file)} (run node runtime/xr/gen/generate-layout.mjs)`);
+        console.error(
+          `stale: ${path.relative(pkgDir, file)} (run node runtime/xr/gen/generate-layout.mjs)`,
+        );
         stale++;
       }
     }
@@ -169,4 +213,8 @@ function main() {
   console.log(`frame record v${layout.version}: ${layout.bytes} bytes`);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) main();
+if (
+  process.argv[1] &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+)
+  main();

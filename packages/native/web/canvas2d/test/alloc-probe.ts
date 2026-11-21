@@ -29,8 +29,19 @@ src.getContext('2d').fillRect(0, 0, 32, 32);
 ctx.font = '48px IwnTest';
 // An image-module source (ImageBitmap / HTMLImageElement): its provider returns one reused descriptor, as web/image does.
 const providerPixels = new Uint8Array(16 * 16 * 4).fill(255);
-const providerDescriptor = { kind: 'pixels', origin: 'bitmap', width: 16, height: 16, premultiplied: true, data: providerPixels };
-const provider = { width: 16, height: 16, [Symbol.for('iwn.image.source')]: () => providerDescriptor };
+const providerDescriptor = {
+  kind: 'pixels',
+  origin: 'bitmap',
+  width: 16,
+  height: 16,
+  premultiplied: true,
+  data: providerPixels,
+};
+const provider = {
+  width: 16,
+  height: 16,
+  [Symbol.for('iwn.image.source')]: () => providerDescriptor,
+};
 
 // GC start times; any GC inside a measured window would make that window's number meaningless.
 const gcTimes: number[] = [];
@@ -47,7 +58,7 @@ const ops: Record<string, () => void> = {
   'font = same string': () => {
     ctx.font = 'bold 48px IwnTest';
   },
-  'fillRect': () => {
+  fillRect: () => {
     ctx.fillRect(1, 2, 3, 4);
   },
   'setTransform(6 args)': () => {
@@ -182,7 +193,10 @@ for (const [name, fn] of Object.entries(ops)) {
   const t = performance.now();
   for (let i = 0; i < 200; i++) fn();
   const per = (performance.now() - t) / 200;
-  const warm = Math.max(2000, Math.min(30000, Math.round(150 / Math.max(per, 1e-4))));
+  const warm = Math.max(
+    2000,
+    Math.min(30000, Math.round(150 / Math.max(per, 1e-4))),
+  );
   // The smallest of the last three rounds counts: a real per-call allocation shows in every round, while code the
   // JIT installs during a round (old-space growth unrelated to the call) only shows in one.
   let best = Infinity;
@@ -204,5 +218,7 @@ for (const [name, fn] of Object.entries(ops)) {
 // Let the observer deliver the GC entries, then flag measurements that a GC interrupted.
 await new Promise((r) => setTimeout(r, 50));
 obs.disconnect();
-const interrupted = windows.filter(([, a, b]) => gcTimes.some((t) => t >= a && t <= b)).map(([name]) => name);
+const interrupted = windows
+  .filter(([, a, b]) => gcTimes.some((t) => t >= a && t <= b))
+  .map(([name]) => name);
 console.log(JSON.stringify({ results, interrupted }));

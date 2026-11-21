@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Host test addon: the generated GL natives built against Node's V8, so web/webgl runs on real GLES
 // (Mesa llvmpipe, surfaceless EGL) inside Node. `require('iwn_gl.node').gl` is the natives object.
 #include <node.h>

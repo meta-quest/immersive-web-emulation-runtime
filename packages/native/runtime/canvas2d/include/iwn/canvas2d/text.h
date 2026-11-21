@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Canvas 2D text: font faces (FreeType), shaping (HarfBuzz), per-character font fallback, TextMetrics and drawing.
 // Plain C++ (no V8).
 //

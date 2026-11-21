@@ -14,6 +14,9 @@ declare module 'whatwg-url/webidl2js-wrapper.js' {
   export default wrapper;
 }
 declare module 'punycode/punycode.es6.js' {
-  const punycode: { encode(input: string): string; decode(input: string): string };
+  const punycode: {
+    encode(input: string): string;
+    decode(input: string): string;
+  };
   export default punycode;
 }

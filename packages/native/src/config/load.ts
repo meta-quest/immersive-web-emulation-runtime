@@ -25,7 +25,11 @@ export interface LoadedNativeProject {
   configPath: string;
   target: ResolvedNativeTarget;
   /** Absolute paths of referenced files (they exist). */
-  files: { icon: string | null; keystore: string | null; splash: string | null };
+  files: {
+    icon: string | null;
+    keystore: string | null;
+    splash: string | null;
+  };
   warnings: ConfigIssue[];
 }
 

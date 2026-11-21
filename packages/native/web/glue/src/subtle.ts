@@ -12,10 +12,20 @@
 
 import { sha1 } from '@noble/hashes/legacy.js';
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
-import { bytesOf, enumerable, illegalConstructor, INTERNAL, tag } from './util.ts';
+import {
+  bytesOf,
+  enumerable,
+  illegalConstructor,
+  INTERNAL,
+  tag,
+} from './util.ts';
 
 function domException(message: string, name: string): Error {
-  const D = (globalThis as unknown as { DOMException: new (m: string, n: string) => Error }).DOMException;
+  const D = (
+    globalThis as unknown as {
+      DOMException: new (m: string, n: string) => Error;
+    }
+  ).DOMException;
   return new D(message, name);
 }
 
@@ -59,7 +69,10 @@ export class SubtleCrypto {
       }
       const name = normalizeDigestAlgorithm(algorithm);
       // Copy first: the spec snapshots the bytes before the promise is returned.
-      const bytes = bytesOf(data, "Failed to execute 'digest' on 'SubtleCrypto'").slice();
+      const bytes = bytesOf(
+        data,
+        "Failed to execute 'digest' on 'SubtleCrypto'",
+      ).slice();
       const out = DIGESTS[name]!(bytes);
       return Promise.resolve(out.slice().buffer as ArrayBuffer);
     } catch (e) {
@@ -87,7 +100,10 @@ for (const op of [
   Object.defineProperty(SubtleCrypto.prototype, op, {
     value: function (): Promise<never> {
       return Promise.reject(
-        domException(`SubtleCrypto.${op} is not supported by this runtime (digest only)`, 'NotSupportedError'),
+        domException(
+          `SubtleCrypto.${op} is not supported by this runtime (digest only)`,
+          'NotSupportedError',
+        ),
       );
     },
     writable: true,
@@ -95,7 +111,6 @@ for (const op of [
     enumerable: true,
   });
 }
-
 
 export function createSubtle(): SubtleCrypto {
   return new SubtleCrypto(INTERNAL);

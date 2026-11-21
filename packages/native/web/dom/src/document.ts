@@ -9,7 +9,19 @@
 // (DOM-6, DOM-7, DOM-10). The page's document follows the core's lifecycle state (readyState, visibilityState,
 // focus) and its URL (location); documents from DOMParser or createHTMLDocument are inert (their scripts never run).
 
-import { G, HTML_NS, SVG_NS, XMLNS_NS, defineHandler, documentURL, domException, lifecycle, lower, str, warn } from './env.ts';
+import {
+  G,
+  HTML_NS,
+  SVG_NS,
+  XMLNS_NS,
+  defineHandler,
+  documentURL,
+  domException,
+  lifecycle,
+  lower,
+  str,
+  warn,
+} from './env.ts';
 import { DOMRect, DOMRectList } from './geometry.ts';
 import {
   HTMLBodyElement,
@@ -24,7 +36,12 @@ import {
   SVGElement,
   SVGSVGElement,
 } from './html-elements.ts';
-import { isHeadElement, parseInto, serializeNode, type NodeFactory } from './html.ts';
+import {
+  isHeadElement,
+  parseInto,
+  serializeNode,
+  type NodeFactory,
+} from './html.ts';
 import {
   ALREADY_STARTED,
   Attr,
@@ -49,7 +66,10 @@ const ELEMENT_NAME = /^[A-Za-z_:][^\s"'>/=\x00-\x1f\x7f]*$/;
 
 function validName(name: string): string {
   if (!ELEMENT_NAME.test(name)) {
-    throw domException(`Failed to execute 'createElement' on 'Document': The tag name provided ('${name}') is not a valid name.`, 'InvalidCharacterError');
+    throw domException(
+      `Failed to execute 'createElement' on 'Document': The tag name provided ('${name}') is not a valid name.`,
+      'InvalidCharacterError',
+    );
   }
   return name;
 }
@@ -120,21 +140,42 @@ export class Document extends Node {
   get head(): Element | null {
     const html = this.documentElement;
     if (!html) return null;
-    for (const k of html._kids ?? []) if (k instanceof Element && k.localName === 'head' && k.namespaceURI === HTML_NS) return k;
+    for (const k of html._kids ?? [])
+      if (
+        k instanceof Element &&
+        k.localName === 'head' &&
+        k.namespaceURI === HTML_NS
+      )
+        return k;
     return null;
   }
   get body(): Element | null {
     const html = this.documentElement;
     if (!html) return null;
-    for (const k of html._kids ?? []) if (k instanceof Element && (k.localName === 'body' || k.localName === 'frameset') && k.namespaceURI === HTML_NS) return k;
+    for (const k of html._kids ?? [])
+      if (
+        k instanceof Element &&
+        (k.localName === 'body' || k.localName === 'frameset') &&
+        k.namespaceURI === HTML_NS
+      )
+        return k;
     return null;
   }
   set body(el: Element | null) {
-    if (!(el instanceof HTMLElement) || (el.localName !== 'body' && el.localName !== 'frameset')) {
-      throw domException("Failed to set the 'body' property on 'Document': The new body element is of type '" + (el ? (el as Element).tagName : 'null') + "'. It must be either a 'BODY' or 'FRAMESET' element.", 'HierarchyRequestError');
+    if (
+      !(el instanceof HTMLElement) ||
+      (el.localName !== 'body' && el.localName !== 'frameset')
+    ) {
+      throw domException(
+        "Failed to set the 'body' property on 'Document': The new body element is of type '" +
+          (el ? (el as Element).tagName : 'null') +
+          "'. It must be either a 'BODY' or 'FRAMESET' element.",
+        'HierarchyRequestError',
+      );
     }
     const html = this.documentElement;
-    if (!html) throw domException('No document element.', 'HierarchyRequestError');
+    if (!html)
+      throw domException('No document element.', 'HierarchyRequestError');
     const old = this.body;
     if (old) html.replaceChild(el, old);
     else html.appendChild(el);
@@ -148,7 +189,9 @@ export class Document extends Node {
       }
       return false;
     });
-    return t ? ((t as Element).textContent ?? '').replace(/[\t\n\f\r ]+/g, ' ').trim() : '';
+    return t
+      ? ((t as Element).textContent ?? '').replace(/[\t\n\f\r ]+/g, ' ').trim()
+      : '';
   }
   set title(v: string) {
     let t: Element | null = this.querySelector('title');
@@ -271,7 +314,8 @@ export class Document extends Node {
   }
   get links(): HTMLCollection {
     const out = new HTMLCollection();
-    for (const el of this.querySelectorAll('a[href],area[href]')) out.push(el as Element);
+    for (const el of this.querySelectorAll('a[href],area[href]'))
+      out.push(el as Element);
     return out;
   }
   exitFullscreen(): Promise<void> {
@@ -309,15 +353,21 @@ export class Document extends Node {
     return false;
   }
   open(): this {
-    warn('document.open() ignored: the document of a packaged app is never replaced');
+    warn(
+      'document.open() ignored: the document of a packaged app is never replaced',
+    );
     return this;
   }
   close(): void {}
   write(..._text: string[]): void {
-    warn('document.write() ignored: the document of a packaged app is never rewritten');
+    warn(
+      'document.write() ignored: the document of a packaged app is never rewritten',
+    );
   }
   writeln(..._text: string[]): void {
-    warn('document.writeln() ignored: the document of a packaged app is never rewritten');
+    warn(
+      'document.writeln() ignored: the document of a packaged app is never rewritten',
+    );
   }
   // --- factories (NodeFactory for the parser too) ---
   createElement(localName: string, _options?: unknown): Element {
@@ -336,12 +386,20 @@ export class Document extends Node {
         return img;
       }
     }
-    const C = HTML_TAGS[name] ?? (PLAIN_HTML_ELEMENT_TAGS.has(name) || name.includes('-') ? HTMLElement : HTMLUnknownElement);
+    const C =
+      HTML_TAGS[name] ??
+      (PLAIN_HTML_ELEMENT_TAGS.has(name) || name.includes('-')
+        ? HTMLElement
+        : HTMLUnknownElement);
     const el = new C(name, this);
     el._doc = this;
     return el;
   }
-  createElementNS(namespace: string | null, qualifiedName: string, _options?: unknown): Element {
+  createElementNS(
+    namespace: string | null,
+    qualifiedName: string,
+    _options?: unknown,
+  ): Element {
     const ns = namespace || null;
     const q = validName(str(qualifiedName));
     const colon = q.indexOf(':');
@@ -350,11 +408,18 @@ export class Document extends Node {
     let el: Element;
     if (ns === HTML_NS) {
       if (lower(local) === 'img' && !prefix) return this.createElement('img');
-      const C = HTML_TAGS[local] ?? (PLAIN_HTML_ELEMENT_TAGS.has(local) || local.includes('-') ? HTMLElement : HTMLUnknownElement);
+      const C =
+        HTML_TAGS[local] ??
+        (PLAIN_HTML_ELEMENT_TAGS.has(local) || local.includes('-')
+          ? HTMLElement
+          : HTMLUnknownElement);
       el = new C(local, this);
       el._prefix = prefix;
     } else if (ns === SVG_NS) {
-      el = local === 'svg' ? new SVGSVGElement(local, this) : new SVGElement(local, this);
+      el =
+        local === 'svg'
+          ? new SVGSVGElement(local, this)
+          : new SVGElement(local, this);
       el._prefix = prefix;
     } else {
       el = new Element(local, ns, prefix);
@@ -373,18 +438,29 @@ export class Document extends Node {
     return c;
   }
   createCDATASection(data: string): CDATASection {
-    if (this._isHTML) throw domException('This operation is not supported for HTML documents.', 'NotSupportedError');
+    if (this._isHTML)
+      throw domException(
+        'This operation is not supported for HTML documents.',
+        'NotSupportedError',
+      );
     const c = new CDATASection(str(data));
     c._doc = this;
     return c;
   }
-  createProcessingInstruction(target: string, data: string): ProcessingInstruction {
+  createProcessingInstruction(
+    target: string,
+    data: string,
+  ): ProcessingInstruction {
     const p = new ProcessingInstruction(str(data));
     p._target = str(target);
     p._doc = this;
     return p;
   }
-  createDocumentType(name: string, publicId: string, systemId: string): DocumentType {
+  createDocumentType(
+    name: string,
+    publicId: string,
+    systemId: string,
+  ): DocumentType {
     return this.implementation.createDocumentType(name, publicId, systemId);
   }
   createDocumentFragment(): DocumentFragment {
@@ -394,47 +470,96 @@ export class Document extends Node {
   }
   createAttribute(name: string): Attr {
     const n = this._isHTML ? lower(str(name)) : str(name);
-    const a = new Attr({ ns: null, prefix: null, local: n, name: n, value: '' });
+    const a = new Attr({
+      ns: null,
+      prefix: null,
+      local: n,
+      name: n,
+      value: '',
+    });
     a._doc = this;
     return a;
   }
   createAttributeNS(ns: string | null, qualifiedName: string): Attr {
     const q = str(qualifiedName);
     const colon = q.indexOf(':');
-    const a = new Attr({ ns: ns || null, prefix: colon > 0 ? q.slice(0, colon) : null, local: colon > 0 ? q.slice(colon + 1) : q, name: q, value: '' });
+    const a = new Attr({
+      ns: ns || null,
+      prefix: colon > 0 ? q.slice(0, colon) : null,
+      local: colon > 0 ? q.slice(colon + 1) : q,
+      name: q,
+      value: '',
+    });
     a._doc = this;
     return a;
   }
   createEvent(interfaceName: string): unknown {
     const n = lower(str(interfaceName));
     const map: Record<string, string> = {
-      event: 'Event', events: 'Event', htmlevents: 'Event', svgevents: 'Event', customevent: 'CustomEvent',
-      uievent: 'UIEvent', uievents: 'UIEvent', mouseevent: 'MouseEvent', mouseevents: 'MouseEvent',
-      keyboardevent: 'KeyboardEvent', keyevents: 'KeyboardEvent', focusevent: 'FocusEvent', messageevent: 'MessageEvent',
-      errorevent: 'ErrorEvent', pointerevent: 'PointerEvent', wheelevent: 'WheelEvent', storageevent: 'StorageEvent',
-      compositionevent: 'CompositionEvent', progressevent: 'ProgressEvent', hashchangeevent: 'HashChangeEvent',
-      popstateevent: 'PopStateEvent', pagetransitionevent: 'PageTransitionEvent', inputevent: 'InputEvent',
+      event: 'Event',
+      events: 'Event',
+      htmlevents: 'Event',
+      svgevents: 'Event',
+      customevent: 'CustomEvent',
+      uievent: 'UIEvent',
+      uievents: 'UIEvent',
+      mouseevent: 'MouseEvent',
+      mouseevents: 'MouseEvent',
+      keyboardevent: 'KeyboardEvent',
+      keyevents: 'KeyboardEvent',
+      focusevent: 'FocusEvent',
+      messageevent: 'MessageEvent',
+      errorevent: 'ErrorEvent',
+      pointerevent: 'PointerEvent',
+      wheelevent: 'WheelEvent',
+      storageevent: 'StorageEvent',
+      compositionevent: 'CompositionEvent',
+      progressevent: 'ProgressEvent',
+      hashchangeevent: 'HashChangeEvent',
+      popstateevent: 'PopStateEvent',
+      pagetransitionevent: 'PageTransitionEvent',
+      inputevent: 'InputEvent',
     };
     const C = map[n] ? G[map[n]!] : undefined;
-    if (typeof C !== 'function') throw domException(`The provided event type ('${interfaceName}') is invalid.`, 'NotSupportedError');
+    if (typeof C !== 'function')
+      throw domException(
+        `The provided event type ('${interfaceName}') is invalid.`,
+        'NotSupportedError',
+      );
     return new C('');
   }
   createRange(): Range {
     return new Range(this);
   }
-  createTreeWalker(root: Node, whatToShow = 0xffffffff, filter: unknown = null): TreeWalker {
+  createTreeWalker(
+    root: Node,
+    whatToShow = 0xffffffff,
+    filter: unknown = null,
+  ): TreeWalker {
     return new TreeWalker(root, whatToShow, filter);
   }
-  createNodeIterator(root: Node, whatToShow = 0xffffffff, filter: unknown = null): TreeWalker {
+  createNodeIterator(
+    root: Node,
+    whatToShow = 0xffffffff,
+    filter: unknown = null,
+  ): TreeWalker {
     return new TreeWalker(root, whatToShow, filter);
   }
   importNode<T extends Node>(node: T, deep = false): T {
-    if (node instanceof Document) throw domException('The node provided is a document, which may not be imported.', 'NotSupportedError');
+    if (node instanceof Document)
+      throw domException(
+        'The node provided is a document, which may not be imported.',
+        'NotSupportedError',
+      );
     const clone = cloneInto(node, this, deep);
     return clone as T;
   }
   adoptNode<T extends Node>(node: T): T {
-    if (node instanceof Document) throw domException('The node provided is a document, which may not be adopted.', 'NotSupportedError');
+    if (node instanceof Document)
+      throw domException(
+        'The node provided is a document, which may not be adopted.',
+        'NotSupportedError',
+      );
     node.parentNode?.removeChild(node);
     const visit = (n: Node) => {
       n._doc = this;
@@ -471,7 +596,8 @@ export class Document extends Node {
   }
   override cloneNode(deep = false): Node {
     const d = this._clone(this) as Document;
-    if (deep) for (const k of this._kids ?? []) d.appendChild(cloneInto(k, d, true));
+    if (deep)
+      for (const k of this._kids ?? []) d.appendChild(cloneInto(k, d, true));
     return d;
   }
   override get [Symbol.toStringTag](): string {
@@ -493,7 +619,18 @@ export interface Document {
   getElementsByTagNameNS(ns: string | null, name: string): HTMLCollection;
   getElementsByClassName(names: string): HTMLCollection;
 }
-for (const t of [...GLOBAL_HANDLERS, 'readystatechange', 'visibilitychange', 'pointerlockchange', 'pointerlockerror', 'fullscreenchange', 'fullscreenerror', 'selectstart', 'freeze', 'resume']) {
+for (const t of [
+  ...GLOBAL_HANDLERS,
+  'readystatechange',
+  'visibilitychange',
+  'pointerlockchange',
+  'pointerlockerror',
+  'fullscreenchange',
+  'fullscreenerror',
+  'selectstart',
+  'freeze',
+  'resume',
+]) {
   defineHandler(Document.prototype, t);
 }
 
@@ -508,10 +645,17 @@ export class XMLDocument extends Document {
 function cloneInto(node: Node, doc: Document, deep: boolean): Node {
   const c = node._clone(doc);
   c._doc = doc;
-  if (deep) for (const k of node._kids ?? []) c.appendChild(cloneInto(k, doc, true));
-  if (deep && node instanceof Element && node.localName === 'template' && (node as any)._content) {
+  if (deep)
+    for (const k of node._kids ?? []) c.appendChild(cloneInto(k, doc, true));
+  if (
+    deep &&
+    node instanceof Element &&
+    node.localName === 'template' &&
+    (node as any)._content
+  ) {
     const content = (c as any).content as Node;
-    for (const k of (node as any)._content._kids ?? []) content.appendChild(cloneInto(k, doc, true));
+    for (const k of (node as any)._content._kids ?? [])
+      content.appendChild(cloneInto(k, doc, true));
   }
   return c;
 }
@@ -521,7 +665,11 @@ export class DOMImplementation {
   constructor(doc: Document) {
     this._doc = doc;
   }
-  createDocumentType(name: string, publicId: string, systemId: string): DocumentType {
+  createDocumentType(
+    name: string,
+    publicId: string,
+    systemId: string,
+  ): DocumentType {
     const d = new DocumentType();
     d._name = str(name);
     d._publicId = str(publicId);
@@ -544,12 +692,17 @@ export class DOMImplementation {
     doc.appendChild(html);
     return doc;
   }
-  createDocument(namespace: string | null, qualifiedName: string | null, doctype: DocumentType | null = null): XMLDocument {
+  createDocument(
+    namespace: string | null,
+    qualifiedName: string | null,
+    doctype: DocumentType | null = null,
+  ): XMLDocument {
     const doc = new XMLDocument();
     if (namespace === HTML_NS) doc._contentType = 'application/xhtml+xml';
     else if (namespace === SVG_NS) doc._contentType = 'image/svg+xml';
     if (doctype) doc.appendChild(doctype);
-    if (qualifiedName) doc.appendChild(doc.createElementNS(namespace, qualifiedName));
+    if (qualifiedName)
+      doc.appendChild(doc.createElementNS(namespace, qualifiedName));
     return doc;
   }
   hasFeature(): boolean {
@@ -574,7 +727,13 @@ export function buildHTMLDocument(doc: Document, markup: string): void {
     }
     // doctype first
     const kids = [...(frag._kids ?? [])];
-    let html = kids.find((k): k is Element => k instanceof Element && k.localName === 'html' && k.namespaceURI === HTML_NS) ?? null;
+    let html =
+      kids.find(
+        (k): k is Element =>
+          k instanceof Element &&
+          k.localName === 'html' &&
+          k.namespaceURI === HTML_NS,
+      ) ?? null;
     let doctype: Node | null = null;
     const before: Node[] = [];
     for (const k of kids) {
@@ -584,21 +743,29 @@ export function buildHTMLDocument(doc: Document, markup: string): void {
     }
     if (!doctype) {
       const d = markup.match(/<!doctype\s+([^\s>]+)/i);
-      if (d) doctype = doc.implementation.createDocumentType(lower(d[1]!), '', '');
+      if (d)
+        doctype = doc.implementation.createDocumentType(lower(d[1]!), '', '');
     }
     if (!html) {
       html = doc.createElement('html');
-      for (const k of kids) if (k.nodeType !== 10 && !before.includes(k)) html.appendChild(k);
+      for (const k of kids)
+        if (k.nodeType !== 10 && !before.includes(k)) html.appendChild(k);
     } else {
       // content outside <html> (stray nodes after it) moves into it
-      for (const k of kids) if (k !== html && k.nodeType !== 10 && !before.includes(k)) html.appendChild(k);
+      for (const k of kids)
+        if (k !== html && k.nodeType !== 10 && !before.includes(k))
+          html.appendChild(k);
     }
     let head: Element | null = null;
     let body: Element | null = null;
     for (const k of html._kids ?? []) {
       if (k instanceof Element && k.namespaceURI === HTML_NS) {
         if (k.localName === 'head' && !head) head = k;
-        else if ((k.localName === 'body' || k.localName === 'frameset') && !body) body = k;
+        else if (
+          (k.localName === 'body' || k.localName === 'frameset') &&
+          !body
+        )
+          body = k;
       }
     }
     if (!head) {
@@ -619,7 +786,12 @@ export function buildHTMLDocument(doc: Document, markup: string): void {
         html.removeChild(k);
         continue;
       }
-      if (!seenBodyContent && k instanceof Element && isHeadElement(k.localName)) head.appendChild(k);
+      if (
+        !seenBodyContent &&
+        k instanceof Element &&
+        isHeadElement(k.localName)
+      )
+        head.appendChild(k);
       else if (k.nodeType === 8 && !seenBodyContent) continue;
       else {
         seenBodyContent = true;
@@ -630,8 +802,10 @@ export function buildHTMLDocument(doc: Document, markup: string): void {
     if (doctype) doc.appendChild(doctype);
     for (const c of before) doc.appendChild(c);
     doc.appendChild(html);
-    for (const s of doc.getElementsByTagName('script')) (s as any)[ALREADY_STARTED] = true;
-    for (const s of doc.querySelectorAll('link,style')) (s as any)[ALREADY_STARTED] = true;
+    for (const s of doc.getElementsByTagName('script'))
+      (s as any)[ALREADY_STARTED] = true;
+    for (const s of doc.querySelectorAll('link,style'))
+      (s as any)[ALREADY_STARTED] = true;
   } finally {
     doc._parsing = false;
   }
@@ -645,24 +819,35 @@ export class DOMParser {
       buildHTMLDocument(doc, str(text));
       return doc;
     }
-    if (t === 'text/xml' || t === 'application/xml' || t === 'application/xhtml+xml' || t === 'image/svg+xml') {
+    if (
+      t === 'text/xml' ||
+      t === 'application/xml' ||
+      t === 'application/xhtml+xml' ||
+      t === 'image/svg+xml'
+    ) {
       const doc = new XMLDocument();
       doc._contentType = t;
       doc._parsing = true;
       try {
         parseInto(doc, str(text), doc as unknown as NodeFactory, { xml: true });
-        for (const k of [...(doc._kids ?? [])]) if (k instanceof Text) doc.removeChild(k);
+        for (const k of [...(doc._kids ?? [])])
+          if (k instanceof Text) doc.removeChild(k);
       } finally {
         doc._parsing = false;
       }
       if (!doc.documentElement) {
-        const err = doc.createElementNS('http://www.mozilla.org/newlayout/xml/parsererror.xml', 'parsererror');
+        const err = doc.createElementNS(
+          'http://www.mozilla.org/newlayout/xml/parsererror.xml',
+          'parsererror',
+        );
         err.textContent = 'XML parsing error: no root element found';
         doc.appendChild(err);
       }
       return doc;
     }
-    throw new TypeError(`Failed to execute 'parseFromString' on 'DOMParser': The provided value '${t}' is not a valid enum value of type DOMParserSupportedType.`);
+    throw new TypeError(
+      `Failed to execute 'parseFromString' on 'DOMParser': The provided value '${t}' is not a valid enum value of type DOMParserSupportedType.`,
+    );
   }
   get [Symbol.toStringTag](): string {
     return 'DOMParser';
@@ -671,9 +856,17 @@ export class DOMParser {
 
 export class XMLSerializer {
   serializeToString(node: Node): string {
-    if (!(node instanceof Node)) throw new TypeError("Failed to execute 'serializeToString' on 'XMLSerializer': parameter 1 is not of type 'Node'.");
+    if (!(node instanceof Node))
+      throw new TypeError(
+        "Failed to execute 'serializeToString' on 'XMLSerializer': parameter 1 is not of type 'Node'.",
+      );
     let out = serializeNode(node as any, true);
-    if (node instanceof Element && node.namespaceURI && !node.hasAttribute('xmlns') && !node.getAttributeNS(XMLNS_NS, 'xmlns')) {
+    if (
+      node instanceof Element &&
+      node.namespaceURI &&
+      !node.hasAttribute('xmlns') &&
+      !node.getAttributeNS(XMLNS_NS, 'xmlns')
+    ) {
       out = out.replace(/^<([^\s/>]+)/, `<$1 xmlns="${node.namespaceURI}"`);
     }
     return out;
@@ -697,10 +890,14 @@ export class Range {
     this.endContainer = this._doc;
   }
   get collapsed(): boolean {
-    return this.startContainer === this.endContainer && this.startOffset === this.endOffset;
+    return (
+      this.startContainer === this.endContainer &&
+      this.startOffset === this.endOffset
+    );
   }
   get commonAncestorContainer(): Node {
-    for (let n: Node | null = this.startContainer; n; n = n.parentNode) if (n.contains(this.endContainer)) return n;
+    for (let n: Node | null = this.startContainer; n; n = n.parentNode)
+      if (n.contains(this.endContainer)) return n;
     return this._doc;
   }
   setStart(node: Node, offset: number): void {
@@ -744,8 +941,11 @@ export class Range {
   detach(): void {}
   createContextualFragment(markup: string): DocumentFragment {
     const frag = this._doc.createDocumentFragment();
-    const ctx = this.startContainer instanceof Element ? this.startContainer : null;
-    parseInto(frag, str(markup), this._doc as unknown as NodeFactory, { contextNs: ctx?.namespaceURI ?? HTML_NS });
+    const ctx =
+      this.startContainer instanceof Element ? this.startContainer : null;
+    parseInto(frag, str(markup), this._doc as unknown as NodeFactory, {
+      contextNs: ctx?.namespaceURI ?? HTML_NS,
+    });
     return frag;
   }
   getBoundingClientRect(): DOMRect {
@@ -793,7 +993,10 @@ export class Selection {
   collapseToEnd(): void {}
   selectAllChildren(): void {}
   getRangeAt(_i: number): never {
-    throw domException('The index provided is not a valid index.', 'IndexSizeError');
+    throw domException(
+      'The index provided is not a valid index.',
+      'IndexSizeError',
+    );
   }
   containsNode(): boolean {
     return false;
@@ -811,9 +1014,19 @@ export function getPageSelection(): Selection {
 }
 
 export const NodeFilter = Object.freeze({
-  FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3, SHOW_ALL: 0xffffffff, SHOW_ELEMENT: 0x1, SHOW_ATTRIBUTE: 0x2,
-  SHOW_TEXT: 0x4, SHOW_CDATA_SECTION: 0x8, SHOW_PROCESSING_INSTRUCTION: 0x40, SHOW_COMMENT: 0x80, SHOW_DOCUMENT: 0x100,
-  SHOW_DOCUMENT_TYPE: 0x200, SHOW_DOCUMENT_FRAGMENT: 0x400,
+  FILTER_ACCEPT: 1,
+  FILTER_REJECT: 2,
+  FILTER_SKIP: 3,
+  SHOW_ALL: 0xffffffff,
+  SHOW_ELEMENT: 0x1,
+  SHOW_ATTRIBUTE: 0x2,
+  SHOW_TEXT: 0x4,
+  SHOW_CDATA_SECTION: 0x8,
+  SHOW_PROCESSING_INSTRUCTION: 0x40,
+  SHOW_COMMENT: 0x80,
+  SHOW_DOCUMENT: 0x100,
+  SHOW_DOCUMENT_TYPE: 0x200,
+  SHOW_DOCUMENT_FRAGMENT: 0x400,
 });
 
 /** TreeWalker / NodeIterator in document order (nextNode/previousNode, the walker's navigation methods). */
@@ -833,13 +1046,17 @@ export class TreeWalker {
   }
   /** @internal */ _accept(n: Node): number {
     if (!((1 << (n.nodeType - 1)) & this.whatToShow)) return 3;
-    const f = this.filter as { acceptNode?: (n: Node) => number } | ((n: Node) => number) | null;
+    const f = this.filter as
+      | { acceptNode?: (n: Node) => number }
+      | ((n: Node) => number)
+      | null;
     if (!f) return 1;
     return typeof f === 'function' ? f(n) : (f.acceptNode?.(n) ?? 1);
   }
   /** @internal */ _following(n: Node): Node | null {
     if (n.firstChild) return n.firstChild;
-    for (let x: Node | null = n; x && x !== this.root; x = x.parentNode) if (x.nextSibling) return x.nextSibling;
+    for (let x: Node | null = n; x && x !== this.root; x = x.parentNode)
+      if (x.nextSibling) return x.nextSibling;
     return null;
   }
   /** @internal */ _preceding(n: Node): Node | null {
@@ -862,26 +1079,34 @@ export class TreeWalker {
     return null;
   }
   parentNode(): Node | null {
-    for (let n = this.currentNode.parentNode; n && n !== this.root.parentNode; n = n.parentNode) {
+    for (
+      let n = this.currentNode.parentNode;
+      n && n !== this.root.parentNode;
+      n = n.parentNode
+    ) {
       if (this._accept(n) === 1) return (this.currentNode = n);
       if (n === this.root) break;
     }
     return null;
   }
   firstChild(): Node | null {
-    for (let n = this.currentNode.firstChild; n; n = n.nextSibling) if (this._accept(n) === 1) return (this.currentNode = n);
+    for (let n = this.currentNode.firstChild; n; n = n.nextSibling)
+      if (this._accept(n) === 1) return (this.currentNode = n);
     return null;
   }
   lastChild(): Node | null {
-    for (let n = this.currentNode.lastChild; n; n = n.previousSibling) if (this._accept(n) === 1) return (this.currentNode = n);
+    for (let n = this.currentNode.lastChild; n; n = n.previousSibling)
+      if (this._accept(n) === 1) return (this.currentNode = n);
     return null;
   }
   nextSibling(): Node | null {
-    for (let n = this.currentNode.nextSibling; n; n = n.nextSibling) if (this._accept(n) === 1) return (this.currentNode = n);
+    for (let n = this.currentNode.nextSibling; n; n = n.nextSibling)
+      if (this._accept(n) === 1) return (this.currentNode = n);
     return null;
   }
   previousSibling(): Node | null {
-    for (let n = this.currentNode.previousSibling; n; n = n.previousSibling) if (this._accept(n) === 1) return (this.currentNode = n);
+    for (let n = this.currentNode.previousSibling; n; n = n.previousSibling)
+      if (this._accept(n) === 1) return (this.currentNode = n);
     return null;
   }
   detach(): void {}

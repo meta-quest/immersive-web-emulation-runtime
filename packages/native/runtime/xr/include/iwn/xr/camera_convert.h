@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The V8-free, Camera2-free parts of the passthrough camera (XR-CAM-1): YUV 4:2:0 → RGBA8 conversion of a camera
 // image and the device list's naming. Host-tested; the Camera2 side is src/android/xr_camera.cc.
 //

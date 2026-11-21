@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // On-device side of the GL-CTS-1 runner: the app's main module (bundled by cts/device-build.mjs into a runtime
 // app whose preludes are web/glue and the shipped dist/webgl.min.js). It runs one Khronos WebGL conformance page
 // in this page context through page.mjs: __ctsSetup(payload), the page's scripts (run by the host), then
@@ -43,15 +50,22 @@ g.__ctsSetup = (payload) => {
     timeout: payload.timeout ?? 30000,
     // src scripts of the markup are run by the host: report them present (any text) so they are not "missing"
     readText: (rel) =>
-      Object.prototype.hasOwnProperty.call(files, rel) ? files[rel] : (payload.srcScripts ?? []).includes(rel) ? '' : null,
+      Object.prototype.hasOwnProperty.call(files, rel)
+        ? files[rel]
+        : (payload.srcScripts ?? []).includes(rel)
+          ? ''
+          : null,
     // timer strings and dynamically inserted <script> elements only (markup scripts go through the host)
-    evalScript: (code, filename) => globalEval(`${code}\n//# sourceURL=${filename}`),
+    evalScript: (code, filename) =>
+      globalEval(`${code}\n//# sourceURL=${filename}`),
     timers,
     now,
     globals: {},
     installBinding: () => {
       if (!g.__iwnWebGL || typeof g.__iwnWebGL.createContext !== 'function') {
-        throw new Error('the WebGL prelude (dist/webgl.min.js) is not installed in this app');
+        throw new Error(
+          'the WebGL prelude (dist/webgl.min.js) is not installed in this app',
+        );
       }
     },
     webglOptions: {},
@@ -60,13 +74,22 @@ g.__ctsSetup = (payload) => {
     deferScripts: true,
   });
   // inline scripts carry their code; src scripts only their file name (the host has the files)
-  return JSON.stringify(page.scripts.map((s) => ({ filename: s.filename, code: s.inline ? s.code : undefined })));
+  return JSON.stringify(
+    page.scripts.map((s) => ({
+      filename: s.filename,
+      code: s.inline ? s.code : undefined,
+    })),
+  );
 };
 /** A markup script threw (or failed to compile): record it like the host harness does. */
 g.__ctsScriptError = (index, description) => {
   const d = String(description);
   const m = /^(\w*Error|\w+): ([^\n]*)/.exec(d);
-  page.scriptError(page.scripts[index], { name: m ? m[1] : 'Error', message: m ? m[2] : d, stack: d });
+  page.scriptError(page.scripts[index], {
+    name: m ? m[1] : 'Error',
+    message: m ? m[2] : d,
+    stack: d,
+  });
 };
 /** Phase 2: load events, then wait for the page to finish; resolves with the JSON summary. */
 g.__ctsFinish = () =>

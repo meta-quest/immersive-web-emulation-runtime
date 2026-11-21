@@ -1,11 +1,21 @@
 {
   "xr": {
     "disableExtensions": [
-      "XR_KHR_convert_timespec_time", "XR_FB_display_refresh_rate", "XR_FB_foveation",
-      "XR_FB_foveation_configuration", "XR_FB_swapchain_update_state", "XR_FB_swapchain_update_state_opengl_es",
-      "XR_FB_color_space", "XR_EXT_performance_settings", "XR_EXT_hand_tracking", "XR_FB_hand_tracking_aim",
-      "XR_EXT_hand_interaction", "XR_META_hand_tracking_microgestures",
-      "XR_META_touch_controller_plus", "XR_FB_touch_controller_pro", "XR_FB_passthrough",
+      "XR_KHR_convert_timespec_time",
+      "XR_FB_display_refresh_rate",
+      "XR_FB_foveation",
+      "XR_FB_foveation_configuration",
+      "XR_FB_swapchain_update_state",
+      "XR_FB_swapchain_update_state_opengl_es",
+      "XR_FB_color_space",
+      "XR_EXT_performance_settings",
+      "XR_EXT_hand_tracking",
+      "XR_FB_hand_tracking_aim",
+      "XR_EXT_hand_interaction",
+      "XR_META_hand_tracking_microgestures",
+      "XR_META_touch_controller_plus",
+      "XR_FB_touch_controller_pro",
+      "XR_FB_passthrough",
       "XR_KHR_composition_layer_cylinder"
     ]
   }

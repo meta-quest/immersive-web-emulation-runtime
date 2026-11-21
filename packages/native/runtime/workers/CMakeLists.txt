@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # runtime/workers: Worker, MessageChannel/MessagePort and structured clone across isolates (spec 05, WRK-*).
 #
 # Targets:

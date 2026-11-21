@@ -16,7 +16,12 @@
 import { checkOrigin } from './allowlist.ts';
 import { domException, type NetEnv, utf8Decode } from './env.ts';
 import { fetchWith, processDataURL, type FetchContext } from './fetch.ts';
-import { Headers, headerList, headersFromPairs, isForbiddenRequestHeader } from './headers.ts';
+import {
+  Headers,
+  headerList,
+  headersFromPairs,
+  isForbiddenRequestHeader,
+} from './headers.ts';
 import { InnerBody, mimeEssence } from './body.ts';
 import { Request, requestState } from './request.ts';
 import { makeResponse, type Response } from './response.ts';
@@ -27,14 +32,32 @@ export function setXhrContext(ctx: FetchContext | null): void {
 }
 
 const TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
-const EVENTS = ['loadstart', 'progress', 'abort', 'error', 'load', 'timeout', 'loadend'] as const;
+const EVENTS = [
+  'loadstart',
+  'progress',
+  'abort',
+  'error',
+  'load',
+  'timeout',
+  'loadend',
+] as const;
 
 type Handler = ((this: unknown, ev: Event) => unknown) | null;
 
-function progressEvent(type: string, loaded: number, total: number, computable: boolean): Event {
-  const PE = (globalThis as { ProgressEvent?: typeof ProgressEvent }).ProgressEvent;
+function progressEvent(
+  type: string,
+  loaded: number,
+  total: number,
+  computable: boolean,
+): Event {
+  const PE = (globalThis as { ProgressEvent?: typeof ProgressEvent })
+    .ProgressEvent;
   if (PE) return new PE(type, { lengthComputable: computable, loaded, total });
-  const e = new Event(type) as Event & { loaded: number; total: number; lengthComputable: boolean };
+  const e = new Event(type) as Event & {
+    loaded: number;
+    total: number;
+    lengthComputable: boolean;
+  };
   Object.defineProperties(e, {
     loaded: { value: loaded },
     total: { value: total },
@@ -146,16 +169,29 @@ export class XMLHttpRequest extends XHREventTarget {
     return this.#withCredentials;
   }
   set withCredentials(v: boolean) {
-    if (this.#state !== 0 && this.#state !== 1) throw domException('withCredentials can only be set before send()', 'InvalidStateError');
-    if (this.#send) throw domException('withCredentials can only be set before send()', 'InvalidStateError');
+    if (this.#state !== 0 && this.#state !== 1)
+      throw domException(
+        'withCredentials can only be set before send()',
+        'InvalidStateError',
+      );
+    if (this.#send)
+      throw domException(
+        'withCredentials can only be set before send()',
+        'InvalidStateError',
+      );
     this.#withCredentials = !!v;
   }
   get responseType(): XMLHttpRequestResponseType {
     return this.#responseType;
   }
   set responseType(v: XMLHttpRequestResponseType) {
-    if (this.#state === 3 || this.#state === 4) throw domException('responseType cannot be set after loading started', 'InvalidStateError');
-    if (['', 'arraybuffer', 'blob', 'document', 'json', 'text'].includes(v)) this.#responseType = v;
+    if (this.#state === 3 || this.#state === 4)
+      throw domException(
+        'responseType cannot be set after loading started',
+        'InvalidStateError',
+      );
+    if (['', 'arraybuffer', 'blob', 'document', 'json', 'text'].includes(v))
+      this.#responseType = v;
   }
   get status(): number {
     return this.#status;
@@ -167,12 +203,27 @@ export class XMLHttpRequest extends XHREventTarget {
     return this.#responseURL;
   }
 
-  open(method: string, url: string | URL, async = true, username?: string | null, password?: string | null): void {
+  open(
+    method: string,
+    url: string | URL,
+    async = true,
+    username?: string | null,
+    password?: string | null,
+  ): void {
     method = String(method);
-    if (!TOKEN.test(method)) throw domException(`'${method}' is not a valid HTTP method.`, 'SyntaxError');
+    if (!TOKEN.test(method))
+      throw domException(
+        `'${method}' is not a valid HTTP method.`,
+        'SyntaxError',
+      );
     const upper = method.toUpperCase();
-    if (upper === 'CONNECT' || upper === 'TRACE' || upper === 'TRACK') throw domException(`'${method}' HTTP method is unsupported.`, 'SecurityError');
-    if (['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'].includes(upper)) method = upper;
+    if (upper === 'CONNECT' || upper === 'TRACE' || upper === 'TRACK')
+      throw domException(
+        `'${method}' HTTP method is unsupported.`,
+        'SecurityError',
+      );
+    if (['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'].includes(upper))
+      method = upper;
     let parsed: URL;
     try {
       const base = this.#ctx?.env.baseURL();
@@ -180,8 +231,10 @@ export class XMLHttpRequest extends XHREventTarget {
     } catch {
       throw domException(`Invalid URL '${String(url)}'`, 'SyntaxError');
     }
-    if (username !== undefined && username !== null) parsed.username = String(username);
-    if (password !== undefined && password !== null) parsed.password = String(password);
+    if (username !== undefined && username !== null)
+      parsed.username = String(username);
+    if (password !== undefined && password !== null)
+      parsed.password = String(password);
     const sync = arguments.length >= 3 && !async;
     if (sync && typeof this.#ctx?.env.natives?.httpSync !== 'function') {
       throw domException(
@@ -203,11 +256,23 @@ export class XMLHttpRequest extends XHREventTarget {
   }
 
   setRequestHeader(name: string, value: string): void {
-    if (this.#state !== 1 || this.#send) throw domException("Failed to execute 'setRequestHeader': The object's state must be OPENED.", 'InvalidStateError');
+    if (this.#state !== 1 || this.#send)
+      throw domException(
+        "Failed to execute 'setRequestHeader': The object's state must be OPENED.",
+        'InvalidStateError',
+      );
     name = String(name);
     value = String(value).replace(/^[\t\n\r ]+|[\t\n\r ]+$/g, '');
-    if (!TOKEN.test(name)) throw domException(`'${name}' is not a valid HTTP header field name.`, 'SyntaxError');
-    if (/[\0\r\n]/.test(value)) throw domException(`'${value}' is not a valid HTTP header field value.`, 'SyntaxError');
+    if (!TOKEN.test(name))
+      throw domException(
+        `'${name}' is not a valid HTTP header field name.`,
+        'SyntaxError',
+      );
+    if (/[\0\r\n]/.test(value))
+      throw domException(
+        `'${value}' is not a valid HTTP header field value.`,
+        'SyntaxError',
+      );
     const lower = name.toLowerCase();
     if (isForbiddenRequestHeader(lower, value)) return;
     const existing = this.#headers.find(([n]) => n === lower);
@@ -216,12 +281,21 @@ export class XMLHttpRequest extends XHREventTarget {
   }
 
   overrideMimeType(mime: string): void {
-    if (this.#state === 3 || this.#state === 4) throw domException('overrideMimeType() cannot be called after loading started', 'InvalidStateError');
-    this.#overrideMime = mimeEssence(String(mime)) || 'application/octet-stream';
+    if (this.#state === 3 || this.#state === 4)
+      throw domException(
+        'overrideMimeType() cannot be called after loading started',
+        'InvalidStateError',
+      );
+    this.#overrideMime =
+      mimeEssence(String(mime)) || 'application/octet-stream';
   }
 
   send(body: unknown = null): void {
-    if (this.#state !== 1 || this.#send) throw domException("Failed to execute 'send': The object's state must be OPENED.", 'InvalidStateError');
+    if (this.#state !== 1 || this.#send)
+      throw domException(
+        "Failed to execute 'send': The object's state must be OPENED.",
+        'InvalidStateError',
+      );
     const ctx = this.#ctx;
     const url = this.#url!;
     if (this.#method === 'GET' || this.#method === 'HEAD') body = null;
@@ -233,7 +307,8 @@ export class XMLHttpRequest extends XHREventTarget {
     this.#abort = ac;
     const hasUploadBody = body !== null && body !== undefined;
     this.dispatchEvent(progressEvent('loadstart', 0, 0, false));
-    if (hasUploadBody) this.#upload.dispatchEvent(progressEvent('loadstart', 0, 0, false));
+    if (hasUploadBody)
+      this.#upload.dispatchEvent(progressEvent('loadstart', 0, 0, false));
     if (!ctx) {
       queueMicrotask(() => this.#requestError(gen, 'error'));
       return;
@@ -245,7 +320,10 @@ export class XMLHttpRequest extends XHREventTarget {
         this.#requestError(gen, 'timeout');
       }, this.#timeout);
     }
-    const doc = typeof body === 'object' && body !== null && (body as { nodeType?: number }).nodeType === 9;
+    const doc =
+      typeof body === 'object' &&
+      body !== null &&
+      (body as { nodeType?: number }).nodeType === 9;
     const init = {
       method: this.#method,
       headers: this.#headers,
@@ -257,7 +335,8 @@ export class XMLHttpRequest extends XHREventTarget {
     fetchWith(ctx, url.href, init).then(
       (resp) => this.#onResponse(gen, resp, hasUploadBody),
       () => {
-        if (gen === this.#generation && this.#send) this.#requestError(gen, 'error');
+        if (gen === this.#generation && this.#send)
+          this.#requestError(gen, 'error');
       },
     );
   }
@@ -265,7 +344,11 @@ export class XMLHttpRequest extends XHREventTarget {
   abort(): void {
     const gen = this.#generation;
     this.#terminate();
-    if ((this.#state === 1 && this.#send) || this.#state === 2 || this.#state === 3) {
+    if (
+      (this.#state === 1 && this.#send) ||
+      this.#state === 2 ||
+      this.#state === 3
+    ) {
       this.#requestError(gen, 'abort');
     }
     if (this.#state === 4) {
@@ -288,24 +371,32 @@ export class XMLHttpRequest extends XHREventTarget {
 
   get responseText(): string {
     if (this.#responseType !== '' && this.#responseType !== 'text') {
-      throw domException("The value is only accessible if the object's 'responseType' is '' or 'text'.", 'InvalidStateError');
+      throw domException(
+        "The value is only accessible if the object's 'responseType' is '' or 'text'.",
+        'InvalidStateError',
+      );
     }
     if (this.#state !== 3 && this.#state !== 4) return '';
     return this.#text();
   }
 
   get response(): unknown {
-    if (this.#responseType === '' || this.#responseType === 'text') return this.responseText;
+    if (this.#responseType === '' || this.#responseType === 'text')
+      return this.responseText;
     if (this.#state !== 4 || this.#error) return null;
     if (this.#responseObject !== undefined) return this.#responseObject;
     const bytes = this.#allBytes();
     switch (this.#responseType) {
       case 'arraybuffer':
         this.#responseObject =
-          bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer : bytes.slice().buffer;
+          bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+            ? bytes.buffer
+            : bytes.slice().buffer;
         break;
       case 'blob':
-        this.#responseObject = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: this.#finalMime() });
+        this.#responseObject = new Blob([bytes as Uint8Array<ArrayBuffer>], {
+          type: this.#finalMime(),
+        });
         break;
       case 'json':
         try {
@@ -327,7 +418,10 @@ export class XMLHttpRequest extends XHREventTarget {
   // --- internals ---
 
   #finalMime(): string {
-    return this.#overrideMime ?? mimeEssence(this.#response?.headers.get('content-type') ?? null);
+    return (
+      this.#overrideMime ??
+      mimeEssence(this.#response?.headers.get('content-type') ?? null)
+    );
   }
 
   #allBytes(): Uint8Array {
@@ -366,7 +460,11 @@ export class XMLHttpRequest extends XHREventTarget {
     this.#timer = null;
   }
 
-  async #onResponse(gen: number, resp: Response, hadUpload: boolean): Promise<void> {
+  async #onResponse(
+    gen: number,
+    resp: Response,
+    hadUpload: boolean,
+  ): Promise<void> {
     if (gen !== this.#generation) return;
     if (hadUpload) {
       this.#upload.dispatchEvent(progressEvent('progress', 0, 0, false));
@@ -397,7 +495,9 @@ export class XMLHttpRequest extends XHREventTarget {
           this.#bytes = null;
           if (this.#state === 2) this.#state = 3;
           this.dispatchEvent(new Event('readystatechange'));
-          this.dispatchEvent(progressEvent('progress', this.#received, total, total > 0));
+          this.dispatchEvent(
+            progressEvent('progress', this.#received, total, total > 0),
+          );
         }
       } catch {
         if (gen === this.#generation) this.#requestError(gen, 'error');
@@ -411,7 +511,9 @@ export class XMLHttpRequest extends XHREventTarget {
     this.#send = false;
     this.dispatchEvent(new Event('readystatechange'));
     this.dispatchEvent(progressEvent('load', this.#received, total, total > 0));
-    this.dispatchEvent(progressEvent('loadend', this.#received, total, total > 0));
+    this.dispatchEvent(
+      progressEvent('loadend', this.#received, total, total > 0),
+    );
   }
 
   /** XHR send() with the synchronous flag (workers): blocks until the response is complete. */
@@ -423,7 +525,10 @@ export class XMLHttpRequest extends XHREventTarget {
     const gen = ++this.#generation;
     let request: Request;
     try {
-      const doc = typeof body === 'object' && body !== null && (body as { nodeType?: number }).nodeType === 9;
+      const doc =
+        typeof body === 'object' &&
+        body !== null &&
+        (body as { nodeType?: number }).nodeType === 9;
       request = new Request(url.href, {
         method: this.#method,
         headers: this.#headers,
@@ -431,15 +536,25 @@ export class XMLHttpRequest extends XHREventTarget {
         credentials: this.#withCredentials ? 'include' : 'same-origin',
       });
     } catch (e) {
-      return this.#syncError(gen, 'NetworkError', `XMLHttpRequest: ${(e as Error).message}`);
+      return this.#syncError(
+        gen,
+        'NetworkError',
+        `XMLHttpRequest: ${(e as Error).message}`,
+      );
     }
     const s = requestState(request);
     let bytes: Uint8Array | null = null;
     if (s.body) {
       const c = s.body.content;
       if (c.kind === 'bytes') bytes = c.bytes;
-      else if (c.kind === 'blob' && ctx.env.glue?.blobBytes) bytes = ctx.env.glue.blobBytes(c.blob);
-      else return this.#syncError(gen, 'NotSupportedError', 'XMLHttpRequest: this body type cannot be sent synchronously');
+      else if (c.kind === 'blob' && ctx.env.glue?.blobBytes)
+        bytes = ctx.env.glue.blobBytes(c.blob);
+      else
+        return this.#syncError(
+          gen,
+          'NotSupportedError',
+          'XMLHttpRequest: this body type cannot be sent synchronously',
+        );
     }
     const natives = ctx.env.natives!;
     const href = s.url.href;
@@ -449,7 +564,10 @@ export class XMLHttpRequest extends XHREventTarget {
     let responseURL = href;
     let data: Uint8Array;
     let type: 'basic' | 'cors' = 'basic';
-    if ((s.url.protocol === 'https:' || s.url.protocol === 'http:') && s.url.origin === ctx.appOrigin) {
+    if (
+      (s.url.protocol === 'https:' || s.url.protocol === 'http:') &&
+      s.url.origin === ctx.appOrigin
+    ) {
       if (s.method !== 'GET' && s.method !== 'HEAD') {
         status = 405;
         statusText = 'Method Not Allowed';
@@ -457,40 +575,77 @@ export class XMLHttpRequest extends XHREventTarget {
         data = new Uint8Array(0);
       } else {
         const r = natives.readAssetSync?.(s.url.pathname);
-        if (!r || (r.status !== 200 && r.status !== 404)) return this.#syncError(gen, 'NetworkError', `XMLHttpRequest: cannot read ${href}`);
+        if (!r || (r.status !== 200 && r.status !== 404))
+          return this.#syncError(
+            gen,
+            'NetworkError',
+            `XMLHttpRequest: cannot read ${href}`,
+          );
         status = r.status;
         statusText = r.status === 200 ? 'OK' : 'Not Found';
         headers = new Headers();
-        data = r.status === 200 && r.buffer ? new Uint8Array(r.buffer) : new Uint8Array(0);
-        if (r.status === 200) headerList(headers).push(['content-length', String(data.byteLength)], ['content-type', r.mime]);
-        else headerList(headers).push(['content-type', 'text/plain;charset=UTF-8']);
+        data =
+          r.status === 200 && r.buffer
+            ? new Uint8Array(r.buffer)
+            : new Uint8Array(0);
+        if (r.status === 200)
+          headerList(headers).push(
+            ['content-length', String(data.byteLength)],
+            ['content-type', r.mime],
+          );
+        else
+          headerList(headers).push([
+            'content-type',
+            'text/plain;charset=UTF-8',
+          ]);
         if (s.method === 'HEAD') data = new Uint8Array(0);
       }
     } else if (s.url.protocol === 'data:') {
       const parsed = processDataURL(href);
-      if (!parsed) return this.#syncError(gen, 'NetworkError', 'XMLHttpRequest: malformed data: URL');
+      if (!parsed)
+        return this.#syncError(
+          gen,
+          'NetworkError',
+          'XMLHttpRequest: malformed data: URL',
+        );
       status = 200;
       statusText = 'OK';
       headers = new Headers();
       headerList(headers).push(['content-type', parsed.mime]);
       data = parsed.body;
     } else if (s.url.protocol === 'blob:') {
-      const blob = s.method === 'GET' ? (ctx.env.glue?.blobUrls?.resolve(href.split('#')[0]) ?? null) : null;
-      if (!blob || !ctx.env.glue?.blobBytes) return this.#syncError(gen, 'NetworkError', `XMLHttpRequest: cannot load ${href}`);
+      const blob =
+        s.method === 'GET'
+          ? (ctx.env.glue?.blobUrls?.resolve(href.split('#')[0]) ?? null)
+          : null;
+      if (!blob || !ctx.env.glue?.blobBytes)
+        return this.#syncError(
+          gen,
+          'NetworkError',
+          `XMLHttpRequest: cannot load ${href}`,
+        );
       data = ctx.env.glue.blobBytes(blob);
       status = 200;
       statusText = 'OK';
       headers = new Headers();
-      headerList(headers).push(['content-length', String(data.byteLength)], ['content-type', blob.type]);
+      headerList(headers).push(
+        ['content-length', String(data.byteLength)],
+        ['content-type', blob.type],
+      );
     } else if (s.url.protocol === 'http:' || s.url.protocol === 'https:') {
       const verdict = checkOrigin(ctx.allow, s.url, ctx.env.config.debug);
       if (verdict !== 'allowed') {
         ctx.blocked.report(s.url, verdict);
-        return this.#syncError(gen, 'NetworkError', `XMLHttpRequest: origin not allowed (native.network.allow): ${href}`);
+        return this.#syncError(
+          gen,
+          'NetworkError',
+          `XMLHttpRequest: origin not allowed (native.network.allow): ${href}`,
+        );
       }
       const flat: string[] = [];
       for (const [n, v] of headerList(s.headers)) flat.push(n, v);
-      if (!s.headers.has('user-agent') && ctx.env.config.userAgent) flat.push('user-agent', ctx.env.config.userAgent);
+      if (!s.headers.has('user-agent') && ctx.env.config.userAgent)
+        flat.push('user-agent', ctx.env.config.userAgent);
       if (!s.headers.has('accept')) flat.push('accept', '*/*');
       const r = natives.httpSync!({
         url: href.split('#')[0],
@@ -503,8 +658,17 @@ export class XMLHttpRequest extends XHREventTarget {
       });
       if (r.errorKind !== undefined) {
         if (r.errorKind === 'blocked') ctx.blocked.report(s.url, 'not-listed');
-        if (r.errorKind === 'timeout' && this.#timeout > 0) return this.#syncError(gen, 'TimeoutError', `XMLHttpRequest: timed out after ${this.#timeout} ms`);
-        return this.#syncError(gen, 'NetworkError', `XMLHttpRequest: ${r.errorMessage || r.errorKind} (${href})`);
+        if (r.errorKind === 'timeout' && this.#timeout > 0)
+          return this.#syncError(
+            gen,
+            'TimeoutError',
+            `XMLHttpRequest: timed out after ${this.#timeout} ms`,
+          );
+        return this.#syncError(
+          gen,
+          'NetworkError',
+          `XMLHttpRequest: ${r.errorMessage || r.errorKind} (${href})`,
+        );
       }
       status = r.status;
       statusText = r.statusText;
@@ -513,10 +677,21 @@ export class XMLHttpRequest extends XHREventTarget {
       data = new Uint8Array(r.body);
       type = 'cors';
     } else {
-      return this.#syncError(gen, 'NetworkError', `XMLHttpRequest: unsupported scheme ${s.url.protocol}`);
+      return this.#syncError(
+        gen,
+        'NetworkError',
+        `XMLHttpRequest: unsupported scheme ${s.url.protocol}`,
+      );
     }
     if (gen !== this.#generation) return; // re-opened from a handler
-    this.#response = makeResponse({ type, status, statusText, headers, body: InnerBody.fromBytes(new Uint8Array(0)), url: responseURL });
+    this.#response = makeResponse({
+      type,
+      status,
+      statusText,
+      headers,
+      body: InnerBody.fromBytes(new Uint8Array(0)),
+      url: responseURL,
+    });
     this.#status = status;
     this.#statusText = statusText;
     this.#responseURL = responseURL;

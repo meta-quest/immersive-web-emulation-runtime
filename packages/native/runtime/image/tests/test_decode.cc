@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Decoding (IMG-1, IMG-2, IMG-3) with the software backends, plus the pipeline's handling of decoders that apply
 // EXIF orientation themselves (as AImageDecoder may).
 #include <algorithm>

@@ -130,7 +130,10 @@ export async function buildTestTemplate(
   ];
   const z = writeZip(entries);
   const buf = Buffer.concat([z.entries, z.centralDirectory, z.eocd]);
-  const file = path.join(dir, options.extra ? 'template-extra.apk' : 'template.apk');
+  const file = path.join(
+    dir,
+    options.extra ? 'template-extra.apk' : 'template.apk',
+  );
   writeFileSync(file, buf);
   return openTemplate(file, buf, 'explicit');
 }

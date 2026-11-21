@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Environment depth for WebXR Depth Sensing (XR-DEPTH-2) over XR_META_environment_depth: one depth provider and its
 // swapchain (a 2D array texture per image, one layer per eye), started when a session enables 'depth-sensing' and
 // stopped when it ends; each WebXR frame acquires the newest image for the frame's predicted display time in the base

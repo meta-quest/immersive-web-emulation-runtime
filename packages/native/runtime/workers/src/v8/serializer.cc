@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Structured serialize/deserialize across isolates (HTML §2.7.3 StructuredSerializeWithTransfer, §2.7.5
 // StructuredDeserializeWithTransfer) over V8's ValueSerializer / ValueDeserializer (v8-value-serializer.h):
 //   * ArrayBuffers in the transfer list move: their BackingStore travels in the message (shared_ptr, so the memory is

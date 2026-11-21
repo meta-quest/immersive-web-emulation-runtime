@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // iwn_register_workers: the module's entry point (NATIVE MODULE CONTRACT). Called once per page context by the core
 // and once per worker context by WorkerRuntime::boot (the worker walks the same module table).
 //

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // PortHub (WRK-5, WRK-6, WRK-8): entangled pairs, queued-until-started delivery in order, one message per delivery
 // task, transfer (detach/adopt) with the queue kept, close/disentangle, owner teardown, payloads destroyed exactly
 // once and outside the lock (re-entrant destructors), and a bounded multi-threaded run.

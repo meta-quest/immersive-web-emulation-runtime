@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // JavaVM / Activity lookup for the OpenXR loader and instance (XR_KHR_loader_init_android needs the VM and an
 // android.content.Context; XR_KHR_android_create_instance needs the VM and the Activity).
 //

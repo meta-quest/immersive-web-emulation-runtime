@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Test selection for the GL-CTS-1 runners (host harness.mjs and device-run.mjs): the subset list expanded
 // through the official 00_test_list.txt files for one suite version, as the official runner does.
 import fs from 'node:fs';
@@ -33,9 +40,14 @@ function listedTests(ROOT, dirRel, version) {
       else parts.shift();
     }
     const name = parts.join(' ');
-    if ((min && versionCmp(version, min) < 0) || (max && versionCmp(version, max) > 0)) continue;
+    if (
+      (min && versionCmp(version, min) < 0) ||
+      (max && versionCmp(version, max) > 0)
+    )
+      continue;
     const rel = path.join(dirRel, name);
-    if (name.endsWith('.txt')) out.push(...listedTests(ROOT, path.dirname(rel), version));
+    if (name.endsWith('.txt'))
+      out.push(...listedTests(ROOT, path.dirname(rel), version));
     else out.push(rel);
   }
   return out;
@@ -90,10 +102,15 @@ export function expandList(ROOT, LIST, pass, filterRe, where = 'host') {
     } else {
       // a single page: keep it only if its directory's list includes it for this version
       const dir = path.dirname(e);
-      const listed = fs.existsSync(path.join(ROOT, dir, '00_test_list.txt')) ? listedTests(ROOT, dir, version) : [e];
+      const listed = fs.existsSync(path.join(ROOT, dir, '00_test_list.txt'))
+        ? listedTests(ROOT, dir, version)
+        : [e];
       if (listed.includes(e)) out.push(e);
     }
   }
   const filter = filterRe ? new RegExp(filterRe) : null;
-  return { tests: [...new Set(out)].filter((t) => !filter || filter.test(t)), exclude };
+  return {
+    tests: [...new Set(out)].filter((t) => !filter || filter.test(t)),
+    exclude,
+  };
 }

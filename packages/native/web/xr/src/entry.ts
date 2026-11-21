@@ -20,14 +20,21 @@ const natives = (g.__iwn as { xr?: XrNatives } | undefined)?.xr;
 let xr: NativeXR | null = null;
 if (natives) {
   try {
-    xr = installNativeXR(g, natives, (g.__iwnWebGL as WebGLHooks | undefined) ?? null);
+    xr = installNativeXR(
+      g,
+      natives,
+      (g.__iwnWebGL as WebGLHooks | undefined) ?? null,
+    );
   } catch (error) {
     console.error('@iwer/native: WebXR could not be installed', error);
   }
 }
 
 const iwn = g.__iwn as
-  | { camera?: CameraNatives; image?: { close(handle: object): void; share(handle: object): object } }
+  | {
+      camera?: CameraNatives;
+      image?: { close(handle: object): void; share(handle: object): object };
+    }
   | undefined;
 if (iwn?.camera) {
   try {
@@ -37,7 +44,10 @@ if (iwn?.camera) {
       closeHandle: (handle) => image?.close(handle),
       shareHandle: image ? (handle) => image.share(handle) : undefined,
       requestPermission: permissions
-        ? () => permissions.requestPermissions(CAMERA_PERMISSIONS).then((held) => CAMERA_PERMISSIONS.every((p) => held[p]))
+        ? () =>
+            permissions
+              .requestPermissions(CAMERA_PERMISSIONS)
+              .then((held) => CAMERA_PERMISSIONS.every((p) => held[p]))
         : undefined,
     });
   } catch (error) {

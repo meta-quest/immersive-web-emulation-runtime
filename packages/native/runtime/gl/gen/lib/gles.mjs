@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Parser for the Khronos GLES C headers as shipped in the Android NDK sysroot (GLES3/gl32.h, GLES2/gl2ext.h).
 // Extracts every `GL_APICALL <ret> GL_APIENTRY gl<Name> (<params>);` prototype (with the extension block it
 // sits in) and every `#define GL_<NAME> 0x...` enum. Written from the header layout; no third-party code.

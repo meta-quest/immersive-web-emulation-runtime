@@ -258,7 +258,12 @@ describe('launch splash and loading screen (native.splash)', () => {
     const manifest = summarizeManifest(
       decodeAxml(entryData(zip, findEntry(zip, 'AndroidManifest.xml')!)),
     );
-    return { zip, cfg, manifest, splash: findEntry(zip, 'assets/vr_splash.png') };
+    return {
+      zip,
+      cfg,
+      manifest,
+      splash: findEntry(zip, 'assets/vr_splash.png'),
+    };
   };
 
   test('on by default: system splash declared, image stored, loading screen configured', async () => {
@@ -289,7 +294,10 @@ describe('launch splash and loading screen (native.splash)', () => {
       text: 'Pack Test',
       icon: true,
     });
-    assert.ok(!r.warnings.some((w) => w.startsWith('splash:')), r.warnings.join('\n'));
+    assert.ok(
+      !r.warnings.some((w) => w.startsWith('splash:')),
+      r.warnings.join('\n'),
+    );
     assert.match(
       formatPackReport(r),
       /splash {6}generated 1024x512 \(icon \+ "Pack Test"\) \+ loading spinner, black background/,
@@ -300,7 +308,9 @@ describe('launch splash and loading screen (native.splash)', () => {
     const r = await pack(input());
     assert.equal(r.splash?.text, null);
     assert.equal(r.splash?.icon, true);
-    assert.ok(r.warnings.some((w) => /^splash: no font in the template/.test(w)));
+    assert.ok(
+      r.warnings.some((w) => /^splash: no font in the template/.test(w)),
+    );
   });
 
   test('your own image and background colour', async () => {
@@ -309,7 +319,9 @@ describe('launch splash and loading screen (native.splash)', () => {
     writeFileSync(own, bytes);
     const r = await pack(
       input({
-        target: target({ splash: { image: './my-splash.png', background: '#0B0C0E' } }),
+        target: target({
+          splash: { image: './my-splash.png', background: '#0B0C0E' },
+        }),
         files: { icon: null, keystore: null, splash: own },
       }),
     );
@@ -352,13 +364,20 @@ describe('launch splash and loading screen (native.splash)', () => {
   test('an app that declares passthrough gets the contextual background on both', async () => {
     // Meta's passthrough loading screen: passthrough-contextual behind the system splash, and the runtime's own
     // passthrough layer behind its loading screen (it needs com.oculus.feature.PASSTHROUGH, which the feature adds).
-    const r = await pack(input({ target: target({ features: { passthrough: 'optional' } }) }));
+    const r = await pack(
+      input({ target: target({ features: { passthrough: 'optional' } }) }),
+    );
     const { cfg, manifest } = unpack(r.outFile);
     assert.equal(manifest.osSplashBackground, 'passthrough-contextual');
-    assert.deepEqual(manifest.features.find((f) => f.name === 'com.oculus.feature.PASSTHROUGH'), {
-      name: 'com.oculus.feature.PASSTHROUGH',
-      required: false,
-    });
+    assert.deepEqual(
+      manifest.features.find(
+        (f) => f.name === 'com.oculus.feature.PASSTHROUGH',
+      ),
+      {
+        name: 'com.oculus.feature.PASSTHROUGH',
+        required: false,
+      },
+    );
     assert.equal(cfg.xr.loading.background, 'contextual');
     assert.match(
       formatPackReport(r),
@@ -366,14 +385,25 @@ describe('launch splash and loading screen (native.splash)', () => {
     );
     // splash: false keeps it; "black" overrides it.
     const off = unpack(
-      (await pack(input({ target: target({ features: { passthrough: true }, splash: false }) }))).outFile,
+      (
+        await pack(
+          input({
+            target: target({ features: { passthrough: true }, splash: false }),
+          }),
+        )
+      ).outFile,
     );
     assert.equal(off.manifest.osSplashBackground, 'passthrough-contextual');
     assert.equal(off.cfg.xr.loading.background, 'contextual');
     const black = unpack(
       (
         await pack(
-          input({ target: target({ features: { passthrough: true }, splash: { background: 'black' } }) }),
+          input({
+            target: target({
+              features: { passthrough: true },
+              splash: { background: 'black' },
+            }),
+          }),
         )
       ).outFile,
     );
@@ -382,7 +412,9 @@ describe('launch splash and loading screen (native.splash)', () => {
   });
 
   test('splash.background "black": opaque black, and black behind the system splash', async () => {
-    const r = await pack(input({ target: target({ splash: { background: 'black' } }) }));
+    const r = await pack(
+      input({ target: target({ splash: { background: 'black' } }) }),
+    );
     const { cfg, manifest } = unpack(r.outFile);
     assert.equal(manifest.osSplash, true);
     assert.equal(manifest.osSplashBackground, 'black');
@@ -411,18 +443,30 @@ describe('launch splash and loading screen (native.splash)', () => {
       manifest: encodeAxml(doc),
       extra: { 'assets/vr_splash.png': encodePng(placeholderIcon(8)) },
     });
-    const off = unpack((await pack(input({ template: t, target: target({ splash: false }) }))).outFile);
+    const off = unpack(
+      (await pack(input({ template: t, target: target({ splash: false }) })))
+        .outFile,
+    );
     assert.equal(off.manifest.osSplash, false);
     assert.equal(off.splash, undefined);
     const on = unpack(
-      (await pack(input({ template: t, target: target({ features: { passthrough: true } }) }))).outFile,
+      (
+        await pack(
+          input({
+            template: t,
+            target: target({ features: { passthrough: true } }),
+          }),
+        )
+      ).outFile,
     );
     assert.equal(on.manifest.osSplash, true);
     // The template's background declaration is replaced, not duplicated.
     assert.equal(on.manifest.osSplashBackground, 'passthrough-contextual');
     const onApp = decodeAxml(
       entryData(on.zip, findEntry(on.zip, 'AndroidManifest.xml')!),
-    ).root.children.find((c) => c.kind === 'element' && c.name === 'application');
+    ).root.children.find(
+      (c) => c.kind === 'element' && c.name === 'application',
+    );
     assert.ok(onApp && onApp.kind === 'element');
     assert.equal(
       onApp.children.filter(
@@ -445,24 +489,51 @@ describe('AR on and the camera feature (XR-AR-1, XR-PERM-1)', () => {
   const unpack = (file: string) => {
     const zip = readZip(readFileSync(file));
     return {
-      cfg: JSON.parse(entryData(zip, findEntry(zip, 'assets/iwn/config.json')!).toString()),
-      manifest: summarizeManifest(decodeAxml(entryData(zip, findEntry(zip, 'AndroidManifest.xml')!))),
+      cfg: JSON.parse(
+        entryData(zip, findEntry(zip, 'assets/iwn/config.json')!).toString(),
+      ),
+      manifest: summarizeManifest(
+        decodeAxml(entryData(zip, findEntry(zip, 'AndroidManifest.xml')!)),
+      ),
     };
   };
   const fromWorld = (world: unknown, native: Record<string, unknown> = {}) =>
     resolveNativeTarget(
-      { version: 'iwsdk.project.v1', world, native: { packageId: 'com.example.packtest', appName: 'Pack Test', ...native } },
+      {
+        version: 'iwsdk.project.v1',
+        world,
+        native: {
+          packageId: 'com.example.packtest',
+          appName: 'Pack Test',
+          ...native,
+        },
+      },
       { packageJson: { name: 'pack-test', version: '1.2.3' } },
     );
-  const CAMERA = ['android.permission.CAMERA', 'horizonos.permission.HEADSET_CAMERA'];
+  const CAMERA = [
+    'android.permission.CAMERA',
+    'horizonos.permission.HEADSET_CAMERA',
+  ];
 
   test('an app that declares passthrough gets xr.immersiveAr; a VR app keeps the template default', async () => {
-    const ar = unpack((await pack(input({ target: fromWorld({ xr: { mode: 'ar' } }) }))).outFile);
+    const ar = unpack(
+      (await pack(input({ target: fromWorld({ xr: { mode: 'ar' } }) })))
+        .outFile,
+    );
     assert.equal(ar.cfg.xr.immersiveAr, true);
     assert.equal(ar.cfg.xr.features.passthrough, 'required');
-    const explicit = unpack((await pack(input({ target: target({ features: { passthrough: 'optional' } }) }))).outFile);
+    const explicit = unpack(
+      (
+        await pack(
+          input({ target: target({ features: { passthrough: 'optional' } }) }),
+        )
+      ).outFile,
+    );
     assert.equal(explicit.cfg.xr.immersiveAr, true);
-    const vr = unpack((await pack(input({ target: fromWorld({ xr: { mode: 'vr' } }) }))).outFile);
+    const vr = unpack(
+      (await pack(input({ target: fromWorld({ xr: { mode: 'vr' } }) })))
+        .outFile,
+    );
     assert.equal(vr.cfg.xr.immersiveAr, undefined);
   });
 
@@ -471,33 +542,70 @@ describe('AR on and the camera feature (XR-AR-1, XR-PERM-1)', () => {
     assert.equal(t.features.camera, 'optional');
     const r = await pack(input({ target: t }));
     const { cfg, manifest } = unpack(r.outFile);
-    for (const perm of CAMERA) assert.ok(manifest.permissions.includes(perm), perm);
-    assert.deepEqual(manifest.features.find((f) => f.name === 'com.oculus.feature.PASSTHROUGH'), {
-      name: 'com.oculus.feature.PASSTHROUGH',
-      required: false,
-    });
+    for (const perm of CAMERA)
+      assert.ok(manifest.permissions.includes(perm), perm);
+    assert.deepEqual(
+      manifest.features.find(
+        (f) => f.name === 'com.oculus.feature.PASSTHROUGH',
+      ),
+      {
+        name: 'com.oculus.feature.PASSTHROUGH',
+        required: false,
+      },
+    );
     assert.equal(cfg.xr.features.camera, 'optional');
-    assert.equal(cfg.xr.immersiveAr, undefined, 'the camera alone does not turn AR on');
+    assert.equal(
+      cfg.xr.immersiveAr,
+      undefined,
+      'the camera alone does not turn AR on',
+    );
   });
 
   test('a non-IWSDK dist that calls getUserMedia gets camera unless native.features is set; IWSDK bundles do not', async () => {
     const camDist = buildTestDist(path.join(scratch, 'cam-plain'), {
-      'assets/index.js': 'navigator.mediaDevices.getUserMedia({ video: true }).then((s) => (video.srcObject = s));',
+      'assets/index.js':
+        'navigator.mediaDevices.getUserMedia({ video: true }).then((s) => (video.srcObject = s));',
     });
-    const derived = await pack(input({ target: fromWorld({ xr: { mode: 'vr' } }), distDir: camDist }));
-    for (const perm of CAMERA) assert.ok(derived.manifest.permissions.includes(perm), perm);
+    const derived = await pack(
+      input({ target: fromWorld({ xr: { mode: 'vr' } }), distDir: camDist }),
+    );
+    for (const perm of CAMERA)
+      assert.ok(derived.manifest.permissions.includes(perm), perm);
     assert.equal(unpack(derived.outFile).cfg.xr.features.camera, 'optional');
-    assert.ok(derived.warnings.some((w) => /assets\/index\.js calls getUserMedia: declared the camera feature/.test(w)));
+    assert.ok(
+      derived.warnings.some((w) =>
+        /assets\/index\.js calls getUserMedia: declared the camera feature/.test(
+          w,
+        ),
+      ),
+    );
 
-    const explicit = await pack(input({ target: target({ features: { handTracking: true } }), distDir: camDist }));
-    assert.ok(!explicit.manifest.permissions.includes('horizonos.permission.HEADSET_CAMERA'), 'native.features is authoritative');
+    const explicit = await pack(
+      input({
+        target: target({ features: { handTracking: true } }),
+        distDir: camDist,
+      }),
+    );
+    assert.ok(
+      !explicit.manifest.permissions.includes(
+        'horizonos.permission.HEADSET_CAMERA',
+      ),
+      'native.features is authoritative',
+    );
 
     // every IWSDK build carries its camera code: only world.features.camera counts there
     const iwsdkDist = buildTestDist(path.join(scratch, 'cam-iwsdk'), {
-      'assets/index.js': 'const m = "iwsdk.scene.json"; navigator.mediaDevices.getUserMedia({ video: true });',
+      'assets/index.js':
+        'const m = "iwsdk.scene.json"; navigator.mediaDevices.getUserMedia({ video: true });',
     });
-    const iwsdk = await pack(input({ target: fromWorld({ xr: { mode: 'vr' } }), distDir: iwsdkDist }));
-    assert.ok(!iwsdk.manifest.permissions.includes('horizonos.permission.HEADSET_CAMERA'));
+    const iwsdk = await pack(
+      input({ target: fromWorld({ xr: { mode: 'vr' } }), distDir: iwsdkDist }),
+    );
+    assert.ok(
+      !iwsdk.manifest.permissions.includes(
+        'horizonos.permission.HEADSET_CAMERA',
+      ),
+    );
     assert.ok(!iwsdk.warnings.some((w) => /getUserMedia/.test(w)));
   });
 });
@@ -526,8 +634,14 @@ describe('refusals (PKG-5, PKG-6, PKG-7)', () => {
       const m = e.message.replace(/\s+/g, ' ');
       assert.match(m, /injected WebXR emulator/);
       // the metavr mode leaves the emulator out without touching the setting (it does not turn it off)
-      assert.match(m, /Build with `npm run build:metavr` \(vite build --mode metavr, which leaves the emulator out whatever dev\.emulator\.injectOnBuild says\)/);
-      assert.match(m, /or set dev\.emulator\.injectOnBuild to false in iwsdk\.config\.json, then rebuild/);
+      assert.match(
+        m,
+        /Build with `npm run build:metavr` \(vite build --mode metavr, which leaves the emulator out whatever dev\.emulator\.injectOnBuild says\)/,
+      );
+      assert.match(
+        m,
+        /or set dev\.emulator\.injectOnBuild to false in iwsdk\.config\.json, then rebuild/,
+      );
       assert.doesNotMatch(m, /turns it off/);
       return true;
     });

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Forgiving-base64 decode (WHATWG Infra standard, "forgiving-base64 decode"), used for data: URL images so the JS
 // thread does not decode base64 (REG-16): the binding copies the text and this runs on a pool thread.
 #include <cstdint>

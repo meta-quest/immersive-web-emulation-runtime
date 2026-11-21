@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Frame timing helpers, V8-free (docs/spec/08 XR-LOOP-4/5, docs/spec/15 PERF-JS-3, LOG-3).
 #pragma once
 

@@ -7,21 +7,21 @@ thread.
 
 ## Layout
 
-| path | what |
-|---|---|
-| `src/core.*` | render-quantum buses, refcounted sample storage, the spec's up/down-mix rules |
-| `src/param.*` | AudioParam automation timeline (all event types, cancel/hold, the hold rule for exponential ramps) |
-| `src/nodes.*` | node DSP: Gain, AudioBufferSource, ConstantSource, Oscillator + PeriodicWave, StereoPanner, Panner (equal-power + HRTF), BiquadFilter, Delay, Analyser, Convolver, ChannelSplitter/Merger, Destination |
-| `src/graph.*` | one context's render graph, control batches, garbage hand-back |
-| `src/context.*` | realtime and offline contexts, the shared state block, the module registry |
-| `src/decode*.cpp`, `src/resampler.*` | decodeAudioData backends, the band-limited resampler, the decoder thread pool |
-| `src/output_oboe.cpp` / `src/output_null.cpp` | the device (Oboe on Android) / a host output paced in real time |
-| `src/notify.*` | wakes the JS thread through the host's task queue |
-| `src/binding_v8.cpp` | `iwn_register_audio`: the `__iwn.audio` natives (contract: `web/audio/src/natives.ts`) |
-| `include/iwn/audio.h` | host API: hooks, `setOutputPaused` (AUD-2), `shutdown` (PROC-7), `stats` |
-| `host-node/addon.cpp` | the same binding as a Node addon, so the JS layer can be tested against this engine |
-| `device-probe/` | headset smoke APK (HL-4 "audio smoke") |
-| `test/` | host tests, decode fixtures (`fixtures/make-fixtures.sh`), decoder fuzzer |
+| path                                          | what                                                                                                                                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/core.*`                                  | render-quantum buses, refcounted sample storage, the spec's up/down-mix rules                                                                                                                          |
+| `src/param.*`                                 | AudioParam automation timeline (all event types, cancel/hold, the hold rule for exponential ramps)                                                                                                     |
+| `src/nodes.*`                                 | node DSP: Gain, AudioBufferSource, ConstantSource, Oscillator + PeriodicWave, StereoPanner, Panner (equal-power + HRTF), BiquadFilter, Delay, Analyser, Convolver, ChannelSplitter/Merger, Destination |
+| `src/graph.*`                                 | one context's render graph, control batches, garbage hand-back                                                                                                                                         |
+| `src/context.*`                               | realtime and offline contexts, the shared state block, the module registry                                                                                                                             |
+| `src/decode*.cpp`, `src/resampler.*`          | decodeAudioData backends, the band-limited resampler, the decoder thread pool                                                                                                                          |
+| `src/output_oboe.cpp` / `src/output_null.cpp` | the device (Oboe on Android) / a host output paced in real time                                                                                                                                        |
+| `src/notify.*`                                | wakes the JS thread through the host's task queue                                                                                                                                                      |
+| `src/binding_v8.cpp`                          | `iwn_register_audio`: the `__iwn.audio` natives (contract: `web/audio/src/natives.ts`)                                                                                                                 |
+| `include/iwn/audio.h`                         | host API: hooks, `setOutputPaused` (AUD-2), `shutdown` (PROC-7), `stats`                                                                                                                               |
+| `host-node/addon.cpp`                         | the same binding as a Node addon, so the JS layer can be tested against this engine                                                                                                                    |
+| `device-probe/`                               | headset smoke APK (HL-4 "audio smoke")                                                                                                                                                                 |
+| `test/`                                       | host tests, decode fixtures (`fixtures/make-fixtures.sh`), decoder fuzzer                                                                                                                              |
 
 ## How it works
 

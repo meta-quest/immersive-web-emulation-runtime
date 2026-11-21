@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Bidirectional text for canvas (HTML "text preparation algorithm" applies the Unicode Bidirectional Algorithm,
 // UAX #9, with the paragraph direction taken from ctx.direction). Implemented from UAX #9 for a single paragraph
 // without explicit embeddings: rules W1-W7, N0 (bracket pairs, BD16), N1-N2, I1-I2 and L1 are applied; explicit

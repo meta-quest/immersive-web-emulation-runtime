@@ -5,6 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-export { createWebAudio, EXPERIMENTAL_INTERFACES, installWebAudio, type WebAudioApi } from './install.ts';
+export {
+  createWebAudio,
+  EXPERIMENTAL_INTERFACES,
+  installWebAudio,
+  type WebAudioApi,
+} from './install.ts';
 export type { AudioNatives, AudioStats, WebAudioOptions } from './natives.ts';
 export { PROTOCOL_VERSION } from './protocol.ts';

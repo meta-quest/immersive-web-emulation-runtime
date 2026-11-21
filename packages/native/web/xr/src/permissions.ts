@@ -17,7 +17,10 @@ import type { XrNatives } from './natives.ts';
 export const USE_SCENE = 'com.oculus.permission.USE_SCENE';
 
 /** The passthrough cameras (getUserMedia, XR-CAM-1): Camera2 access and the headset cameras. */
-export const CAMERA_PERMISSIONS: readonly string[] = ['android.permission.CAMERA', 'horizonos.permission.HEADSET_CAMERA'];
+export const CAMERA_PERMISSIONS: readonly string[] = [
+  'android.permission.CAMERA',
+  'horizonos.permission.HEADSET_CAMERA',
+];
 
 export class RuntimePermissions {
   private readonly natives: XrNatives;
@@ -40,11 +43,17 @@ export class RuntimePermissions {
   async request(names: readonly string[]): Promise<Record<string, boolean>> {
     // one the manifest does not declare cannot be granted: denied without asking (the system would still start its
     // dialog activity, which pauses the session)
-    for (const n of names) if (!this.asked.has(n) && !this.declared(n)) this.asked.set(n, Promise.resolve(false));
+    for (const n of names)
+      if (!this.asked.has(n) && !this.declared(n))
+        this.asked.set(n, Promise.resolve(false));
     const fresh = [...new Set(names)].filter((n) => !this.asked.has(n));
     if (fresh.length > 0) {
       const answer = this.ask(fresh);
-      for (const n of fresh) this.asked.set(n, answer.then((r) => r[n] === true));
+      for (const n of fresh)
+        this.asked.set(
+          n,
+          answer.then((r) => r[n] === true),
+        );
     }
     const out: Record<string, boolean> = {};
     for (const n of names) out[n] = (await this.asked.get(n)!) || this.check(n);
@@ -69,7 +78,8 @@ export class RuntimePermissions {
     const request = this.natives.requestPermissions;
     // A runtime without the helper (host tests, an older template): the manifest's install-time grant is all
     // there is, so the feature's own native call decides.
-    if (typeof request !== 'function') return Promise.resolve(Object.fromEntries(names.map((n) => [n, true])));
+    if (typeof request !== 'function')
+      return Promise.resolve(Object.fromEntries(names.map((n) => [n, true])));
     return Promise.resolve()
       .then(() => request.call(this.natives, names))
       .then(

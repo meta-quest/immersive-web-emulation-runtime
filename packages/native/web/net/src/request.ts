@@ -21,7 +21,14 @@ import {
   InnerBody,
 } from './body.ts';
 import { abortReason, type NetEnv } from './env.ts';
-import { cloneHeaders, fillHeaders, getGuard, Headers, setGuard, type HeadersInitLike } from './headers.ts';
+import {
+  cloneHeaders,
+  fillHeaders,
+  getGuard,
+  Headers,
+  setGuard,
+  type HeadersInitLike,
+} from './headers.ts';
 
 export interface RequestInitLike {
   method?: string;
@@ -45,7 +52,14 @@ const METHOD_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const NORMALIZED = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH'];
 const MODES = ['navigate', 'same-origin', 'no-cors', 'cors'];
 const CREDENTIALS = ['omit', 'same-origin', 'include'];
-const CACHES = ['default', 'no-store', 'reload', 'no-cache', 'force-cache', 'only-if-cached'];
+const CACHES = [
+  'default',
+  'no-store',
+  'reload',
+  'no-cache',
+  'force-cache',
+  'only-if-cached',
+];
 const REDIRECTS = ['follow', 'error', 'manual'];
 
 let currentEnv: NetEnv | null = null;
@@ -59,7 +73,10 @@ export function getRequestEnv(): NetEnv | null {
 
 function enumValue(v: unknown, allowed: string[], what: string): string {
   const s = String(v);
-  if (!allowed.includes(s)) throw new TypeError(`Failed to construct 'Request': The provided value '${s}' is not a valid enum value of type ${what}.`);
+  if (!allowed.includes(s))
+    throw new TypeError(
+      `Failed to construct 'Request': The provided value '${s}' is not a valid enum value of type ${what}.`,
+    );
   return s;
 }
 
@@ -96,10 +113,26 @@ function stateOf(r: Request): RequestState {
  */
 const DEPENDENT_CONTROLLERS = new WeakMap<AbortSignal, AbortController>();
 function followSignal(parent: AbortSignal | null | undefined): AbortSignal {
-  const AS = (globalThis as { AbortSignal?: typeof AbortSignal & { any?: (s: AbortSignal[]) => AbortSignal } }).AbortSignal;
-  if (parent && AS && typeof AS.any === 'function' && parent instanceof AS) return AS.any([parent]);
-  const AC = (globalThis as { AbortController?: typeof AbortController }).AbortController;
-  if (!AC) return parent ?? ({ aborted: false, addEventListener() {}, removeEventListener() {} } as unknown as AbortSignal);
+  const AS = (
+    globalThis as {
+      AbortSignal?: typeof AbortSignal & {
+        any?: (s: AbortSignal[]) => AbortSignal;
+      };
+    }
+  ).AbortSignal;
+  if (parent && AS && typeof AS.any === 'function' && parent instanceof AS)
+    return AS.any([parent]);
+  const AC = (globalThis as { AbortController?: typeof AbortController })
+    .AbortController;
+  if (!AC)
+    return (
+      parent ??
+      ({
+        aborted: false,
+        addEventListener() {},
+        removeEventListener() {},
+      } as unknown as AbortSignal)
+    );
   const ac = new AC();
   if (parent) {
     if (parent.aborted) {
@@ -108,9 +141,15 @@ function followSignal(parent: AbortSignal | null | undefined): AbortSignal {
       // The dependent signal keeps its controller alive (a signal does not reference its controller).
       DEPENDENT_CONTROLLERS.set(ac.signal, ac);
       const weak = new WeakRef(ac);
-      parent.addEventListener('abort', () => weak.deref()?.abort(abortReason(parent)), { once: true });
+      parent.addEventListener(
+        'abort',
+        () => weak.deref()?.abort(abortReason(parent)),
+        { once: true },
+      );
     } else {
-      parent.addEventListener('abort', () => ac.abort(abortReason(parent)), { once: true });
+      parent.addEventListener('abort', () => ac.abort(abortReason(parent)), {
+        once: true,
+      });
     }
   }
   return ac.signal;
@@ -128,56 +167,119 @@ export class Request implements BodyOwner {
     } else {
       const baseURL = env ? env.baseURL() : undefined;
       try {
-        url = baseURL ? new URL(String(input), baseURL) : new URL(String(input));
+        url = baseURL
+          ? new URL(String(input), baseURL)
+          : new URL(String(input));
       } catch {
-        throw new TypeError(`Failed to construct 'Request': Invalid URL "${String(input)}"`);
+        throw new TypeError(
+          `Failed to construct 'Request': Invalid URL "${String(input)}"`,
+        );
       }
       if (url.username || url.password) {
-        throw new TypeError(`Failed to construct 'Request': Request cannot be constructed from a URL that includes credentials: ${String(input)}`);
+        throw new TypeError(
+          `Failed to construct 'Request': Request cannot be constructed from a URL that includes credentials: ${String(input)}`,
+        );
       }
     }
     let method = base ? base.method : 'GET';
     if (init.method !== undefined) {
       const m = String(init.method);
-      if (!METHOD_TOKEN.test(m)) throw new TypeError(`Failed to construct 'Request': '${m}' is not a valid HTTP method.`);
+      if (!METHOD_TOKEN.test(m))
+        throw new TypeError(
+          `Failed to construct 'Request': '${m}' is not a valid HTTP method.`,
+        );
       const upper = m.toUpperCase();
       if (upper === 'CONNECT' || upper === 'TRACE' || upper === 'TRACK') {
-        throw new TypeError(`Failed to construct 'Request': '${m}' HTTP method is unsupported.`);
+        throw new TypeError(
+          `Failed to construct 'Request': '${m}' HTTP method is unsupported.`,
+        );
       }
       method = NORMALIZED.includes(upper) && upper !== 'PATCH' ? upper : m;
     }
-    const mode = init.mode !== undefined ? enumValue(init.mode, MODES, 'RequestMode') : base ? base.mode : 'cors';
-    if (mode === 'navigate') throw new TypeError("Failed to construct 'Request': Cannot construct a Request with a RequestInit whose mode member is set as 'navigate'.");
-    const credentials = init.credentials !== undefined ? enumValue(init.credentials, CREDENTIALS, 'RequestCredentials') : base ? base.credentials : 'same-origin';
-    const cache = init.cache !== undefined ? enumValue(init.cache, CACHES, 'RequestCache') : base ? base.cache : 'default';
+    const mode =
+      init.mode !== undefined
+        ? enumValue(init.mode, MODES, 'RequestMode')
+        : base
+          ? base.mode
+          : 'cors';
+    if (mode === 'navigate')
+      throw new TypeError(
+        "Failed to construct 'Request': Cannot construct a Request with a RequestInit whose mode member is set as 'navigate'.",
+      );
+    const credentials =
+      init.credentials !== undefined
+        ? enumValue(init.credentials, CREDENTIALS, 'RequestCredentials')
+        : base
+          ? base.credentials
+          : 'same-origin';
+    const cache =
+      init.cache !== undefined
+        ? enumValue(init.cache, CACHES, 'RequestCache')
+        : base
+          ? base.cache
+          : 'default';
     if (cache === 'only-if-cached' && mode !== 'same-origin') {
-      throw new TypeError("Failed to construct 'Request': 'only-if-cached' can be set only with 'same-origin' mode");
+      throw new TypeError(
+        "Failed to construct 'Request': 'only-if-cached' can be set only with 'same-origin' mode",
+      );
     }
-    const redirect = init.redirect !== undefined ? enumValue(init.redirect, REDIRECTS, 'RequestRedirect') : base ? base.redirect : 'follow';
-    const signal = followSignal(init.signal !== undefined ? init.signal : base ? base.signal : null);
+    const redirect =
+      init.redirect !== undefined
+        ? enumValue(init.redirect, REDIRECTS, 'RequestRedirect')
+        : base
+          ? base.redirect
+          : 'follow';
+    const signal = followSignal(
+      init.signal !== undefined ? init.signal : base ? base.signal : null,
+    );
 
     const headers = new Headers();
     setGuard(headers, mode === 'no-cors' ? 'request-no-cors' : 'request');
-    const headerInit = init.headers !== undefined ? init.headers : base ? base.headers : undefined;
-    if (headerInit !== undefined) fillHeaders(headers, headerInit instanceof Headers ? cloneHeaders(headerInit, 'none') : headerInit);
+    const headerInit =
+      init.headers !== undefined
+        ? init.headers
+        : base
+          ? base.headers
+          : undefined;
+    if (headerInit !== undefined)
+      fillHeaders(
+        headers,
+        headerInit instanceof Headers
+          ? cloneHeaders(headerInit, 'none')
+          : headerInit,
+      );
 
     let body: InnerBody | null = null;
     const inputBody = base ? base.body : null;
-    if (((init.body !== undefined && init.body !== null) || inputBody) && (method === 'GET' || method === 'HEAD')) {
-      throw new TypeError("Failed to construct 'Request': Request with GET/HEAD method cannot have body.");
+    if (
+      ((init.body !== undefined && init.body !== null) || inputBody) &&
+      (method === 'GET' || method === 'HEAD')
+    ) {
+      throw new TypeError(
+        "Failed to construct 'Request': Request with GET/HEAD method cannot have body.",
+      );
     }
     if (init.body !== undefined && init.body !== null) {
       const ex = extractBody(init.body, env);
       if (ex.body.content.kind === 'stream' && init.duplex !== 'half') {
-        throw new TypeError("Failed to construct 'Request': The `duplex` member must be specified for a request with a streaming body");
+        throw new TypeError(
+          "Failed to construct 'Request': The `duplex` member must be specified for a request with a streaming body",
+        );
       }
       body = ex.body;
-      if (ex.type !== null && !headers.has('content-type')) headers.append('content-type', ex.type);
+      if (ex.type !== null && !headers.has('content-type'))
+        headers.append('content-type', ex.type);
     } else if (inputBody) {
-      if (inputBody.unusable()) throw new TypeError("Failed to construct 'Request': Cannot construct a Request with a Request object that has already been used.");
+      if (inputBody.unusable())
+        throw new TypeError(
+          "Failed to construct 'Request': Cannot construct a Request with a Request object that has already been used.",
+        );
       // Fetch: the new request takes over the input's body (the input becomes disturbed).
       body = inputBody;
-      base!.body = new InnerBody({ kind: 'bytes', bytes: new Uint8Array(0), shared: false }, 0);
+      base!.body = new InnerBody(
+        { kind: 'bytes', bytes: new Uint8Array(0), shared: false },
+        0,
+      );
       base!.body.disturbed = true;
     }
 
@@ -190,10 +292,30 @@ export class Request implements BodyOwner {
       credentials,
       cache,
       redirect,
-      referrer: init.referrer !== undefined ? String(init.referrer) || '' : base ? base.referrer : 'about:client',
-      referrerPolicy: init.referrerPolicy !== undefined ? String(init.referrerPolicy) : base ? base.referrerPolicy : '',
-      integrity: init.integrity !== undefined ? String(init.integrity) : base ? base.integrity : '',
-      keepalive: init.keepalive !== undefined ? Boolean(init.keepalive) : base ? base.keepalive : false,
+      referrer:
+        init.referrer !== undefined
+          ? String(init.referrer) || ''
+          : base
+            ? base.referrer
+            : 'about:client',
+      referrerPolicy:
+        init.referrerPolicy !== undefined
+          ? String(init.referrerPolicy)
+          : base
+            ? base.referrerPolicy
+            : '',
+      integrity:
+        init.integrity !== undefined
+          ? String(init.integrity)
+          : base
+            ? base.integrity
+            : '',
+      keepalive:
+        init.keepalive !== undefined
+          ? Boolean(init.keepalive)
+          : base
+            ? base.keepalive
+            : false,
       signal,
       duplex: 'half',
       env,
@@ -260,7 +382,10 @@ export class Request implements BodyOwner {
 
   clone(): Request {
     const s = stateOf(this);
-    if (s.body?.unusable()) throw new TypeError("Failed to execute 'clone' on 'Request': Request body is already used");
+    if (s.body?.unusable())
+      throw new TypeError(
+        "Failed to execute 'clone' on 'Request': Request body is already used",
+      );
     const r = Object.create(Request.prototype) as Request;
     STATE.set(r, {
       ...s,

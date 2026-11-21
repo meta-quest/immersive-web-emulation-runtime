@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // MOD-2, MOD-3, NET-1, NET-4: URL parsing, module specifier resolution, asset path mapping.
 #include "iwn/core/url.h"
 #include "iwn_test.h"

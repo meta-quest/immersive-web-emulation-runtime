@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Composite natives that return JS values (slow path only): reflection records, shader status, strings.
 // The record layouts are decoded by web/webgl/reflection.ts; keep the two in sync.
 

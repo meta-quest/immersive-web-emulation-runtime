@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // HTML timers (HTML §8.6, "timer initialization steps") without V8: ids, the nesting clamp, ordering of equal
 // delays, repeat re-arming. TMR-1, TMR-2. The JS side keeps the callbacks keyed by id.
 #pragma once

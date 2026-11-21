@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The headset's scene model for WebXR plane detection, mesh detection and hit test (docs/spec/08 XR-AR-2): the room
 // from Space Setup, read with XR_FB_spatial_entity, XR_FB_spatial_entity_query, XR_FB_spatial_entity_container,
 // XR_FB_scene and XR_META_spatial_entity_mesh (no OVRPlugin, no MRUK).

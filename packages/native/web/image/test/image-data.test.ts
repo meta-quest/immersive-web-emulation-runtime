@@ -33,25 +33,55 @@ test('ImageData(data, w[, h]) wraps the array without copying', () => {
   assert.equal(d.height, 3);
   assert.equal(d.data, data);
   assert.equal(new ImageData(data, 3, 2).height, 2);
-  assert.equal(new ImageData(data, 2, 3, { colorSpace: 'display-p3' }).colorSpace, 'display-p3');
+  assert.equal(
+    new ImageData(data, 2, 3, { colorSpace: 'display-p3' }).colorSpace,
+    'display-p3',
+  );
 });
 
 test('ImageData validation errors follow the spec', () => {
   assert.throws(() => new ImageData(0, 1), named('IndexSizeError'));
   assert.throws(() => new ImageData(1, 0), named('IndexSizeError'));
-  assert.throws(() => new ImageData(new Uint8ClampedArray(0), 1), named('InvalidStateError'));
-  assert.throws(() => new ImageData(new Uint8ClampedArray(6), 1), named('InvalidStateError'));
-  assert.throws(() => new ImageData(new Uint8ClampedArray(12), 2), named('IndexSizeError'));
-  assert.throws(() => new ImageData(new Uint8ClampedArray(16), 2, 3), named('IndexSizeError'));
-  assert.throws(() => new ImageData(new Uint8ClampedArray(16), 0), named('IndexSizeError'));
+  assert.throws(
+    () => new ImageData(new Uint8ClampedArray(0), 1),
+    named('InvalidStateError'),
+  );
+  assert.throws(
+    () => new ImageData(new Uint8ClampedArray(6), 1),
+    named('InvalidStateError'),
+  );
+  assert.throws(
+    () => new ImageData(new Uint8ClampedArray(12), 2),
+    named('IndexSizeError'),
+  );
+  assert.throws(
+    () => new ImageData(new Uint8ClampedArray(16), 2, 3),
+    named('IndexSizeError'),
+  );
+  assert.throws(
+    () => new ImageData(new Uint8ClampedArray(16), 0),
+    named('IndexSizeError'),
+  );
   assert.throws(() => new ImageData(new Uint8Array(16), 2), TypeError);
   // WebIDL: no [AllowResizable] / [AllowShared] on the constructor.
   const resizable = new ArrayBuffer(16, { maxByteLength: 64 });
-  assert.throws(() => new ImageData(new Uint8ClampedArray(resizable), 2, 2), TypeError);
-  assert.throws(() => new ImageData(new Uint8ClampedArray(new SharedArrayBuffer(16)), 2, 2), TypeError);
-  assert.equal(new ImageData(new Uint8ClampedArray(new ArrayBuffer(16)), 2, 2).width, 2);
+  assert.throws(
+    () => new ImageData(new Uint8ClampedArray(resizable), 2, 2),
+    TypeError,
+  );
+  assert.throws(
+    () => new ImageData(new Uint8ClampedArray(new SharedArrayBuffer(16)), 2, 2),
+    TypeError,
+  );
+  assert.equal(
+    new ImageData(new Uint8ClampedArray(new ArrayBuffer(16)), 2, 2).width,
+    2,
+  );
   assert.throws(() => new ImageData(2), TypeError);
-  assert.throws(() => new ImageData(1, 1, { colorSpace: 'rec2020' }), TypeError);
+  assert.throws(
+    () => new ImageData(1, 1, { colorSpace: 'rec2020' }),
+    TypeError,
+  );
   assert.throws(() => new ImageData(70000, 70000), RangeError);
 });
 

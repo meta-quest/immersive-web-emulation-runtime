@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 /* FreeType modules compiled into @iwer/native: TrueType/OpenType (glyf, CFF, CFF2), WOFF/WOFF2 via sfnt. */
 FT_USE_MODULE( FT_Driver_ClassRec, tt_driver_class )
 FT_USE_MODULE( FT_Driver_ClassRec, cff_driver_class )

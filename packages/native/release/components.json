@@ -11,254 +11,616 @@
     "is taken from this package's LICENSE)."
   ],
   "detectIgnore": {
-    "cmakeVars": ["IWN_TOOLCHAIN_DIR", "IWN_THIRD_PARTY_DIR", "IWN_RUNTIME_DIR", "IWN_AUDIO_DIR", "IWN_GL_DIR", "IWN_V8_INCLUDE_DIR", "IWN_V8_DIR"],
+    "cmakeVars": [
+      "IWN_TOOLCHAIN_DIR",
+      "IWN_THIRD_PARTY_DIR",
+      "IWN_RUNTIME_DIR",
+      "IWN_AUDIO_DIR",
+      "IWN_GL_DIR",
+      "IWN_V8_INCLUDE_DIR",
+      "IWN_V8_DIR"
+    ],
     "cmakeVarsTestOnly": ["IWN_NODE_API_INCLUDE_DIR"],
     "npmFirstParty": ["iwer"]
   },
   "components": [
     {
-      "id": "v8", "name": "V8", "version": "15.5.35.25", "license": "BSD-3-Clause", "ships": "apk",
+      "id": "v8",
+      "name": "V8",
+      "version": "15.5.35.25",
+      "license": "BSD-3-Clause",
+      "ships": "apk",
       "source": "https://chromium.googlesource.com/v8/v8/+/refs/tags/15.5.35.25",
-      "libs": ["libv8android.so"], "files": ["snapshot_blob.bin"],
-      "notice": { "files": ["${V8_SRC}/LICENSE", "${V8_SRC}/LICENSE.v8", "${V8_SRC}/LICENSE.strongtalk"] }
+      "libs": ["libv8android.so"],
+      "files": ["snapshot_blob.bin"],
+      "notice": {
+        "files": [
+          "${V8_SRC}/LICENSE",
+          "${V8_SRC}/LICENSE.v8",
+          "${V8_SRC}/LICENSE.strongtalk"
+        ]
+      }
     },
     {
-      "id": "icu", "name": "ICU", "version": "78 (chromium/deps/icu @ 6ebb40c594776cc2c21ea14df85a2a89a328b364)", "license": "Unicode-3.0", "ships": "apk",
-      "source": "https://chromium.googlesource.com/chromium/deps/icu", "inside": "v8",
+      "id": "icu",
+      "name": "ICU",
+      "version": "78 (chromium/deps/icu @ 6ebb40c594776cc2c21ea14df85a2a89a328b364)",
+      "license": "Unicode-3.0",
+      "ships": "apk",
+      "source": "https://chromium.googlesource.com/chromium/deps/icu",
+      "inside": "v8",
       "notice": { "files": ["${V8_SRC}/third_party/icu/LICENSE"] }
     },
     {
-      "id": "abseil", "name": "Abseil", "thirdPartyName": "Abseil (abseil-cpp)", "version": "chromium/src/third_party/abseil-cpp @ 435e7d977fb36fb47854a4c552c0706dad0bd7cf", "license": "Apache-2.0", "ships": "apk", "inside": "v8",
+      "id": "abseil",
+      "name": "Abseil",
+      "thirdPartyName": "Abseil (abseil-cpp)",
+      "version": "chromium/src/third_party/abseil-cpp @ 435e7d977fb36fb47854a4c552c0706dad0bd7cf",
+      "license": "Apache-2.0",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/chromium/src/third_party/abseil-cpp",
       "notice": { "files": ["${V8_SRC}/third_party/abseil-cpp/LICENSE"] }
     },
     {
-      "id": "simdutf", "name": "simdutf", "version": "f7356eed293f8208c40b3c1b344a50bd70971983", "license": "Apache-2.0 OR MIT (MIT used)", "ships": "apk", "inside": "v8",
+      "id": "simdutf",
+      "name": "simdutf",
+      "version": "f7356eed293f8208c40b3c1b344a50bd70971983",
+      "license": "Apache-2.0 OR MIT (MIT used)",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/chromium/src/third_party/simdutf",
       "notice": { "files": ["${V8_SRC}/third_party/simdutf/LICENSE"] }
     },
     {
-      "id": "fast_float", "name": "fast_float", "version": "34164f547b7df3f5d794ff67e9f885c36819ebfc", "license": "Apache-2.0 OR MIT OR BSL-1.0 (MIT used)", "ships": "apk", "inside": "v8",
+      "id": "fast_float",
+      "name": "fast_float",
+      "version": "34164f547b7df3f5d794ff67e9f885c36819ebfc",
+      "license": "Apache-2.0 OR MIT OR BSL-1.0 (MIT used)",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/external/github.com/fastfloat/fast_float",
-      "notice": { "files": ["${V8_SRC}/third_party/fast_float/src/LICENSE-MIT"] }
+      "notice": {
+        "files": ["${V8_SRC}/third_party/fast_float/src/LICENSE-MIT"]
+      }
     },
     {
-      "id": "dragonbox", "name": "dragonbox", "version": "beeeef91cf6fef89a4d4ba5e95d47ca64ccb3a44", "license": "Apache-2.0 WITH LLVM-exception OR BSL-1.0 (BSL-1.0 used)", "ships": "apk", "inside": "v8",
+      "id": "dragonbox",
+      "name": "dragonbox",
+      "version": "beeeef91cf6fef89a4d4ba5e95d47ca64ccb3a44",
+      "license": "Apache-2.0 WITH LLVM-exception OR BSL-1.0 (BSL-1.0 used)",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/external/github.com/jk-jeon/dragonbox",
-      "notice": { "files": ["${V8_SRC}/third_party/dragonbox/src/LICENSE-Boost"] }
+      "notice": {
+        "files": ["${V8_SRC}/third_party/dragonbox/src/LICENSE-Boost"]
+      }
     },
     {
-      "id": "fp16", "name": "FP16", "version": "782eea126dc5c755827be751a099eb01826175cf", "license": "MIT", "ships": "apk", "inside": "v8",
+      "id": "fp16",
+      "name": "FP16",
+      "version": "782eea126dc5c755827be751a099eb01826175cf",
+      "license": "MIT",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/external/github.com/Maratyszcza/FP16",
       "notice": { "files": ["${V8_SRC}/third_party/fp16/src/LICENSE"] }
     },
     {
-      "id": "zlib-chromium", "name": "zlib (Chromium's fork)", "thirdPartyName": "zlib (Chromium's fork)", "version": "285e94b8fa95ad3b7d16b80798ec8dce6febb8c8", "license": "Zlib", "ships": "apk", "inside": "v8",
+      "id": "zlib-chromium",
+      "name": "zlib (Chromium's fork)",
+      "thirdPartyName": "zlib (Chromium's fork)",
+      "version": "285e94b8fa95ad3b7d16b80798ec8dce6febb8c8",
+      "license": "Zlib",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/chromium/src/third_party/zlib",
       "notice": { "files": ["${V8_SRC}/third_party/zlib/LICENSE"] }
     },
     {
-      "id": "fdlibm", "name": "fdlibm", "thirdPartyName": "fdlibm", "version": "as in V8 15.5.35.25", "license": "Sun Microsystems permissive notice", "ships": "apk", "inside": "v8",
+      "id": "fdlibm",
+      "name": "fdlibm",
+      "thirdPartyName": "fdlibm",
+      "version": "as in V8 15.5.35.25",
+      "license": "Sun Microsystems permissive notice",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/v8/v8/+/refs/tags/15.5.35.25/LICENSE.fdlibm",
       "notice": { "files": ["${V8_SRC}/LICENSE.fdlibm"] }
     },
     {
-      "id": "llvm-libc", "name": "LLVM libc", "version": "43a9a99ce4b5a04954090f8a0e74bf2786f59379", "license": "Apache-2.0 WITH LLVM-exception", "ships": "apk", "inside": "v8",
+      "id": "llvm-libc",
+      "name": "LLVM libc",
+      "version": "43a9a99ce4b5a04954090f8a0e74bf2786f59379",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/external/github.com/llvm/llvm-project/libc",
       "notice": { "files": ["${V8_SRC}/third_party/llvm-libc/src/LICENSE.TXT"] }
     },
     {
-      "id": "inspector_protocol", "name": "inspector_protocol", "version": "c0045057ce801744c5e88596a2f1bab1802e39f0", "license": "BSD-3-Clause", "ships": "apk", "inside": "v8",
+      "id": "inspector_protocol",
+      "name": "inspector_protocol",
+      "version": "c0045057ce801744c5e88596a2f1bab1802e39f0",
+      "license": "BSD-3-Clause",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/deps/inspector_protocol",
-      "notice": { "files": ["${V8_SRC}/third_party/inspector_protocol/LICENSE"] }
+      "notice": {
+        "files": ["${V8_SRC}/third_party/inspector_protocol/LICENSE"]
+      }
     },
     {
-      "id": "utf8-decoder", "name": "DFA UTF-8 Decoder", "version": "2010-06-25", "license": "MIT", "ships": "apk", "inside": "v8",
+      "id": "utf8-decoder",
+      "name": "DFA UTF-8 Decoder",
+      "version": "2010-06-25",
+      "license": "MIT",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://bjoern.hoehrmann.de/utf-8/decoder/dfa/",
       "notice": { "files": ["${V8_SRC}/third_party/utf8-decoder/LICENSE"] }
     },
     {
-      "id": "v8-sha256", "name": "SHA-256 from V8's src/utils/sha-256.cc", "thirdPartyName": "SHA-256 (V8's", "version": "as in V8 15.5.35.25", "license": "Apache-2.0", "ships": "apk", "inside": "v8",
+      "id": "v8-sha256",
+      "name": "SHA-256 from V8's src/utils/sha-256.cc",
+      "thirdPartyName": "SHA-256 (V8's",
+      "version": "as in V8 15.5.35.25",
+      "license": "Apache-2.0",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://chromium.googlesource.com/v8/v8/+/refs/tags/15.5.35.25/src/utils/sha-256.h",
-      "notice": { "kind": "statement", "copyright": ["Copyright 2013 Google Inc.", "Licensed under the Apache License, Version 2.0; the license text is reproduced in the Abseil section of this file."] }
+      "notice": {
+        "kind": "statement",
+        "copyright": [
+          "Copyright 2013 Google Inc.",
+          "Licensed under the Apache License, Version 2.0; the license text is reproduced in the Abseil section of this file."
+        ]
+      }
     },
     {
-      "id": "rapidhash", "name": "rapidhash", "thirdPartyName": "rapidhash (V8's", "version": "Nicoshev/rapidhash @ 588978411df8683777429f729be5213eb1bfd5f3 (as in V8 15.5.35.25)", "license": "BSD-2-Clause", "ships": "apk", "inside": "v8",
+      "id": "rapidhash",
+      "name": "rapidhash",
+      "thirdPartyName": "rapidhash (V8's",
+      "version": "Nicoshev/rapidhash @ 588978411df8683777429f729be5213eb1bfd5f3 (as in V8 15.5.35.25)",
+      "license": "BSD-2-Clause",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://github.com/Nicoshev/rapidhash (vendored in V8 as third_party/rapidhash-v8)",
       "notice": { "files": ["${V8_SRC}/third_party/rapidhash-v8/LICENSE"] }
     },
     {
-      "id": "highway", "name": "Highway", "thirdPartyName": "Highway (Google", "version": "google/highway @ 2607d3b5b0113992fe84d3848859eae13b3b52c1 (V8 15.5.35.25 DEPS)", "license": "Apache-2.0 OR BSD-3-Clause", "ships": "apk", "inside": "v8",
+      "id": "highway",
+      "name": "Highway",
+      "thirdPartyName": "Highway (Google",
+      "version": "google/highway @ 2607d3b5b0113992fe84d3848859eae13b3b52c1 (V8 15.5.35.25 DEPS)",
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://github.com/google/highway (Chromium mirror chromium.googlesource.com/external/github.com/google/highway)",
       "notice": { "files": ["${V8_SRC}/third_party/highway/src/LICENSE"] }
     },
     {
-      "id": "cpu_features", "name": "cpu_features", "thirdPartyName": "cpu_features (Google", "version": "v0.11.0 (google/cpu_features @ 81d13c49649f0714dd41fb56bb246398b6584085)", "license": "Apache-2.0 (ndk_compat: BSD-2-Clause)", "ships": "apk", "inside": "v8",
+      "id": "cpu_features",
+      "name": "cpu_features",
+      "thirdPartyName": "cpu_features (Google",
+      "version": "v0.11.0 (google/cpu_features @ 81d13c49649f0714dd41fb56bb246398b6584085)",
+      "license": "Apache-2.0 (ndk_compat: BSD-2-Clause)",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://github.com/google/cpu_features (linked through Chromium's zlib on Android)",
       "notice": { "files": ["${V8_SRC}/third_party/cpu_features/src/LICENSE"] }
     },
     {
-      "id": "halfsiphash", "name": "HalfSipHash", "thirdPartyName": "HalfSipHash (V8's", "version": "as in V8 15.5.35.25 (third_party/siphash)", "license": "CC0-1.0", "ships": "apk", "inside": "v8",
+      "id": "halfsiphash",
+      "name": "HalfSipHash",
+      "thirdPartyName": "HalfSipHash (V8's",
+      "version": "as in V8 15.5.35.25 (third_party/siphash)",
+      "license": "CC0-1.0",
+      "ships": "apk",
+      "inside": "v8",
       "source": "https://github.com/veorq/SipHash",
       "notice": { "files": ["${V8_SRC}/third_party/siphash/LICENSE"] }
     },
     {
-      "id": "libcxx", "name": "LLVM libc++", "version": "Android NDK r30 (30.0.16248370)", "license": "Apache-2.0 WITH LLVM-exception", "ships": "apk",
-      "source": "https://developer.android.com/ndk", "libs": ["libc++_shared.so"],
-      "notice": { "files": ["${V8_SRC}/third_party/llvm-libc/src/LICENSE.TXT"], "preface": "libc++ and libunwind are part of the LLVM project and carry the same license as LLVM libc (text below)." }
-    },
-    {
-      "id": "libunwind", "name": "LLVM libunwind", "version": "Android NDK r30 runtime", "license": "Apache-2.0 WITH LLVM-exception", "ships": "apk", "inside": "v8",
+      "id": "libcxx",
+      "name": "LLVM libc++",
+      "version": "Android NDK r30 (30.0.16248370)",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "ships": "apk",
       "source": "https://developer.android.com/ndk",
-      "notice": { "kind": "statement", "copyright": ["Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions; the license text is reproduced in the LLVM libc section of this file."] }
+      "libs": ["libc++_shared.so"],
+      "notice": {
+        "files": ["${V8_SRC}/third_party/llvm-libc/src/LICENSE.TXT"],
+        "preface": "libc++ and libunwind are part of the LLVM project and carry the same license as LLVM libc (text below)."
+      }
     },
     {
-      "id": "openxr-loader", "name": "OpenXR loader", "thirdPartyName": "Khronos OpenXR loader", "version": "OpenXR SDK 1.1.63 (KhronosGroup/OpenXR-SDK @ f2448a8797c85814aa892efc1ab8707900fbcc78)", "license": "Apache-2.0 OR MIT (MIT used)", "ships": "apk",
-      "source": "https://github.com/KhronosGroup/OpenXR-SDK", "cmakeVars": ["IWN_OPENXR_SDK_DIR"],
-      "notice": { "kind": "mit", "copyright": ["Copyright (c) 2017-2026 The Khronos Group Inc.", "Copyright (c) 2017-2019 Valve Corporation", "Copyright (c) 2017-2019 LunarG, Inc."] }
+      "id": "libunwind",
+      "name": "LLVM libunwind",
+      "version": "Android NDK r30 runtime",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "ships": "apk",
+      "inside": "v8",
+      "source": "https://developer.android.com/ndk",
+      "notice": {
+        "kind": "statement",
+        "copyright": [
+          "Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions; the license text is reproduced in the LLVM libc section of this file."
+        ]
+      }
     },
     {
-      "id": "jnipp", "name": "jnipp", "version": "as vendored in OpenXR SDK 1.1.63", "license": "MIT", "ships": "apk", "inside": "openxr-loader",
+      "id": "openxr-loader",
+      "name": "OpenXR loader",
+      "thirdPartyName": "Khronos OpenXR loader",
+      "version": "OpenXR SDK 1.1.63 (KhronosGroup/OpenXR-SDK @ f2448a8797c85814aa892efc1ab8707900fbcc78)",
+      "license": "Apache-2.0 OR MIT (MIT used)",
+      "ships": "apk",
+      "source": "https://github.com/KhronosGroup/OpenXR-SDK",
+      "cmakeVars": ["IWN_OPENXR_SDK_DIR"],
+      "notice": {
+        "kind": "mit",
+        "copyright": [
+          "Copyright (c) 2017-2026 The Khronos Group Inc.",
+          "Copyright (c) 2017-2019 Valve Corporation",
+          "Copyright (c) 2017-2019 LunarG, Inc."
+        ]
+      }
+    },
+    {
+      "id": "jnipp",
+      "name": "jnipp",
+      "version": "as vendored in OpenXR SDK 1.1.63",
+      "license": "MIT",
+      "ships": "apk",
+      "inside": "openxr-loader",
       "source": "https://github.com/mitchdowd/jnipp (OpenXR-SDK src/external/jnipp)",
-      "notice": { "files": ["${THIRD_PARTY}/openxr/src/external/jnipp/LICENSE"] }
+      "notice": {
+        "files": ["${THIRD_PARTY}/openxr/src/external/jnipp/LICENSE"]
+      }
     },
     {
-      "id": "android-jni-wrappers", "name": "android-jni-wrappers", "version": "as vendored in OpenXR SDK 1.1.63", "license": "BSL-1.0", "ships": "apk", "inside": "openxr-loader",
+      "id": "android-jni-wrappers",
+      "name": "android-jni-wrappers",
+      "version": "as vendored in OpenXR SDK 1.1.63",
+      "license": "BSL-1.0",
+      "ships": "apk",
+      "inside": "openxr-loader",
       "source": "https://gitlab.freedesktop.org/monado/utilities/android-jni-wrappers (OpenXR-SDK src/external/android-jni-wrappers)",
-      "notice": { "files": ["${V8_SRC}/third_party/fast_float/src/LICENSE-BOOST"], "preface": "Copyright 2020-2021, Collabora, Ltd. Distributed under the Boost Software License 1.0 (text below)." }
+      "notice": {
+        "files": ["${V8_SRC}/third_party/fast_float/src/LICENSE-BOOST"],
+        "preface": "Copyright 2020-2021, Collabora, Ltd. Distributed under the Boost Software License 1.0 (text below)."
+      }
     },
     {
-      "id": "jsoncpp", "name": "jsoncpp", "version": "1.9.6", "license": "MIT (or public domain)", "ships": "apk",
-      "source": "https://github.com/open-source-parsers/jsoncpp", "cmakeVars": ["IWN_JSONCPP_DIR"],
+      "id": "jsoncpp",
+      "name": "jsoncpp",
+      "version": "1.9.6",
+      "license": "MIT (or public domain)",
+      "ships": "apk",
+      "source": "https://github.com/open-source-parsers/jsoncpp",
+      "cmakeVars": ["IWN_JSONCPP_DIR"],
       "notice": { "files": ["${THIRD_PARTY}/jsoncpp/LICENSE"] }
     },
     {
-      "id": "oboe", "name": "Oboe", "version": "1.9.0", "license": "Apache-2.0", "ships": "apk",
-      "source": "https://github.com/google/oboe (as vendored in JUCE 8.0.8, https://github.com/juce-framework/JUCE)", "cmakeVars": ["IWN_OBOE_DIR"],
+      "id": "oboe",
+      "name": "Oboe",
+      "version": "1.9.0",
+      "license": "Apache-2.0",
+      "ships": "apk",
+      "source": "https://github.com/google/oboe (as vendored in JUCE 8.0.8, https://github.com/juce-framework/JUCE)",
+      "cmakeVars": ["IWN_OBOE_DIR"],
       "notice": { "files": ["${THIRD_PARTY}/oboe/LICENSE"] }
     },
     {
-      "id": "dr_mp3", "name": "dr_mp3", "version": "0.7.3", "license": "Unlicense OR MIT-0", "ships": "apk",
-      "source": "https://github.com/mackron/dr_libs", "cmakeVars": ["IWN_DR_LIBS_DIR"],
+      "id": "dr_mp3",
+      "name": "dr_mp3",
+      "version": "0.7.3",
+      "license": "Unlicense OR MIT-0",
+      "ships": "apk",
+      "source": "https://github.com/mackron/dr_libs",
+      "cmakeVars": ["IWN_DR_LIBS_DIR"],
       "notice": { "files": ["${THIRD_PARTY}/dr_libs/LICENSE"] }
     },
     {
-      "id": "libvorbis", "name": "libvorbis", "version": "xiph main @ 2d79800b6751dddd4b8b4ad50832faa5ae2a00d9", "license": "BSD-3-Clause", "ships": "apk",
-      "source": "https://gitlab.xiph.org/xiph/vorbis", "cmakeVars": ["IWN_LIBVORBIS_DIR"],
+      "id": "libvorbis",
+      "name": "libvorbis",
+      "version": "xiph main @ 2d79800b6751dddd4b8b4ad50832faa5ae2a00d9",
+      "license": "BSD-3-Clause",
+      "ships": "apk",
+      "source": "https://gitlab.xiph.org/xiph/vorbis",
+      "cmakeVars": ["IWN_LIBVORBIS_DIR"],
       "notice": { "files": ["${THIRD_PARTY}/libvorbis/COPYING"] }
     },
     {
-      "id": "libogg", "name": "libogg", "version": "1.3.5", "license": "BSD-3-Clause", "ships": "apk",
-      "source": "https://downloads.xiph.org/releases/ogg/", "cmakeVars": ["IWN_LIBOGG_DIR"],
+      "id": "libogg",
+      "name": "libogg",
+      "version": "1.3.5",
+      "license": "BSD-3-Clause",
+      "ships": "apk",
+      "source": "https://downloads.xiph.org/releases/ogg/",
+      "cmakeVars": ["IWN_LIBOGG_DIR"],
       "notice": { "files": ["${THIRD_PARTY}/libogg/COPYING"] }
     },
     {
-      "id": "kissfft", "name": "KISS FFT", "version": "131.1.0", "license": "BSD-3-Clause", "ships": "apk",
-      "source": "https://github.com/mborgerding/kissfft", "vendoredDirs": ["runtime/audio/third_party/kissfft"],
-      "notice": { "files": ["${PKG}/runtime/audio/third_party/kissfft/COPYING", "${PKG}/runtime/audio/third_party/kissfft/LICENSE-BSD-3-Clause"] }
+      "id": "kissfft",
+      "name": "KISS FFT",
+      "version": "131.1.0",
+      "license": "BSD-3-Clause",
+      "ships": "apk",
+      "source": "https://github.com/mborgerding/kissfft",
+      "vendoredDirs": ["runtime/audio/third_party/kissfft"],
+      "notice": {
+        "files": [
+          "${PKG}/runtime/audio/third_party/kissfft/COPYING",
+          "${PKG}/runtime/audio/third_party/kissfft/LICENSE-BSD-3-Clause"
+        ]
+      }
     },
     {
-      "id": "stb", "name": "stb", "thirdPartyName": "stb_image", "version": "stb_image 2.30, stb_image_write 1.16 (nothings/stb @ 2e2bef463a5b53ddf8bb788e25da6b8506314c08)", "license": "MIT OR Unlicense (MIT used)", "ships": "apk",
-      "source": "https://github.com/nothings/stb", "cmakeVars": ["IWN_STB_DIR"],
-      "notice": { "files": ["${PKG}/runtime/canvas2d/licenses/stb-LICENSE.txt"] }
+      "id": "stb",
+      "name": "stb",
+      "thirdPartyName": "stb_image",
+      "version": "stb_image 2.30, stb_image_write 1.16 (nothings/stb @ 2e2bef463a5b53ddf8bb788e25da6b8506314c08)",
+      "license": "MIT OR Unlicense (MIT used)",
+      "ships": "apk",
+      "source": "https://github.com/nothings/stb",
+      "cmakeVars": ["IWN_STB_DIR"],
+      "notice": {
+        "files": ["${PKG}/runtime/canvas2d/licenses/stb-LICENSE.txt"]
+      }
     },
     {
-      "id": "skia-origin", "name": "Skia `SkParseEncodedOrigin.cpp`", "version": "Skia milestone 103", "license": "BSD-3-Clause", "ships": "apk",
+      "id": "skia-origin",
+      "name": "Skia `SkParseEncodedOrigin.cpp`",
+      "version": "Skia milestone 103",
+      "license": "BSD-3-Clause",
+      "ships": "apk",
       "source": "https://skia.googlesource.com/skia",
-      "notice": { "files": ["${THIRD_PARTY}/skia/LICENSE"], "preface": "runtime/image/src/format.cc adapts SkParseEncodedOrigin (Copyright 2018 / 2011 Google Inc.)." }
+      "notice": {
+        "files": ["${THIRD_PARTY}/skia/LICENSE"],
+        "preface": "runtime/image/src/format.cc adapts SkParseEncodedOrigin (Copyright 2018 / 2011 Google Inc.)."
+      }
     },
     {
-      "id": "freetype", "name": "FreeType", "version": "2.14.2", "license": "FTL", "ships": "apk",
-      "source": "https://freetype.org", "cmakeVars": ["IWN_FREETYPE_DIR"], "vendoredDirs": ["runtime/canvas2d/third_party/config"],
-      "notice": { "files": ["${PKG}/runtime/canvas2d/licenses/NOTICE.txt", "${PKG}/runtime/canvas2d/licenses/FreeType-FTL.txt"] }
+      "id": "freetype",
+      "name": "FreeType",
+      "version": "2.14.2",
+      "license": "FTL",
+      "ships": "apk",
+      "source": "https://freetype.org",
+      "cmakeVars": ["IWN_FREETYPE_DIR"],
+      "vendoredDirs": ["runtime/canvas2d/third_party/config"],
+      "notice": {
+        "files": [
+          "${PKG}/runtime/canvas2d/licenses/NOTICE.txt",
+          "${PKG}/runtime/canvas2d/licenses/FreeType-FTL.txt"
+        ]
+      }
     },
     {
-      "id": "zlib-freetype", "name": "zlib (inside FreeType)", "thirdPartyName": "zlib (inside FreeType)", "version": "1.3.1", "license": "Zlib", "ships": "apk", "inside": "freetype",
+      "id": "zlib-freetype",
+      "name": "zlib (inside FreeType)",
+      "thirdPartyName": "zlib (inside FreeType)",
+      "version": "1.3.1",
+      "license": "Zlib",
+      "ships": "apk",
+      "inside": "freetype",
       "source": "https://zlib.net",
-      "notice": { "files": ["${PKG}/runtime/canvas2d/licenses/zlib-LICENSE.txt"] }
+      "notice": {
+        "files": ["${PKG}/runtime/canvas2d/licenses/zlib-LICENSE.txt"]
+      }
     },
     {
-      "id": "harfbuzz", "name": "HarfBuzz", "version": "14.0.0", "license": "MIT (Old MIT)", "ships": "apk",
-      "source": "https://github.com/harfbuzz/harfbuzz", "cmakeVars": ["IWN_HARFBUZZ_DIR"],
-      "notice": { "files": ["${PKG}/runtime/canvas2d/licenses/HarfBuzz-COPYING.txt"] }
+      "id": "harfbuzz",
+      "name": "HarfBuzz",
+      "version": "14.0.0",
+      "license": "MIT (Old MIT)",
+      "ships": "apk",
+      "source": "https://github.com/harfbuzz/harfbuzz",
+      "cmakeVars": ["IWN_HARFBUZZ_DIR"],
+      "notice": {
+        "files": ["${PKG}/runtime/canvas2d/licenses/HarfBuzz-COPYING.txt"]
+      }
     },
     {
-      "id": "unicode-ucd", "name": "Unicode Character Database data", "version": "Unicode 17.0.0", "license": "Unicode License", "ships": "apk", "inside": "harfbuzz",
+      "id": "unicode-ucd",
+      "name": "Unicode Character Database data",
+      "version": "Unicode 17.0.0",
+      "license": "Unicode License",
+      "ships": "apk",
+      "inside": "harfbuzz",
       "source": "https://www.unicode.org/ucd/",
-      "notice": { "files": ["${PKG}/runtime/canvas2d/licenses/Unicode-License.txt"] }
+      "notice": {
+        "files": ["${PKG}/runtime/canvas2d/licenses/Unicode-License.txt"]
+      }
     },
     {
-      "id": "brotli", "name": "Brotli", "thirdPartyName": "Brotli (decoder only)", "version": "1.2.0", "license": "MIT", "ships": "apk",
-      "source": "https://github.com/google/brotli", "cmakeVars": ["IWN_BROTLI_DIR"],
-      "notice": { "files": ["${PKG}/runtime/canvas2d/licenses/Brotli-LICENSE.txt"] }
+      "id": "brotli",
+      "name": "Brotli",
+      "thirdPartyName": "Brotli (decoder only)",
+      "version": "1.2.0",
+      "license": "MIT",
+      "ships": "apk",
+      "source": "https://github.com/google/brotli",
+      "cmakeVars": ["IWN_BROTLI_DIR"],
+      "notice": {
+        "files": ["${PKG}/runtime/canvas2d/licenses/Brotli-LICENSE.txt"]
+      }
     },
     {
-      "id": "roboto", "name": "Roboto", "thirdPartyName": "Roboto (Regular, Bold)", "version": "Google Fonts v51 (2026-02-19)", "license": "OFL-1.1", "ships": "apk",
-      "source": "https://fonts.google.com/specimen/Roboto (npm @expo-google-fonts/roboto 0.4.3)", "fonts": ["Roboto-Regular.ttf", "Roboto-Bold.ttf"],
+      "id": "roboto",
+      "name": "Roboto",
+      "thirdPartyName": "Roboto (Regular, Bold)",
+      "version": "Google Fonts v51 (2026-02-19)",
+      "license": "OFL-1.1",
+      "ships": "apk",
+      "source": "https://fonts.google.com/specimen/Roboto (npm @expo-google-fonts/roboto 0.4.3)",
+      "fonts": ["Roboto-Regular.ttf", "Roboto-Bold.ttf"],
       "notice": { "files": ["${PKG}/runtime/canvas2d/fonts/OFL-Roboto.txt"] }
     },
     {
-      "id": "roboto-mono", "name": "Roboto Mono", "thirdPartyName": "Roboto Mono (Regular)", "version": "Google Fonts (2026)", "license": "OFL-1.1", "ships": "apk",
-      "source": "https://fonts.google.com/specimen/Roboto+Mono (npm @expo-google-fonts/roboto-mono 0.4.2)", "fonts": ["RobotoMono-Regular.ttf"],
-      "notice": { "files": ["${PKG}/runtime/canvas2d/fonts/OFL-RobotoMono.txt"] }
+      "id": "roboto-mono",
+      "name": "Roboto Mono",
+      "thirdPartyName": "Roboto Mono (Regular)",
+      "version": "Google Fonts (2026)",
+      "license": "OFL-1.1",
+      "ships": "apk",
+      "source": "https://fonts.google.com/specimen/Roboto+Mono (npm @expo-google-fonts/roboto-mono 0.4.2)",
+      "fonts": ["RobotoMono-Regular.ttf"],
+      "notice": {
+        "files": ["${PKG}/runtime/canvas2d/fonts/OFL-RobotoMono.txt"]
+      }
     },
     {
-      "id": "sqlite", "name": "SQLite", "thirdPartyName": "SQLite (amalgamation)", "version": "3.53.2", "license": "blessing (public domain)", "ships": "apk",
-      "source": "https://sqlite.org (amalgamation 3530200)", "cmakeVars": ["IWN_SQLITE_DIR"],
-      "notice": { "kind": "statement", "copyright": ["The author disclaims copyright to this source code. In place of a legal notice, here is a blessing:", "May you do good and not evil. May you find forgiveness for yourself and forgive others. May you share freely, never taking more than you give.", "SQLite is in the public domain: https://sqlite.org/copyright.html"] }
+      "id": "sqlite",
+      "name": "SQLite",
+      "thirdPartyName": "SQLite (amalgamation)",
+      "version": "3.53.2",
+      "license": "blessing (public domain)",
+      "ships": "apk",
+      "source": "https://sqlite.org (amalgamation 3530200)",
+      "cmakeVars": ["IWN_SQLITE_DIR"],
+      "notice": {
+        "kind": "statement",
+        "copyright": [
+          "The author disclaims copyright to this source code. In place of a legal notice, here is a blessing:",
+          "May you do good and not evil. May you find forgiveness for yourself and forgive others. May you share freely, never taking more than you give.",
+          "SQLite is in the public domain: https://sqlite.org/copyright.html"
+        ]
+      }
     },
     {
-      "id": "whatwg-url", "name": "whatwg-url", "version": "17.3.0", "license": "MIT", "ships": "prelude",
-      "source": "https://github.com/jsdom/whatwg-url", "npm": ["whatwg-url"],
-      "notice": { "files": ["${PKG}/web/glue/node_modules/whatwg-url/LICENSE.txt"] }
+      "id": "whatwg-url",
+      "name": "whatwg-url",
+      "version": "17.3.0",
+      "license": "MIT",
+      "ships": "prelude",
+      "source": "https://github.com/jsdom/whatwg-url",
+      "npm": ["whatwg-url"],
+      "notice": {
+        "files": ["${PKG}/web/glue/node_modules/whatwg-url/LICENSE.txt"]
+      }
     },
     {
-      "id": "webidl-conversions", "name": "webidl-conversions", "version": "8.0.1", "license": "BSD-2-Clause", "ships": "prelude",
-      "source": "https://github.com/jsdom/webidl-conversions", "npm": ["webidl-conversions"],
-      "notice": { "files": ["${PKG}/web/glue/node_modules/webidl-conversions/LICENSE.md"] }
+      "id": "webidl-conversions",
+      "name": "webidl-conversions",
+      "version": "8.0.1",
+      "license": "BSD-2-Clause",
+      "ships": "prelude",
+      "source": "https://github.com/jsdom/webidl-conversions",
+      "npm": ["webidl-conversions"],
+      "notice": {
+        "files": ["${PKG}/web/glue/node_modules/webidl-conversions/LICENSE.md"]
+      }
     },
     {
-      "id": "punycode", "name": "punycode", "version": "2.3.1", "license": "MIT", "ships": "prelude",
-      "source": "https://github.com/mathiasbynens/punycode.js", "npm": ["punycode"],
-      "notice": { "files": ["${PKG}/web/glue/node_modules/punycode/LICENSE-MIT.txt"] }
+      "id": "punycode",
+      "name": "punycode",
+      "version": "2.3.1",
+      "license": "MIT",
+      "ships": "prelude",
+      "source": "https://github.com/mathiasbynens/punycode.js",
+      "npm": ["punycode"],
+      "notice": {
+        "files": ["${PKG}/web/glue/node_modules/punycode/LICENSE-MIT.txt"]
+      }
     },
     {
-      "id": "noble-hashes", "name": "@noble/hashes", "version": "2.4.0", "license": "MIT", "ships": "prelude",
-      "source": "https://github.com/paulmillr/noble-hashes", "npm": ["@noble/hashes"],
-      "notice": { "files": ["${PKG}/web/glue/node_modules/@noble/hashes/LICENSE"] }
+      "id": "noble-hashes",
+      "name": "@noble/hashes",
+      "version": "2.4.0",
+      "license": "MIT",
+      "ships": "prelude",
+      "source": "https://github.com/paulmillr/noble-hashes",
+      "npm": ["@noble/hashes"],
+      "notice": {
+        "files": ["${PKG}/web/glue/node_modules/@noble/hashes/LICENSE"]
+      }
     },
     {
-      "id": "web-streams-polyfill", "name": "web-streams-polyfill", "version": "4.3.0", "license": "MIT", "ships": "prelude",
-      "source": "https://github.com/MattiasBuelens/web-streams-polyfill", "npm": ["web-streams-polyfill"],
-      "notice": { "files": ["${PKG}/web/net/node_modules/web-streams-polyfill/LICENSE"] }
+      "id": "web-streams-polyfill",
+      "name": "web-streams-polyfill",
+      "version": "4.3.0",
+      "license": "MIT",
+      "ships": "prelude",
+      "source": "https://github.com/MattiasBuelens/web-streams-polyfill",
+      "npm": ["web-streams-polyfill"],
+      "notice": {
+        "files": ["${PKG}/web/net/node_modules/web-streams-polyfill/LICENSE"]
+      }
     },
     {
-      "id": "gl-matrix", "name": "gl-matrix", "version": "3.4.4", "license": "MIT", "ships": "prelude",
-      "source": "https://github.com/toji/gl-matrix", "npm": ["gl-matrix"],
+      "id": "gl-matrix",
+      "name": "gl-matrix",
+      "version": "3.4.4",
+      "license": "MIT",
+      "ships": "prelude",
+      "source": "https://github.com/toji/gl-matrix",
+      "npm": ["gl-matrix"],
       "notice": { "files": ["${PKG}/web/xr/node_modules/gl-matrix/LICENSE.md"] }
     },
     {
-      "id": "iwer", "name": "iwer", "version": "2.7.0 host entry (this monorepo)", "license": "MIT", "ships": "prelude", "firstParty": true,
+      "id": "iwer",
+      "name": "iwer",
+      "version": "2.7.0 host entry (this monorepo)",
+      "license": "MIT",
+      "ships": "prelude",
+      "firstParty": true,
       "source": "https://github.com/meta-quest/immersive-web-emulation-runtime",
-      "notice": { "kind": "statement", "copyright": ["Copyright (c) Meta Platforms, Inc. and affiliates. MIT License (the same license as this package, see LICENSE)."] }
+      "notice": {
+        "kind": "statement",
+        "copyright": [
+          "Copyright (c) Meta Platforms, Inc. and affiliates. MIT License (the same license as this package, see LICENSE)."
+        ]
+      }
     },
     {
-      "id": "indexeddbshim", "name": "indexeddbshim", "version": "19.0.7", "license": "MIT OR Apache-2.0", "ships": "no", "why": "only in web/storage/dist/idb.min.js, an opt-in prelude that is out of the alpha scope and not in the template",
+      "id": "indexeddbshim",
+      "name": "indexeddbshim",
+      "version": "19.0.7",
+      "license": "MIT OR Apache-2.0",
+      "ships": "no",
+      "why": "only in web/storage/dist/idb.min.js, an opt-in prelude that is out of the alpha scope and not in the template",
       "npm": ["indexeddbshim"]
     },
     {
-      "id": "websql-configurable", "name": "websql-configurable", "version": "4.1.0", "license": "Apache-2.0", "ships": "no", "why": "only in idb.min.js (out of the alpha scope)",
+      "id": "websql-configurable",
+      "name": "websql-configurable",
+      "version": "4.1.0",
+      "license": "Apache-2.0",
+      "ships": "no",
+      "why": "only in idb.min.js (out of the alpha scope)",
       "npm": ["websql-configurable"]
     },
     {
-      "id": "libwebp", "name": "libwebp", "thirdPartyName": "libwebp (+ demux, sharpyuv)", "version": "1.4.0", "license": "BSD-3-Clause", "ships": "no", "why": "host builds and tests only (IWN_IMAGE_WITH_WEBP=OFF on Android)",
+      "id": "libwebp",
+      "name": "libwebp",
+      "thirdPartyName": "libwebp (+ demux, sharpyuv)",
+      "version": "1.4.0",
+      "license": "BSD-3-Clause",
+      "ships": "no",
+      "why": "host builds and tests only (IWN_IMAGE_WITH_WEBP=OFF on Android)",
       "cmakeVars": ["IWN_LIBWEBP_DIR"]
     },
     {
-      "id": "lodepng", "name": "lodepng", "version": "18964554", "license": "Zlib", "ships": "no", "why": "tests only", "cmakeVars": ["IWN_LODEPNG_DIR"]
+      "id": "lodepng",
+      "name": "lodepng",
+      "version": "18964554",
+      "license": "Zlib",
+      "ships": "no",
+      "why": "tests only",
+      "cmakeVars": ["IWN_LODEPNG_DIR"]
     },
     {
-      "id": "libjpeg-turbo", "name": "libjpeg-turbo", "thirdPartyName": "libjpeg-turbo (libjpeg API", "version": "2.1.6", "license": "IJG AND BSD-3-Clause", "ships": "no", "why": "tests only", "cmakeVars": ["IWN_LIBJPEG_TURBO_DIR"]
+      "id": "libjpeg-turbo",
+      "name": "libjpeg-turbo",
+      "thirdPartyName": "libjpeg-turbo (libjpeg API",
+      "version": "2.1.6",
+      "license": "IJG AND BSD-3-Clause",
+      "ships": "no",
+      "why": "tests only",
+      "cmakeVars": ["IWN_LIBJPEG_TURBO_DIR"]
     }
   ]
 }

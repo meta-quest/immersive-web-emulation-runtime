@@ -25,9 +25,20 @@ const root = join(here, '..');
 let bundlePromise: Promise<vm.Script> | null = null;
 let subtlePromise: Promise<vm.Script> | null = null;
 
-async function buildScript(which: 'buildOptions' | 'subtleBuildOptions', filename: string): Promise<vm.Script> {
-  const opts = (await import(join(root, 'build.mjs'))) as Record<string, Record<string, unknown>>;
-  const r = await build({ ...opts[which], minify: true, write: false, outfile: filename } as never);
+async function buildScript(
+  which: 'buildOptions' | 'subtleBuildOptions',
+  filename: string,
+): Promise<vm.Script> {
+  const opts = (await import(join(root, 'build.mjs'))) as Record<
+    string,
+    Record<string, unknown>
+  >;
+  const r = await build({
+    ...opts[which],
+    minify: true,
+    write: false,
+    outfile: filename,
+  } as never);
   return new vm.Script(r.outputFiles![0]!.text, { filename });
 }
 
@@ -106,8 +117,17 @@ export type GlueGlobal = typeof globalThis & Record<string, unknown>;
  * provided (the event-loop stream owns them on device) so FileReader / AbortSignal.timeout work.
  */
 export async function createGlueContext(
-  opts: { natives?: Record<string, unknown>; config?: unknown; preset?: Record<string, unknown>; timers?: boolean } = {},
-): Promise<{ g: GlueGlobal; ctx: vm.Context; run: <T = unknown>(code: string) => T }> {
+  opts: {
+    natives?: Record<string, unknown>;
+    config?: unknown;
+    preset?: Record<string, unknown>;
+    timers?: boolean;
+  } = {},
+): Promise<{
+  g: GlueGlobal;
+  ctx: vm.Context;
+  run: <T = unknown>(code: string) => T;
+}> {
   const script = await glueScript();
   const subtle = await subtleScript();
   const sandbox: Record<string, unknown> = { ...(opts.preset ?? {}) };
@@ -124,7 +144,7 @@ export async function createGlueContext(
   script.runInContext(ctx);
   // As the APK does when it ships both preludes: glue.min.js, then glue-subtle.min.js.
   subtle.runInContext(ctx);
-  return { g, ctx, run: <T,>(code: string) => vm.runInContext(code, ctx) as T };
+  return { g, ctx, run: <T>(code: string) => vm.runInContext(code, ctx) as T };
 }
 
 let messageCompare = false;
@@ -151,22 +171,50 @@ export function snap(v: unknown, seen = new Set<unknown>()): unknown {
   try {
     const tagName = Object.prototype.toString.call(v).slice(8, -1);
     if (ArrayBuffer.isView(v)) {
-      const arr = Array.from(v as unknown as ArrayLike<number | bigint>, (x) => snap(x));
+      const arr = Array.from(v as unknown as ArrayLike<number | bigint>, (x) =>
+        snap(x),
+      );
       return { $: tagName, v: arr };
     }
-    if (tagName === 'ArrayBuffer') return { $: 'ArrayBuffer', v: Array.from(new Uint8Array(v as ArrayBuffer)) };
-    if (tagName === 'Error' || tagName === 'DOMException' || v instanceof Error) {
+    if (tagName === 'ArrayBuffer')
+      return {
+        $: 'ArrayBuffer',
+        v: Array.from(new Uint8Array(v as ArrayBuffer)),
+      };
+    if (
+      tagName === 'Error' ||
+      tagName === 'DOMException' ||
+      v instanceof Error
+    ) {
       const e = v as { name?: unknown; message?: unknown; code?: unknown };
       // Messages are compared only for errors this suite builds itself (not engine/Node wording).
-      return { $: 'error', name: e.name, code: e.code, message: messageCompare ? e.message : undefined };
+      return {
+        $: 'error',
+        name: e.name,
+        code: e.code,
+        message: messageCompare ? e.message : undefined,
+      };
     }
-    if (Array.isArray(v)) return Array.from(v as unknown[], (x) => snap(x, seen));
-    if (tagName === 'Map') return { $: 'Map', v: Array.from(v as Map<unknown, unknown>, ([a, b]) => [snap(a, seen), snap(b, seen)]) };
-    if (tagName === 'Set') return { $: 'Set', v: Array.from(v as Set<unknown>, (a) => snap(a, seen)) };
+    if (Array.isArray(v))
+      return Array.from(v as unknown[], (x) => snap(x, seen));
+    if (tagName === 'Map')
+      return {
+        $: 'Map',
+        v: Array.from(v as Map<unknown, unknown>, ([a, b]) => [
+          snap(a, seen),
+          snap(b, seen),
+        ]),
+      };
+    if (tagName === 'Set')
+      return {
+        $: 'Set',
+        v: Array.from(v as Set<unknown>, (a) => snap(a, seen)),
+      };
     if (tagName === 'Date') return { $: 'Date', v: (v as Date).getTime() };
     if (tagName === 'RegExp') return { $: 'RegExp', v: String(v) };
     const out: Record<string, unknown> = {};
-    for (const k of Object.keys(v)) out[k] = snap((v as Record<string, unknown>)[k], seen);
+    for (const k of Object.keys(v))
+      out[k] = snap((v as Record<string, unknown>)[k], seen);
     return out;
   } finally {
     seen.delete(v);
@@ -174,9 +222,14 @@ export function snap(v: unknown, seen = new Set<unknown>()): unknown {
 }
 
 /** Runs `body` (an async function body; `return` the result) in a realm and snapshots it. */
-async function runIn(evaluate: (code: string) => unknown, body: string): Promise<unknown> {
+async function runIn(
+  evaluate: (code: string) => unknown,
+  body: string,
+): Promise<unknown> {
   try {
-    const value = await (evaluate(`(async () => {\n${body}\n})()`) as Promise<unknown>);
+    const value = await (evaluate(
+      `(async () => {\n${body}\n})()`,
+    ) as Promise<unknown>);
     return snap(value);
   } catch (e) {
     return { thrown: snap(e) };
@@ -198,7 +251,9 @@ export const BOOTSTRAP_PATH = join(root, '../../runtime/core/js/bootstrap.js');
 
 export interface DeviceCalls {
   setBlobResolver: number;
-  resolver: ((url: string) => { bytes: Uint8Array; type: string } | null) | null;
+  resolver:
+    | ((url: string) => { bytes: Uint8Array; type: string } | null)
+    | null;
   timerAdd: number[];
   /** Errors the real bootstrap's reportError handed to core.reportError (listener exceptions, ...). */
   reported: unknown[];
@@ -210,11 +265,25 @@ export interface DeviceCalls {
  * 0), then glue.min.js and glue-subtle.min.js.
  */
 export async function createDeviceContext(
-  opts: { natives?: Record<string, unknown>; config?: Record<string, unknown> } = {},
-): Promise<{ g: GlueGlobal; ctx: vm.Context; run: <T = unknown>(code: string) => T; calls: DeviceCalls; logs: unknown[][] }> {
+  opts: {
+    natives?: Record<string, unknown>;
+    config?: Record<string, unknown>;
+  } = {},
+): Promise<{
+  g: GlueGlobal;
+  ctx: vm.Context;
+  run: <T = unknown>(code: string) => T;
+  calls: DeviceCalls;
+  logs: unknown[][];
+}> {
   const ctx = vm.createContext({});
   const g = vm.runInContext('globalThis', ctx) as GlueGlobal;
-  const calls: DeviceCalls = { setBlobResolver: 0, resolver: null, timerAdd: [], reported: [] };
+  const calls: DeviceCalls = {
+    setBlobResolver: 0,
+    resolver: null,
+    timerAdd: [],
+    reported: [],
+  };
   const logs: unknown[][] = [];
   let hooks: { timer(id: number): void } | null = null;
   let nextId = 1;
@@ -252,7 +321,11 @@ export async function createDeviceContext(
       calls.reported.push(e);
       logs.push(['reportError', e]);
     },
-    lifecycleState: () => ({ visibilityState: 'visible', focused: true, readyState: 'loading' }),
+    lifecycleState: () => ({
+      visibilityState: 'visible',
+      focused: true,
+      readyState: 'loading',
+    }),
     reload() {},
     close() {},
     inspectorSessions: () => 0,
@@ -267,15 +340,24 @@ export async function createDeviceContext(
     ...base,
     core,
     loop: { queueMicrotask: (fn: () => void) => queueMicrotask(fn) },
-    config: { url: 'https://app.local/', runtimeVersion: '0.0.0', ...(opts.config ?? {}) },
+    config: {
+      url: 'https://app.local/',
+      runtimeVersion: '0.0.0',
+      ...(opts.config ?? {}),
+    },
   };
   g.__iwn = natives;
-  const boot = vm.runInContext(readFileSync(BOOTSTRAP_PATH, 'utf8'), ctx, { filename: 'bootstrap.js' }) as (
-    n: unknown,
-    g: unknown,
-  ) => void;
+  const boot = vm.runInContext(readFileSync(BOOTSTRAP_PATH, 'utf8'), ctx, {
+    filename: 'bootstrap.js',
+  }) as (n: unknown, g: unknown) => void;
   boot(natives, g);
   (await glueScript()).runInContext(ctx);
   (await subtleScript()).runInContext(ctx);
-  return { g, ctx, run: <T,>(code: string) => vm.runInContext(code, ctx) as T, calls, logs };
+  return {
+    g,
+    ctx,
+    run: <T>(code: string) => vm.runInContext(code, ctx) as T,
+    calls,
+    logs,
+  };
 }

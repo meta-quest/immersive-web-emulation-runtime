@@ -15,9 +15,31 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
-import { COUNTS, F32, F64, HAND_F32, HAND_U32, HAND_U8, LAYOUT_VERSION, RECORD_BYTES, U32 } from '../src/layout.gen.ts';
-import { LAYER_BUFFER_VERSION, LAYER_BUFFER_WORDS, NAMES_AT, NO_LIST, COUNT_AT, VERSION_AT } from '../src/layers.ts';
-import type { NativeSwapchain, SceneData, XrInfo, XrNativeEvent } from '../src/natives.ts';
+import {
+  COUNTS,
+  F32,
+  F64,
+  HAND_F32,
+  HAND_U32,
+  HAND_U8,
+  LAYOUT_VERSION,
+  RECORD_BYTES,
+  U32,
+} from '../src/layout.gen.ts';
+import {
+  LAYER_BUFFER_VERSION,
+  LAYER_BUFFER_WORDS,
+  NAMES_AT,
+  NO_LIST,
+  COUNT_AT,
+  VERSION_AT,
+} from '../src/layers.ts';
+import type {
+  NativeSwapchain,
+  SceneData,
+  XrInfo,
+  XrNativeEvent,
+} from '../src/natives.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const bundle = readFileSync(join(here, '../dist/xr.js'), 'utf8');
@@ -39,7 +61,13 @@ export interface Harness {
   gl: Record<string, any>;
   reported: unknown[];
   logs: string[];
-  record: { u32: Uint32Array; f32: Float32Array; f64: Float64Array; u8: Uint8Array; buffer: ArrayBuffer };
+  record: {
+    u32: Uint32Array;
+    f32: Float32Array;
+    f64: Float64Array;
+    u8: Uint8Array;
+    buffer: ArrayBuffer;
+  };
   /** The composition-layer buffer (layers.ts) as the XR thread sees it; names of acquired images go in here. */
   layerWords: { u32: Uint32Array; f32: Float32Array };
   info: XrInfo;
@@ -83,21 +111,49 @@ export interface FrameOptions {
 
 const DEFAULT_FOV = [-0.82, 0.76, 0.85, -0.93];
 export const DEFAULT_VIEWS = [
-  -0.031, 1.6, 0, 0, 0, 0, 1, ...DEFAULT_FOV,
-  0.031, 1.6, 0, 0, 0, 0, 1, ...DEFAULT_FOV,
+  -0.031,
+  1.6,
+  0,
+  0,
+  0,
+  0,
+  1,
+  ...DEFAULT_FOV,
+  0.031,
+  1.6,
+  0,
+  0,
+  0,
+  0,
+  1,
+  ...DEFAULT_FOV,
 ];
 
 export function writeController(
   rec: Harness['record'],
   hand: 0 | 1,
-  opts: { trigger?: number; pressed?: boolean; aim?: number[]; grip?: number[]; mode?: number; profile?: number; stick?: [number, number] },
+  opts: {
+    trigger?: number;
+    pressed?: boolean;
+    aim?: number[];
+    grip?: number[];
+    mode?: number;
+    profile?: number;
+    stick?: [number, number];
+  },
 ): void {
   rec.u32[HAND_U32.inputMode[hand]] = opts.mode ?? 1;
   // Native interaction profile (input_map.h): 2 Touch Plus; 5 hand_interaction_ext (a hand used as a pointer).
   rec.u32[HAND_U32.inputProfile[hand]] = opts.profile ?? 2;
   rec.u32[HAND_U32.inputFlags[hand]] = 1 | 2;
-  rec.f32.set(opts.aim ?? [hand ? 0.2 : -0.2, 1.3, -0.3, 0, 0, 0, 1], HAND_F32.targetRay[hand]);
-  rec.f32.set(opts.grip ?? [hand ? 0.2 : -0.2, 1.25, -0.25, 0, 0, 0, 1], HAND_F32.grip[hand]);
+  rec.f32.set(
+    opts.aim ?? [hand ? 0.2 : -0.2, 1.3, -0.3, 0, 0, 0, 1],
+    HAND_F32.targetRay[hand],
+  );
+  rec.f32.set(
+    opts.grip ?? [hand ? 0.2 : -0.2, 1.25, -0.25, 0, 0, 0, 1],
+    HAND_F32.grip[hand],
+  );
   rec.f32[HAND_F32.buttonValues[hand]] = opts.trigger ?? 0;
   rec.u8[HAND_U8.buttonPressed[hand]] = opts.pressed ? 1 : 0;
   rec.u8[HAND_U8.buttonTouched[hand]] = opts.pressed ? 1 : 0;
@@ -174,11 +230,23 @@ export function createHarness(
   const h = {} as Harness;
   h.swapchain =
     opts.swapchain === undefined
-      ? { width: 1680, height: 1760, arraySize: 2, rates: [72, 90, 120], rate: 72, hasStage: true, stageWidth: 3, stageDepth: 2 }
+      ? {
+          width: 1680,
+          height: 1760,
+          arraySize: 2,
+          rates: [72, 90, 120],
+          rate: 72,
+          hasStage: true,
+          stageWidth: 3,
+          stageDepth: 2,
+        }
       : opts.swapchain;
 
   const layerBuffer = new ArrayBuffer(LAYER_BUFFER_WORDS * 4);
-  const layerWords = { u32: new Uint32Array(layerBuffer), f32: new Float32Array(layerBuffer) };
+  const layerWords = {
+    u32: new Uint32Array(layerBuffer),
+    f32: new Float32Array(layerBuffer),
+  };
   layerWords.u32[VERSION_AT] = opts.layerBufferVersion ?? LAYER_BUFFER_VERSION;
   layerWords.u32[COUNT_AT] = NO_LIST;
   let nextLayerId = 1;
@@ -189,10 +257,16 @@ export function createHarness(
         layers: () => layerBuffer,
         beginLayerSwapchain: (...args: unknown[]) => {
           calls.push(['beginLayerSwapchain', ...args]);
-          if ((args[1] as number) > 4096) return null;  // the system's swapchain limit
-          return { id: nextLayerId++, width: args[1], height: args[2], arraySize: args[3] };
+          if ((args[1] as number) > 4096) return null; // the system's swapchain limit
+          return {
+            id: nextLayerId++,
+            width: args[1],
+            height: args[2],
+            arraySize: args[3],
+          };
         },
-        destroyLayerSwapchain: (id: number) => calls.push(['destroyLayerSwapchain', id]),
+        destroyLayerSwapchain: (id: number) =>
+          calls.push(['destroyLayerSwapchain', id]),
         acquireLayerImage: (id: number) => {
           calls.push(['acquireLayerImage', id]);
           const name = nextLayerImage++;
@@ -217,19 +291,28 @@ export function createHarness(
         requestPermissions: (names: string[]) => {
           calls.push(['requestPermissions', [...names]]);
           const p = h.permissions!;
-          if (p.fail) return Promise.reject(new Error('requestPermissions failed'));
+          if (p.fail)
+            return Promise.reject(new Error('requestPermissions failed'));
           const answer = () => {
             for (const n of names) if (p.answer[n] === true) p.held[n] = true;
-            return Object.fromEntries(names.map((n) => [n, p.held[n] === true]));
+            return Object.fromEntries(
+              names.map((n) => [n, p.held[n] === true]),
+            );
           };
           if (!p.hold) return Promise.resolve(answer());
-          return new Promise((resolve) => heldAnswers.push(() => resolve(answer())));
+          return new Promise((resolve) =>
+            heldAnswers.push(() => resolve(answer())),
+          );
         },
         checkPermissions: (names: string[]) => {
           calls.push(['checkPermissions', [...names]]);
-          return Object.fromEntries(names.map((n) => [n, h.permissions!.held[n] === true]));
+          return Object.fromEntries(
+            names.map((n) => [n, h.permissions!.held[n] === true]),
+          );
         },
-        ...(opts.declared !== undefined ? { declaredPermissions: () => opts.declared } : {}),
+        ...(opts.declared !== undefined
+          ? { declaredPermissions: () => opts.declared }
+          : {}),
       }
     : {};
 
@@ -239,7 +322,9 @@ export function createHarness(
     ? {
         sceneData: (known: number) => {
           calls.push(['sceneData', known]);
-          return h.sceneData && h.sceneData.version !== known ? h.sceneData : null;
+          return h.sceneData && h.sceneData.version !== known
+            ? h.sceneData
+            : null;
         },
         scenePoses: () => h.scenePoses.buffer,
         sceneStatus: () => ({ phase: h.sceneData ? 'ready' : 'querying' }),
@@ -261,7 +346,11 @@ export function createHarness(
     beginSwapchain: (...args: unknown[]) => {
       calls.push(['beginSwapchain', ...args]);
       if (!h.swapchain) return null;
-      return { ...h.swapchain, arraySize: args[0] === 1 ? 1 : h.swapchain.arraySize, width: args[0] === 1 ? 3360 : h.swapchain.width };
+      return {
+        ...h.swapchain,
+        arraySize: args[0] === 1 ? 1 : h.swapchain.arraySize,
+        width: args[0] === 1 ? 3360 : h.swapchain.width,
+      };
     },
     endSession: () => calls.push(['endSession']),
     requestFrameRate: (hz: number) => {
@@ -269,7 +358,8 @@ export function createHarness(
       return (info.refreshRates ?? []).includes(hz);
     },
     setFoveation: (l: number) => calls.push(['setFoveation', l]),
-    setPassthroughVisible: (v: boolean) => calls.push(['setPassthroughVisible', v]),
+    setPassthroughVisible: (v: boolean) =>
+      calls.push(['setPassthroughVisible', v]),
     haptic: (...a: unknown[]) => calls.push(['haptic', ...a]),
     sessionStarted: (...a: unknown[]) => calls.push(['sessionStarted', ...a]),
     offered: () => calls.push(['offered']),
@@ -282,7 +372,9 @@ export function createHarness(
 
   // A recording WebGL context with the internal surface the hooks touch. Like the WebGL binding it keeps the
   // draw-framebuffer binding and each framebuffer's record of attachments (`_attachments`).
-  let drawFramebuffer: { _attachments?: Map<number, { object: unknown }> } | null = null;
+  let drawFramebuffer: {
+    _attachments?: Map<number, { object: unknown }>;
+  } | null = null;
   const gl: Record<string, any> = {
     _id: 1,
     _makeCurrent() {
@@ -290,7 +382,8 @@ export function createHarness(
     },
     bindFramebuffer(target: number, fb: unknown) {
       glCalls.push(['bindFramebuffer', target, fb]);
-      if (target === 0x8d40 || target === 0x8ca9) drawFramebuffer = fb as typeof drawFramebuffer;
+      if (target === 0x8d40 || target === 0x8ca9)
+        drawFramebuffer = fb as typeof drawFramebuffer;
     },
     isFramebuffer(fb: unknown) {
       return !!fb;
@@ -305,7 +398,7 @@ export function createHarness(
       return {};
     },
     getParameter(pname: number) {
-      return pname === 0x8ca6 ? drawFramebuffer : null;  // FRAMEBUFFER_BINDING (= DRAW_FRAMEBUFFER_BINDING)
+      return pname === 0x8ca6 ? drawFramebuffer : null; // FRAMEBUFFER_BINDING (= DRAW_FRAMEBUFFER_BINDING)
     },
     framebufferTexture2D(_t: number, att: number, _tt: number, tex: unknown) {
       glCalls.push(['framebufferTexture2D', att, tex]);
@@ -331,15 +424,22 @@ export function createHarness(
           glCalls.push(['wrapTexture', name, target]);
           return { _name: name, _target: target, wrapped: true };
         },
-        retargetTexture: (_ctx: unknown, tex: { _name: number }, name: number, fbs: Iterable<unknown>) => {
-          if (tex._name === name) return;  // as web/webgl host.ts: nothing to do for an unchanged name
+        retargetTexture: (
+          _ctx: unknown,
+          tex: { _name: number },
+          name: number,
+          fbs: Iterable<unknown>,
+        ) => {
+          if (tex._name === name) return; // as web/webgl host.ts: nothing to do for an unchanged name
           const list = [...fbs];
           glCalls.push(['retargetTexture', name, list.length]);
           retargets.push({ name, tex, fbs: list });
           tex._name = name;
         },
-        invalidateDepthStencil: (_ctx: unknown, fb: unknown) => glCalls.push(['invalidateDepthStencil', fb]),
-        clearSessionFramebuffer: (_ctx: unknown, fb: unknown) => glCalls.push(['clearSessionFramebuffer', fb]),
+        invalidateDepthStencil: (_ctx: unknown, fb: unknown) =>
+          glCalls.push(['invalidateDepthStencil', fb]),
+        clearSessionFramebuffer: (_ctx: unknown, fb: unknown) =>
+          glCalls.push(['clearSessionFramebuffer', fb]),
         frameBoundary: () => glCalls.push(['frameBoundary']),
         afterAnimationFrame: () => glCalls.push(['afterAnimationFrame']),
       };
@@ -350,7 +450,8 @@ export function createHarness(
       log: (...a: unknown[]) => logs.push(a.map(String).join(' ')),
       info: (...a: unknown[]) => logs.push(a.map(String).join(' ')),
       warn: (...a: unknown[]) => logs.push('warn: ' + a.map(String).join(' ')),
-      error: (...a: unknown[]) => logs.push('error: ' + a.map(String).join(' ')),
+      error: (...a: unknown[]) =>
+        logs.push('error: ' + a.map(String).join(' ')),
       debug: () => {},
     },
     EventTarget,

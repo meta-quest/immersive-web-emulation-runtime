@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The scene model for plane detection, mesh detection and hit test (see xr_scene.h). XR thread, except where noted.
 #include "android/xr_scene.h"
 

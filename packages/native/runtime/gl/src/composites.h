@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // V8-independent core of the GL module: reflection records, shader status, zero-initialisation,
 // multi-draw, sync ids, context registry glue. Host-testable against Mesa or a recording GlApi.
 #pragma once

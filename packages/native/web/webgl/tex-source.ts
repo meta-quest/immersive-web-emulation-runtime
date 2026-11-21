@@ -27,9 +27,13 @@
 import type { Ctx } from './core.ts';
 import * as E from './gen/enums.gen.ts';
 
-export const TEX_SOURCE: unique symbol = Symbol.for('iwn.texImageSource') as never;
+export const TEX_SOURCE: unique symbol = Symbol.for(
+  'iwn.texImageSource',
+) as never;
 /** runtime/image's protocol (web/image/source.ts IMAGE_SOURCE). */
-export const IMAGE_SOURCE: unique symbol = Symbol.for('iwn.image.source') as never;
+export const IMAGE_SOURCE: unique symbol = Symbol.for(
+  'iwn.image.source',
+) as never;
 
 export interface SourcePixels {
   width: number;
@@ -55,54 +59,113 @@ interface ImageSourceDescriptor {
 const EMPTY = new Uint8Array(0);
 
 /** Copy a handle's pixels (tight RGBA8, the store's alpha mode) into JS memory once. */
-export function materializePixels(px: SourcePixels, ctx: Ctx, what: string): void {
+export function materializePixels(
+  px: SourcePixels,
+  ctx: Ctx,
+  what: string,
+): void {
   if (!px.handle || px.data.byteLength) return;
   const data = new Uint8Array(px.width * px.height * 4);
   void data.buffer; // out-parameter: keep the view off-heap (fast-API GetContents copies small on-heap views)
   if (!ctx._n.imageRead(px.handle, data, 0, data.byteLength, false, -1)) {
-    throw domException(`${what}: the source is closed or detached`, 'InvalidStateError');
+    throw domException(
+      `${what}: the source is closed or detached`,
+      'InvalidStateError',
+    );
   }
   px.data = data;
 }
 
 export function domException(message: string, name: string): Error {
-  const D = (globalThis as { DOMException?: new (m: string, n: string) => Error }).DOMException;
+  const D = (
+    globalThis as { DOMException?: new (m: string, n: string) => Error }
+  ).DOMException;
   if (D) return new D(message, name);
   const e = new Error(message);
   e.name = name;
   return e;
 }
 
-export function getSourcePixels(source: unknown, ctx: Ctx, what: string): SourcePixels {
-  if (source === null || typeof source !== 'object') throw new TypeError(`${what}: source is not a TexImageSource`);
+export function getSourcePixels(
+  source: unknown,
+  ctx: Ctx,
+  what: string,
+): SourcePixels {
+  if (source === null || typeof source !== 'object')
+    throw new TypeError(`${what}: source is not a TexImageSource`);
   const image = (source as Record<PropertyKey, unknown>)[IMAGE_SOURCE];
   // A <video> playing a camera stream is an image source (its newest frame); other video sources are not.
-  const ctor = (source as { constructor?: { name?: string } }).constructor?.name ?? '';
-  if (typeof image !== 'function' && (ctor === 'HTMLVideoElement' || ctor === 'VideoFrame')) {
-    throw new TypeError(`${what}: video sources are not supported by this runtime`);
+  const ctor =
+    (source as { constructor?: { name?: string } }).constructor?.name ?? '';
+  if (
+    typeof image !== 'function' &&
+    (ctor === 'HTMLVideoElement' || ctor === 'VideoFrame')
+  ) {
+    throw new TypeError(
+      `${what}: video sources are not supported by this runtime`,
+    );
   }
   if (typeof image === 'function') {
     // Throws TypeError / InvalidStateError itself (closed bitmap, broken image, zero-sized canvas).
     const d = (image as () => ImageSourceDescriptor).call(source);
-    if (!d) throw domException(`${what}: the source is not usable`, 'InvalidStateError');
-    const base = { width: d.width, height: d.height, premultiplied: !!d.premultiplied, isBitmap: d.origin === 'bitmap' };
+    if (!d)
+      throw domException(
+        `${what}: the source is not usable`,
+        'InvalidStateError',
+      );
+    const base = {
+      width: d.width,
+      height: d.height,
+      premultiplied: !!d.premultiplied,
+      isBitmap: d.origin === 'bitmap',
+    };
     if (d.kind === 'handle') return { ...base, data: EMPTY, handle: d.handle };
     return { ...base, data: d.data ?? EMPTY };
   }
   const proto = (source as Record<PropertyKey, unknown>)[TEX_SOURCE];
   if (typeof proto === 'function') {
-    const r = (proto as () => SourcePixels & { closed?: boolean; complete?: boolean }).call(source);
-    if (!r || r.closed) throw domException(`${what}: the source is closed or detached`, 'InvalidStateError');
-    if (r.complete === false) throw domException(`${what}: the image is not loaded`, 'InvalidStateError');
-    return { width: r.width, height: r.height, data: r.data, premultiplied: !!r.premultiplied, isBitmap: !!r.isBitmap };
+    const r = (
+      proto as () => SourcePixels & { closed?: boolean; complete?: boolean }
+    ).call(source);
+    if (!r || r.closed)
+      throw domException(
+        `${what}: the source is closed or detached`,
+        'InvalidStateError',
+      );
+    if (r.complete === false)
+      throw domException(
+        `${what}: the image is not loaded`,
+        'InvalidStateError',
+      );
+    return {
+      width: r.width,
+      height: r.height,
+      data: r.data,
+      premultiplied: !!r.premultiplied,
+      isBitmap: !!r.isBitmap,
+    };
   }
   // A WebGL canvas: read its drawing buffer.
   const webgl = (source as { __iwnWebGLContext?: Ctx }).__iwnWebGLContext;
   if (webgl) return readCanvasPixels(webgl);
-  const d = (source as { data?: unknown; width?: unknown; height?: unknown }).data;
-  if (d instanceof Uint8ClampedArray && typeof (source as { width: unknown }).width === 'number') {
-    const s = source as { width: number; height: number; data: Uint8ClampedArray };
-    return { width: s.width, height: s.height, data: s.data, premultiplied: false, isBitmap: false };
+  const d = (source as { data?: unknown; width?: unknown; height?: unknown })
+    .data;
+  if (
+    d instanceof Uint8ClampedArray &&
+    typeof (source as { width: unknown }).width === 'number'
+  ) {
+    const s = source as {
+      width: number;
+      height: number;
+      data: Uint8ClampedArray;
+    };
+    return {
+      width: s.width,
+      height: s.height,
+      data: s.data,
+      premultiplied: false,
+      isBitmap: false,
+    };
   }
   void ctx;
   throw new TypeError(`${what}: source is not a TexImageSource`);
@@ -135,7 +198,13 @@ function readCanvasPixels(src: Ctx): SourcePixels {
     data.copyWithin(a, b, b + row);
     data.set(tmp, b);
   }
-  return { width: w, height: h, data, premultiplied: src._attrs.premultipliedAlpha, isBitmap: false };
+  return {
+    width: w,
+    height: h,
+    data,
+    premultiplied: src._attrs.premultipliedAlpha,
+    isBitmap: false,
+  };
 }
 
 const f32 = new Float32Array(1);
@@ -183,10 +252,25 @@ export function convertPixels(
 ): ArrayBufferView | null {
   const comps = formatComps(format);
   if (comps === 0) return null;
-  const packed = type === E.UNSIGNED_SHORT_5_6_5 || type === E.UNSIGNED_SHORT_4_4_4_4 || type === E.UNSIGNED_SHORT_5_5_5_1;
+  const packed =
+    type === E.UNSIGNED_SHORT_5_6_5 ||
+    type === E.UNSIGNED_SHORT_4_4_4_4 ||
+    type === E.UNSIGNED_SHORT_5_5_5_1;
   // WebGL 2 TexImageSource formats packed in 32 bits: R11F_G11F_B10F and RGB10_A2
-  const packed32 = (type === E.UNSIGNED_INT_10F_11F_11F_REV && format === E.RGB) || (type === E.UNSIGNED_INT_2_10_10_10_REV && format === E.RGBA);
-  if (!(type === E.UNSIGNED_BYTE || type === E.HALF_FLOAT || type === E.HALF_FLOAT_OES || type === E.FLOAT || packed || packed32)) return null;
+  const packed32 =
+    (type === E.UNSIGNED_INT_10F_11F_11F_REV && format === E.RGB) ||
+    (type === E.UNSIGNED_INT_2_10_10_10_REV && format === E.RGBA);
+  if (
+    !(
+      type === E.UNSIGNED_BYTE ||
+      type === E.HALF_FLOAT ||
+      type === E.HALF_FLOAT_OES ||
+      type === E.FLOAT ||
+      packed ||
+      packed32
+    )
+  )
+    return null;
   const h = depth > 1 ? rows / depth : rows;
   const count = w * h * depth;
   let out8: Uint8Array | null = null;
@@ -195,7 +279,8 @@ export function convertPixels(
   let outU32: Uint32Array | null = null;
   if (type === E.UNSIGNED_BYTE) out8 = new Uint8Array(count * comps);
   else if (packed32) outU32 = new Uint32Array(count);
-  else if (packed || type === E.HALF_FLOAT || type === E.HALF_FLOAT_OES) out16 = new Uint16Array(count * (packed ? 1 : comps));
+  else if (packed || type === E.HALF_FLOAT || type === E.HALF_FLOAT_OES)
+    out16 = new Uint16Array(count * (packed ? 1 : comps));
   else out32 = new Float32Array(count * comps);
   const sw = src.width;
   const sh = src.height;
@@ -226,7 +311,12 @@ export function convertPixels(
           r = Math.round((r * a) / 255);
           g = Math.round((g * a) / 255);
           b = Math.round((b * a) / 255);
-        } else if (premultiply === false && src.premultiplied && a !== 0 && a !== 255) {
+        } else if (
+          premultiply === false &&
+          src.premultiplied &&
+          a !== 0 &&
+          a !== 255
+        ) {
           r = Math.min(255, Math.round((r * 255) / a));
           g = Math.min(255, Math.round((g * 255) / a));
           b = Math.min(255, Math.round((b * 255) / a));
@@ -236,18 +326,45 @@ export function convertPixels(
         } else if (outU32) {
           outU32[o++] =
             type === E.UNSIGNED_INT_2_10_10_10_REV
-              ? (Math.round((r * 1023) / 255) | (Math.round((g * 1023) / 255) << 10) | (Math.round((b * 1023) / 255) << 20) | (Math.round((a * 3) / 255) << 30)) >>> 0
-              : ((toHalf(r / 255) + 8) >> 4) | (((toHalf(g / 255) + 8) >> 4) << 11) | ((((toHalf(b / 255) + 16) >> 5) << 22) >>> 0);
+              ? (Math.round((r * 1023) / 255) |
+                  (Math.round((g * 1023) / 255) << 10) |
+                  (Math.round((b * 1023) / 255) << 20) |
+                  (Math.round((a * 3) / 255) << 30)) >>>
+                0
+              : ((toHalf(r / 255) + 8) >> 4) |
+                (((toHalf(g / 255) + 8) >> 4) << 11) |
+                ((((toHalf(b / 255) + 16) >> 5) << 22) >>> 0);
         } else if (packed && out16) {
           let v = 0;
-          if (type === E.UNSIGNED_SHORT_5_6_5) v = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
-          else if (type === E.UNSIGNED_SHORT_4_4_4_4) v = ((r >> 4) << 12) | ((g >> 4) << 8) | ((b >> 4) << 4) | (a >> 4);
-          else v = ((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | (a >> 7);
+          if (type === E.UNSIGNED_SHORT_5_6_5)
+            v = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+          else if (type === E.UNSIGNED_SHORT_4_4_4_4)
+            v = ((r >> 4) << 12) | ((g >> 4) << 8) | ((b >> 4) << 4) | (a >> 4);
+          else
+            v = ((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | (a >> 7);
           out16[o++] = v;
         } else if (out16) {
-          o = writeCompsF(out16, o, format, r / 255, g / 255, b / 255, a / 255, true);
+          o = writeCompsF(
+            out16,
+            o,
+            format,
+            r / 255,
+            g / 255,
+            b / 255,
+            a / 255,
+            true,
+          );
         } else if (out32) {
-          o = writeCompsF(out32, o, format, r / 255, g / 255, b / 255, a / 255, false);
+          o = writeCompsF(
+            out32,
+            o,
+            format,
+            r / 255,
+            g / 255,
+            b / 255,
+            a / 255,
+            false,
+          );
         }
       }
     }
@@ -279,7 +396,15 @@ function formatComps(format: number): number {
   }
 }
 
-function writeComps8(o8: Uint8Array, o: number, format: number, r: number, g: number, b: number, a: number): number {
+function writeComps8(
+  o8: Uint8Array,
+  o: number,
+  format: number,
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+): number {
   switch (format) {
     case E.RGBA:
     case E.SRGB_ALPHA_EXT:
@@ -314,22 +439,31 @@ function writeComps8(o8: Uint8Array, o: number, format: number, r: number, g: nu
   }
 }
 
-function writeCompsF(out: Uint16Array | Float32Array, o: number, format: number, r: number, g: number, b: number, a: number, half: boolean): number {
+function writeCompsF(
+  out: Uint16Array | Float32Array,
+  o: number,
+  format: number,
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  half: boolean,
+): number {
   const put = (v: number): void => {
     out[o++] = half ? toHalf(v) : v;
   };
   switch (format) {
     case E.RGBA:
-      put(r), put(g), put(b), put(a);
+      (put(r), put(g), put(b), put(a));
       break;
     case E.RGB:
-      put(r), put(g), put(b);
+      (put(r), put(g), put(b));
       break;
     case E.RG:
-      put(r), put(g);
+      (put(r), put(g));
       break;
     case E.LUMINANCE_ALPHA:
-      put(r), put(a);
+      (put(r), put(a));
       break;
     case E.ALPHA:
       put(a);

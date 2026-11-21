@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The loading screen: what the runtime shows from its first OpenXR frame until the app's first WebXR frame, and
 // again whenever the page has no WebXR content (a reload, between sessions). docs/spec/08 XR-IDLE-1 (the idle
 // presentation's optional loading image). V8-free and OpenXR-call-free, so it is unit-tested on the host; the XR

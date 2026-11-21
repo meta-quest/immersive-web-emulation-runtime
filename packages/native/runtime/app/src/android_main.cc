@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The Android shell: a NativeActivity without android_native_app_glue (Android NDK native_activity.h). Activity
 // callbacks run on the UI thread and only post inputs to the runtime's JS thread; nothing here ever waits on JS,
 // so pausing in the debugger or a long task cannot cause an ANR (PROC-3). Lifecycle mapping: PROC-6, PROC-7.

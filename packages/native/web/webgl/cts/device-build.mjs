@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Builds the GL-CTS-1 device harness app: cts/device-main.mjs (+ page.mjs) as the app's main module, with the
 // shipped preludes web/glue/dist/glue.min.js and dist/webgl.min.js, packed by the runtime's template build-apk.mjs.
 //
@@ -15,12 +22,20 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = join(here, '..', '..', '..');
 const args = {};
-for (let i = 2; i < process.argv.length; i++) args[process.argv[i].replace(/^--/, '')] = process.argv[++i];
+for (let i = 2; i < process.argv.length; i++)
+  args[process.argv[i].replace(/^--/, '')] = process.argv[++i];
 if (!args.libs || !args.out) {
-  console.error('usage: device-build.mjs --libs <apk-libs.txt> --out <apk> [--dist dir] [--inspector-port N] [--debug-port N]');
+  console.error(
+    'usage: device-build.mjs --libs <apk-libs.txt> --out <apk> [--dist dir] [--inspector-port N] [--debug-port N]',
+  );
   process.exit(2);
 }
-const dist = args.dist ?? join(dirname(fileURLToPath(import.meta.url)), '../../../build/gl/gl-cts-dist');
+const dist =
+  args.dist ??
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../build/gl/gl-cts-dist',
+  );
 mkdirSync(dist, { recursive: true });
 await build({
   entryPoints: [join(here, 'device-main.mjs')],
@@ -36,20 +51,31 @@ writeFileSync(
   '<!doctype html>\n<html><head><meta charset="utf-8"><title>iwer-native GL-CTS-1 harness</title>' +
     '<script type="module" src="/main.js"></script></head><body></body></html>\n',
 );
-const preludes = [join(pkgRoot, 'web/glue/dist/glue.min.js'), join(here, '..', 'dist', 'webgl.min.js')];
-for (const p of preludes) if (!existsSync(p)) throw new Error(`missing prelude ${p} (build it first)`);
+const preludes = [
+  join(pkgRoot, 'web/glue/dist/glue.min.js'),
+  join(here, '..', 'dist', 'webgl.min.js'),
+];
+for (const p of preludes)
+  if (!existsSync(p)) throw new Error(`missing prelude ${p} (build it first)`);
 const out = execFileSync(
   process.execPath,
   [
     join(pkgRoot, 'runtime/app/template/build-apk.mjs'),
-    '--libs', args.libs,
-    '--dist', dist,
+    '--libs',
+    args.libs,
+    '--dist',
+    dist,
     ...preludes.flatMap((p) => ['--prelude', p]),
-    '--out', args.out,
-    '--package', 'com.iwernative.glcts',
-    '--label', 'iwn gl cts',
-    '--inspector-port', args['inspector-port'] ?? '9502',
-    '--debug-port', args['debug-port'] ?? '9602',
+    '--out',
+    args.out,
+    '--package',
+    'com.iwernative.glcts',
+    '--label',
+    'iwn gl cts',
+    '--inspector-port',
+    args['inspector-port'] ?? '9502',
+    '--debug-port',
+    args['debug-port'] ?? '9602',
   ],
   { encoding: 'utf8' },
 );

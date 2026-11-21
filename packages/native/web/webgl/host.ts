@@ -18,8 +18,12 @@ import type { Attachment } from './objects.ts';
 import { PS_PACK_ALIGNMENT, PS_UNPACK_ALIGNMENT } from './state.ts';
 
 /** IWER XRHostBackend.wrapTexture: a host-owned texture (never deleted by the binding). */
-export function wrapTexture(gl: Ctx, name: number, target: number = E.TEXTURE_2D_ARRAY): WebGLTexture {
-  const t = new WebGLTexture(INTERNAL, gl, name, );
+export function wrapTexture(
+  gl: Ctx,
+  name: number,
+  target: number = E.TEXTURE_2D_ARRAY,
+): WebGLTexture {
+  const t = new WebGLTexture(INTERNAL, gl, name);
   t._target = target;
   t._bound = true;
   t._external = true;
@@ -34,15 +38,24 @@ export function wrapTexture(gl: Ctx, name: number, target: number = E.TEXTURE_2D
  * index loops over arrays, and the attachment map walked with Map.forEach and a hoisted callback (PERF-ALLOC-1:
  * ~0 per-frame allocation on the host + IWER path).
  */
-export function retargetTexture(gl: Ctx, tex: WebGLTexture, name: number, framebuffers: Iterable<WebGLFramebuffer>): void {
+export function retargetTexture(
+  gl: Ctx,
+  tex: WebGLTexture,
+  name: number,
+  framebuffers: Iterable<WebGLFramebuffer>,
+): void {
   if (tex._name === name) return;
   gl._skip();
   tex._name = name;
   const n = gl._n;
   let unitChanged = rebindUnits(n, gl._tex2D, E.TEXTURE_2D, tex, name);
-  unitChanged = rebindUnits(n, gl._texCube, E.TEXTURE_CUBE_MAP, tex, name) || unitChanged;
-  unitChanged = rebindUnits(n, gl._tex3D, E.TEXTURE_3D, tex, name) || unitChanged;
-  unitChanged = rebindUnits(n, gl._tex2DArray, E.TEXTURE_2D_ARRAY, tex, name) || unitChanged;
+  unitChanged =
+    rebindUnits(n, gl._texCube, E.TEXTURE_CUBE_MAP, tex, name) || unitChanged;
+  unitChanged =
+    rebindUnits(n, gl._tex3D, E.TEXTURE_3D, tex, name) || unitChanged;
+  unitChanged =
+    rebindUnits(n, gl._tex2DArray, E.TEXTURE_2D_ARRAY, tex, name) ||
+    unitChanged;
   if (unitChanged) n.activeTexture(E.TEXTURE0 + gl._activeUnit);
   const r = reattach;
   r.n = n;
@@ -69,7 +82,13 @@ export function retargetTexture(gl: Ctx, tex: WebGLTexture, name: number, frameb
 }
 
 /** retargetTexture: re-bind `tex` (now named `name`) on every unit of one target where it is bound. */
-function rebindUnits(n: Ctx['_n'], list: (WebGLTexture | null)[], target: number, tex: WebGLTexture, name: number): boolean {
+function rebindUnits(
+  n: Ctx['_n'],
+  list: (WebGLTexture | null)[],
+  target: number,
+  tex: WebGLTexture,
+  name: number,
+): boolean {
   let changed = false;
   for (let u = 0; u < list.length; u++) {
     if (list[u] !== tex) continue;
@@ -82,7 +101,13 @@ function rebindUnits(n: Ctx['_n'], list: (WebGLTexture | null)[], target: number
 
 // retargetTexture's state for reattachVisit (one framebuffer's Map.forEach at a time; only native GL calls run inside,
 // so it is never re-entered).
-const reattach: { n: Ctx['_n'] | null; tex: WebGLTexture | null; fb: WebGLFramebuffer | null; name: number; changed: boolean } = {
+const reattach: {
+  n: Ctx['_n'] | null;
+  tex: WebGLTexture | null;
+  fb: WebGLFramebuffer | null;
+  name: number;
+  changed: boolean;
+} = {
   n: null,
   tex: null,
   fb: null,
@@ -97,13 +122,47 @@ function reattachVisit(a: Attachment, att: number): void {
   const name = r.name;
   n.bindFramebuffer(E.DRAW_FRAMEBUFFER, r.fb!._name);
   if (a.numViews > 0) {
-    if (a.samples > 0) n.framebufferTextureMultisampleMultiviewOVR(E.DRAW_FRAMEBUFFER, att, name, a.level, a.samples, a.baseViewIndex, a.numViews);
-    else if (a.numViews === 1) n.framebufferTextureLayer(E.DRAW_FRAMEBUFFER, att, name, a.level, a.baseViewIndex);
-    else n.framebufferTextureMultiviewOVR(E.DRAW_FRAMEBUFFER, att, name, a.level, a.baseViewIndex, a.numViews);
-  } else if (a.textarget === E.TEXTURE_2D_ARRAY || a.textarget === E.TEXTURE_3D) {
+    if (a.samples > 0)
+      n.framebufferTextureMultisampleMultiviewOVR(
+        E.DRAW_FRAMEBUFFER,
+        att,
+        name,
+        a.level,
+        a.samples,
+        a.baseViewIndex,
+        a.numViews,
+      );
+    else if (a.numViews === 1)
+      n.framebufferTextureLayer(
+        E.DRAW_FRAMEBUFFER,
+        att,
+        name,
+        a.level,
+        a.baseViewIndex,
+      );
+    else
+      n.framebufferTextureMultiviewOVR(
+        E.DRAW_FRAMEBUFFER,
+        att,
+        name,
+        a.level,
+        a.baseViewIndex,
+        a.numViews,
+      );
+  } else if (
+    a.textarget === E.TEXTURE_2D_ARRAY ||
+    a.textarget === E.TEXTURE_3D
+  ) {
     n.framebufferTextureLayer(E.DRAW_FRAMEBUFFER, att, name, a.level, a.layer);
   } else if (a.samples > 0) {
-    n.framebufferTexture2DMultisampleEXT(E.DRAW_FRAMEBUFFER, att, a.textarget, name, a.level, a.samples);
+    n.framebufferTexture2DMultisampleEXT(
+      E.DRAW_FRAMEBUFFER,
+      att,
+      a.textarget,
+      name,
+      a.level,
+      a.samples,
+    );
   } else {
     n.framebufferTexture2D(E.DRAW_FRAMEBUFFER, att, a.textarget, name, a.level);
   }
@@ -111,7 +170,11 @@ function reattachVisit(a: Attachment, att: number): void {
 }
 
 /** A host-owned framebuffer (XRWebGLLayer's opaque framebuffer). `numViews` > 0 for multiview targets. */
-export function wrapFramebuffer(gl: Ctx, name: number, opts: { opaque?: boolean; numViews?: number } = {}): WebGLFramebuffer {
+export function wrapFramebuffer(
+  gl: Ctx,
+  name: number,
+  opts: { opaque?: boolean; numViews?: number } = {},
+): WebGLFramebuffer {
   const f = new WebGLFramebuffer(INTERNAL, gl, name);
   f._opaque = opts.opaque ?? true;
   f._numViews = opts.numViews ?? 0;
@@ -138,7 +201,18 @@ export function frameBoundary(gl: Ctx | null): void {
 export function resyncState(gl: Ctx): void {
   gl._makeCurrent();
   const n = gl._n;
-  const caps = [E.BLEND, E.CULL_FACE, E.DEPTH_TEST, E.DITHER, E.POLYGON_OFFSET_FILL, E.SAMPLE_ALPHA_TO_COVERAGE, E.SAMPLE_COVERAGE, E.SCISSOR_TEST, E.STENCIL_TEST, E.RASTERIZER_DISCARD];
+  const caps = [
+    E.BLEND,
+    E.CULL_FACE,
+    E.DEPTH_TEST,
+    E.DITHER,
+    E.POLYGON_OFFSET_FILL,
+    E.SAMPLE_ALPHA_TO_COVERAGE,
+    E.SAMPLE_COVERAGE,
+    E.SCISSOR_TEST,
+    E.STENCIL_TEST,
+    E.RASTERIZER_DISCARD,
+  ];
   caps.forEach((cap, i) => {
     if (i === 9 && !gl._v2) return;
     if (gl._caps[i] === 1) n.enable(cap);
@@ -160,27 +234,62 @@ export function resyncState(gl: Ctx): void {
   const bc = gl._blendColor;
   n.blendColor(bc[0], bc[1], bc[2], bc[3]);
   n.blendEquationSeparate(gl._blendEq[0], gl._blendEq[1]);
-  n.blendFuncSeparate(gl._blendFunc[0], gl._blendFunc[1], gl._blendFunc[2], gl._blendFunc[3]);
+  n.blendFuncSeparate(
+    gl._blendFunc[0],
+    gl._blendFunc[1],
+    gl._blendFunc[2],
+    gl._blendFunc[3],
+  );
   n.cullFace(gl._cullFace);
   n.frontFace(gl._frontFace);
   n.lineWidth(gl._lineWidth);
-  if (gl._polygonOffsetClamp !== 0) n.polygonOffsetClampEXT(gl._polygonOffset[0], gl._polygonOffset[1], gl._polygonOffsetClamp);
+  if (gl._polygonOffsetClamp !== 0)
+    n.polygonOffsetClampEXT(
+      gl._polygonOffset[0],
+      gl._polygonOffset[1],
+      gl._polygonOffsetClamp,
+    );
   else n.polygonOffset(gl._polygonOffset[0], gl._polygonOffset[1]);
-  if (gl._extensions.has('EXT_clip_control')) n.clipControlEXT(gl._clipControl[0], gl._clipControl[1]);
-  if (gl._extensions.has('WEBGL_polygon_mode')) n.polygonModeNV(E.FRONT_AND_BACK, gl._polygonMode);
+  if (gl._extensions.has('EXT_clip_control'))
+    n.clipControlEXT(gl._clipControl[0], gl._clipControl[1]);
+  if (gl._extensions.has('WEBGL_polygon_mode'))
+    n.polygonModeNV(E.FRONT_AND_BACK, gl._polygonMode);
   n.sampleCoverage(gl._sampleCoverageValue, gl._sampleCoverageInvert);
-  n.stencilFuncSeparate(E.FRONT, gl._stencilFuncF[0], gl._stencilFuncF[1], gl._stencilFuncF[2] >>> 0);
-  n.stencilFuncSeparate(E.BACK, gl._stencilFuncB[0], gl._stencilFuncB[1], gl._stencilFuncB[2] >>> 0);
+  n.stencilFuncSeparate(
+    E.FRONT,
+    gl._stencilFuncF[0],
+    gl._stencilFuncF[1],
+    gl._stencilFuncF[2] >>> 0,
+  );
+  n.stencilFuncSeparate(
+    E.BACK,
+    gl._stencilFuncB[0],
+    gl._stencilFuncB[1],
+    gl._stencilFuncB[2] >>> 0,
+  );
   n.stencilMaskSeparate(E.FRONT, gl._stencilMaskF >>> 0);
   n.stencilMaskSeparate(E.BACK, gl._stencilMaskB >>> 0);
-  n.stencilOpSeparate(E.FRONT, gl._stencilOpF[0], gl._stencilOpF[1], gl._stencilOpF[2]);
-  n.stencilOpSeparate(E.BACK, gl._stencilOpB[0], gl._stencilOpB[1], gl._stencilOpB[2]);
+  n.stencilOpSeparate(
+    E.FRONT,
+    gl._stencilOpF[0],
+    gl._stencilOpF[1],
+    gl._stencilOpF[2],
+  );
+  n.stencilOpSeparate(
+    E.BACK,
+    gl._stencilOpB[0],
+    gl._stencilOpB[1],
+    gl._stencilOpB[2],
+  );
   n.pixelStorei(E.PACK_ALIGNMENT, gl._ps[PS_PACK_ALIGNMENT]);
   n.pixelStorei(E.UNPACK_ALIGNMENT, gl._ps[PS_UNPACK_ALIGNMENT]);
   n.useProgram(gl._program ? gl._program._name : 0);
   n.bindVertexArray(gl._vao._name);
   n.bindBuffer(E.ARRAY_BUFFER, gl._arrayBuffer ? gl._arrayBuffer._name : 0);
-  n.bindRenderbuffer(E.RENDERBUFFER, gl._renderbuffer ? gl._renderbuffer._name : 0);
+  n.bindRenderbuffer(
+    E.RENDERBUFFER,
+    gl._renderbuffer ? gl._renderbuffer._name : 0,
+  );
   for (let u = 0; u < gl._maxUnits; u++) {
     const t2 = gl._tex2D[u];
     const tc = gl._texCube[u];
@@ -210,8 +319,10 @@ export function invalidateDepthStencil(gl: Ctx, fb: WebGLFramebuffer): void {
   const n = gl._n;
   const atts = gl._u32;
   let count = 0;
-  if (fb._opaque || fb._attachments.has(E.DEPTH_ATTACHMENT)) atts[count++] = E.DEPTH_ATTACHMENT;
-  if (fb._opaque || fb._attachments.has(E.STENCIL_ATTACHMENT)) atts[count++] = E.STENCIL_ATTACHMENT;
+  if (fb._opaque || fb._attachments.has(E.DEPTH_ATTACHMENT))
+    atts[count++] = E.DEPTH_ATTACHMENT;
+  if (fb._opaque || fb._attachments.has(E.STENCIL_ATTACHMENT))
+    atts[count++] = E.STENCIL_ATTACHMENT;
   if (!count) return;
   n.bindFramebuffer(E.DRAW_FRAMEBUFFER, fb._name);
   n.invalidateFramebuffer(E.DRAW_FRAMEBUFFER, count, atts, 0, count * 4);
@@ -227,7 +338,8 @@ export function invalidateDepthStencil(gl: Ctx, fb: WebGLFramebuffer): void {
 export function clearSessionFramebuffer(gl: Ctx, fb: WebGLFramebuffer): void {
   if (gl._skip()) return;
   const atts = fb._attachments;
-  const color = atts.has(E.COLOR_ATTACHMENT0) && fb._drawBuffers[0] === E.COLOR_ATTACHMENT0;
+  const color =
+    atts.has(E.COLOR_ATTACHMENT0) && fb._drawBuffers[0] === E.COLOR_ATTACHMENT0;
   const depth = atts.has(E.DEPTH_ATTACHMENT);
   const stencil = atts.has(E.STENCIL_ATTACHMENT);
   if (!color && !depth && !stencil) return;
@@ -256,7 +368,8 @@ export function clearSessionFramebuffer(gl: Ctx, fb: WebGLFramebuffer): void {
     n.clearBufferiv(E.STENCIL, 0, gl._i32, 0, 4);
   }
   const m = gl._colorMask;
-  if (perBuffer) n.colorMaskiOES(0, m[0] === 1, m[1] === 1, m[2] === 1, m[3] === 1);
+  if (perBuffer)
+    n.colorMaskiOES(0, m[0] === 1, m[1] === 1, m[2] === 1, m[3] === 1);
   else n.colorMask(m[0] === 1, m[1] === 1, m[2] === 1, m[3] === 1);
   n.depthMask(gl._depthMask);
   n.stencilMaskSeparate(E.FRONT, gl._stencilMaskF >>> 0);
@@ -285,7 +398,9 @@ export const STATS_FIELDS = [
 ] as const;
 
 /** Native counters of the GL module (runtime/gl/src/stats.h). */
-export function readStats(gl: Ctx): Record<(typeof STATS_FIELDS)[number], number> {
+export function readStats(
+  gl: Ctx,
+): Record<(typeof STATS_FIELDS)[number], number> {
   const out = new Float64Array(STATS_FIELDS.length);
   void out.buffer;
   gl._n.stats(out, 0, out.byteLength);

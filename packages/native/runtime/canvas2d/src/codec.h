@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Small image codec wrappers over stb (public domain / MIT): PNG + JPEG encode for toBlob/toDataURL, PNG decode for
 // colour emoji strikes (CBDT). All stb symbols are file-static in codec.cc, so they cannot clash with another
 // module's copy of stb in the same binary.

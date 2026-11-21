@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Minimal host test harness (no external dependency). Other modules may use it through iwn_add_host_test().
 //   IWN_TEST(suite, name) { IWN_CHECK(cond); IWN_CHECK_EQ(a, b); }
 #pragma once

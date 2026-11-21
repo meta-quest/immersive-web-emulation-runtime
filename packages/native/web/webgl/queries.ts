@@ -11,7 +11,13 @@
 
 import type { Ctx } from './core.ts';
 import * as E from './gen/enums.gen.ts';
-import { INTERNAL, WebGLQuery, WebGLSampler, WebGLSync, WebGLTransformFeedback } from './objects.ts';
+import {
+  INTERNAL,
+  WebGLQuery,
+  WebGLSampler,
+  WebGLSync,
+  WebGLTransformFeedback,
+} from './objects.ts';
 import { recordSamplingParam, texParamError } from './textures.ts';
 
 const TIMEOUT_IGNORED = -1;
@@ -23,14 +29,19 @@ function queryTargetOk(ctx: Ctx, target: number): boolean {
     case E.TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN:
       return true;
     case E.TIME_ELAPSED_EXT:
-      return ctx._extensions.has('EXT_disjoint_timer_query_webgl2') || ctx._extensions.has('EXT_disjoint_timer_query');
+      return (
+        ctx._extensions.has('EXT_disjoint_timer_query_webgl2') ||
+        ctx._extensions.has('EXT_disjoint_timer_query')
+      );
   }
   return false;
 }
 
 /** ANY_SAMPLES_PASSED and ..._CONSERVATIVE share one active slot (GLES 3.0 §4.1.6). */
 function slotOf(target: number): number {
-  return target === E.ANY_SAMPLES_PASSED_CONSERVATIVE ? E.ANY_SAMPLES_PASSED : target;
+  return target === E.ANY_SAMPLES_PASSED_CONSERVATIVE
+    ? E.ANY_SAMPLES_PASSED
+    : target;
 }
 
 export const queryMethods = {
@@ -42,8 +53,11 @@ export const queryMethods = {
   },
   isQuery(this: Ctx, q: unknown): boolean {
     if (this._lost || q === null || q === undefined) return false;
-    if (!(q instanceof WebGLQuery)) throw new TypeError('isQuery: argument is not a WebGLQuery');
-    return q._ctx === this && q._gen === this._gen && !q._deleted && q._target !== 0;
+    if (!(q instanceof WebGLQuery))
+      throw new TypeError('isQuery: argument is not a WebGLQuery');
+    return (
+      q._ctx === this && q._gen === this._gen && !q._deleted && q._target !== 0
+    );
   },
   deleteQuery(this: Ctx, q: unknown): void {
     if (this._skip()) return;
@@ -65,9 +79,12 @@ export const queryMethods = {
     if (this._skip()) return;
     target >>>= 0;
     if (!this._ok(q, WebGLQuery, false, 'beginQuery')) return;
-    if (!queryTargetOk(this, target)) return this._e(E.INVALID_ENUM, 'beginQuery');
-    if (this._activeQueries.has(slotOf(target))) return this._e(E.INVALID_OPERATION, 'beginQuery');
-    if (q._active || (q._target !== 0 && q._target !== target)) return this._e(E.INVALID_OPERATION, 'beginQuery');
+    if (!queryTargetOk(this, target))
+      return this._e(E.INVALID_ENUM, 'beginQuery');
+    if (this._activeQueries.has(slotOf(target)))
+      return this._e(E.INVALID_OPERATION, 'beginQuery');
+    if (q._active || (q._target !== 0 && q._target !== target))
+      return this._e(E.INVALID_OPERATION, 'beginQuery');
     q._target = target;
     q._active = true;
     q._bound = true;
@@ -78,9 +95,11 @@ export const queryMethods = {
   endQuery(this: Ctx, target: number): void {
     if (this._skip()) return;
     target >>>= 0;
-    if (!queryTargetOk(this, target)) return this._e(E.INVALID_ENUM, 'endQuery');
+    if (!queryTargetOk(this, target))
+      return this._e(E.INVALID_ENUM, 'endQuery');
     const q = this._activeQueries.get(slotOf(target));
-    if (!q || q._target !== target) return this._e(E.INVALID_OPERATION, 'endQuery');
+    if (!q || q._target !== target)
+      return this._e(E.INVALID_OPERATION, 'endQuery');
     this._activeQueries.delete(slotOf(target));
     q._active = false;
     q._availableAfter = this._epoch() + 1;
@@ -91,7 +110,11 @@ export const queryMethods = {
     if (this._skip()) return null;
     target >>>= 0;
     pname >>>= 0;
-    if (target === E.TIMESTAMP_EXT && (this._extensions.has('EXT_disjoint_timer_query_webgl2') || this._extensions.has('EXT_disjoint_timer_query'))) {
+    if (
+      target === E.TIMESTAMP_EXT &&
+      (this._extensions.has('EXT_disjoint_timer_query_webgl2') ||
+        this._extensions.has('EXT_disjoint_timer_query'))
+    ) {
       if (pname === E.CURRENT_QUERY) return null; // timestamps are never "current"
       if (pname === E.QUERY_COUNTER_BITS_EXT) {
         this._n.getQueryiv(target, pname, this._i32, 0, 4);
@@ -125,13 +148,25 @@ export const queryMethods = {
     switch (pname) {
       case E.QUERY_RESULT_AVAILABLE: {
         if (!visible) return false;
-        this._n.getQueryObjectuiv(q._name, E.QUERY_RESULT_AVAILABLE, this._u32, 0, 4);
+        this._n.getQueryObjectuiv(
+          q._name,
+          E.QUERY_RESULT_AVAILABLE,
+          this._u32,
+          0,
+          4,
+        );
         return this._u32[0] !== 0;
       }
       case E.QUERY_RESULT: {
         if (!visible) return 0;
         if (q._target === E.TIME_ELAPSED_EXT || q._target === E.TIMESTAMP_EXT) {
-          this._n.getQueryObjectui64vEXT(q._name, E.QUERY_RESULT, this._i64, 0, 8);
+          this._n.getQueryObjectui64vEXT(
+            q._name,
+            E.QUERY_RESULT,
+            this._i64,
+            0,
+            8,
+          );
           return Number(BigInt.asUintN(64, this._i64[0]));
         }
         this._n.getQueryObjectuiv(q._name, E.QUERY_RESULT, this._u32, 0, 4);
@@ -151,7 +186,8 @@ export const queryMethods = {
   },
   isSampler(this: Ctx, s: unknown): boolean {
     if (this._lost || s === null || s === undefined) return false;
-    if (!(s instanceof WebGLSampler)) throw new TypeError('isSampler: argument is not a WebGLSampler');
+    if (!(s instanceof WebGLSampler))
+      throw new TypeError('isSampler: argument is not a WebGLSampler');
     return s._ctx === this && s._gen === this._gen && !s._deleted;
   },
   deleteSampler(this: Ctx, s: unknown): void {
@@ -160,7 +196,8 @@ export const queryMethods = {
     const sampler = s as WebGLSampler;
     if (sampler._deleted) return;
     sampler._deleted = true;
-    for (let i = 0; i < this._samplers.length; i++) if (this._samplers[i] === sampler) this._samplers[i] = null;
+    for (let i = 0; i < this._samplers.length; i++)
+      if (this._samplers[i] === sampler) this._samplers[i] = null;
     this._texDirty = true;
     this._untrack(sampler);
     this._n.deleteSampler(sampler._name);
@@ -177,10 +214,20 @@ export const queryMethods = {
     if (sampler) sampler._bound = true;
     this._n.bindSampler(unit, sampler ? sampler._name : 0);
   },
-  samplerParameteri(this: Ctx, s: WebGLSampler, pname: number, param: number): void {
+  samplerParameteri(
+    this: Ctx,
+    s: WebGLSampler,
+    pname: number,
+    param: number,
+  ): void {
     samplerParameter(this, s, pname >>> 0, param | 0, false);
   },
-  samplerParameterf(this: Ctx, s: WebGLSampler, pname: number, param: number): void {
+  samplerParameterf(
+    this: Ctx,
+    s: WebGLSampler,
+    pname: number,
+    param: number,
+  ): void {
     samplerParameter(this, s, pname >>> 0, +param, true);
   },
   getSamplerParameter(this: Ctx, s: WebGLSampler, pname: number): unknown {
@@ -232,7 +279,8 @@ export const queryMethods = {
   },
   isSync(this: Ctx, s: unknown): boolean {
     if (this._lost || s === null || s === undefined) return false;
-    if (!(s instanceof WebGLSync)) throw new TypeError('isSync: argument is not a WebGLSync');
+    if (!(s instanceof WebGLSync))
+      throw new TypeError('isSync: argument is not a WebGLSync');
     return s._ctx === this && s._gen === this._gen && !s._deleted;
   },
   deleteSync(this: Ctx, s: unknown): void {
@@ -244,7 +292,12 @@ export const queryMethods = {
     this._untrack(sync);
     this._n.deleteSync(sync._name);
   },
-  clientWaitSync(this: Ctx, s: WebGLSync, flags: number, timeout: number): number {
+  clientWaitSync(
+    this: Ctx,
+    s: WebGLSync,
+    flags: number,
+    timeout: number,
+  ): number {
     if (this._skip()) return E.WAIT_FAILED;
     flags >>>= 0;
     const t = Number(timeout);
@@ -264,13 +317,15 @@ export const queryMethods = {
       return E.TIMEOUT_EXPIRED;
     }
     const r = this._n.clientWaitSync(s._name, flags, 0);
-    if (r === E.ALREADY_SIGNALED || r === E.CONDITION_SATISFIED) s._signaled = true;
+    if (r === E.ALREADY_SIGNALED || r === E.CONDITION_SATISFIED)
+      s._signaled = true;
     return r;
   },
   waitSync(this: Ctx, s: WebGLSync, flags: number, timeout: number): void {
     if (this._skip()) return;
     if (!this._ok(s, WebGLSync, false, 'waitSync')) return;
-    if ((flags >>> 0) !== 0 || Number(timeout) !== TIMEOUT_IGNORED) return this._e(E.INVALID_VALUE, 'waitSync');
+    if (flags >>> 0 !== 0 || Number(timeout) !== TIMEOUT_IGNORED)
+      return this._e(E.INVALID_VALUE, 'waitSync');
     this._n.waitSync(s._name, 0, TIMEOUT_IGNORED);
   },
   getSyncParameter(this: Ctx, s: WebGLSync, pname: number): unknown {
@@ -299,33 +354,50 @@ export const queryMethods = {
   // ------------------------------------------------------------------------------------------- transform feedback
   createTransformFeedback(this: Ctx): WebGLTransformFeedback | null {
     if (this._skip()) return null;
-    const t = new WebGLTransformFeedback(INTERNAL, this, this._n.genTransformFeedback(), this._maxTfBuffers);
+    const t = new WebGLTransformFeedback(
+      INTERNAL,
+      this,
+      this._n.genTransformFeedback(),
+      this._maxTfBuffers,
+    );
     this._track(t);
     return t;
   },
   isTransformFeedback(this: Ctx, t: unknown): boolean {
     if (this._lost || t === null || t === undefined) return false;
-    if (!(t instanceof WebGLTransformFeedback)) throw new TypeError('isTransformFeedback: argument is not a WebGLTransformFeedback');
+    if (!(t instanceof WebGLTransformFeedback))
+      throw new TypeError(
+        'isTransformFeedback: argument is not a WebGLTransformFeedback',
+      );
     return t._ctx === this && t._gen === this._gen && !t._deleted && t._bound;
   },
   deleteTransformFeedback(this: Ctx, t: unknown): void {
     if (this._skip()) return;
-    if (!this._owned(t, WebGLTransformFeedback, 'deleteTransformFeedback')) return;
+    if (!this._owned(t, WebGLTransformFeedback, 'deleteTransformFeedback'))
+      return;
     const tf = t as WebGLTransformFeedback;
     if (tf._deleted || tf._name === 0) return;
-    if (tf._active) return this._e(E.INVALID_OPERATION, 'deleteTransformFeedback');
+    if (tf._active)
+      return this._e(E.INVALID_OPERATION, 'deleteTransformFeedback');
     tf._deleted = true;
     if (this._tf === tf) this._tf = this._defaultTf;
     this._untrack(tf);
     this._n.deleteTransformFeedback(tf._name);
   },
-  bindTransformFeedback(this: Ctx, target: number, t: WebGLTransformFeedback | null): void {
+  bindTransformFeedback(
+    this: Ctx,
+    target: number,
+    t: WebGLTransformFeedback | null,
+  ): void {
     if (this._skip()) return;
     target >>>= 0;
-    if (!this._ok(t, WebGLTransformFeedback, true, 'bindTransformFeedback')) return;
-    if (target !== E.TRANSFORM_FEEDBACK) return this._e(E.INVALID_ENUM, 'bindTransformFeedback');
+    if (!this._ok(t, WebGLTransformFeedback, true, 'bindTransformFeedback'))
+      return;
+    if (target !== E.TRANSFORM_FEEDBACK)
+      return this._e(E.INVALID_ENUM, 'bindTransformFeedback');
     const tf = t ?? this._defaultTf;
-    if (this._tf._active && !this._tf._paused) return this._e(E.INVALID_OPERATION, 'bindTransformFeedback');
+    if (this._tf._active && !this._tf._paused)
+      return this._e(E.INVALID_OPERATION, 'bindTransformFeedback');
     if (this._tf === tf) return;
     this._tf = tf;
     tf._bound = true;
@@ -334,22 +406,33 @@ export const queryMethods = {
   beginTransformFeedback(this: Ctx, primitiveMode: number): void {
     if (this._skip()) return;
     primitiveMode >>>= 0;
-    if (primitiveMode !== E.POINTS && primitiveMode !== E.LINES && primitiveMode !== E.TRIANGLES) {
+    if (
+      primitiveMode !== E.POINTS &&
+      primitiveMode !== E.LINES &&
+      primitiveMode !== E.TRIANGLES
+    ) {
       return this._e(E.INVALID_ENUM, 'beginTransformFeedback');
     }
     const tf = this._tf;
     const p = this._program;
-    if (tf._active || !p) return this._e(E.INVALID_OPERATION, 'beginTransformFeedback');
+    if (tf._active || !p)
+      return this._e(E.INVALID_OPERATION, 'beginTransformFeedback');
     // The program must capture varyings and every capture slot needs a buffer (GLES 3.0 §2.15.2).
     const rec = this._programRecord(p);
-    if (!rec || !rec.linked || rec.varyings.length === 0) return this._e(E.INVALID_OPERATION, 'beginTransformFeedback');
-    const slots = rec.tfBufferMode === E.SEPARATE_ATTRIBS ? rec.varyings.length : 1;
-    for (let i = 0; i < slots; i++) if (!tf._buffers[i]) return this._e(E.INVALID_OPERATION, 'beginTransformFeedback');
+    if (!rec || !rec.linked || rec.varyings.length === 0)
+      return this._e(E.INVALID_OPERATION, 'beginTransformFeedback');
+    const slots =
+      rec.tfBufferMode === E.SEPARATE_ATTRIBS ? rec.varyings.length : 1;
+    for (let i = 0; i < slots; i++)
+      if (!tf._buffers[i])
+        return this._e(E.INVALID_OPERATION, 'beginTransformFeedback');
     // one buffer at two binding points (used or not by the program) is an error in WebGL (no overlapping writes)
     const bufs = tf._buffers;
-    for (let i = 0; i < bufs.length; i++) for (let j = i + 1; j < bufs.length; j++) {
-      if (bufs[i] !== null && bufs[i] === bufs[j]) return this._e(E.INVALID_OPERATION, 'beginTransformFeedback');
-    }
+    for (let i = 0; i < bufs.length; i++)
+      for (let j = i + 1; j < bufs.length; j++) {
+        if (bufs[i] !== null && bufs[i] === bufs[j])
+          return this._e(E.INVALID_OPERATION, 'beginTransformFeedback');
+      }
     tf._active = true;
     tf._written = 0;
     this._activeTfs.add(tf);
@@ -361,7 +444,8 @@ export const queryMethods = {
   endTransformFeedback(this: Ctx): void {
     if (this._skip()) return;
     const tf = this._tf;
-    if (!tf._active) return this._e(E.INVALID_OPERATION, 'endTransformFeedback');
+    if (!tf._active)
+      return this._e(E.INVALID_OPERATION, 'endTransformFeedback');
     tf._active = false;
     this._activeTfs.delete(tf);
     tf._paused = false;
@@ -371,20 +455,28 @@ export const queryMethods = {
   pauseTransformFeedback(this: Ctx): void {
     if (this._skip()) return;
     const tf = this._tf;
-    if (!tf._active || tf._paused) return this._e(E.INVALID_OPERATION, 'pauseTransformFeedback');
+    if (!tf._active || tf._paused)
+      return this._e(E.INVALID_OPERATION, 'pauseTransformFeedback');
     tf._paused = true;
     this._n.pauseTransformFeedback();
   },
   resumeTransformFeedback(this: Ctx): void {
     if (this._skip()) return;
     const tf = this._tf;
-    if (!tf._active || !tf._paused || tf._program !== this._program) return this._e(E.INVALID_OPERATION, 'resumeTransformFeedback');
+    if (!tf._active || !tf._paused || tf._program !== this._program)
+      return this._e(E.INVALID_OPERATION, 'resumeTransformFeedback');
     tf._paused = false;
     this._n.resumeTransformFeedback();
   },
 };
 
-function samplerParameter(ctx: Ctx, s: WebGLSampler, pname: number, param: number, isFloat: boolean): void {
+function samplerParameter(
+  ctx: Ctx,
+  s: WebGLSampler,
+  pname: number,
+  param: number,
+  isFloat: boolean,
+): void {
   const what = isFloat ? 'samplerParameterf' : 'samplerParameteri';
   if (ctx._skip()) return;
   if (!ctx._ok(s, WebGLSampler, false, what)) return;
@@ -399,8 +491,10 @@ function samplerParameter(ctx: Ctx, s: WebGLSampler, pname: number, param: numbe
 export function queryCounter(ctx: Ctx, q: WebGLQuery, target: number): void {
   if (ctx._skip()) return;
   if (!ctx._ok(q, WebGLQuery, false, 'queryCounterEXT')) return;
-  if ((target >>> 0) !== E.TIMESTAMP_EXT) return ctx._e(E.INVALID_ENUM, 'queryCounterEXT');
-  if (q._active || (q._target !== 0 && q._target !== E.TIMESTAMP_EXT)) return ctx._e(E.INVALID_OPERATION, 'queryCounterEXT');
+  if (target >>> 0 !== E.TIMESTAMP_EXT)
+    return ctx._e(E.INVALID_ENUM, 'queryCounterEXT');
+  if (q._active || (q._target !== 0 && q._target !== E.TIMESTAMP_EXT))
+    return ctx._e(E.INVALID_OPERATION, 'queryCounterEXT');
   q._target = E.TIMESTAMP_EXT;
   q._bound = true;
   q._availableAfter = ctx._epoch() + 1;

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Worker policy without V8: the "workers" config section, the live-worker limit (WRK-9), worker URL checks
 // (WRK-1), script loading for worker scripts, importScripts and worker modules (WRK-1, WRK-3, WRK-4), and thread
 // naming (PROC-4).

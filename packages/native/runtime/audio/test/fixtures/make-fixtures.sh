@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # Regenerates the decode fixtures with ffmpeg (libmp3lame, libvorbis, aac, flac, libopus).
 # Signal: 1 s, left 440 Hz, right 660 Hz (mono files: 440 Hz), amplitude 0.5.
 set -euo pipefail

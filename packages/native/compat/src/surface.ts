@@ -16,7 +16,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildInventory } from './inventory.ts';
-import { iwerHostSurface, measuredSurface, type MeasuredSurface } from './providers.ts';
+import {
+  iwerHostSurface,
+  measuredSurface,
+  type MeasuredSurface,
+} from './providers.ts';
 
 export interface SurfaceSnapshot {
   generatedAt: string;
@@ -33,13 +37,16 @@ export interface SurfaceSnapshot {
 }
 
 /** The @iwer/native package root (works from compat/src and from lib/compat/src). */
-export function packageRoot(from = path.dirname(fileURLToPath(import.meta.url))): string | null {
+export function packageRoot(
+  from = path.dirname(fileURLToPath(import.meta.url)),
+): string | null {
   let d = from;
   for (let i = 0; i < 6; i++) {
     const pj = path.join(d, 'package.json');
     if (existsSync(pj)) {
       try {
-        if (JSON.parse(readFileSync(pj, 'utf8')).name === '@iwer/native') return d;
+        if (JSON.parse(readFileSync(pj, 'utf8')).name === '@iwer/native')
+          return d;
       } catch {
         /* keep looking */
       }
@@ -57,10 +64,14 @@ export function snapshotFile(root: string): string {
   return path.join(root, 'compat', 'data', 'surface-snapshot.json');
 }
 
-export function toSnapshot(s: MeasuredSurface, source: string): SurfaceSnapshot {
+export function toSnapshot(
+  s: MeasuredSurface,
+  source: string,
+): SurfaceSnapshot {
   const tokens: Record<string, string> = {};
   // only identifier-like tokens that look like API names (keeps the snapshot small)
-  for (const [k, v] of s.tokens) if (/^[A-Z][A-Za-z0-9]+$|^[a-z][A-Za-z0-9]{3,}$/.test(k)) tokens[k] = v;
+  for (const [k, v] of s.tokens)
+    if (/^[A-Z][A-Za-z0-9]+$|^[a-z][A-Za-z0-9]{3,}$/.test(k)) tokens[k] = v;
   return {
     generatedAt: new Date().toISOString(),
     source,
@@ -105,26 +116,66 @@ export interface LoadedSurface {
 }
 
 /** Live when the checkout has built layers; else the snapshot; else an empty surface (everything reads as a gap). */
-export async function loadSurface(opts: { root?: string | null; iwerHostFile?: string; preferSnapshot?: boolean } = {}): Promise<LoadedSurface> {
+export async function loadSurface(
+  opts: {
+    root?: string | null;
+    iwerHostFile?: string;
+    preferSnapshot?: boolean;
+  } = {},
+): Promise<LoadedSurface> {
   const root = opts.root === undefined ? packageRoot() : opts.root;
-  if (root && !opts.preferSnapshot && existsSync(path.join(root, 'web', 'glue', 'dist'))) {
+  if (
+    root &&
+    !opts.preferSnapshot &&
+    existsSync(path.join(root, 'web', 'glue', 'dist'))
+  ) {
     const iwerFile = opts.iwerHostFile ?? defaultIwerHostFile(root);
-    const iwer = existsSync(iwerFile) ? await iwerHostSurface(iwerFile).catch(() => new Set<string>()) : new Set<string>();
-    if (iwer.size || !existsSync(snapshotFile(root))) return { surface: measuredSurface(buildInventory(root), iwer), origin: 'live' };
+    const iwer = existsSync(iwerFile)
+      ? await iwerHostSurface(iwerFile).catch(() => new Set<string>())
+      : new Set<string>();
+    if (iwer.size || !existsSync(snapshotFile(root)))
+      return {
+        surface: measuredSurface(buildInventory(root), iwer),
+        origin: 'live',
+      };
     // live layers but no IWER build: take IWER from the snapshot
-    const snap = JSON.parse(readFileSync(snapshotFile(root), 'utf8')) as SurfaceSnapshot;
-    return { surface: measuredSurface(buildInventory(root), snap.iwer), origin: 'live (IWER from snapshot)' };
+    const snap = JSON.parse(
+      readFileSync(snapshotFile(root), 'utf8'),
+    ) as SurfaceSnapshot;
+    return {
+      surface: measuredSurface(buildInventory(root), snap.iwer),
+      origin: 'live (IWER from snapshot)',
+    };
   }
   if (root && existsSync(snapshotFile(root))) {
-    const snap = JSON.parse(readFileSync(snapshotFile(root), 'utf8')) as SurfaceSnapshot;
-    return { surface: fromSnapshot(snap), origin: `snapshot ${snap.generatedAt}` };
+    const snap = JSON.parse(
+      readFileSync(snapshotFile(root), 'utf8'),
+    ) as SurfaceSnapshot;
+    return {
+      surface: fromSnapshot(snap),
+      origin: `snapshot ${snap.generatedAt}`,
+    };
   }
-  return { surface: measuredSurface({ generatedAt: '', packageRoot: '', layers: [] }, []), origin: 'empty (no built layers, no snapshot)' };
+  return {
+    surface: measuredSurface(
+      { generatedAt: '', packageRoot: '', layers: [] },
+      [],
+    ),
+    origin: 'empty (no built layers, no snapshot)',
+  };
 }
 
-export async function writeSnapshot(root: string, iwerHostFile = defaultIwerHostFile(root)): Promise<string> {
-  const iwer = existsSync(iwerHostFile) ? await iwerHostSurface(iwerHostFile) : new Set<string>();
-  const snap = toSnapshot(measuredSurface(buildInventory(root), iwer), `${path.basename(root)} + ${path.basename(iwerHostFile)}`);
+export async function writeSnapshot(
+  root: string,
+  iwerHostFile = defaultIwerHostFile(root),
+): Promise<string> {
+  const iwer = existsSync(iwerHostFile)
+    ? await iwerHostSurface(iwerHostFile)
+    : new Set<string>();
+  const snap = toSnapshot(
+    measuredSurface(buildInventory(root), iwer),
+    `${path.basename(root)} + ${path.basename(iwerHostFile)}`,
+  );
   const file = snapshotFile(root);
   const { mkdirSync } = await import('node:fs');
   mkdirSync(path.dirname(file), { recursive: true });

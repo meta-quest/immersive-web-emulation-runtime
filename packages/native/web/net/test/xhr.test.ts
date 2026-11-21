@@ -12,9 +12,16 @@ import { after, before, test } from 'node:test';
 
 import { XMLHttpRequest } from '../src/xhr.ts';
 import { bridgeAvailable } from './bridge-natives.ts';
-import { makeDist, setupBridge, startHttpServer, type TestHttpServer } from './helpers.ts';
+import {
+  makeDist,
+  setupBridge,
+  startHttpServer,
+  type TestHttpServer,
+} from './helpers.ts';
 
-const skip = bridgeAvailable ? false : 'iwn_net_bridge not built (node scripts/build-bridge.mjs)';
+const skip = bridgeAvailable
+  ? false
+  : 'iwn_net_bridge not built (node scripts/build-bridge.mjs)';
 let server: TestHttpServer;
 let env: Awaited<ReturnType<typeof setupBridge>>;
 
@@ -35,7 +42,11 @@ before(async () => {
       res.end('missing');
     }
   });
-  env = await setupBridge({ assets: makeDist(16).dir, allow: [server.origin], debug: true });
+  env = await setupBridge({
+    assets: makeDist(16).dir,
+    allow: [server.origin],
+    debug: true,
+  });
 });
 after(async () => {
   if (skip) return;
@@ -47,7 +58,15 @@ function run(xhr: XMLHttpRequest, body?: unknown): Promise<string[]> {
   const log: string[] = [];
   return new Promise((resolve) => {
     xhr.onreadystatechange = () => log.push(`rs${xhr.readyState}`);
-    for (const t of ['loadstart', 'progress', 'load', 'error', 'abort', 'timeout']) xhr.addEventListener(t, () => log.push(t));
+    for (const t of [
+      'loadstart',
+      'progress',
+      'load',
+      'error',
+      'abort',
+      'timeout',
+    ])
+      xhr.addEventListener(t, () => log.push(t));
     xhr.onloadend = () => {
       log.push('loadend');
       resolve(log);
@@ -56,24 +75,37 @@ function run(xhr: XMLHttpRequest, body?: unknown): Promise<string[]> {
   });
 }
 
-test('async GET: readyState sequence, events, text and headers', { skip }, async () => {
-  const xhr = new XMLHttpRequest();
-  xhr.open('GET', `${server.origin}/json`);
-  assert.equal(xhr.readyState, 1);
-  const log = await run(xhr);
-  assert.deepEqual(log.filter((l) => !l.startsWith('rs3') && l !== 'progress'), ['loadstart', 'rs2', 'rs4', 'load', 'loadend']);
-  assert.equal(xhr.status, 200);
-  assert.equal(xhr.responseText, '{"n":42}');
-  assert.equal(xhr.getResponseHeader('X-A'), '1');
-  assert.match(xhr.getAllResponseHeaders(), /x-a: 1\r\nx-b: 2\r\n/);
-  assert.equal(xhr.responseURL, `${server.origin}/json`);
-});
+test(
+  'async GET: readyState sequence, events, text and headers',
+  { skip },
+  async () => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `${server.origin}/json`);
+    assert.equal(xhr.readyState, 1);
+    const log = await run(xhr);
+    assert.deepEqual(
+      log.filter((l) => !l.startsWith('rs3') && l !== 'progress'),
+      ['loadstart', 'rs2', 'rs4', 'load', 'loadend'],
+    );
+    assert.equal(xhr.status, 200);
+    assert.equal(xhr.responseText, '{"n":42}');
+    assert.equal(xhr.getResponseHeader('X-A'), '1');
+    assert.match(xhr.getAllResponseHeaders(), /x-a: 1\r\nx-b: 2\r\n/);
+    assert.equal(xhr.responseURL, `${server.origin}/json`);
+  },
+);
 
 test('responseType json, arraybuffer, blob', { skip }, async () => {
   for (const [type, check] of [
     ['json', (r: unknown) => assert.deepEqual(r, { n: 42 })],
-    ['arraybuffer', (r: unknown) => assert.equal((r as ArrayBuffer).byteLength, 8)],
-    ['blob', (r: unknown) => assert.equal((r as Blob).type, 'application/json')],
+    [
+      'arraybuffer',
+      (r: unknown) => assert.equal((r as ArrayBuffer).byteLength, 8),
+    ],
+    [
+      'blob',
+      (r: unknown) => assert.equal((r as Blob).type, 'application/json'),
+    ],
   ] as const) {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', `${server.origin}/json`);
@@ -84,24 +116,34 @@ test('responseType json, arraybuffer, blob', { skip }, async () => {
   }
 });
 
-test('POST with headers and body; 404 is a load, not an error', { skip }, async () => {
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', `${server.origin}/echo`);
-  xhr.setRequestHeader('X-H', 'v');
-  xhr.setRequestHeader('Host', 'dropped');
-  await run(xhr, 'payload');
-  assert.equal(xhr.responseText, 'POST v payload');
-  const nf = new XMLHttpRequest();
-  nf.open('GET', `${server.origin}/nope`);
-  const log = await run(nf);
-  assert.equal(nf.status, 404);
-  assert.ok(log.includes('load'));
-});
+test(
+  'POST with headers and body; 404 is a load, not an error',
+  { skip },
+  async () => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${server.origin}/echo`);
+    xhr.setRequestHeader('X-H', 'v');
+    xhr.setRequestHeader('Host', 'dropped');
+    await run(xhr, 'payload');
+    assert.equal(xhr.responseText, 'POST v payload');
+    const nf = new XMLHttpRequest();
+    nf.open('GET', `${server.origin}/nope`);
+    const log = await run(nf);
+    assert.equal(nf.status, 404);
+    assert.ok(log.includes('load'));
+  },
+);
 
-test('synchronous requests throw InvalidAccessError on the main thread (documented deviation)', { skip }, () => {
-  const xhr = new XMLHttpRequest();
-  assert.throws(() => xhr.open('GET', '/x', false), { name: 'InvalidAccessError' });
-});
+test(
+  'synchronous requests throw InvalidAccessError on the main thread (documented deviation)',
+  { skip },
+  () => {
+    const xhr = new XMLHttpRequest();
+    assert.throws(() => xhr.open('GET', '/x', false), {
+      name: 'InvalidAccessError',
+    });
+  },
+);
 
 test('abort and timeout', { skip }, async () => {
   const a = new XMLHttpRequest();
@@ -127,10 +169,14 @@ test('blocked origins fire error', { skip }, async () => {
   assert.equal(xhr.status, 0);
 });
 
-test('same-origin assets through XHR (three FileLoader fallback path)', { skip }, async () => {
-  const xhr = new XMLHttpRequest();
-  xhr.open('GET', '/_app/x.js');
-  await run(xhr);
-  assert.equal(xhr.status, 200);
-  assert.equal(xhr.responseText, 'export const x = 1;\n');
-});
+test(
+  'same-origin assets through XHR (three FileLoader fallback path)',
+  { skip },
+  async () => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', '/_app/x.js');
+    await run(xhr);
+    assert.equal(xhr.status, 200);
+    assert.equal(xhr.responseText, 'export const x = 1;\n');
+  },
+);

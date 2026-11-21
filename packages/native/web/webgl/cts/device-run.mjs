@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // GL-CTS-1 on the device: drives the harness app (cts/device-build.mjs) on a headset over CDP and runs the same
 // subset as the host runner (cts/subset.txt, both WebGL passes), one page per fresh page context (Page.reload).
 // Each page's HTML and the files it loads go in the evaluate payload; the page's markup scripts run as classic
@@ -24,14 +31,18 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const args = {};
 for (let i = 2; i < process.argv.length; i++) {
   const a = process.argv[i];
-  if (a === '--keep-installed' || a === '--verbose' || a === '--keep-running') args[a.slice(2)] = true;
+  if (a === '--keep-installed' || a === '--verbose' || a === '--keep-running')
+    args[a.slice(2)] = true;
   else args[a.replace(/^--/, '')] = process.argv[++i];
 }
 if (!args.serial) {
-  console.error('usage: device-run.mjs --serial <serial> [--apk gl-cts.apk] [--port 9502] [--json out.json] ...');
+  console.error(
+    'usage: device-run.mjs --serial <serial> [--apk gl-cts.apk] [--port 9502] [--json out.json] ...',
+  );
   process.exit(2);
 }
-const ROOT = args.root ?? path.join(os.homedir(), '.cache/iwn-webgl-cts/sdk-tests');
+const ROOT =
+  args.root ?? path.join(os.homedir(), '.cache/iwn-webgl-cts/sdk-tests');
 const LIST = args.list ?? path.join(here, 'subset.txt');
 const PORT = Number(args.port ?? 9502);
 const TIMEOUT = Number(args.timeout ?? 30000);
@@ -40,10 +51,16 @@ const PKG = 'com.iwernative.glcts';
 // other apps of this stream that bind the same inspector port: a leftover instance makes the harness unreachable
 const OTHER_PKGS = ['com.iwernative.gltest', 'com.iwernative.glbench'];
 const ACTIVITY = `${PKG}/android.app.NativeActivity`;
-const ADB = process.env.IWN_ADB ? process.env.IWN_ADB.split(/\s+/) : ['adb', '-s', args.serial];
+const ADB = process.env.IWN_ADB
+  ? process.env.IWN_ADB.split(/\s+/)
+  : ['adb', '-s', args.serial];
 
 function adb(...a) {
-  return execFileSync(ADB[0], [...ADB.slice(1), ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180000 });
+  return execFileSync(ADB[0], [...ADB.slice(1), ...a], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 180000,
+  });
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -51,9 +68,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class Cdp {
   static async connect() {
-    const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
+    const list = await (
+      await fetch(`http://127.0.0.1:${PORT}/json/list`)
+    ).json();
     const page = list.find((t) => t.type === 'page') ?? list[0];
-    const url = page.webSocketDebuggerUrl.replace(/ws:\/\/[^/]+/, `ws://127.0.0.1:${PORT}`);
+    const url = page.webSocketDebuggerUrl.replace(
+      /ws:\/\/[^/]+/,
+      `ws://127.0.0.1:${PORT}`,
+    );
     const ws = new WebSocket(url);
     await new Promise((res, rej) => {
       ws.onopen = res;
@@ -67,7 +89,9 @@ class Cdp {
     this.pending = new Map();
     this.closed = false;
     ws.onmessage = (ev) => {
-      const m = JSON.parse(typeof ev.data === 'string' ? ev.data : Buffer.from(ev.data).toString());
+      const m = JSON.parse(
+        typeof ev.data === 'string' ? ev.data : Buffer.from(ev.data).toString(),
+      );
       const p = m.id !== undefined && this.pending.get(m.id);
       if (!p) return;
       this.pending.delete(m.id);
@@ -76,7 +100,8 @@ class Cdp {
     };
     ws.onclose = () => {
       this.closed = true;
-      for (const p of this.pending.values()) p.rej(new Error('CDP connection closed'));
+      for (const p of this.pending.values())
+        p.rej(new Error('CDP connection closed'));
       this.pending.clear();
     };
   }
@@ -96,8 +121,15 @@ class Cdp {
     });
   }
   async evaluate(expression, timeoutMs = 60000) {
-    const r = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, timeoutMs);
-    if (r.exceptionDetails) throw new Error(`page exception: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
+    const r = await this.send(
+      'Runtime.evaluate',
+      { expression, awaitPromise: true, returnByValue: true },
+      timeoutMs,
+    );
+    if (r.exceptionDetails)
+      throw new Error(
+        `page exception: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`,
+      );
     return r.result.value;
   }
   close() {
@@ -122,7 +154,13 @@ async function readyPage(deadlineMs = 30000) {
         await cdp.send('Runtime.enable', {}, 10000); // compileScript / runScript need the Runtime agent
       }
       // __ctsStale marks the page being replaced: do not mistake it for the fresh one
-      if ((await cdp.evaluate('globalThis.__ctsReady === true && globalThis.__ctsStale !== true', 5000)) === true) return;
+      if (
+        (await cdp.evaluate(
+          'globalThis.__ctsReady === true && globalThis.__ctsStale !== true',
+          5000,
+        )) === true
+      )
+        return;
     } catch (e) {
       last = String(e.message ?? e);
       cdp?.close();
@@ -146,7 +184,10 @@ async function freshPage() {
   try {
     // The page's DOM (page.mjs) replaces window.dispatchEvent, so the runtime's pagehide never reaches the binding's
     // listener (prelude.ts): free the page's WebGL contexts and objects here, as the pagehide listener does in apps.
-    await cdp.evaluate('globalThis.__ctsStale = true; globalThis.__iwnWebGL?.releaseAllContexts?.(); true', 5000);
+    await cdp.evaluate(
+      'globalThis.__ctsStale = true; globalThis.__iwnWebGL?.releaseAllContexts?.(); true',
+      5000,
+    );
     await cdp.send('Page.reload', {}, 10000);
     await sleep(30);
     await readyPage(20000);
@@ -172,7 +213,9 @@ async function runOnDevice(testRel, webglVersion) {
   const dir = path.posix.dirname(testRel);
   const want = new Set(dirDeps.get(dir) ?? []); // files the page reads itself (XHR, dynamic <script>)
   const srcScripts = [];
-  for (const it of parseHtml(html).items) if (it.tag === 'script' && it.attrs.src) srcScripts.push(resolveRel(testRel, it.attrs.src));
+  for (const it of parseHtml(html).items)
+    if (it.tag === 'script' && it.attrs.src)
+      srcScripts.push(resolveRel(testRel, it.attrs.src));
   for (let attempt = 0; attempt < 6; attempt++) {
     const files = {};
     for (const rel of want) {
@@ -180,10 +223,19 @@ async function runOnDevice(testRel, webglVersion) {
       if (t !== null) files[rel] = t;
     }
     await freshPage();
-    const payload = { testRel, html, files, srcScripts, webglVersion, timeout: TIMEOUT };
+    const payload = {
+      testRel,
+      html,
+      files,
+      srcScripts,
+      webglVersion,
+      timeout: TIMEOUT,
+    };
     let r;
     try {
-      const scripts = JSON.parse(await cdp.evaluate(`__ctsSetup(${JSON.stringify(payload)})`, 60000));
+      const scripts = JSON.parse(
+        await cdp.evaluate(`__ctsSetup(${JSON.stringify(payload)})`, 60000),
+      );
       // Markup scripts run as classic scripts (global declarations, "use strict" per script), in order.
       for (let i = 0; i < scripts.length; i++) {
         const { filename } = scripts[i];
@@ -192,11 +244,27 @@ async function runOnDevice(testRel, webglVersion) {
           await cdp.evaluate(`__ctsScriptError(${i}, 'not found')`, 10000);
           continue;
         }
-        const c = await cdp.send('Runtime.compileScript', { expression: code, sourceURL: filename, persistScript: true }, 60000);
-        const run = c.exceptionDetails ? c : await cdp.send('Runtime.runScript', { scriptId: c.scriptId }, TIMEOUT + 30000);
+        const c = await cdp.send(
+          'Runtime.compileScript',
+          { expression: code, sourceURL: filename, persistScript: true },
+          60000,
+        );
+        const run = c.exceptionDetails
+          ? c
+          : await cdp.send(
+              'Runtime.runScript',
+              { scriptId: c.scriptId },
+              TIMEOUT + 30000,
+            );
         if (run.exceptionDetails) {
-          const d = run.exceptionDetails.exception?.description ?? run.exceptionDetails.text ?? 'error';
-          await cdp.evaluate(`__ctsScriptError(${i}, ${JSON.stringify(String(d))})`, 10000);
+          const d =
+            run.exceptionDetails.exception?.description ??
+            run.exceptionDetails.text ??
+            'error';
+          await cdp.evaluate(
+            `__ctsScriptError(${i}, ${JSON.stringify(String(d))})`,
+            10000,
+          );
         }
       }
       r = JSON.parse(await cdp.evaluate('__ctsFinish()', TIMEOUT + 30000));
@@ -204,14 +272,27 @@ async function runOnDevice(testRel, webglVersion) {
       // hang (evaluate timed out) or crash (connection closed): restart the app for the next page
       const msg = String(e.message ?? e);
       await startApp().catch(() => {});
-      return { pass: 0, fail: 0, finished: false, timedOut: /timed out/.test(msg), failures: [], errors: [`device: ${msg}`] };
+      return {
+        pass: 0,
+        fail: 0,
+        finished: false,
+        timedOut: /timed out/.test(msg),
+        failures: [],
+        errors: [`device: ${msg}`],
+      };
     }
     const fresh = r.missing.filter((m) => !want.has(m) && readRoot(m) !== null);
     if (!fresh.length) return r;
     for (const m of fresh) want.add(m);
     dirDeps.set(dir, new Set([...(dirDeps.get(dir) ?? []), ...fresh]));
   }
-  return { pass: 0, fail: 0, finished: false, failures: [], errors: ['device: page kept asking for more files'] };
+  return {
+    pass: 0,
+    fail: 0,
+    finished: false,
+    failures: [],
+    errors: ['device: page kept asking for more files'],
+  };
 }
 
 // ------------------------------------------------------------------------------------------------ main
@@ -227,7 +308,13 @@ if (args.apk) {
   console.log(adb('install', '-r', '-g', args.apk).trim().split('\n').pop());
 }
 adb('forward', `tcp:${PORT}`, `localabstract:${PKG}_devtools_${PORT}`); // CDP-1: the inspector is an abstract socket
-const report = { root: ROOT, device, started: new Date().toISOString(), passes: [], tests: [] };
+const report = {
+  root: ROOT,
+  device,
+  started: new Date().toISOString(),
+  passes: [],
+  tests: [],
+};
 let passed = 0;
 let failed = 0;
 let excluded = 0;
@@ -237,34 +324,76 @@ const byDir = new Map();
 const previous = new Map();
 if (args.resume && fs.existsSync(args.resume)) {
   const old = JSON.parse(fs.readFileSync(args.resume, 'utf8'));
-  for (const t of old.tests ?? []) if (t.status !== 'excluded' && !(t.errors ?? []).some((e) => /^device: /.test(e))) previous.set(`${t.webgl} ${t.test}`, t);
-  report.resumedFrom = { file: args.resume, kept: previous.size, device: old.device };
+  for (const t of old.tests ?? [])
+    if (
+      t.status !== 'excluded' &&
+      !(t.errors ?? []).some((e) => /^device: /.test(e))
+    )
+      previous.set(`${t.webgl} ${t.test}`, t);
+  report.resumedFrom = {
+    file: args.resume,
+    kept: previous.size,
+    device: old.device,
+  };
   console.log(`resuming: ${previous.size} results kept from ${args.resume}`);
 }
 try {
   await startApp();
   for (const pass of PASSES) {
-    const { tests, exclude } = expandList(ROOT, LIST, pass, args.filter, 'device');
+    const { tests, exclude } = expandList(
+      ROOT,
+      LIST,
+      pass,
+      args.filter,
+      'device',
+    );
     total += tests.length;
-    const counts = { webgl: pass, suiteVersion: SUITE_VERSION[pass], passed: 0, failed: 0, excluded: 0, total: tests.length };
+    const counts = {
+      webgl: pass,
+      suiteVersion: SUITE_VERSION[pass],
+      passed: 0,
+      failed: 0,
+      excluded: 0,
+      total: tests.length,
+    };
     report.passes.push(counts);
     for (const t of tests) {
       const dir = `v${pass} ${path.dirname(t)}`;
       const d = byDir.get(dir) ?? { pass: 0, fail: 0, excluded: 0 };
       byDir.set(dir, d);
-      const why = exclude.get(t) ?? [...exclude.entries()].find(([k]) => k.endsWith('/') && t.startsWith(k))?.[1];
+      const why =
+        exclude.get(t) ??
+        [...exclude.entries()].find(
+          ([k]) => k.endsWith('/') && t.startsWith(k),
+        )?.[1];
       if (why !== undefined) {
         excluded++;
         counts.excluded++;
         d.excluded++;
-        report.tests.push({ webgl: pass, test: t, status: 'excluded', reason: why });
+        report.tests.push({
+          webgl: pass,
+          test: t,
+          status: 'excluded',
+          reason: why,
+        });
         continue;
       }
       const prev = previous.get(`${pass} ${t}`);
       const r = prev
-        ? { pass: prev.subtests?.pass ?? 0, fail: prev.subtests?.fail ?? 0, finished: prev.status === 'pass', timedOut: prev.timedOut, ms: prev.ms, failures: prev.failures ?? [], errors: prev.errors ?? [], resumed: true }
+        ? {
+            pass: prev.subtests?.pass ?? 0,
+            fail: prev.subtests?.fail ?? 0,
+            finished: prev.status === 'pass',
+            timedOut: prev.timedOut,
+            ms: prev.ms,
+            failures: prev.failures ?? [],
+            errors: prev.errors ?? [],
+            resumed: true,
+          }
         : await runOnDevice(t, pass);
-      const ok = prev ? prev.status === 'pass' : r.finished && r.fail === 0 && r.errors.length === 0 && r.pass > 0;
+      const ok = prev
+        ? prev.status === 'pass'
+        : r.finished && r.fail === 0 && r.errors.length === 0 && r.pass > 0;
       if (ok) {
         passed++;
         counts.passed++;
@@ -274,14 +403,27 @@ try {
         counts.failed++;
         d.fail++;
       }
-      report.tests.push({ webgl: pass, test: t, status: ok ? 'pass' : 'fail', subtests: { pass: r.pass, fail: r.fail }, timedOut: r.timedOut, ms: r.ms, failures: r.failures, errors: r.errors, ...(r.resumed ? { resumed: true } : {}) });
+      report.tests.push({
+        webgl: pass,
+        test: t,
+        status: ok ? 'pass' : 'fail',
+        subtests: { pass: r.pass, fail: r.fail },
+        timedOut: r.timedOut,
+        ms: r.ms,
+        failures: r.failures,
+        errors: r.errors,
+        ...(r.resumed ? { resumed: true } : {}),
+      });
       if (r.resumed) continue;
-      console.log(`${ok ? 'PASS' : 'FAIL'} [v${pass}] ${t} (${r.pass}/${r.pass + r.fail})${r.timedOut ? ' TIMEOUT' : ''}`);
+      console.log(
+        `${ok ? 'PASS' : 'FAIL'} [v${pass}] ${t} (${r.pass}/${r.pass + r.fail})${r.timedOut ? ' TIMEOUT' : ''}`,
+      );
       if (!ok && args.verbose) {
         for (const f of r.failures.slice(0, 5)) console.log(`    - ${f}`);
         for (const e of r.errors.slice(0, 3)) console.log(`    ! ${e}`);
       }
-      if (args.json && report.tests.length % 25 === 0) fs.writeFileSync(args.json, JSON.stringify(report, null, 2));
+      if (args.json && report.tests.length % 25 === 0)
+        fs.writeFileSync(args.json, JSON.stringify(report, null, 2));
     }
   }
 } finally {
@@ -296,8 +438,16 @@ try {
 }
 report.finished = new Date().toISOString();
 console.log('\nper directory:');
-for (const [dir, d] of [...byDir].sort()) console.log(`  ${dir}: pass ${d.pass}, fail ${d.fail}, excluded ${d.excluded}`);
-for (const c of report.passes) console.log(`WebGL ${c.webgl} pass (suite ${c.suiteVersion}): ${c.passed} passed, ${c.failed} failed, ${c.excluded} excluded (of ${c.total})`);
-console.log(`\nCTS subset on ${device.model} ${device.build}: ${passed} passed, ${failed} failed, ${excluded} excluded (of ${total})`);
+for (const [dir, d] of [...byDir].sort())
+  console.log(
+    `  ${dir}: pass ${d.pass}, fail ${d.fail}, excluded ${d.excluded}`,
+  );
+for (const c of report.passes)
+  console.log(
+    `WebGL ${c.webgl} pass (suite ${c.suiteVersion}): ${c.passed} passed, ${c.failed} failed, ${c.excluded} excluded (of ${c.total})`,
+  );
+console.log(
+  `\nCTS subset on ${device.model} ${device.build}: ${passed} passed, ${failed} failed, ${excluded} excluded (of ${total})`,
+);
 if (args.json) fs.writeFileSync(args.json, JSON.stringify(report, null, 2));
 process.exit(failed ? 1 : 0);

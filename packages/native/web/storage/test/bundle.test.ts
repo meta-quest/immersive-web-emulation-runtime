@@ -25,35 +25,91 @@ const gluePath = join(here, '..', '..', 'glue', 'dist', 'glue.min.js');
 const haveGlue = existsSync(gluePath);
 let ctx: vm.Context;
 
-async function bundle(entry: string, root: string, options: Record<string, unknown>): Promise<string> {
-  const r = await build({ ...options, entryPoints: [entry], minify: true, write: false, outfile: 'x.js', absWorkingDir: root } as never);
+async function bundle(
+  entry: string,
+  root: string,
+  options: Record<string, unknown>,
+): Promise<string> {
+  const r = await build({
+    ...options,
+    entryPoints: [entry],
+    minify: true,
+    write: false,
+    outfile: 'x.js',
+    absWorkingDir: root,
+  } as never);
   return r.outputFiles![0]!.text;
 }
 
 before(async () => {
-  const natives = new FakeStorageNatives(mkdtempSync(join(tmpdir(), 'iwn-bundle-')));
+  const natives = new FakeStorageNatives(
+    mkdtempSync(join(tmpdir(), 'iwn-bundle-')),
+  );
   const netNatives = {
-    config: () => ({ allow: [], debug: false, origin: 'https://app.local', userAgent: 't', timeoutMs: 1000 }),
-    readAsset: (_p: string, cb: (s: number, b: ArrayBuffer | null, m: string, mapped: boolean) => void) => setImmediate(() => cb(404, null, '', false)),
+    config: () => ({
+      allow: [],
+      debug: false,
+      origin: 'https://app.local',
+      userAgent: 't',
+      timeoutMs: 1000,
+    }),
+    readAsset: (
+      _p: string,
+      cb: (
+        s: number,
+        b: ArrayBuffer | null,
+        m: string,
+        mapped: boolean,
+      ) => void,
+    ) => setImmediate(() => cb(404, null, '', false)),
   };
   ctx = vm.createContext({
     setTimeout,
     clearTimeout,
     console,
-    __iwn: { crypto: { random: (u8: Uint8Array) => randomFillSync(u8) }, storage: natives, net: netNatives },
+    __iwn: {
+      crypto: { random: (u8: Uint8Array) => randomFillSync(u8) },
+      storage: natives,
+      net: netNatives,
+    },
   });
   if (haveGlue) {
     vm.runInContext(readFileSync(gluePath, 'utf8'), ctx);
   } else {
-    for (const k of ['URL', 'URLSearchParams', 'TextEncoder', 'TextDecoder', 'EventTarget', 'Event', 'DOMException', 'AbortController', 'AbortSignal', 'Blob', 'queueMicrotask']) {
-      (ctx as Record<string, unknown>)[k] = (globalThis as Record<string, unknown>)[k];
+    for (const k of [
+      'URL',
+      'URLSearchParams',
+      'TextEncoder',
+      'TextDecoder',
+      'EventTarget',
+      'Event',
+      'DOMException',
+      'AbortController',
+      'AbortSignal',
+      'Blob',
+      'queueMicrotask',
+    ]) {
+      (ctx as Record<string, unknown>)[k] = (
+        globalThis as Record<string, unknown>
+      )[k];
     }
-    vm.runInContext('globalThis.navigator = {}; globalThis.window = globalThis; globalThis.self = globalThis;', ctx);
+    vm.runInContext(
+      'globalThis.navigator = {}; globalThis.window = globalThis; globalThis.self = globalThis;',
+      ctx,
+    );
   }
   const netRoot = join(here, '..', '..', 'net');
-  const { buildOptions } = (await import(join(netRoot, 'build.mjs'))) as { buildOptions: Record<string, unknown> };
-  vm.runInContext(await bundle(join(netRoot, 'src/entry.ts'), netRoot, buildOptions), ctx);
-  const { common, entries } = (await import(join(here, '..', 'build.mjs'))) as { common: Record<string, unknown>; entries: Record<string, string> };
+  const { buildOptions } = (await import(join(netRoot, 'build.mjs'))) as {
+    buildOptions: Record<string, unknown>;
+  };
+  vm.runInContext(
+    await bundle(join(netRoot, 'src/entry.ts'), netRoot, buildOptions),
+    ctx,
+  );
+  const { common, entries } = (await import(join(here, '..', 'build.mjs'))) as {
+    common: Record<string, unknown>;
+    entries: Record<string, string>;
+  };
   vm.runInContext(await bundle(entries.storage, join(here, '..'), common), ctx);
   vm.runInContext(await bundle(entries.idb, join(here, '..'), common), ctx);
 });
@@ -63,7 +119,18 @@ test('globals present in a bare context', () => {
     `['localStorage','sessionStorage','Storage','indexedDB','IDBKeyRange','caches','CacheStorage'].map((n) => typeof globalThis[n])`,
     ctx,
   ) as string[];
-  assert.deepEqual([...t], ['object', 'object', 'function', 'object', 'function', 'object', 'function']);
+  assert.deepEqual(
+    [...t],
+    [
+      'object',
+      'object',
+      'function',
+      'object',
+      'function',
+      'object',
+      'function',
+    ],
+  );
 });
 
 test('localStorage and IndexedDB work inside the context', async () => {

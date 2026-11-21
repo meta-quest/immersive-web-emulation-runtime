@@ -16,7 +16,8 @@ import { fileURLToPath } from 'node:url';
 import { both, createGlueContext } from './harness.ts';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
-const load = (n: string): unknown => JSON.parse(readFileSync(join(fixtures, n), 'utf8'));
+const load = (n: string): unknown =>
+  JSON.parse(readFileSync(join(fixtures, n), 'utf8'));
 
 type UrlCase = {
   input: string;
@@ -27,21 +28,37 @@ type UrlCase = {
   [k: string]: unknown;
 };
 
-const FIELDS = ['href', 'protocol', 'username', 'password', 'host', 'hostname', 'port', 'pathname', 'search', 'hash'];
+const FIELDS = [
+  'href',
+  'protocol',
+  'username',
+  'password',
+  'host',
+  'hostname',
+  'port',
+  'pathname',
+  'search',
+  'hash',
+];
 
 describe('URL (NET-13)', () => {
   test('WPT urltestdata.json: >= 99% pass in the glue realm', async (t) => {
-    const cases = (load('wpt-urltestdata.json') as unknown[]).filter((x): x is UrlCase => typeof x === 'object');
+    const cases = (load('wpt-urltestdata.json') as unknown[]).filter(
+      (x): x is UrlCase => typeof x === 'object',
+    );
     const { g } = await createGlueContext();
     const URLG = g.URL as unknown as typeof URL;
     const failures: string[] = [];
     for (const t of cases) {
       let ok = true;
       try {
-        const u = t.base == null ? new URLG(t.input) : new URLG(t.input, t.base);
+        const u =
+          t.base == null ? new URLG(t.input) : new URLG(t.input, t.base);
         if (t.failure) ok = false;
         else {
-          for (const k of FIELDS) if ((u as unknown as Record<string, unknown>)[k] !== t[k]) ok = false;
+          for (const k of FIELDS)
+            if ((u as unknown as Record<string, unknown>)[k] !== t[k])
+              ok = false;
           if (t.origin !== undefined && u.origin !== t.origin) ok = false;
           if (u.toJSON() !== u.href) ok = false;
         }
@@ -50,16 +67,31 @@ describe('URL (NET-13)', () => {
       }
       if (t.failure && ok) {
         // URL.canParse must agree with the constructor.
-        if ((URLG as unknown as { canParse(u: string, b?: string): boolean }).canParse(t.input, t.base ?? undefined)) ok = false;
+        if (
+          (
+            URLG as unknown as { canParse(u: string, b?: string): boolean }
+          ).canParse(t.input, t.base ?? undefined)
+        )
+          ok = false;
       }
       if (!ok) failures.push(JSON.stringify([t.input, t.base]));
     }
     const rate = 1 - failures.length / cases.length;
-    t.diagnostic(`urltestdata: ${cases.length - failures.length}/${cases.length} pass; failures: ${failures.join(' ')}`);
-    assert.ok(rate >= 0.99, `pass rate ${(rate * 100).toFixed(2)}%; failures:\n${failures.join('\n')}`);
+    t.diagnostic(
+      `urltestdata: ${cases.length - failures.length}/${cases.length} pass; failures: ${failures.join(' ')}`,
+    );
+    assert.ok(
+      rate >= 0.99,
+      `pass rate ${(rate * 100).toFixed(2)}%; failures:\n${failures.join('\n')}`,
+    );
     // Recorded 2026-10-20 (whatwg-url 17.3.0 + the tr46 shim): no failures. The shim approximates UTS #46,
     // so a future WPT revision may add IDNA cases it misses; keep any such failure IDNA-only.
-    for (const f of failures) assert.match(f, /[^\x00-\x7f]|%[89a-f]/i, `unexpected non-IDNA failure ${f}`);
+    for (const f of failures)
+      assert.match(
+        f,
+        /[^\x00-\x7f]|%[89a-f]/i,
+        `unexpected non-IDNA failure ${f}`,
+      );
   });
 
   test('WPT setters_tests.json', async (t) => {
@@ -70,21 +102,32 @@ describe('URL (NET-13)', () => {
     const failures: string[] = [];
     for (const [setter, cases] of Object.entries(data)) {
       if (setter === 'comment') continue;
-      for (const c of cases as { href: string; new_value: string; expected: Record<string, string> }[]) {
+      for (const c of cases as {
+        href: string;
+        new_value: string;
+        expected: Record<string, string>;
+      }[]) {
         total++;
         const u = new URLG(c.href);
         (u as unknown as Record<string, string>)[setter] = c.new_value;
         for (const [k, v] of Object.entries(c.expected)) {
           if ((u as unknown as Record<string, string>)[k] !== v) {
-            failures.push(`${setter} ${c.href} <- ${JSON.stringify(c.new_value)}: ${k}=${JSON.stringify((u as unknown as Record<string, string>)[k])} want ${JSON.stringify(v)}`);
+            failures.push(
+              `${setter} ${c.href} <- ${JSON.stringify(c.new_value)}: ${k}=${JSON.stringify((u as unknown as Record<string, string>)[k])} want ${JSON.stringify(v)}`,
+            );
             break;
           }
         }
       }
     }
     const rate = 1 - failures.length / total;
-    t.diagnostic(`setters: ${total - failures.length}/${total} pass; failures: ${failures.join(' | ')}`);
-    assert.ok(rate >= 0.99, `setters pass rate ${(rate * 100).toFixed(2)}% (${failures.length}/${total}):\n${failures.join('\n')}`);
+    t.diagnostic(
+      `setters: ${total - failures.length}/${total} pass; failures: ${failures.join(' | ')}`,
+    );
+    assert.ok(
+      rate >= 0.99,
+      `setters pass rate ${(rate * 100).toFixed(2)}% (${failures.length}/${total}):\n${failures.join('\n')}`,
+    );
   });
 
   // IDNA through the build-time tr46 shim (UTS #46 approximated with NFKC + case folding, see
@@ -92,7 +135,8 @@ describe('URL (NET-13)', () => {
   // for ~240 KB of mapping table.
   test('WPT toascii.json through the tr46 shim (recorded)', async (t) => {
     const cases = (load('wpt-toascii.json') as unknown[]).filter(
-      (x): x is { input: string; output: string | null } => typeof x === 'object' && x !== null,
+      (x): x is { input: string; output: string | null } =>
+        typeof x === 'object' && x !== null,
     );
     const { g } = await createGlueContext();
     const URLG = g.URL as unknown as typeof URL;
@@ -104,9 +148,14 @@ describe('URL (NET-13)', () => {
       } catch {
         host = null;
       }
-      if (host !== c.output) failures.push(`${JSON.stringify(c.input)} -> ${JSON.stringify(host)} want ${JSON.stringify(c.output)}`);
+      if (host !== c.output)
+        failures.push(
+          `${JSON.stringify(c.input)} -> ${JSON.stringify(host)} want ${JSON.stringify(c.output)}`,
+        );
     }
-    t.diagnostic(`toascii: ${cases.length - failures.length}/${cases.length} pass; failures: ${failures.join(' | ')}`);
+    t.diagnostic(
+      `toascii: ${cases.length - failures.length}/${cases.length} pass; failures: ${failures.join(' | ')}`,
+    );
     assert.ok(failures.length / cases.length <= 0.05, failures.join('\n'));
   });
 
@@ -137,9 +186,14 @@ describe('URL (NET-13)', () => {
   });
 
   test('createObjectURL / revokeObjectURL format (NET-14)', async () => {
-    const { run } = await createGlueContext({ config: { url: 'https://app.local/' } });
+    const { run } = await createGlueContext({
+      config: { url: 'https://app.local/' },
+    });
     const url = run<string>(`URL.createObjectURL(new Blob(['x']))`);
-    assert.match(url, /^blob:https:\/\/app\.local\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.match(
+      url,
+      /^blob:https:\/\/app\.local\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
     assert.throws(() => run(`URL.createObjectURL('x')`), { name: 'TypeError' });
     assert.equal(run(`typeof URL.revokeObjectURL`), 'function');
   });

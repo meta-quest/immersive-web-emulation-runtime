@@ -16,7 +16,11 @@ import '../test/three.test.ts';
 import '../test/image-handle.test.ts';
 import '../test/regressions.test.ts';
 import { realInstall } from './shims/real-gl.ts';
-import { runGlBench, formatBench, type BenchResult } from '../bench/gl-bench.ts';
+import {
+  runGlBench,
+  formatBench,
+  type BenchResult,
+} from '../bench/gl-bench.ts';
 import * as THREE from 'three';
 import { runThreeFrame, formatFrame } from '../bench/three-frame.ts';
 import { installWebGL } from '../install.ts';
@@ -29,23 +33,50 @@ interface Outcome {
   detail: string;
 }
 
-const now = (): number => (globalThis as { performance?: { now(): number } }).performance?.now() ?? Date.now();
+const now = (): number =>
+  (globalThis as { performance?: { now(): number } }).performance?.now() ??
+  Date.now();
 
 /** GL-22: compile + link a fixed set of three.js programs; a warm launch (driver blob cache) should be much faster. */
 function compileTiming(): number {
   const inst = realInstall();
   if (!inst) return -1;
-  const canvas = { width: 8, height: 8, style: {}, addEventListener() {}, removeEventListener() {} };
-  const gl = inst.createContext(canvas, 'webgl2', { antialias: false }) as unknown as { finish(): void };
-  const r = new THREE.WebGLRenderer({ canvas: canvas as never, context: gl as never });
+  const canvas = {
+    width: 8,
+    height: 8,
+    style: {},
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const gl = inst.createContext(canvas, 'webgl2', {
+    antialias: false,
+  }) as unknown as { finish(): void };
+  const r = new THREE.WebGLRenderer({
+    canvas: canvas as never,
+    context: gl as never,
+  });
   const scene = new THREE.Scene();
-  scene.add(new THREE.DirectionalLight(0xffffff, 1), new THREE.PointLight(0xffffff, 1), new THREE.AmbientLight(0x202020));
+  scene.add(
+    new THREE.DirectionalLight(0xffffff, 1),
+    new THREE.PointLight(0xffffff, 1),
+    new THREE.AmbientLight(0x202020),
+  );
   const geo = new THREE.BoxGeometry();
   const mats: THREE.Material[] = [
-    new THREE.MeshStandardMaterial(), new THREE.MeshStandardMaterial({ map: new THREE.DataTexture(new Uint8Array(4), 1, 1) }),
-    new THREE.MeshPhysicalMaterial({ clearcoat: 1 }), new THREE.MeshPhongMaterial(), new THREE.MeshLambertMaterial(),
-    new THREE.MeshToonMaterial(), new THREE.MeshBasicMaterial(), new THREE.MeshNormalMaterial(),
-    new THREE.MeshMatcapMaterial(), new THREE.MeshDepthMaterial(), new THREE.PointsMaterial(), new THREE.LineBasicMaterial(),
+    new THREE.MeshStandardMaterial(),
+    new THREE.MeshStandardMaterial({
+      map: new THREE.DataTexture(new Uint8Array(4), 1, 1),
+    }),
+    new THREE.MeshPhysicalMaterial({ clearcoat: 1 }),
+    new THREE.MeshPhongMaterial(),
+    new THREE.MeshLambertMaterial(),
+    new THREE.MeshToonMaterial(),
+    new THREE.MeshBasicMaterial(),
+    new THREE.MeshNormalMaterial(),
+    new THREE.MeshMatcapMaterial(),
+    new THREE.MeshDepthMaterial(),
+    new THREE.PointsMaterial(),
+    new THREE.LineBasicMaterial(),
   ];
   mats.forEach((m, i) => {
     const mesh = new THREE.Mesh(geo, m);
@@ -68,22 +99,49 @@ async function main(): Promise<void> {
     const inst = realInstall();
     if (inst) {
       console.log(formatFrame(runThreeFrame(inst, 'device')));
-      console.log(formatFrame(runThreeFrame(installWebGL({}, createFakeNatives().natives), 'device-null-natives')));
+      console.log(
+        formatFrame(
+          runThreeFrame(
+            installWebGL({}, createFakeNatives().natives),
+            'device-null-natives',
+          ),
+        ),
+      );
       console.log(formatFrame(runThreeFrame(inst, 'device-again')));
-      for (const line of formatBench(runGlBench(inst), 'device-benchonly').split('\n')) console.log(line);
+      for (const line of formatBench(
+        runGlBench(inst),
+        'device-benchonly',
+      ).split('\n'))
+        console.log(line);
     }
     console.log('GLDEV DONE');
     return;
   }
   const inst0 = realInstall();
   if (inst0) {
-    const probe = inst0.createContext({ width: 1, height: 1 }, 'webgl2') as unknown as Record<string, (...a: unknown[]) => unknown> & { _info: { renderer: string; version: string; vendor: string; extensions: string[] } };
-    console.log(`GLDEV driver: ${probe._info.vendor} | ${probe._info.renderer} | ${probe._info.version}`);
+    const probe = inst0.createContext(
+      { width: 1, height: 1 },
+      'webgl2',
+    ) as unknown as Record<string, (...a: unknown[]) => unknown> & {
+      _info: {
+        renderer: string;
+        version: string;
+        vendor: string;
+        extensions: string[];
+      };
+    };
+    console.log(
+      `GLDEV driver: ${probe._info.vendor} | ${probe._info.renderer} | ${probe._info.version}`,
+    );
     console.log(`GLDEV driver extensions: ${probe._info.extensions.join(' ')}`);
-    console.log(`GLDEV webgl2 extensions: ${(probe.getSupportedExtensions() as string[]).join(' ')}`);
+    console.log(
+      `GLDEV webgl2 extensions: ${(probe.getSupportedExtensions() as string[]).join(' ')}`,
+    );
   }
   const compileMs = compileTiming();
-  console.log(`GLDEV compile12 ${compileMs.toFixed(1)} ms (three.js: 12 materials, GL-22 cold/warm)`);
+  console.log(
+    `GLDEV compile12 ${compileMs.toFixed(1)} ms (three.js: 12 materials, GL-22 cold/warm)`,
+  );
   console.log(`GLDEV start: ${cases.length} cases`);
   for (const c of cases) {
     if (c.skip) {
@@ -104,19 +162,26 @@ async function main(): Promise<void> {
   }
   const pass = out.filter((o) => o.status === 'pass').length;
   const fail = out.filter((o) => o.status === 'fail').length;
-  console.log(`GLDEV SUMMARY pass=${pass} fail=${fail} skip=${out.length - pass - fail}`);
+  console.log(
+    `GLDEV SUMMARY pass=${pass} fail=${fail} skip=${out.length - pass - fail}`,
+  );
   let bench: BenchResult[] = [];
   const inst = realInstall();
   if (inst) {
     try {
       console.log(formatFrame(runThreeFrame(inst, 'device')));
       bench = runGlBench(inst);
-      for (const line of formatBench(bench, 'device').split('\n')) console.log(line);
+      for (const line of formatBench(bench, 'device').split('\n'))
+        console.log(line);
     } catch (e) {
       console.log(`GLDEV bench failed: ${String(e)}`);
     }
   }
-  (globalThis as Record<string, unknown>).__glDevice = { done: true, results: out, bench };
+  (globalThis as Record<string, unknown>).__glDevice = {
+    done: true,
+    results: out,
+    bench,
+  };
   console.log('GLDEV DONE');
 }
 

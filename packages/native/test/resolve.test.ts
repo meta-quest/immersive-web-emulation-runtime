@@ -183,7 +183,11 @@ describe('resolveNativeTarget', () => {
   });
 
   test('the launch splash is on by default, generated, on black (contextual with passthrough)', () => {
-    const splash = (value?: unknown, extra: Record<string, unknown> = {}, world?: unknown) =>
+    const splash = (
+      value?: unknown,
+      extra: Record<string, unknown> = {},
+      world?: unknown,
+    ) =>
       resolveNativeTarget({
         ...(world ? { world } : {}),
         native: {
@@ -215,13 +219,28 @@ describe('resolveNativeTarget', () => {
     const pt = { features: { passthrough: 'optional' } };
     assert.equal(splash(undefined, pt).background, 'contextual');
     assert.equal(splash(false, pt).background, 'contextual');
-    assert.equal(splash(undefined, {}, { xr: { mode: 'ar' } }).background, 'contextual');
-    assert.equal(splash({ background: 'contextual' }, pt).background, 'contextual');
+    assert.equal(
+      splash(undefined, {}, { xr: { mode: 'ar' } }).background,
+      'contextual',
+    );
+    assert.equal(
+      splash({ background: 'contextual' }, pt).background,
+      'contextual',
+    );
     assert.equal(splash({ background: 'black' }, pt).background, 'black');
-    assert.equal(defaultSplashBackground({ passthrough: 'required' }), 'contextual');
-    assert.equal(defaultSplashBackground({ handTracking: 'optional' }), 'black');
+    assert.equal(
+      defaultSplashBackground({ passthrough: 'required' }),
+      'contextual',
+    );
+    assert.equal(
+      defaultSplashBackground({ handTracking: 'optional' }),
+      'black',
+    );
     // "contextual" without passthrough is refused (validateIwsdkConfigNativeSection).
-    assert.throws(() => splash({ background: 'contextual' }), NativeConfigError);
+    assert.throws(
+      () => splash({ background: 'contextual' }),
+      NativeConfigError,
+    );
   });
 
   test('throws NativeConfigError for invalid input', () => {
@@ -267,26 +286,47 @@ test('featuresFromWorld tolerates missing parts', () => {
 });
 
 test('camera: world.features.camera derives it (optional), native.features.camera declares it', () => {
-  assert.deepEqual(featuresFromWorld({ features: { camera: true } }), { camera: 'optional' });
-  assert.deepEqual(featuresFromWorld({ features: { camera: { facing: 'back' } } }), { camera: 'optional' });
+  assert.deepEqual(featuresFromWorld({ features: { camera: true } }), {
+    camera: 'optional',
+  });
+  assert.deepEqual(
+    featuresFromWorld({ features: { camera: { facing: 'back' } } }),
+    { camera: 'optional' },
+  );
   assert.deepEqual(featuresFromWorld({ features: { camera: false } }), {});
-  const t = resolveNativeTarget({ native: { packageId: 'com.a.b', features: { camera: 'required' } } });
-  assert.deepEqual(t.permissions, ['android.permission.CAMERA', 'horizonos.permission.HEADSET_CAMERA']);
+  const t = resolveNativeTarget({
+    native: { packageId: 'com.a.b', features: { camera: 'required' } },
+  });
+  assert.deepEqual(t.permissions, [
+    'android.permission.CAMERA',
+    'horizonos.permission.HEADSET_CAMERA',
+  ]);
   assert.deepEqual(t.usesFeatures, [
     { name: 'android.hardware.camera', required: true },
     { name: 'com.oculus.feature.PASSTHROUGH', required: true },
   ]);
   assert.equal(t.featuresDerived, false);
-  assert.equal(resolveNativeTarget({ native: { packageId: 'com.a.b' } }).featuresDerived, true);
+  assert.equal(
+    resolveNativeTarget({ native: { packageId: 'com.a.b' } }).featuresDerived,
+    true,
+  );
 });
 
 test('withFeature adds a feature with its manifest entries and keeps the rest', () => {
   const t = resolveNativeTarget({
     world: { xr: { mode: 'ar', features: { handTracking: true } } },
-    native: { packageId: 'com.a.b', permissions: ['android.permission.RECORD_AUDIO'], network: { allow: ['https://a.org'] } },
+    native: {
+      packageId: 'com.a.b',
+      permissions: ['android.permission.RECORD_AUDIO'],
+      network: { allow: ['https://a.org'] },
+    },
   });
   const c = withFeature(t, 'camera', 'optional');
-  assert.deepEqual(c.features, { handTracking: 'optional', passthrough: 'required', camera: 'optional' });
+  assert.deepEqual(c.features, {
+    handTracking: 'optional',
+    passthrough: 'required',
+    camera: 'optional',
+  });
   assert.deepEqual(c.permissions, [
     'android.permission.CAMERA',
     'android.permission.INTERNET',
@@ -300,5 +340,9 @@ test('withFeature adds a feature with its manifest entries and keeps the rest', 
     { name: 'com.oculus.feature.PASSTHROUGH', required: true },
     { name: 'oculus.software.handtracking', required: false },
   ]);
-  assert.equal(withFeature(c, 'camera', 'required'), c, 'an existing feature keeps its requirement');
+  assert.equal(
+    withFeature(c, 'camera', 'required'),
+    c,
+    'an existing feature keeps its requirement',
+  );
 });

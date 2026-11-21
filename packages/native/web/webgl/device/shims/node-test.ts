@@ -15,6 +15,8 @@ export const cases: Case[] = [];
 
 export function test(name: string, a?: unknown, b?: unknown): void {
   const fn = (typeof a === 'function' ? a : b) as () => unknown;
-  const opts = (typeof a === 'object' && a ? a : {}) as { skip?: string | boolean };
+  const opts = (typeof a === 'object' && a ? a : {}) as {
+    skip?: string | boolean;
+  };
   cases.push({ name, skip: opts.skip ? String(opts.skip) : false, fn });
 }

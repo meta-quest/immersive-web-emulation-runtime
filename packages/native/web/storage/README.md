@@ -2,10 +2,10 @@
 
 Over `globalThis.__iwn.storage` (runtime/storage). Two IIFE preludes:
 
-| prelude | size (min / gzip) | installs | shipped |
-|---|---|---|---|
-| `dist/storage.min.js` | 4.3 KB / 1.7 KB | `localStorage`, `sessionStorage`, `Storage`, `navigator.storage.estimate` | always (window only) |
-| `dist/idb.min.js` | 164 KB / 50 KB | `indexedDB` + `IDB*` classes (IndexedDBShim over native SQLite), `caches`/`CacheStorage`/`Cache`, `navigator.storage.{persist,persisted}` | **not shipped in the alpha** (IndexedDB persistence and the Cache API are out of the 2026-10-23 scope; NET-STORE-3 keeps them absent by default, so `typeof indexedDB === 'undefined'`); experimental opt-in, needs the net prelude for the Cache API |
+| prelude               | size (min / gzip) | installs                                                                                                                                  | shipped                                                                                                                                                                                                                                               |
+| --------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dist/storage.min.js` | 4.3 KB / 1.7 KB   | `localStorage`, `sessionStorage`, `Storage`, `navigator.storage.estimate`                                                                 | always (window only)                                                                                                                                                                                                                                  |
+| `dist/idb.min.js`     | 164 KB / 50 KB    | `indexedDB` + `IDB*` classes (IndexedDBShim over native SQLite), `caches`/`CacheStorage`/`Cache`, `navigator.storage.{persist,persisted}` | **not shipped in the alpha** (IndexedDB persistence and the Cache API are out of the 2026-10-23 scope; NET-STORE-3 keeps them absent by default, so `typeof indexedDB === 'undefined'`); experimental opt-in, needs the net prelude for the Cache API |
 
 ```
 npm ci --ignore-scripts   # --ignore-scripts: skips indexeddbshim's unused native `canvas` dep

@@ -11,9 +11,15 @@
 import type { AudioNatives } from './natives.ts';
 import { installWebAudio } from './install.ts';
 
-type Iwn = { audio?: AudioNatives; config?: { audio?: { experimental?: unknown } } };
+type Iwn = {
+  audio?: AudioNatives;
+  config?: { audio?: { experimental?: unknown } };
+};
 const iwn = (globalThis as { __iwn?: Iwn }).__iwn;
 const natives = iwn?.audio;
 // Web Audio beyond the alpha's basic set stays off unless the runtime config opts in:
 // assets/iwn/config.json "glue": {"audio": {"experimental": true}} (handed to JS as __iwn.config).
-if (natives) installWebAudio(globalThis, natives, { experimental: iwn?.config?.audio?.experimental === true });
+if (natives)
+  installWebAudio(globalThis, natives, {
+    experimental: iwn?.config?.audio?.experimental === true,
+  });

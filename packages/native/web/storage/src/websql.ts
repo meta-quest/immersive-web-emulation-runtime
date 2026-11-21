@@ -32,16 +32,27 @@ function fileName(name: string): string {
   return name.replace(/^.*[\\/]/, '');
 }
 
-export function makeOpenDatabase(natives: StorageNatives, area: SqlArea, delay: (fn: () => void) => void) {
+export function makeOpenDatabase(
+  natives: StorageNatives,
+  area: SqlArea,
+  delay: (fn: () => void) => void,
+) {
   class NativeSqlDriver {
     #handle: number;
     #closed = false;
     constructor(name: string) {
       this.#handle = natives.sqlOpen(area, fileName(name));
     }
-    exec(queries: Query[], readOnly: boolean, callback: (err: Error | null, results?: DriverResult[]) => void): void {
+    exec(
+      queries: Query[],
+      readOnly: boolean,
+      callback: (err: Error | null, results?: DriverResult[]) => void,
+    ): void {
       if (this.#closed) {
-        callback(null, queries.map(() => ({ error: new Error('database is closed') })));
+        callback(
+          null,
+          queries.map(() => ({ error: new Error('database is closed') })),
+        );
         return;
       }
       natives.sqlExec(
@@ -55,7 +66,12 @@ export function makeOpenDatabase(natives: StorageNatives, area: SqlArea, delay: 
             results.map((r) =>
               r.error !== undefined
                 ? { error: new Error(r.error) }
-                : { error: null, insertId: r.insertId, rowsAffected: r.rowsAffected, rows: r.rows ?? [] },
+                : {
+                    error: null,
+                    insertId: r.insertId,
+                    rowsAffected: r.rowsAffected,
+                    rows: r.rows ?? [],
+                  },
             ),
           );
         },
@@ -67,14 +83,23 @@ export function makeOpenDatabase(natives: StorageNatives, area: SqlArea, delay: 
       natives.sqlClose(this.#handle, (e) => cb?.(e ? new Error(e) : null));
     }
   }
-  return customOpenDatabase(NativeSqlDriver as never, {
-    websql: {
-      // Same reasoning as IndexedDBShim's Node driver: concurrent read-only transactions must not
-      // deadlock each other.
-      concurrentReaders: true,
-      openDelay: delay,
-      transactionDelay: delay,
-      executeDelay: delay,
-    },
-  } as never) as (name: string, version: string, description: string, size: number, cb?: unknown) => unknown;
+  return customOpenDatabase(
+    NativeSqlDriver as never,
+    {
+      websql: {
+        // Same reasoning as IndexedDBShim's Node driver: concurrent read-only transactions must not
+        // deadlock each other.
+        concurrentReaders: true,
+        openDelay: delay,
+        transactionDelay: delay,
+        executeDelay: delay,
+      },
+    } as never,
+  ) as (
+    name: string,
+    version: string,
+    description: string,
+    size: number,
+    cb?: unknown,
+  ) => unknown;
 }

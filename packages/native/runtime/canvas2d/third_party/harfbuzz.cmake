@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # HarfBuzz 14.0.0 (Old MIT, github.com/harfbuzz/harfbuzz): the amalgamated harfbuzz.cc with only the OpenType shaper
 # and its own Unicode data; colour/bitmap/CFF/AAT tables are not needed for shaping (FreeType reads those) (no ICU, no glib, no FreeType integration: we hand it the font bytes directly).
 if(NOT TARGET iwn_harfbuzz)

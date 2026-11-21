@@ -328,14 +328,21 @@ export class WebGLUniformLocation {
    * (GL-PERF-2); resolved on first upload.
    */
   _cell: UniformCell | null = null;
-  constructor(token: unknown, program: WebGLProgram, loc: number, uniform: number, element: number) {
+  constructor(
+    token: unknown,
+    program: WebGLProgram,
+    loc: number,
+    uniform: number,
+    element: number,
+  ) {
     guard(token);
     this._program = program;
     this._linkGen = program._linkGen;
     this._loc = loc;
     this._uniform = uniform;
     this._element = element;
-    for (const k of Object.keys(this)) Object.defineProperty(this, k, { enumerable: false });
+    for (const k of Object.keys(this))
+      Object.defineProperty(this, k, { enumerable: false });
   }
   get [Symbol.toStringTag](): string {
     return 'WebGLUniformLocation';
@@ -361,7 +368,12 @@ export class WebGLShaderPrecisionFormat {
   readonly rangeMin: number;
   readonly rangeMax: number;
   readonly precision: number;
-  constructor(token: unknown, rangeMin: number, rangeMax: number, precision: number) {
+  constructor(
+    token: unknown,
+    rangeMin: number,
+    rangeMax: number,
+    precision: number,
+  ) {
     guard(token);
     this.rangeMin = rangeMin;
     this.rangeMax = rangeMax;

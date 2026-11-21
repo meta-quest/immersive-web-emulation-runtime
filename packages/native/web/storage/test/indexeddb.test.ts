@@ -48,9 +48,15 @@ test('open/upgrade, object stores, indexes, CRUD, cursors, key ranges', async ()
   const open = idb.open('crud', 2);
   const versions: number[] = [];
   open.onupgradeneeded = (e) => {
-    versions.push((e as IDBVersionChangeEvent).oldVersion, (e as IDBVersionChangeEvent).newVersion!);
+    versions.push(
+      (e as IDBVersionChangeEvent).oldVersion,
+      (e as IDBVersionChangeEvent).newVersion!,
+    );
     const db = open.result;
-    const s = db.createObjectStore('items', { keyPath: 'id', autoIncrement: true });
+    const s = db.createObjectStore('items', {
+      keyPath: 'id',
+      autoIncrement: true,
+    });
     s.createIndex('byTag', 'tag', { unique: false });
   };
   const db = await req(open);
@@ -69,7 +75,10 @@ test('open/upgrade, object stores, indexes, CRUD, cursors, key ranges', async ()
   const ro = db.transaction('items', 'readonly').objectStore('items');
   assert.deepEqual(await req(ro.get(2)), { id: 2, tag: 'b', n: 20 });
   assert.equal(await req(ro.count()), 2);
-  assert.deepEqual((await req(ro.index('byTag').getAll('a'))).map((r: { n: number }) => r.n), [3]);
+  assert.deepEqual(
+    (await req(ro.index('byTag').getAll('a'))).map((r: { n: number }) => r.n),
+    [3],
+  );
   const seen: number[] = [];
   await new Promise<void>((resolve, reject) => {
     const c = ro.openCursor(IDBKeyRange.bound(1, 10), 'prev');
@@ -109,11 +118,18 @@ test('structured clone of values (Date, typed arrays, Map, nested)', async () =>
   const open = idb.open('clone', 1);
   open.onupgradeneeded = () => open.result.createObjectStore('s');
   const db = await req(open);
-  const value = { d: new Date(1234), u8: new Uint8Array([9, 8]), m: new Map([['k', 1]]), nested: { arr: [1, 'two', null] } };
+  const value = {
+    d: new Date(1234),
+    u8: new Uint8Array([9, 8]),
+    m: new Map([['k', 1]]),
+    nested: { arr: [1, 'two', null] },
+  };
   const tx = db.transaction('s', 'readwrite');
   tx.objectStore('s').put(value, 'v');
   await txDone(tx);
-  const got = (await req(db.transaction('s').objectStore('s').get('v'))) as typeof value;
+  const got = (await req(
+    db.transaction('s').objectStore('s').get('v'),
+  )) as typeof value;
   assert.equal(got.d.getTime(), 1234);
   assert.deepEqual([...got.u8], [9, 8]);
   assert.equal(got.m.get('k'), 1);
@@ -137,7 +153,11 @@ test('deleteDatabase removes the SQLite file through the native delete', async (
 });
 
 function child(dir: string, mode: string): unknown {
-  const r = spawnSync(process.execPath, ['--no-warnings', join(here, 'idb-child.ts'), dir, mode], { encoding: 'utf8' });
+  const r = spawnSync(
+    process.execPath,
+    ['--no-warnings', join(here, 'idb-child.ts'), dir, mode],
+    { encoding: 'utf8' },
+  );
   assert.equal(r.status, 0, r.stderr);
   const line = r.stdout.trim().split('\n').pop() ?? '';
   return line ? JSON.parse(line) : null;
@@ -146,7 +166,11 @@ function child(dir: string, mode: string): unknown {
 test('data persists across app restarts; only committed transactions survive a force-stop', () => {
   const dir = mkdtempSync(join(tmpdir(), 'iwn-idb-restart-'));
   assert.deepEqual(child(dir, 'write'), { ok: true });
-  const read = child(dir, 'read') as { ids: string[]; slot1: Array<{ bytes: number[]; date: number }>; highLevel: string[] };
+  const read = child(dir, 'read') as {
+    ids: string[];
+    slot1: Array<{ bytes: number[]; date: number }>;
+    highLevel: string[];
+  };
   assert.deepEqual(read.ids, ['slot1', 'slot2']);
   assert.deepEqual(read.slot1, [{ bytes: [1, 2, 3], date: 0 }]);
   assert.deepEqual(read.highLevel, ['slot2']);

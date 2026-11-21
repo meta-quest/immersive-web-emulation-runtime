@@ -39,11 +39,14 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { runTrace, loadPlaywright, findIwerBuild, phaseMsProblem } = await import(
-  path.join(here, '..', 'src', 'trace-run.ts')
+const { runTrace, loadPlaywright, findIwerBuild, phaseMsProblem } =
+  await import(path.join(here, '..', 'src', 'trace-run.ts'));
+const { headsetTrim } = await import(
+  path.join(here, '..', 'src', 'providers.ts')
 );
-const { headsetTrim } = await import(path.join(here, '..', 'src', 'providers.ts'));
-const { loadSurface } = await import(path.join(here, '..', 'src', 'surface.ts'));
+const { loadSurface } = await import(
+  path.join(here, '..', 'src', 'surface.ts')
+);
 
 const { values } = parseArgs({
   options: {
@@ -69,9 +72,13 @@ for (const k of ['boot-ms', 'xr-ms']) {
     process.exit(2);
   }
 }
-const trim = values['no-trim'] ? undefined : headsetTrim((await loadSurface()).surface);
+const trim = values['no-trim']
+  ? undefined
+  : headsetTrim((await loadSurface()).surface);
 if (!values.samples || !values.out) {
-  console.error('usage: sweep.mjs --samples <dir> --out <dir> [--packages <dir>] [--iwer <iwer.js>]');
+  console.error(
+    'usage: sweep.mjs --samples <dir> --out <dir> [--packages <dir>] [--iwer <iwer.js>]',
+  );
   process.exit(2);
 }
 const samplesRoot = path.resolve(values.samples);
@@ -104,7 +111,8 @@ function run(cmd, args, opts, logFile) {
 
 /** Keep the sample's own file once, as <file>.iwn-orig, before the sweep rewrites it. */
 function keepOriginal(file) {
-  if (fs.existsSync(file) && !fs.existsSync(`${file}.iwn-orig`)) fs.copyFileSync(file, `${file}.iwn-orig`);
+  if (fs.existsSync(file) && !fs.existsSync(`${file}.iwn-orig`))
+    fs.copyFileSync(file, `${file}.iwn-orig`);
 }
 
 function prep(dir, pkgsRoot) {
@@ -115,16 +123,26 @@ function prep(dir, pkgsRoot) {
   const ov = {};
   for (const p of fs.readdirSync(pkgsRoot)) {
     const tgz = path.join(pkgsRoot, p, `iwsdk-${p}.tgz`);
-    if (fs.existsSync(tgz)) ov[`@iwsdk/${p}`] = 'file:' + path.relative(dir, tgz);
+    if (fs.existsSync(tgz))
+      ov[`@iwsdk/${p}`] = 'file:' + path.relative(dir, tgz);
   }
   for (const sect of ['dependencies', 'devDependencies'])
-    for (const k of Object.keys(pkg[sect] ?? {})) if (ov[k]) pkg[sect][k] = ov[k];
-  pkg.overrides = { ...(pkg.overrides ?? {}), ...ov, playwright: '1.58.2', 'playwright-core': '1.58.2' };
+    for (const k of Object.keys(pkg[sect] ?? {}))
+      if (ov[k]) pkg[sect][k] = ov[k];
+  pkg.overrides = {
+    ...(pkg.overrides ?? {}),
+    ...ov,
+    playwright: '1.58.2',
+    'playwright-core': '1.58.2',
+  };
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
   const cfgPath = path.join(dir, 'iwsdk.config.json');
   if (fs.existsSync(cfgPath)) {
     const cfg = fs.readFileSync(cfgPath, 'utf8');
-    fs.writeFileSync(cfgPath, cfg.replace(/"injectOnBuild":\s*true/, '"injectOnBuild": false'));
+    fs.writeFileSync(
+      cfgPath,
+      cfg.replace(/"injectOnBuild":\s*true/, '"injectOnBuild": false'),
+    );
   }
 }
 
@@ -135,7 +153,18 @@ async function build(name) {
   if (values.packages) prep(dir, path.resolve(values.packages));
   const env = { ...process.env, NODE_ENV: 'production' };
   if (!fs.existsSync(path.join(dir, 'node_modules', 'vite'))) {
-    const code = await run('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts', '--include=dev'], { cwd: dir, env: { ...env, NODE_ENV: 'development' } }, logFile);
+    const code = await run(
+      'npm',
+      [
+        'install',
+        '--no-audit',
+        '--no-fund',
+        '--ignore-scripts',
+        '--include=dev',
+      ],
+      { cwd: dir, env: { ...env, NODE_ENV: 'development' } },
+      logFile,
+    );
     if (code !== 0) return { name, ok: false, step: 'install' };
   }
   const code = await run('npx', ['vite', 'build'], { cwd: dir, env }, logFile);
@@ -164,10 +193,13 @@ if (!values['skip-build']) {
     console.error(`[build] ${n}: ${r.ok ? 'ok' : `FAILED (${r.step})`}`);
     return r;
   });
-  for (const b of builds) summary.samples[b.name] = { build: b.ok ? 'ok' : `failed:${b.step}` };
+  for (const b of builds)
+    summary.samples[b.name] = { build: b.ok ? 'ok' : `failed:${b.step}` };
 }
 
-const traced = names.filter((n) => fs.existsSync(path.join(samplesRoot, n, 'dist', 'index.html')));
+const traced = names.filter((n) =>
+  fs.existsSync(path.join(samplesRoot, n, 'dist', 'index.html')),
+);
 await pool(traced, Number(values['trace-jobs']), async (n) => {
   const dir = path.join(samplesRoot, n);
   const pw = await loadPlaywright(dir);
@@ -193,14 +225,36 @@ await pool(traced, Number(values['trace-jobs']), async (n) => {
       }),
     });
     r.sample = n;
-    fs.writeFileSync(path.join(out, 'traces', `${n}.json`), JSON.stringify(r, null, 1));
-    summary.samples[n] = { ...(summary.samples[n] ?? {}), trace: 'ok', trimmed: !!trim, emulateAR: !values['no-ar'], reachedXR: r.reachedXR, via: r.enteredVia, xrFrames: r.xrFrames, pageErrors: r.pageErrors.length, ...(r.hung ? { hung: r.hung } : {}), ms: Date.now() - t0 };
-    console.error(`[trace] ${n}: xr=${r.reachedXR} via=${r.enteredVia} frames=${r.xrFrames} apis=${r.main ? Object.keys(r.main.apis).length : 0} workers=${r.workers.length} errors=${r.pageErrors.length}${r.hung ? ` HUNG: ${r.hung}` : ''}`);
+    fs.writeFileSync(
+      path.join(out, 'traces', `${n}.json`),
+      JSON.stringify(r, null, 1),
+    );
+    summary.samples[n] = {
+      ...(summary.samples[n] ?? {}),
+      trace: 'ok',
+      trimmed: !!trim,
+      emulateAR: !values['no-ar'],
+      reachedXR: r.reachedXR,
+      via: r.enteredVia,
+      xrFrames: r.xrFrames,
+      pageErrors: r.pageErrors.length,
+      ...(r.hung ? { hung: r.hung } : {}),
+      ms: Date.now() - t0,
+    };
+    console.error(
+      `[trace] ${n}: xr=${r.reachedXR} via=${r.enteredVia} frames=${r.xrFrames} apis=${r.main ? Object.keys(r.main.apis).length : 0} workers=${r.workers.length} errors=${r.pageErrors.length}${r.hung ? ` HUNG: ${r.hung}` : ''}`,
+    );
   } catch (error) {
-    summary.samples[n] = { ...(summary.samples[n] ?? {}), trace: `failed: ${String(error).slice(0, 200)}` };
+    summary.samples[n] = {
+      ...(summary.samples[n] ?? {}),
+      trace: `failed: ${String(error).slice(0, 200)}`,
+    };
     console.error(`[trace] ${n}: FAILED ${error}`);
   }
 });
 summary.finishedAt = new Date().toISOString();
-fs.writeFileSync(path.join(out, 'sweep-summary.json'), JSON.stringify(summary, null, 2));
+fs.writeFileSync(
+  path.join(out, 'sweep-summary.json'),
+  JSON.stringify(summary, null, 2),
+);
 console.error(`wrote ${path.join(out, 'sweep-summary.json')}`);

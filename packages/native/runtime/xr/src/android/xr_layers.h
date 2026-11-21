@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Composition layers on the XR thread (docs/spec/08 XR-LAYER-1): WebXR Layers quad and cylinder layers, one OpenXR
 // swapchain per layer, submitted as XrCompositionLayerQuad / XrCompositionLayerCylinderKHR in renderState.layers
 // order around the projection layer. iwn/xr/layers.h has the buffer the adapter shares with this class.

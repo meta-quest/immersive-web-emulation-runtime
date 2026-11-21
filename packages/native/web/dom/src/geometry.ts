@@ -33,7 +33,9 @@ export class DOMRectReadOnly {
     this[RW] = num(width);
     this[RH] = num(height);
   }
-  static fromRect(other: { x?: number; y?: number; width?: number; height?: number } = {}): DOMRectReadOnly {
+  static fromRect(
+    other: { x?: number; y?: number; width?: number; height?: number } = {},
+  ): DOMRectReadOnly {
     return new this(other.x, other.y, other.width, other.height);
   }
   get x(): number {
@@ -61,7 +63,16 @@ export class DOMRectReadOnly {
     return Math.min(this[RX], this[RX] + this[RW]);
   }
   toJSON(): Record<string, number> {
-    return { x: this.x, y: this.y, width: this.width, height: this.height, top: this.top, right: this.right, bottom: this.bottom, left: this.left };
+    return {
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      top: this.top,
+      right: this.right,
+      bottom: this.bottom,
+      left: this.left,
+    };
   }
   get [Symbol.toStringTag](): string {
     return 'DOMRectReadOnly';
@@ -69,7 +80,9 @@ export class DOMRectReadOnly {
 }
 
 export class DOMRect extends DOMRectReadOnly {
-  static override fromRect(other: { x?: number; y?: number; width?: number; height?: number } = {}): DOMRect {
+  static override fromRect(
+    other: { x?: number; y?: number; width?: number; height?: number } = {},
+  ): DOMRect {
     return new DOMRect(other.x, other.y, other.width, other.height);
   }
   override get x(): number {
@@ -139,29 +152,143 @@ function multiply(a: Mat, b: Mat): Mat {
 
 function invert(m: Mat): Mat | null {
   const inv = new Float64Array(16);
-  inv[0] = m[5]! * m[10]! * m[15]! - m[5]! * m[11]! * m[14]! - m[9]! * m[6]! * m[15]! + m[9]! * m[7]! * m[14]! + m[13]! * m[6]! * m[11]! - m[13]! * m[7]! * m[10]!;
-  inv[4] = -m[4]! * m[10]! * m[15]! + m[4]! * m[11]! * m[14]! + m[8]! * m[6]! * m[15]! - m[8]! * m[7]! * m[14]! - m[12]! * m[6]! * m[11]! + m[12]! * m[7]! * m[10]!;
-  inv[8] = m[4]! * m[9]! * m[15]! - m[4]! * m[11]! * m[13]! - m[8]! * m[5]! * m[15]! + m[8]! * m[7]! * m[13]! + m[12]! * m[5]! * m[11]! - m[12]! * m[7]! * m[9]!;
-  inv[12] = -m[4]! * m[9]! * m[14]! + m[4]! * m[10]! * m[13]! + m[8]! * m[5]! * m[14]! - m[8]! * m[6]! * m[13]! - m[12]! * m[5]! * m[10]! + m[12]! * m[6]! * m[9]!;
-  inv[1] = -m[1]! * m[10]! * m[15]! + m[1]! * m[11]! * m[14]! + m[9]! * m[2]! * m[15]! - m[9]! * m[3]! * m[14]! - m[13]! * m[2]! * m[11]! + m[13]! * m[3]! * m[10]!;
-  inv[5] = m[0]! * m[10]! * m[15]! - m[0]! * m[11]! * m[14]! - m[8]! * m[2]! * m[15]! + m[8]! * m[3]! * m[14]! + m[12]! * m[2]! * m[11]! - m[12]! * m[3]! * m[10]!;
-  inv[9] = -m[0]! * m[9]! * m[15]! + m[0]! * m[11]! * m[13]! + m[8]! * m[1]! * m[15]! - m[8]! * m[3]! * m[13]! - m[12]! * m[1]! * m[11]! + m[12]! * m[3]! * m[9]!;
-  inv[13] = m[0]! * m[9]! * m[14]! - m[0]! * m[10]! * m[13]! - m[8]! * m[1]! * m[14]! + m[8]! * m[2]! * m[13]! + m[12]! * m[1]! * m[10]! - m[12]! * m[2]! * m[9]!;
-  inv[2] = m[1]! * m[6]! * m[15]! - m[1]! * m[7]! * m[14]! - m[5]! * m[2]! * m[15]! + m[5]! * m[3]! * m[14]! + m[13]! * m[2]! * m[7]! - m[13]! * m[3]! * m[6]!;
-  inv[6] = -m[0]! * m[6]! * m[15]! + m[0]! * m[7]! * m[14]! + m[4]! * m[2]! * m[15]! - m[4]! * m[3]! * m[14]! - m[12]! * m[2]! * m[7]! + m[12]! * m[3]! * m[6]!;
-  inv[10] = m[0]! * m[5]! * m[15]! - m[0]! * m[7]! * m[13]! - m[4]! * m[1]! * m[15]! + m[4]! * m[3]! * m[13]! + m[12]! * m[1]! * m[7]! - m[12]! * m[3]! * m[5]!;
-  inv[14] = -m[0]! * m[5]! * m[14]! + m[0]! * m[6]! * m[13]! + m[4]! * m[1]! * m[14]! - m[4]! * m[2]! * m[13]! - m[12]! * m[1]! * m[6]! + m[12]! * m[2]! * m[5]!;
-  inv[3] = -m[1]! * m[6]! * m[11]! + m[1]! * m[7]! * m[10]! + m[5]! * m[2]! * m[11]! - m[5]! * m[3]! * m[10]! - m[9]! * m[2]! * m[7]! + m[9]! * m[3]! * m[6]!;
-  inv[7] = m[0]! * m[6]! * m[11]! - m[0]! * m[7]! * m[10]! - m[4]! * m[2]! * m[11]! + m[4]! * m[3]! * m[10]! + m[8]! * m[2]! * m[7]! - m[8]! * m[3]! * m[6]!;
-  inv[11] = -m[0]! * m[5]! * m[11]! + m[0]! * m[7]! * m[9]! + m[4]! * m[1]! * m[11]! - m[4]! * m[3]! * m[9]! - m[8]! * m[1]! * m[7]! + m[8]! * m[3]! * m[5]!;
-  inv[15] = m[0]! * m[5]! * m[10]! - m[0]! * m[6]! * m[9]! - m[4]! * m[1]! * m[10]! + m[4]! * m[2]! * m[9]! + m[8]! * m[1]! * m[6]! - m[8]! * m[2]! * m[5]!;
-  const det = m[0]! * inv[0]! + m[1]! * inv[4]! + m[2]! * inv[8]! + m[3]! * inv[12]!;
+  inv[0] =
+    m[5]! * m[10]! * m[15]! -
+    m[5]! * m[11]! * m[14]! -
+    m[9]! * m[6]! * m[15]! +
+    m[9]! * m[7]! * m[14]! +
+    m[13]! * m[6]! * m[11]! -
+    m[13]! * m[7]! * m[10]!;
+  inv[4] =
+    -m[4]! * m[10]! * m[15]! +
+    m[4]! * m[11]! * m[14]! +
+    m[8]! * m[6]! * m[15]! -
+    m[8]! * m[7]! * m[14]! -
+    m[12]! * m[6]! * m[11]! +
+    m[12]! * m[7]! * m[10]!;
+  inv[8] =
+    m[4]! * m[9]! * m[15]! -
+    m[4]! * m[11]! * m[13]! -
+    m[8]! * m[5]! * m[15]! +
+    m[8]! * m[7]! * m[13]! +
+    m[12]! * m[5]! * m[11]! -
+    m[12]! * m[7]! * m[9]!;
+  inv[12] =
+    -m[4]! * m[9]! * m[14]! +
+    m[4]! * m[10]! * m[13]! +
+    m[8]! * m[5]! * m[14]! -
+    m[8]! * m[6]! * m[13]! -
+    m[12]! * m[5]! * m[10]! +
+    m[12]! * m[6]! * m[9]!;
+  inv[1] =
+    -m[1]! * m[10]! * m[15]! +
+    m[1]! * m[11]! * m[14]! +
+    m[9]! * m[2]! * m[15]! -
+    m[9]! * m[3]! * m[14]! -
+    m[13]! * m[2]! * m[11]! +
+    m[13]! * m[3]! * m[10]!;
+  inv[5] =
+    m[0]! * m[10]! * m[15]! -
+    m[0]! * m[11]! * m[14]! -
+    m[8]! * m[2]! * m[15]! +
+    m[8]! * m[3]! * m[14]! +
+    m[12]! * m[2]! * m[11]! -
+    m[12]! * m[3]! * m[10]!;
+  inv[9] =
+    -m[0]! * m[9]! * m[15]! +
+    m[0]! * m[11]! * m[13]! +
+    m[8]! * m[1]! * m[15]! -
+    m[8]! * m[3]! * m[13]! -
+    m[12]! * m[1]! * m[11]! +
+    m[12]! * m[3]! * m[9]!;
+  inv[13] =
+    m[0]! * m[9]! * m[14]! -
+    m[0]! * m[10]! * m[13]! -
+    m[8]! * m[1]! * m[14]! +
+    m[8]! * m[2]! * m[13]! +
+    m[12]! * m[1]! * m[10]! -
+    m[12]! * m[2]! * m[9]!;
+  inv[2] =
+    m[1]! * m[6]! * m[15]! -
+    m[1]! * m[7]! * m[14]! -
+    m[5]! * m[2]! * m[15]! +
+    m[5]! * m[3]! * m[14]! +
+    m[13]! * m[2]! * m[7]! -
+    m[13]! * m[3]! * m[6]!;
+  inv[6] =
+    -m[0]! * m[6]! * m[15]! +
+    m[0]! * m[7]! * m[14]! +
+    m[4]! * m[2]! * m[15]! -
+    m[4]! * m[3]! * m[14]! -
+    m[12]! * m[2]! * m[7]! +
+    m[12]! * m[3]! * m[6]!;
+  inv[10] =
+    m[0]! * m[5]! * m[15]! -
+    m[0]! * m[7]! * m[13]! -
+    m[4]! * m[1]! * m[15]! +
+    m[4]! * m[3]! * m[13]! +
+    m[12]! * m[1]! * m[7]! -
+    m[12]! * m[3]! * m[5]!;
+  inv[14] =
+    -m[0]! * m[5]! * m[14]! +
+    m[0]! * m[6]! * m[13]! +
+    m[4]! * m[1]! * m[14]! -
+    m[4]! * m[2]! * m[13]! -
+    m[12]! * m[1]! * m[6]! +
+    m[12]! * m[2]! * m[5]!;
+  inv[3] =
+    -m[1]! * m[6]! * m[11]! +
+    m[1]! * m[7]! * m[10]! +
+    m[5]! * m[2]! * m[11]! -
+    m[5]! * m[3]! * m[10]! -
+    m[9]! * m[2]! * m[7]! +
+    m[9]! * m[3]! * m[6]!;
+  inv[7] =
+    m[0]! * m[6]! * m[11]! -
+    m[0]! * m[7]! * m[10]! -
+    m[4]! * m[2]! * m[11]! +
+    m[4]! * m[3]! * m[10]! +
+    m[8]! * m[2]! * m[7]! -
+    m[8]! * m[3]! * m[6]!;
+  inv[11] =
+    -m[0]! * m[5]! * m[11]! +
+    m[0]! * m[7]! * m[9]! +
+    m[4]! * m[1]! * m[11]! -
+    m[4]! * m[3]! * m[9]! -
+    m[8]! * m[1]! * m[7]! +
+    m[8]! * m[3]! * m[5]!;
+  inv[15] =
+    m[0]! * m[5]! * m[10]! -
+    m[0]! * m[6]! * m[9]! -
+    m[4]! * m[1]! * m[10]! +
+    m[4]! * m[2]! * m[9]! +
+    m[8]! * m[1]! * m[6]! -
+    m[8]! * m[2]! * m[5]!;
+  const det =
+    m[0]! * inv[0]! + m[1]! * inv[4]! + m[2]! * inv[8]! + m[3]! * inv[12]!;
   if (det === 0 || !Number.isFinite(det)) return null;
   for (let i = 0; i < 16; i++) inv[i] = inv[i]! / det;
   return inv;
 }
 
-const NAMES = ['m11', 'm12', 'm13', 'm14', 'm21', 'm22', 'm23', 'm24', 'm31', 'm32', 'm33', 'm34', 'm41', 'm42', 'm43', 'm44'] as const;
+const NAMES = [
+  'm11',
+  'm12',
+  'm13',
+  'm14',
+  'm21',
+  'm22',
+  'm23',
+  'm24',
+  'm31',
+  'm32',
+  'm33',
+  'm34',
+  'm41',
+  'm42',
+  'm43',
+  'm44',
+] as const;
 const ALIAS: Record<string, number> = { a: 0, b: 1, c: 4, d: 5, e: 12, f: 13 };
 
 function parseTransformList(text: string): { m: Mat; is2D: boolean } {
@@ -174,34 +301,61 @@ function parseTransformList(text: string): { m: Mat; is2D: boolean } {
   for (let x = re.exec(s); x; x = re.exec(s)) {
     consumed += x[0];
     const fn = x[1]!.toLowerCase();
-    const args = x[2]!.split(/[\s,]+/).filter(Boolean).map((a) => {
-      const v = parseFloat(a);
-      if (/deg$/.test(a)) return (v * Math.PI) / 180;
-      if (/turn$/.test(a)) return v * 2 * Math.PI;
-      if (/grad$/.test(a)) return (v * Math.PI) / 200;
-      return v;
-    });
+    const args = x[2]!
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map((a) => {
+        const v = parseFloat(a);
+        if (/deg$/.test(a)) return (v * Math.PI) / 180;
+        if (/turn$/.test(a)) return v * 2 * Math.PI;
+        if (/grad$/.test(a)) return (v * Math.PI) / 200;
+        return v;
+      });
     let t = identity();
     if (fn === 'matrix' && args.length === 6) {
-      t[0] = args[0]!; t[1] = args[1]!; t[4] = args[2]!; t[5] = args[3]!; t[12] = args[4]!; t[13] = args[5]!;
+      t[0] = args[0]!;
+      t[1] = args[1]!;
+      t[4] = args[2]!;
+      t[5] = args[3]!;
+      t[12] = args[4]!;
+      t[13] = args[5]!;
     } else if (fn === 'matrix3d' && args.length === 16) {
       t = Float64Array.from(args);
       is2D = false;
-    } else if (fn === 'translate' || fn === 'translatex' || fn === 'translatey') {
-      t[12] = fn === 'translatey' ? 0 : args[0] ?? 0;
-      t[13] = fn === 'translatex' ? 0 : fn === 'translatey' ? args[0] ?? 0 : args[1] ?? 0;
+    } else if (
+      fn === 'translate' ||
+      fn === 'translatex' ||
+      fn === 'translatey'
+    ) {
+      t[12] = fn === 'translatey' ? 0 : (args[0] ?? 0);
+      t[13] =
+        fn === 'translatex'
+          ? 0
+          : fn === 'translatey'
+            ? (args[0] ?? 0)
+            : (args[1] ?? 0);
     } else if (fn === 'translate3d' || fn === 'translatez') {
       if (fn === 'translatez') t[14] = args[0] ?? 0;
       else {
-        t[12] = args[0] ?? 0; t[13] = args[1] ?? 0; t[14] = args[2] ?? 0;
+        t[12] = args[0] ?? 0;
+        t[13] = args[1] ?? 0;
+        t[14] = args[2] ?? 0;
       }
       is2D = false;
     } else if (fn === 'scale' || fn === 'scalex' || fn === 'scaley') {
-      t[0] = fn === 'scaley' ? 1 : args[0] ?? 1;
-      t[5] = fn === 'scalex' ? 1 : fn === 'scaley' ? args[0] ?? 1 : args[1] ?? args[0] ?? 1;
+      t[0] = fn === 'scaley' ? 1 : (args[0] ?? 1);
+      t[5] =
+        fn === 'scalex'
+          ? 1
+          : fn === 'scaley'
+            ? (args[0] ?? 1)
+            : (args[1] ?? args[0] ?? 1);
     } else if (fn === 'rotate' || fn === 'rotatez') {
       const a = args[0] ?? 0;
-      t[0] = Math.cos(a); t[1] = Math.sin(a); t[4] = -Math.sin(a); t[5] = Math.cos(a);
+      t[0] = Math.cos(a);
+      t[1] = Math.sin(a);
+      t[4] = -Math.sin(a);
+      t[5] = Math.cos(a);
     } else if (fn === 'skewx') {
       t[4] = Math.tan(args[0] ?? 0);
     } else if (fn === 'skewy') {
@@ -209,11 +363,15 @@ function parseTransformList(text: string): { m: Mat; is2D: boolean } {
     } else throw new SyntaxError(`Failed to parse '${text}'.`);
     m = multiply(m, t);
   }
-  if (consumed.replace(/\s/g, '') !== s.replace(/\s/g, '')) throw new SyntaxError(`Failed to parse '${text}'.`);
+  if (consumed.replace(/\s/g, '') !== s.replace(/\s/g, ''))
+    throw new SyntaxError(`Failed to parse '${text}'.`);
   return { m, is2D };
 }
 
-function fromInit(init: Record<string, unknown> | undefined | null): { m: Mat; is2D: boolean } {
+function fromInit(init: Record<string, unknown> | undefined | null): {
+  m: Mat;
+  is2D: boolean;
+} {
   const m = identity();
   if (!init) return { m, is2D: true };
   let is2D = true;
@@ -222,7 +380,16 @@ function fromInit(init: Record<string, unknown> | undefined | null): { m: Mat; i
     const v = init[named] ?? init[k];
     if (v !== undefined) m[i] = Number(v);
   }
-  for (const k of ['m13', 'm14', 'm23', 'm24', 'm31', 'm32', 'm34', 'm43'] as const) {
+  for (const k of [
+    'm13',
+    'm14',
+    'm23',
+    'm24',
+    'm31',
+    'm32',
+    'm34',
+    'm43',
+  ] as const) {
     if (init[k] !== undefined && Number(init[k]) !== 0) is2D = false;
     if (init[k] !== undefined) m[NAMES.indexOf(k)] = Number(init[k]);
   }
@@ -249,18 +416,29 @@ export class DOMMatrixReadOnly {
     else if (init !== undefined && init !== null) {
       const a = Array.from(init as ArrayLike<number>, Number);
       if (a.length === 6) {
-        m[0] = a[0]!; m[1] = a[1]!; m[4] = a[2]!; m[5] = a[3]!; m[12] = a[4]!; m[13] = a[5]!;
+        m[0] = a[0]!;
+        m[1] = a[1]!;
+        m[4] = a[2]!;
+        m[5] = a[3]!;
+        m[12] = a[4]!;
+        m[13] = a[5]!;
       } else if (a.length === 16) {
         m = Float64Array.from(a);
         is2D = false;
-      } else throw new TypeError(`Failed to construct 'DOMMatrix': The sequence must contain 6 elements for a 2D matrix or 16 elements for a 3D matrix.`);
+      } else
+        throw new TypeError(
+          `Failed to construct 'DOMMatrix': The sequence must contain 6 elements for a 2D matrix or 16 elements for a 3D matrix.`,
+        );
     }
     this[M] = m;
     this[IS2D] = is2D;
   }
   static fromMatrix(other?: any): DOMMatrixReadOnly {
     const r = new this();
-    const { m, is2D } = other instanceof DOMMatrixReadOnly ? { m: Float64Array.from(other[M]), is2D: other[IS2D] } : fromInit(other);
+    const { m, is2D } =
+      other instanceof DOMMatrixReadOnly
+        ? { m: Float64Array.from(other[M]), is2D: other[IS2D] }
+        : fromInit(other);
     r[M] = m;
     r[IS2D] = is2D;
     return r;
@@ -276,7 +454,8 @@ export class DOMMatrixReadOnly {
   }
   get isIdentity(): boolean {
     const m = this[M];
-    for (let i = 0; i < 16; i++) if (m[i] !== (i % 5 === 0 ? 1 : 0)) return false;
+    for (let i = 0; i < 16; i++)
+      if (m[i] !== (i % 5 === 0 ? 1 : 0)) return false;
     return true;
   }
   translate(tx = 0, ty = 0, tz = 0): DOMMatrix {
@@ -312,9 +491,14 @@ export class DOMMatrixReadOnly {
   inverse(): DOMMatrix {
     return DOMMatrix.fromMatrix(this).invertSelf();
   }
-  transformPoint(p: { x?: number; y?: number; z?: number; w?: number } = {}): unknown {
+  transformPoint(
+    p: { x?: number; y?: number; z?: number; w?: number } = {},
+  ): unknown {
     const m = this[M];
-    const x = num(p.x), y = num(p.y), z = num(p.z), w = num(p.w, 1);
+    const x = num(p.x),
+      y = num(p.y),
+      z = num(p.z),
+      w = num(p.w, 1);
     return point(
       m[0]! * x + m[4]! * y + m[8]! * z + m[12]! * w,
       m[1]! * x + m[5]! * y + m[9]! * z + m[13]! * w,
@@ -329,7 +513,14 @@ export class DOMMatrixReadOnly {
     return Float64Array.from(this[M]);
   }
   toJSON(): Record<string, unknown> {
-    const o: Record<string, unknown> = { a: this.a, b: this.b, c: this.c, d: this.d, e: this.e, f: this.f };
+    const o: Record<string, unknown> = {
+      a: this.a,
+      b: this.b,
+      c: this.c,
+      d: this.d,
+      e: this.e,
+      f: this.f,
+    };
     NAMES.forEach((n, i) => (o[n] = this[M][i]));
     o.is2D = this.is2D;
     o.isIdentity = this.isIdentity;
@@ -337,8 +528,11 @@ export class DOMMatrixReadOnly {
   }
   toString(): string {
     const m = this[M];
-    if (!m.every(Number.isFinite)) throw new Error('InvalidStateError: the matrix has non-finite values');
-    return this[IS2D] ? `matrix(${[m[0], m[1], m[4], m[5], m[12], m[13]].join(', ')})` : `matrix3d(${Array.from(m).join(', ')})`;
+    if (!m.every(Number.isFinite))
+      throw new Error('InvalidStateError: the matrix has non-finite values');
+    return this[IS2D]
+      ? `matrix(${[m[0], m[1], m[4], m[5], m[12], m[13]].join(', ')})`
+      : `matrix3d(${Array.from(m).join(', ')})`;
   }
   get [Symbol.toStringTag](): string {
     return 'DOMMatrixReadOnly';
@@ -363,17 +557,37 @@ for (const [k, i] of Object.entries(ALIAS)) {
   });
 }
 export interface DOMMatrixReadOnly {
-  readonly a: number; readonly b: number; readonly c: number; readonly d: number; readonly e: number; readonly f: number;
-  readonly m11: number; readonly m12: number; readonly m13: number; readonly m14: number;
-  readonly m21: number; readonly m22: number; readonly m23: number; readonly m24: number;
-  readonly m31: number; readonly m32: number; readonly m33: number; readonly m34: number;
-  readonly m41: number; readonly m42: number; readonly m43: number; readonly m44: number;
+  readonly a: number;
+  readonly b: number;
+  readonly c: number;
+  readonly d: number;
+  readonly e: number;
+  readonly f: number;
+  readonly m11: number;
+  readonly m12: number;
+  readonly m13: number;
+  readonly m14: number;
+  readonly m21: number;
+  readonly m22: number;
+  readonly m23: number;
+  readonly m24: number;
+  readonly m31: number;
+  readonly m32: number;
+  readonly m33: number;
+  readonly m34: number;
+  readonly m41: number;
+  readonly m42: number;
+  readonly m43: number;
+  readonly m44: number;
 }
 
 export class DOMMatrix extends DOMMatrixReadOnly {
   static override fromMatrix(other?: any): DOMMatrix {
     const r = new DOMMatrix();
-    const { m, is2D } = other instanceof DOMMatrixReadOnly ? { m: Float64Array.from(other[M]), is2D: other[IS2D] } : fromInit(other);
+    const { m, is2D } =
+      other instanceof DOMMatrixReadOnly
+        ? { m: Float64Array.from(other[M]), is2D: other[IS2D] }
+        : fromInit(other);
     r[M] = m;
     r[IS2D] = is2D;
     return r;
@@ -385,20 +599,28 @@ export class DOMMatrix extends DOMMatrixReadOnly {
     return new DOMMatrix(Array.from(a));
   }
   multiplySelf(other?: any): this {
-    const o = other instanceof DOMMatrixReadOnly ? { m: other[M], is2D: other[IS2D] } : fromInit(other);
+    const o =
+      other instanceof DOMMatrixReadOnly
+        ? { m: other[M], is2D: other[IS2D] }
+        : fromInit(other);
     this[M] = multiply(this[M], o.m);
     this[IS2D] = this[IS2D] && o.is2D;
     return this;
   }
   preMultiplySelf(other?: any): this {
-    const o = other instanceof DOMMatrixReadOnly ? { m: other[M], is2D: other[IS2D] } : fromInit(other);
+    const o =
+      other instanceof DOMMatrixReadOnly
+        ? { m: other[M], is2D: other[IS2D] }
+        : fromInit(other);
     this[M] = multiply(o.m, this[M]);
     this[IS2D] = this[IS2D] && o.is2D;
     return this;
   }
   translateSelf(tx = 0, ty = 0, tz = 0): this {
     const t = identity();
-    t[12] = Number(tx); t[13] = Number(ty); t[14] = Number(tz);
+    t[12] = Number(tx);
+    t[13] = Number(ty);
+    t[14] = Number(tz);
     this[M] = multiply(this[M], t);
     if (Number(tz) !== 0) this[IS2D] = false;
     return this;
@@ -406,7 +628,9 @@ export class DOMMatrix extends DOMMatrixReadOnly {
   scaleSelf(sx = 1, sy?: number, sz = 1, ox = 0, oy = 0, oz = 0): this {
     this.translateSelf(ox, oy, oz);
     const t = identity();
-    t[0] = Number(sx); t[5] = Number(sy ?? sx); t[10] = Number(sz);
+    t[0] = Number(sx);
+    t[5] = Number(sy ?? sx);
+    t[10] = Number(sz);
     this[M] = multiply(this[M], t);
     this.translateSelf(-ox, -oy, -oz);
     if (Number(sz) !== 1 || Number(oz) !== 0) this[IS2D] = false;
@@ -431,10 +655,14 @@ export class DOMMatrix extends DOMMatrixReadOnly {
   rotateAxisAngleSelf(x = 0, y = 0, z = 0, angle = 0): this {
     const len = Math.hypot(x, y, z);
     if (len === 0) return this;
-    x /= len; y /= len; z /= len;
+    x /= len;
+    y /= len;
+    z /= len;
     const a = (Number(angle) * Math.PI) / 180;
-    const s = Math.sin(a / 2), c = Math.cos(a / 2);
-    const sc = s * c, sq = s * s;
+    const s = Math.sin(a / 2),
+      c = Math.cos(a / 2);
+    const sc = s * c,
+      sq = s * s;
     const t = identity();
     t[0] = 1 - 2 * (y * y + z * z) * sq;
     t[1] = 2 * (x * y * sq + z * sc);
@@ -486,7 +714,18 @@ for (const [i, n] of NAMES.entries()) {
     },
     set(this: DOMMatrix, v: number) {
       this[M][i] = Number(v);
-      if ((i === 2 || i === 3 || i === 6 || i === 7 || i === 8 || i === 9 || i === 11 || i === 14) && Number(v) !== 0) this[IS2D] = false;
+      if (
+        (i === 2 ||
+          i === 3 ||
+          i === 6 ||
+          i === 7 ||
+          i === 8 ||
+          i === 9 ||
+          i === 11 ||
+          i === 14) &&
+        Number(v) !== 0
+      )
+        this[IS2D] = false;
       if ((i === 10 || i === 15) && Number(v) !== 1) this[IS2D] = false;
     },
     configurable: true,
@@ -511,26 +750,51 @@ export class DOMQuad {
   readonly p2: unknown;
   readonly p3: unknown;
   readonly p4: unknown;
-  constructor(p1: Record<string, number> = {}, p2: Record<string, number> = {}, p3: Record<string, number> = {}, p4: Record<string, number> = {}) {
-    const mk = (p: Record<string, number>) => point(num(p.x), num(p.y), num(p.z), num(p.w, 1));
+  constructor(
+    p1: Record<string, number> = {},
+    p2: Record<string, number> = {},
+    p3: Record<string, number> = {},
+    p4: Record<string, number> = {},
+  ) {
+    const mk = (p: Record<string, number>) =>
+      point(num(p.x), num(p.y), num(p.z), num(p.w, 1));
     this.p1 = mk(p1);
     this.p2 = mk(p2);
     this.p3 = mk(p3);
     this.p4 = mk(p4);
   }
-  static fromRect(r: { x?: number; y?: number; width?: number; height?: number } = {}): DOMQuad {
-    const x = num(r.x), y = num(r.y), w = num(r.width), h = num(r.height);
-    return new DOMQuad({ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h });
+  static fromRect(
+    r: { x?: number; y?: number; width?: number; height?: number } = {},
+  ): DOMQuad {
+    const x = num(r.x),
+      y = num(r.y),
+      w = num(r.width),
+      h = num(r.height);
+    return new DOMQuad(
+      { x, y },
+      { x: x + w, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h },
+    );
   }
   static fromQuad(q: Record<string, Record<string, number>> = {}): DOMQuad {
     return new DOMQuad(q.p1, q.p2, q.p3, q.p4);
   }
   getBounds(): DOMRect {
-    const ps = [this.p1, this.p2, this.p3, this.p4] as Array<{ x: number; y: number }>;
+    const ps = [this.p1, this.p2, this.p3, this.p4] as Array<{
+      x: number;
+      y: number;
+    }>;
     const xs = ps.map((p) => p.x);
     const ys = ps.map((p) => p.y);
-    const minX = Math.min(...xs), minY = Math.min(...ys);
-    return new DOMRect(minX, minY, Math.max(...xs) - minX, Math.max(...ys) - minY);
+    const minX = Math.min(...xs),
+      minY = Math.min(...ys);
+    return new DOMRect(
+      minX,
+      minY,
+      Math.max(...xs) - minX,
+      Math.max(...ys) - minY,
+    );
   }
   toJSON(): Record<string, unknown> {
     return { p1: this.p1, p2: this.p2, p3: this.p3, p4: this.p4 };

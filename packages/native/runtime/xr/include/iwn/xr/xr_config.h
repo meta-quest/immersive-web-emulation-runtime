@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The `xr` section of assets/iwn/config.json (written by the packer from iwsdk.config.json's native section, PKG-CFG)
 // and the fixed-foveation level mapping (XR-FOV-1). V8-free.
 //

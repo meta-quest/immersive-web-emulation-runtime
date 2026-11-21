@@ -90,7 +90,11 @@ export const SO_ALIGNMENT = 16384;
 export interface PackInput {
   target: ResolvedNativeTarget;
   /** Absolute paths of files the config references (from loadNativeProject). */
-  files: { icon: string | null; keystore: string | null; splash?: string | null };
+  files: {
+    icon: string | null;
+    keystore: string | null;
+    splash?: string | null;
+  };
   distDir: string;
   outFile: string;
   template: LoadedTemplate;
@@ -285,9 +289,7 @@ function writeOutput(outFile: string, apk: Buffer): void {
     renameSync(tmp, outFile);
   } catch (e) {
     rmSync(tmp, { force: true });
-    throw new PackError(
-      `cannot write ${outFile}: ${(e as Error).message}`,
-    );
+    throw new PackError(`cannot write ${outFile}: ${(e as Error).message}`);
   }
 }
 
@@ -448,7 +450,12 @@ export async function pack(input: PackInput): Promise<PackResult> {
   );
   // Stored: a PNG does not compress further, and the runtime maps it.
   const splashEntries = splash
-    ? [await prepareEntry(SPLASH_ENTRY, splash.png, { compress: false, align: 4 })]
+    ? [
+        await prepareEntry(SPLASH_ENTRY, splash.png, {
+          compress: false,
+          align: 4,
+        }),
+      ]
     : [];
 
   // Dist files: compress concurrently (zlib runs on the libuv pool).
@@ -544,14 +551,19 @@ export function formatBytes(n: number): string {
 export function describeSplashBackground(background: string): string {
   if (background === 'contextual')
     return 'contextual background (passthrough from a passthrough home, else black)';
-  return background === 'black' ? 'black background' : `background ${background}`;
+  return background === 'black'
+    ? 'black background'
+    : `background ${background}`;
 }
 
 function formatSplash(s: PackResult['splash'], background: string): string {
   const bg = describeSplashBackground(background);
   if (!s) return `off (no image or spinner; ${bg} until the first XR frame)`;
-  if (s.source === 'image') return `your image, ${s.width}x${s.height}, + loading spinner, ${bg}`;
-  const parts = [s.icon ? 'icon' : null, s.text ? `"${s.text}"` : null].filter(Boolean);
+  if (s.source === 'image')
+    return `your image, ${s.width}x${s.height}, + loading spinner, ${bg}`;
+  const parts = [s.icon ? 'icon' : null, s.text ? `"${s.text}"` : null].filter(
+    Boolean,
+  );
   return `generated ${s.width}x${s.height} (${parts.join(' + ') || 'empty'}) + loading spinner, ${bg}`;
 }
 

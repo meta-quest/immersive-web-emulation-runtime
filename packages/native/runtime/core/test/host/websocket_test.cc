@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // CDP-3, CDP-4, GAP-5: case-insensitive handshake, token lists, accept key (RFC 6455 §1.3 example), framing.
 #include <string>
 #include <vector>

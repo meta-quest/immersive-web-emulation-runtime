@@ -66,12 +66,28 @@ const IWSDK_FEATURES: Record<string, string> = {
 
 /** IWSDK-level uses in app source that end in device-only web API calls. */
 export const APP_SOURCE_SIGNALS: ScanSignal[] = [
-  { key: 'XRWebGLBinding.createQuadLayer()', re: /\bXRQuadLayer\b/, strength: 'call' },
-  { key: 'XRWebGLBinding.createCylinderLayer()', re: /\bXRCylinderLayer\b/, strength: 'call' },
-  { key: 'HTMLMediaElement.srcObject=', re: /\.srcObject\s*=/, strength: 'call' },
+  {
+    key: 'XRWebGLBinding.createQuadLayer()',
+    re: /\bXRQuadLayer\b/,
+    strength: 'call',
+  },
+  {
+    key: 'XRWebGLBinding.createCylinderLayer()',
+    re: /\bXRCylinderLayer\b/,
+    strength: 'call',
+  },
+  {
+    key: 'HTMLMediaElement.srcObject=',
+    re: /\.srcObject\s*=/,
+    strength: 'call',
+  },
   // IWSDK's camera feature: a CameraSource component makes CameraSystem call navigator.mediaDevices.getUserMedia
   // (and enumerateDevices) and play the stream through a <video>; CameraUtils wraps the same calls
-  { key: 'MediaDevices.getUserMedia()', re: /\b(CameraSource|CameraUtils)\b/, strength: 'call' },
+  {
+    key: 'MediaDevices.getUserMedia()',
+    re: /\b(CameraSource|CameraUtils)\b/,
+    strength: 'call',
+  },
 ];
 
 /**
@@ -90,9 +106,17 @@ function featureSourceSignals(): ScanSignal[] {
     const m = /^XR feature (\S+) \(optional\)$/.exec(sig.key);
     if (!m) continue;
     const f = m[1]!;
-    out.push({ key: sig.key, strength: sig.strength, re: new RegExp(`\\boptionalFeatures\\s*:\\s*\\[[^\\]]*["'\`]${f}["'\`]`) });
+    out.push({
+      key: sig.key,
+      strength: sig.strength,
+      re: new RegExp(`\\boptionalFeatures\\s*:\\s*\\[[^\\]]*["'\`]${f}["'\`]`),
+    });
     // a required feature makes requestSession reject on the headset while the feature is 'later'
-    out.push({ key: `XR feature ${f} (required)`, strength: sig.strength, re: new RegExp(`\\brequiredFeatures\\s*:\\s*\\[[^\\]]*["'\`]${f}["'\`]`) });
+    out.push({
+      key: `XR feature ${f} (required)`,
+      strength: sig.strength,
+      re: new RegExp(`\\brequiredFeatures\\s*:\\s*\\[[^\\]]*["'\`]${f}["'\`]`),
+    });
   }
   return out;
 }
@@ -103,13 +127,28 @@ function featureSourceSignals(): ScanSignal[] {
  * `SessionMode.ImmersiveAR` is a request.
  */
 const SESSION_MODE_SIGNALS: ScanSignal[] = [
-  { key: 'XRSystem.requestSession("immersive-ar")', re: /(?<!isSessionSupported\s*\(\s*)["'`]immersive-ar["'`]|(?<!isSessionSupported\s*\(\s*)\bSessionMode\.ImmersiveAR\b/, strength: 'call' },
-  { key: 'XRSystem.isSessionSupported("immersive-ar")', re: /\bisSessionSupported\s*\(\s*(?:["'`]immersive-ar["'`]|SessionMode\.ImmersiveAR\b)/, strength: 'probe' },
+  {
+    key: 'XRSystem.requestSession("immersive-ar")',
+    re: /(?<!isSessionSupported\s*\(\s*)["'`]immersive-ar["'`]|(?<!isSessionSupported\s*\(\s*)\bSessionMode\.ImmersiveAR\b/,
+    strength: 'call',
+  },
+  {
+    key: 'XRSystem.isSessionSupported("immersive-ar")',
+    re: /\bisSessionSupported\s*\(\s*(?:["'`]immersive-ar["'`]|SessionMode\.ImmersiveAR\b)/,
+    strength: 'probe',
+  },
 ];
 
 /** The catalogue used on app source: the bundle catalogue with feature strings and session modes in context, plus IWSDK uses. */
 export function appSourceCatalogue(): ScanSignal[] {
-  return [...SIGNALS.filter((sig) => !/^XR feature /.test(sig.key) && !/immersive-ar/.test(sig.key)), ...featureSourceSignals(), ...SESSION_MODE_SIGNALS, ...APP_SOURCE_SIGNALS];
+  return [
+    ...SIGNALS.filter(
+      (sig) => !/^XR feature /.test(sig.key) && !/immersive-ar/.test(sig.key),
+    ),
+    ...featureSourceSignals(),
+    ...SESSION_MODE_SIGNALS,
+    ...APP_SOURCE_SIGNALS,
+  ];
 }
 
 /** Text of the balanced `{...}` block that starts at `open` (an index of `{`), or '' when unbalanced. */
@@ -144,7 +183,9 @@ function topLevelPairs(block: string): Array<[string, string]> {
   }
   parts.push(inner.slice(start));
   for (const part of parts) {
-    const m = /^\s*["']?([A-Za-z_$][\w$]*)["']?\s*:\s*([\s\S]*?)\s*$/.exec(part);
+    const m = /^\s*["']?([A-Za-z_$][\w$]*)["']?\s*:\s*([\s\S]*?)\s*$/.exec(
+      part,
+    );
     if (m) out.push([m[1]!, m[2]!]);
   }
   return out;
@@ -164,7 +205,8 @@ export function maskStrings(src: string): string {
     const c = src[i];
     if (c === '"' || c === "'") {
       let j = i + 1;
-      while (j < n && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1;
+      while (j < n && src[j] !== c && src[j] !== '\n')
+        j += src[j] === '\\' ? 2 : 1;
       if (j < n && src[j] === c) blank(i + 1, j);
       i = j < n && src[j] === c ? j + 1 : i + 1;
     } else if (c === '`') {
@@ -199,7 +241,9 @@ export function maskStrings(src: string): string {
 }
 
 /** IWSDK world features (World.create options.features) that end in an absent API. */
-const WORLD_FEATURE_KEYS: Record<string, string> = { camera: 'MediaDevices.getUserMedia()' };
+const WORLD_FEATURE_KEYS: Record<string, string> = {
+  camera: 'MediaDevices.getUserMedia()',
+};
 
 /**
  * IWSDK options given in code (`World.create(el, { xr: {...}, features: {...} })`, `launchXR(world, {...})`):
@@ -212,10 +256,18 @@ export function codeOptionSignals(text: string, rel: string): AppSignal[] {
   // a match must be code, not UI text that quotes the option ('XR is off (xr: false)')
   const masked = maskStrings(text);
   const inCode = (i: number) => masked[i] === text[i];
-  const at = (i: number, len = 60) => `${rel}:${text.slice(0, i).split('\n').length}: ${text.slice(i, i + len).replace(/\s+/g, ' ').trim()}`;
+  const at = (i: number, len = 60) =>
+    `${rel}:${text.slice(0, i).split('\n').length}: ${text
+      .slice(i, i + len)
+      .replace(/\s+/g, ' ')
+      .trim()}`;
   // one branch of a ternary (`pureBrowser ? { ...opts, xr: false } : opts`) is a mode the app can be in, not what it is
-  const conditional = (i: number) => /\?[^;?]{0,80}$/.test(text.slice(Math.max(0, i - 80), i));
-  for (const [re, key] of [[/\bxr\s*:\s*false\b/g, `${NO_XR_ENTRY} (xr: false)`], [/\boffer\s*:\s*["'`]none["'`]/g, `${NO_XR_ENTRY} (offer: none)`]] as Array<[RegExp, string]>) {
+  const conditional = (i: number) =>
+    /\?[^;?]{0,80}$/.test(text.slice(Math.max(0, i - 80), i));
+  for (const [re, key] of [
+    [/\bxr\s*:\s*false\b/g, `${NO_XR_ENTRY} (xr: false)`],
+    [/\boffer\s*:\s*["'`]none["'`]/g, `${NO_XR_ENTRY} (offer: none)`],
+  ] as Array<[RegExp, string]>) {
     for (const m of text.matchAll(re)) {
       if (!inCode(m.index!) || conditional(m.index!)) continue;
       out.push({ key, origin: 'source', evidence: at(m.index!) });
@@ -232,9 +284,17 @@ export function codeOptionSignals(text: string, rel: string): AppSignal[] {
       const feature = IWSDK_FEATURES[name];
       if (feature) {
         const required = /\brequired\s*:\s*true\b/.test(value);
-        out.push({ key: `XR feature ${feature} (${required ? 'required' : 'optional'})`, origin: 'source', evidence: at(f.index!, 120) });
+        out.push({
+          key: `XR feature ${feature} (${required ? 'required' : 'optional'})`,
+          origin: 'source',
+          evidence: at(f.index!, 120),
+        });
       } else if (WORLD_FEATURE_KEYS[name]) {
-        out.push({ key: WORLD_FEATURE_KEYS[name]!, origin: 'source', evidence: `${at(f.index!, 120)} (IWSDK's ${name} feature)` });
+        out.push({
+          key: WORLD_FEATURE_KEYS[name]!,
+          origin: 'source',
+          evidence: `${at(f.index!, 120)} (IWSDK's ${name} feature)`,
+        });
       }
     }
   }
@@ -249,26 +309,63 @@ export function codeOptionSignals(text: string, rel: string): AppSignal[] {
  */
 function mediaPlaybackSignals(text: string, rel: string): AppSignal[] {
   // `new Audio(listener)` with three.js's Audio imported (or any local class/binding named Audio) is Web Audio
-  if (bindsLocally('Audio', text)) text = text.replace(/\bnew(\s+)Audio(\s*)\(/g, 'new$1Au_io$2(');
-  const made = /\bcreateElement\(\s*["'`](video|audio)["'`]\s*\)|\bnew\s+Audio\s*\(|<(video|audio)\b/.exec(text);
+  if (bindsLocally('Audio', text))
+    text = text.replace(/\bnew(\s+)Audio(\s*)\(/g, 'new$1Au_io$2(');
+  const made =
+    /\bcreateElement\(\s*["'`](video|audio)["'`]\s*\)|\bnew\s+Audio\s*\(|<(video|audio)\b/.exec(
+      text,
+    );
   if (!made) return [];
   const holders = new Set<string>();
-  for (const m of text.matchAll(/([A-Za-z_$][\w$]*)\s*=\s*(?:document\.createElement\(\s*["'`](?:video|audio)["'`]\s*\)|new\s+Audio\s*\()/g)) holders.add(m[1]!);
-  const MEDIA_NAME = /^(?:.*(?:video|audio|sound|music|media|bgm|sfx)\w*|vid|aud)$/i;
+  for (const m of text.matchAll(
+    /([A-Za-z_$][\w$]*)\s*=\s*(?:document\.createElement\(\s*["'`](?:video|audio)["'`]\s*\)|new\s+Audio\s*\()/g,
+  ))
+    holders.add(m[1]!);
+  const MEDIA_NAME =
+    /^(?:.*(?:video|audio|sound|music|media|bgm|sfx)\w*|vid|aud)$/i;
   const holds = (receiver: string) => {
     const last = receiver.split('.').pop()!.replace(/\?$/, '');
     return holders.has(last) || MEDIA_NAME.test(last);
   };
   const out: AppSignal[] = [];
   const line = (i: number) => text.slice(0, i).split('\n').length;
-  const near = (i: number, after: number) => text.slice(Math.max(0, i - 30), i + after).replace(/\s+/g, ' ').trim();
+  const near = (i: number, after: number) =>
+    text
+      .slice(Math.max(0, i - 30), i + after)
+      .replace(/\s+/g, ' ')
+      .trim();
   const why = ` (after ${made[0]} at line ${line(made.index)})`;
-  let play: RegExpExecArray | null = /\bnew\s+Audio\s*\([^)]*\)\s*\.play\s*\(/.exec(text);
-  if (!play) for (const m of text.matchAll(/([A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*)\??\.play\s*\(\s*\)/g)) if (holds(m[1]!)) { play = m; break; }
-  if (play) out.push({ key: 'HTMLMediaElement.play()', origin: 'source', evidence: `${rel}:${line(play.index)}: ${near(play.index, 20)}${why}` });
+  let play: RegExpExecArray | null =
+    /\bnew\s+Audio\s*\([^)]*\)\s*\.play\s*\(/.exec(text);
+  if (!play)
+    for (const m of text.matchAll(
+      /([A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*)\??\.play\s*\(\s*\)/g,
+    ))
+      if (holds(m[1]!)) {
+        play = m;
+        break;
+      }
+  if (play)
+    out.push({
+      key: 'HTMLMediaElement.play()',
+      origin: 'source',
+      evidence: `${rel}:${line(play.index)}: ${near(play.index, 20)}${why}`,
+    });
   let src: RegExpExecArray | null = /\bnew\s+Audio\s*\(\s*[^)\s]/.exec(text);
-  if (!src) for (const m of text.matchAll(/([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.(?:src|srcObject)\s*=(?!=)/g)) if (holds(m[1]!)) { src = m; break; }
-  if (src) out.push({ key: 'HTMLMediaElement.src=', origin: 'source', evidence: `${rel}:${line(src.index)}: ${near(src.index, 40)}${why}` });
+  if (!src)
+    for (const m of text.matchAll(
+      /([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.(?:src|srcObject)\s*=(?!=)/g,
+    ))
+      if (holds(m[1]!)) {
+        src = m;
+        break;
+      }
+  if (src)
+    out.push({
+      key: 'HTMLMediaElement.src=',
+      origin: 'source',
+      evidence: `${rel}:${line(src.index)}: ${near(src.index, 40)}${why}`,
+    });
   return out;
 }
 
@@ -278,8 +375,15 @@ function mediaPlaybackSignals(text: string, rel: string): AppSignal[] {
  */
 export function bindsLocally(name: string, text: string): boolean {
   const n = name.replace(/\$/g, '\\$');
-  if (new RegExp(`\\b(?:class|function\\*?|const|let|var)\\s+${n}\\b|\\bimport\\s+${n}\\s*(?:,|from\\b)`).test(text)) return true;
-  for (const m of text.matchAll(/\bimport\s*(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\b/g)) {
+  if (
+    new RegExp(
+      `\\b(?:class|function\\*?|const|let|var)\\s+${n}\\b|\\bimport\\s+${n}\\s*(?:,|from\\b)`,
+    ).test(text)
+  )
+    return true;
+  for (const m of text.matchAll(
+    /\bimport\s*(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\b/g,
+  )) {
     for (const spec of m[1]!.split(',')) {
       const parts = spec.trim().split(/\s+as\s+/);
       if ((parts[1] ?? parts[0])?.trim() === name) return true;
@@ -289,7 +393,9 @@ export function bindsLocally(name: string, text: string): boolean {
 }
 
 /** Removed interfaces an app reaches through an instance member, and that member (ctx.audioWorklet). */
-const INSTANCE_MEMBER: Record<string, string> = { AudioWorklet: 'audioWorklet' };
+const INSTANCE_MEMBER: Record<string, string> = {
+  AudioWorklet: 'audioWorklet',
+};
 
 /** A feature check of an API's global or navigator member (see rootOf), if the text has one. */
 export function guardFor(key: string, text: string): RegExpExecArray | null {
@@ -298,23 +404,38 @@ export function guardFor(key: string, text: string): RegExpExecArray | null {
   if (root.global && INSTANCE_MEMBER[root.global]) {
     // `if (ctx.audioWorklet)`, `'audioWorklet' in ctx`, `ctx.audioWorklet?.`, `typeof ctx.audioWorklet`
     const m = INSTANCE_MEMBER[root.global];
-    const viaMember = new RegExp(`\\bif\\s*\\(\\s*!?\\s*[\\w$.]+\\.${m}\\s*(?:\\)|&&|\\|\\|)|["'\`]${m}["'\`]\\s+in\\b|\\.${m}\\s*\\?\\.|\\?\\.${m}\\b|\\btypeof\\s+[\\w$.]+\\.${m}\\b|\\.${m}\\s*(?:===|!==|==|!=)\\s*(?:undefined|null)\\b|&&\\s*[\\w$.]+\\.${m}\\s*[)?]`).exec(text);
+    const viaMember = new RegExp(
+      `\\bif\\s*\\(\\s*!?\\s*[\\w$.]+\\.${m}\\s*(?:\\)|&&|\\|\\|)|["'\`]${m}["'\`]\\s+in\\b|\\.${m}\\s*\\?\\.|\\?\\.${m}\\b|\\btypeof\\s+[\\w$.]+\\.${m}\\b|\\.${m}\\s*(?:===|!==|==|!=)\\s*(?:undefined|null)\\b|&&\\s*[\\w$.]+\\.${m}\\s*[)?]`,
+    ).exec(text);
     if (viaMember) return viaMember;
   }
   // crypto.subtle hangs off the crypto global: `if (crypto.subtle)`, `'subtle' in crypto`, `crypto?.subtle?.x()`
-  if (root.global === 'Crypto.subtle') return memberGuard('(?:(?:window|globalThis|self)\\??\\.)?crypto', 'subtle', text);
+  if (root.global === 'Crypto.subtle')
+    return memberGuard(
+      '(?:(?:window|globalThis|self)\\??\\.)?crypto',
+      'subtle',
+      text,
+    );
   if (root.global) {
     const g = root.global.replace(/\$/g, '\\$');
     // `window.X` counts only as a value (`if (window.X)`, `window.X?.open()`), not when it is called or a member of it
     // is used (`window.indexedDB.open()` throws on the headset like the bare form)
-    return new RegExp(`\\btypeof\\s+(?:(?:window|globalThis|self)\\.)?${g}\\b|["'\`]${g}["'\`]\\s+in\\b|\\b(?:window|globalThis|self)\\??\\.${g}\\b(?!\\s*(?:\\(|\\.|\\[))|\\b${g}\\s*(?:===|!==|==|!=)\\s*(?:undefined|null)\\b`).exec(text);
+    return new RegExp(
+      `\\btypeof\\s+(?:(?:window|globalThis|self)\\.)?${g}\\b|["'\`]${g}["'\`]\\s+in\\b|\\b(?:window|globalThis|self)\\??\\.${g}\\b(?!\\s*(?:\\(|\\.|\\[))|\\b${g}\\s*(?:===|!==|==|!=)\\s*(?:undefined|null)\\b`,
+    ).exec(text);
   }
   return memberGuard('navigator', root.nav!, text);
 }
 
 /** A feature check of member `n` of the object `obj` (a regex source) such as navigator.gpu or crypto.subtle. */
-function memberGuard(obj: string, n: string, text: string): RegExpExecArray | null {
-  return new RegExp(`["'\`]${n}["'\`]\\s+in\\s+${obj}\\b|\\b${obj}\\??\\.${n}\\s*\\?\\.|\\b${obj}\\?\\.${n}\\b|\\bif\\s*\\(\\s*!?\\s*${obj}\\.${n}\\s*(?:\\)|&&|\\|\\|)|\\b${obj}\\.${n}\\s*(?:===|!==|==|!=)\\s*(?:undefined|null)\\b|\\btypeof\\s+${obj}\\.${n}\\b|&&\\s*${obj}\\.${n}\\s*[)?]`).exec(text);
+function memberGuard(
+  obj: string,
+  n: string,
+  text: string,
+): RegExpExecArray | null {
+  return new RegExp(
+    `["'\`]${n}["'\`]\\s+in\\s+${obj}\\b|\\b${obj}\\??\\.${n}\\s*\\?\\.|\\b${obj}\\?\\.${n}\\b|\\bif\\s*\\(\\s*!?\\s*${obj}\\.${n}\\s*(?:\\)|&&|\\|\\|)|\\b${obj}\\.${n}\\s*(?:===|!==|==|!=)\\s*(?:undefined|null)\\b|\\btypeof\\s+${obj}\\.${n}\\b|&&\\s*${obj}\\.${n}\\s*[)?]`,
+  ).exec(text);
 }
 
 /** Read `world.xr` (and `world.features.camera`) from iwsdk.config.json. */
@@ -331,22 +452,52 @@ export function configSignals(projectRoot: string): AppSignal[] {
   // world.features.camera: IWSDK's CameraSystem (getUserMedia + enumerateDevices + a <video>); XR-SEC-1
   const cam = cfg.world?.features?.camera;
   if (cam !== undefined && cam !== false && cam !== null)
-    out.push({ key: 'MediaDevices.getUserMedia()', origin: 'config', evidence: `iwsdk.config.json world.features.camera = ${JSON.stringify(cam)} (IWSDK's camera feature calls navigator.mediaDevices.getUserMedia)` });
-  const xr = cfg.world?.xr as { mode?: unknown; offer?: unknown; features?: Record<string, unknown> } | false | undefined;
+    out.push({
+      key: 'MediaDevices.getUserMedia()',
+      origin: 'config',
+      evidence: `iwsdk.config.json world.features.camera = ${JSON.stringify(cam)} (IWSDK's camera feature calls navigator.mediaDevices.getUserMedia)`,
+    });
+  const xr = cfg.world?.xr as
+    | { mode?: unknown; offer?: unknown; features?: Record<string, unknown> }
+    | false
+    | undefined;
   if (xr === false) {
-    out.push({ key: `${NO_XR_ENTRY} (xr: false)`, origin: 'config', evidence: 'iwsdk.config.json world.xr = false' });
+    out.push({
+      key: `${NO_XR_ENTRY} (xr: false)`,
+      origin: 'config',
+      evidence: 'iwsdk.config.json world.xr = false',
+    });
     return out;
   }
   if (!xr || typeof xr !== 'object') return out;
-  if (xr.offer === 'none') out.push({ key: `${NO_XR_ENTRY} (offer: none)`, origin: 'config', evidence: 'iwsdk.config.json world.xr.offer = "none"' });
-  const mode = xr.mode === 'ar' ? 'immersive-ar' : xr.mode === 'vr' || xr.mode === undefined ? 'immersive-vr' : String(xr.mode);
+  if (xr.offer === 'none')
+    out.push({
+      key: `${NO_XR_ENTRY} (offer: none)`,
+      origin: 'config',
+      evidence: 'iwsdk.config.json world.xr.offer = "none"',
+    });
+  const mode =
+    xr.mode === 'ar'
+      ? 'immersive-ar'
+      : xr.mode === 'vr' || xr.mode === undefined
+        ? 'immersive-vr'
+        : String(xr.mode);
   const how = xr.offer === 'none' ? 'requestSession' : 'offerSession';
-  out.push({ key: `XRSystem.${how}("${mode}")`, origin: 'config', evidence: `iwsdk.config.json world.xr.mode = ${JSON.stringify(xr.mode ?? 'vr')}` });
+  out.push({
+    key: `XRSystem.${how}("${mode}")`,
+    origin: 'config',
+    evidence: `iwsdk.config.json world.xr.mode = ${JSON.stringify(xr.mode ?? 'vr')}`,
+  });
   for (const [name, v] of Object.entries(xr.features ?? {})) {
     if (v === false || v === undefined || v === null) continue;
     const feature = IWSDK_FEATURES[name] ?? name;
-    const required = typeof v === 'object' && (v as { required?: unknown }).required === true;
-    out.push({ key: `XR feature ${feature} (${required ? 'required' : 'optional'})`, origin: 'config', evidence: `iwsdk.config.json world.xr.features.${name} = ${JSON.stringify(v)}` });
+    const required =
+      typeof v === 'object' && (v as { required?: unknown }).required === true;
+    out.push({
+      key: `XR feature ${feature} (${required ? 'required' : 'optional'})`,
+      origin: 'config',
+      evidence: `iwsdk.config.json world.xr.features.${name} = ${JSON.stringify(v)}`,
+    });
   }
   return out;
 }
@@ -365,11 +516,13 @@ export function stripComments(src: string): string {
   let depth = 0;
   let prevSig = ''; // last significant (non-space) character emitted, to tell regex from division
   const regexAllowedAfter = /[(,=:[!&|?{};+\-*%<>~^]|^$/;
-  const keywordBefore = /\b(return|typeof|case|do|else|in|of|new|delete|void|throw|instanceof|yield|await)\s*$/;
+  const keywordBefore =
+    /\b(return|typeof|case|do|else|in|of|new|delete|void|throw|instanceof|yield|await)\s*$/;
   const readString = (q: string) => {
     const start = i;
     i++;
-    while (i < n && src[i] !== q && src[i] !== '\n') i += src[i] === '\\' ? 2 : 1;
+    while (i < n && src[i] !== q && src[i] !== '\n')
+      i += src[i] === '\\' ? 2 : 1;
     i++;
     out += src.slice(start, i);
   };
@@ -403,7 +556,9 @@ export function stripComments(src: string): string {
     if (c === '/' && d === '*') {
       const end = src.indexOf('*/', i + 2);
       const body = src.slice(i, end < 0 ? n : end + 2);
-      out += body.replace(/[^\n]/g, '').length ? body.replace(/[^\n]/g, '') : ' ';
+      out += body.replace(/[^\n]/g, '').length
+        ? body.replace(/[^\n]/g, '')
+        : ' ';
       i = end < 0 ? n : end + 2;
       continue;
     }
@@ -428,7 +583,10 @@ export function stripComments(src: string): string {
       }
       depth--;
     }
-    if (c === '/' && (regexAllowedAfter.test(prevSig) || keywordBefore.test(out.slice(-12)))) {
+    if (
+      c === '/' &&
+      (regexAllowedAfter.test(prevSig) || keywordBefore.test(out.slice(-12)))
+    ) {
       // a regular-expression literal: copy through the closing slash (classes may contain '/')
       const start = i;
       i++;
@@ -461,7 +619,18 @@ const NOT_APP = /\.(test|spec|config)\.|\.d\.ts$/;
 function appSourceFiles(projectRoot: string): string[] {
   const out: string[] = [];
   const root = path.resolve(projectRoot);
-  const skip = new Set(['node_modules', 'dist', 'dist-metavr', 'build', 'public', '.git', 'test', 'tests', '__tests__', 'coverage']);
+  const skip = new Set([
+    'node_modules',
+    'dist',
+    'dist-metavr',
+    'build',
+    'public',
+    '.git',
+    'test',
+    'tests',
+    '__tests__',
+    'coverage',
+  ]);
   const visit = (d: string, depth: number) => {
     let names: string[];
     try {
@@ -480,7 +649,12 @@ function appSourceFiles(projectRoot: string): string[] {
       }
       if (st.isDirectory()) {
         if (depth < 8) visit(p, depth + 1);
-      } else if (SCRIPT.test(f) && !NOT_APP.test(f) && st.size < 2 * 1024 * 1024) out.push(p);
+      } else if (
+        SCRIPT.test(f) &&
+        !NOT_APP.test(f) &&
+        st.size < 2 * 1024 * 1024
+      )
+        out.push(p);
     }
   };
   const src = path.join(root, 'src');
@@ -493,10 +667,19 @@ function appSourceFiles(projectRoot: string): string[] {
     top = [];
   }
   for (const f of top) {
-    if (f.startsWith('.') || !/\.m?[jt]sx?$/i.test(f) || NOT_APP.test(f) || /^(vite|vitest|eslint|prettier|babel|webpack|rollup|playwright|jest|postcss|tailwind)\b/.test(f)) continue;
+    if (
+      f.startsWith('.') ||
+      !/\.m?[jt]sx?$/i.test(f) ||
+      NOT_APP.test(f) ||
+      /^(vite|vitest|eslint|prettier|babel|webpack|rollup|playwright|jest|postcss|tailwind)\b/.test(
+        f,
+      )
+    )
+      continue;
     const p = path.join(root, f);
     try {
-      if (statSync(p).isFile() && statSync(p).size < 2 * 1024 * 1024) out.push(p);
+      if (statSync(p).isFile() && statSync(p).size < 2 * 1024 * 1024)
+        out.push(p);
     } catch {
       /* skip */
     }
@@ -511,13 +694,21 @@ function appSourceFiles(projectRoot: string): string[] {
     } catch {
       html = '';
     }
-    for (const m of html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi)) {
+    for (const m of html.matchAll(
+      /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi,
+    )) {
       const ref = m[1]!.split(/[?#]/)[0]!;
       if (/^([a-z]+:)?\/\//i.test(ref)) continue;
       const file = path.resolve(root, ref.replace(/^\//, ''));
-      if (!file.startsWith(root + path.sep) || /[\\/]node_modules[\\/]/.test(file) || !existsSync(file)) continue;
+      if (
+        !file.startsWith(root + path.sep) ||
+        /[\\/]node_modules[\\/]/.test(file) ||
+        !existsSync(file)
+      )
+        continue;
       const dir = path.dirname(file);
-      if (dir !== root && !dir.startsWith(src + path.sep) && dir !== src) visit(dir, 0);
+      if (dir !== root && !dir.startsWith(src + path.sep) && dir !== src)
+        visit(dir, 0);
       else out.push(file);
     }
   }
@@ -525,7 +716,10 @@ function appSourceFiles(projectRoot: string): string[] {
 }
 
 /** Signals from the app's own source. */
-export function sourceSignals(projectRoot: string, signals: ScanSignal[] = appSourceCatalogue()): AppSignal[] {
+export function sourceSignals(
+  projectRoot: string,
+  signals: ScanSignal[] = appSourceCatalogue(),
+): AppSignal[] {
   const out = new Map<string, AppSignal>();
   const texts: Array<{ rel: string; text: string }> = [];
   const put = (a: AppSignal) => {
@@ -541,7 +735,10 @@ export function sourceSignals(projectRoot: string, signals: ScanSignal[] = appSo
     // inline scripts only (an <video> tag in the markup still counts as a media element)
     const html = file.endsWith('.html');
     const markup = html ? text : '';
-    if (html) text = [...text.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).join('\n;\n');
+    if (html)
+      text = [...text.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+        .map((m) => m[1])
+        .join('\n;\n');
     text = stripComments(text);
     const rel = path.relative(projectRoot, file);
     texts.push({ rel, text });
@@ -552,17 +749,31 @@ export function sourceSignals(projectRoot: string, signals: ScanSignal[] = appSo
       // `new Audio(` of a locally bound Audio (three.js) is not the <audio> element
       if (sig.key === 'new Audio' && bindsLocally('Audio', text)) continue;
       const line = text.slice(0, m.index).split('\n').length;
-      put({ key: sig.key, origin: 'source', evidence: `${rel}:${line}: ${text.slice(Math.max(0, m.index - 30), m.index + 50).replace(/\s+/g, ' ').trim()}` });
+      put({
+        key: sig.key,
+        origin: 'source',
+        evidence: `${rel}:${line}: ${text
+          .slice(Math.max(0, m.index - 30), m.index + 50)
+          .replace(/\s+/g, ' ')
+          .trim()}`,
+      });
     }
     for (const a of codeOptionSignals(text, rel)) put(a);
-    for (const a of mediaPlaybackSignals(html && /<(video|audio)\b/i.test(markup) ? `${text}\n<video>` : text, rel)) put(a);
+    for (const a of mediaPlaybackSignals(
+      html && /<(video|audio)\b/i.test(markup) ? `${text}\n<video>` : text,
+      rel,
+    ))
+      put(a);
   }
   // feature checks anywhere in the app's source
   for (const a of out.values()) {
     for (const { rel, text } of texts) {
       const g = guardFor(a.key, text);
       if (!g) continue;
-      a.guarded = `${rel}:${text.slice(0, g.index).split('\n').length}: ${text.slice(Math.max(0, g.index - 10), g.index + 50).replace(/\s+/g, ' ').trim()}`;
+      a.guarded = `${rel}:${text.slice(0, g.index).split('\n').length}: ${text
+        .slice(Math.max(0, g.index - 10), g.index + 50)
+        .replace(/\s+/g, ' ')
+        .trim()}`;
       break;
     }
   }

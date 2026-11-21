@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+
+  This source code is licensed under the MIT license found in the
+  LICENSE file in the root directory of this source tree.
+-->
 <!-- @iwer/native template manifest (M1). ${...} placeholders are filled by build-apk.mjs (and by the Node packer
      in M5, which rewrites the binary manifest instead). No Java/Kotlin code: the activity is the framework's
      NativeActivity and loads libiwernative.so. M1 launches as a 2D panel; the XR module (M3) adds the

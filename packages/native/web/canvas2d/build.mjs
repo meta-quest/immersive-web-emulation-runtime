@@ -18,7 +18,11 @@ const require = createRequire(join(here, '../glue/package.json'));
 const { build } = require('esbuild');
 mkdirSync(join(here, 'dist'), { recursive: true });
 for (const minify of [false, true]) {
-  const outfile = join(here, 'dist', minify ? 'canvas2d.min.js' : 'canvas2d.js');
+  const outfile = join(
+    here,
+    'dist',
+    minify ? 'canvas2d.min.js' : 'canvas2d.js',
+  );
   await build({
     entryPoints: [join(here, 'entry.ts')],
     bundle: true,
@@ -31,5 +35,7 @@ for (const minify of [false, true]) {
     outfile,
   });
   const bytes = readFileSync(outfile);
-  console.log(`${outfile}: ${bytes.length} B, ${gzipSync(bytes).length} B gzip`);
+  console.log(
+    `${outfile}: ${bytes.length} B, ${gzipSync(bytes).length} B gzip`,
+  );
 }

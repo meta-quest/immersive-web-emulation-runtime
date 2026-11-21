@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Spatial anchors (XR-ANCHOR-1). See xr_anchors.h for the threading model. Sequences, from the extension
 // specifications and Meta's OpenXR SDK sample XrSpatialAnchor:
 //   create   xrCreateSpatialAnchorFB (base space, pose, frame time) -> XrEventDataSpatialAnchorCreateCompleteFB (space,

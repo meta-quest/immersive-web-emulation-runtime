@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Decode cost per format and option set on the decode pool's thread (the JS thread pays none of it: PROC-2,
 // REG-16). Usage: iwn_image_bench [size=2048] [iterations=5]
 // Peak memory of one decode (a fresh process per measurement; VmHWM is process-wide):

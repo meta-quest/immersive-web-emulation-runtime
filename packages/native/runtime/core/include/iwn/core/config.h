@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The generated runtime config (assets/iwn/config.json), V8-free. Written by the packer (M5) or the template build
 // script; every field has a default so an APK without the file still boots the dist under assets/app/.
 //

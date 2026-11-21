@@ -47,7 +47,14 @@ export interface Canvas2DNatives {
   /** Reallocates and clears. False when the size cannot be allocated (the surface is then 0x0). */
   resize(surface: NativeSurface, width: number, height: number): boolean;
 
-  fill(s: NativeSurface, state: Float64Array, cmds: Float32Array, len: number, paint: NativePaint | null, clip: NativeClip | null): void;
+  fill(
+    s: NativeSurface,
+    state: Float64Array,
+    cmds: Float32Array,
+    len: number,
+    paint: NativePaint | null,
+    clip: NativeClip | null,
+  ): void;
   stroke(
     s: NativeSurface,
     state: Float64Array,
@@ -57,11 +64,33 @@ export interface Canvas2DNatives {
     clip: NativeClip | null,
     dash: Float32Array | null,
   ): void;
-  clearRect(s: NativeSurface, state: Float64Array, x: number, y: number, w: number, h: number, clip: NativeClip | null): void;
+  clearRect(
+    s: NativeSurface,
+    state: Float64Array,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    clip: NativeClip | null,
+  ): void;
   /** A new clip (parent intersected with the path). `reuse`: an unreferenced clip handle to write the result into
    * (returned instead of a new handle); natives without reuse support ignore it. */
-  clip(s: NativeSurface, state: Float64Array, cmds: Float32Array, len: number, parent: NativeClip | null, reuse?: NativeClip | null): NativeClip;
-  isPointInPath(s: NativeSurface, state: Float64Array, cmds: Float32Array, len: number, x: number, y: number): boolean;
+  clip(
+    s: NativeSurface,
+    state: Float64Array,
+    cmds: Float32Array,
+    len: number,
+    parent: NativeClip | null,
+    reuse?: NativeClip | null,
+  ): NativeClip;
+  isPointInPath(
+    s: NativeSurface,
+    state: Float64Array,
+    cmds: Float32Array,
+    len: number,
+    x: number,
+    y: number,
+  ): boolean;
   isPointInStroke(
     s: NativeSurface,
     state: Float64Array,
@@ -119,7 +148,14 @@ export interface Canvas2DNatives {
     clip: NativeClip | null,
   ): boolean;
 
-  getImageData(s: NativeSurface, x: number, y: number, w: number, h: number, out: Uint8ClampedArray): void;
+  getImageData(
+    s: NativeSurface,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    out: Uint8ClampedArray,
+  ): void;
   putImageData(
     s: NativeSurface,
     data: Uint8ClampedArray,
@@ -132,12 +168,40 @@ export interface Canvas2DNatives {
     dirtyWidth: number,
     dirtyHeight: number,
   ): void;
-  readPixels(s: NativeSurface, out: Uint8Array | Uint8ClampedArray, premultiplied: boolean, flipY: boolean): void;
-  encode(s: NativeSurface, mime: string, quality: number): [ArrayBuffer, string] | null;
+  readPixels(
+    s: NativeSurface,
+    out: Uint8Array | Uint8ClampedArray,
+    premultiplied: boolean,
+    flipY: boolean,
+  ): void;
+  encode(
+    s: NativeSurface,
+    mime: string,
+    quality: number,
+  ): [ArrayBuffer, string] | null;
 
-  createGradient(kind: number, p0: number, p1: number, p2: number, p3: number, p4: number, p5: number): NativeGradient;
-  addColorStop(g: NativeGradient, offset: number, r: number, gr: number, b: number, a: number): void;
-  createPatternFromSurface(src: NativeSurface, repeatX: boolean, repeatY: boolean): NativePattern;
+  createGradient(
+    kind: number,
+    p0: number,
+    p1: number,
+    p2: number,
+    p3: number,
+    p4: number,
+    p5: number,
+  ): NativeGradient;
+  addColorStop(
+    g: NativeGradient,
+    offset: number,
+    r: number,
+    gr: number,
+    b: number,
+    a: number,
+  ): void;
+  createPatternFromSurface(
+    src: NativeSurface,
+    repeatX: boolean,
+    repeatY: boolean,
+  ): NativePattern;
   createPatternFromPixels(
     data: Uint8Array | Uint8ClampedArray,
     width: number,
@@ -146,8 +210,20 @@ export interface Canvas2DNatives {
     repeatX: boolean,
     repeatY: boolean,
   ): NativePattern;
-  createPatternFromExternal?(src: object, repeatX: boolean, repeatY: boolean): NativePattern | null;
-  setPatternTransform(p: NativePattern, a: number, b: number, c: number, d: number, e: number, f: number): void;
+  createPatternFromExternal?(
+    src: object,
+    repeatX: boolean,
+    repeatY: boolean,
+  ): NativePattern | null;
+  setPatternTransform(
+    p: NativePattern,
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+  ): void;
 
   /** Returns a face, or an error message string. */
   loadFace(bytes: ArrayBuffer | Uint8Array, index: number): NativeFace | string;
@@ -173,7 +249,14 @@ export interface Canvas2DNatives {
     language: string,
   ): NativeFont;
   /** Writes TEXT_METRICS_SIZE doubles (see TM_* indices). */
-  measureText(font: NativeFont, text: string, align: number, baseline: number, direction: number, out: Float64Array): void;
+  measureText(
+    font: NativeFont,
+    text: string,
+    align: number,
+    baseline: number,
+    direction: number,
+    out: Float64Array,
+  ): void;
   fillText(
     s: NativeSurface,
     state: Float64Array,
@@ -273,7 +356,14 @@ export const COMPOSITE_OPS = [
 ] as const;
 
 export const TEXT_ALIGNS = ['start', 'end', 'left', 'right', 'center'] as const;
-export const TEXT_BASELINES = ['top', 'hanging', 'middle', 'alphabetic', 'ideographic', 'bottom'] as const;
+export const TEXT_BASELINES = [
+  'top',
+  'hanging',
+  'middle',
+  'alphabetic',
+  'ideographic',
+  'bottom',
+] as const;
 export const LINE_CAPS = ['butt', 'round', 'square'] as const;
 export const LINE_JOINS = ['miter', 'round', 'bevel'] as const;
 

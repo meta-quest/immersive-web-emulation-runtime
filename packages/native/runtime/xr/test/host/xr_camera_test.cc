@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Host tests of src/android/xr_camera.cc (the passthrough cameras, XR-CAM-1) against the fake camera service of
 // fake_camera.h. CameraService is a process singleton that makes its camera manager once, so the permission test
 // comes first (tests run in the order they are written).

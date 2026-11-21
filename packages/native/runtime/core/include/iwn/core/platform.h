@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Process-wide V8 setup (Android). The core's v8::Platform delegates worker threads and jobs to V8's default
 // platform but routes each registered isolate's foreground tasks into that isolate's EventLoop, so GC steps,
 // compile finalisation and Atomics.waitAsync wake the loop instead of waiting to be pumped.

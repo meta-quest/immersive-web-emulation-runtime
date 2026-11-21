@@ -31,12 +31,15 @@ let override: typeof ReadableStream | null = null;
 
 export function getReadableStream(): typeof ReadableStream {
   if (override) return override;
-  const g = (globalThis as { ReadableStream?: typeof ReadableStream }).ReadableStream;
+  const g = (globalThis as { ReadableStream?: typeof ReadableStream })
+    .ReadableStream;
   return g ?? (ponyfill.ReadableStream as unknown as typeof ReadableStream);
 }
 
 /** Tests: force the polyfill (or another implementation). */
-export function setReadableStreamForTests(rs: typeof ReadableStream | null): void {
+export function setReadableStreamForTests(
+  rs: typeof ReadableStream | null,
+): void {
   override = rs;
 }
 
@@ -48,7 +51,12 @@ export function installStreams(g: typeof globalThis): string[] {
   const src = ponyfill as unknown as Record<string, unknown>;
   for (const name of NAMES) {
     if (typeof target[name] !== 'function' && typeof src[name] === 'function') {
-      Object.defineProperty(g, name, { value: src[name], writable: true, configurable: true, enumerable: false });
+      Object.defineProperty(g, name, {
+        value: src[name],
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
       installed.push(name);
     }
   }

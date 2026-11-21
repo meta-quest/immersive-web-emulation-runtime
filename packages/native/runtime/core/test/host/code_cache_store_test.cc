@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // CC-1, CC-4: hit/miss/stale/corrupt, version stamp wipe, LRU bound.
 #include <sys/stat.h>
 #include <unistd.h>

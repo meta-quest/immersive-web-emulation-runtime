@@ -20,10 +20,22 @@ import {
   InnerBody,
 } from './body.ts';
 import { type NetEnv, utf8Encode } from './env.ts';
-import { cloneHeaders, fillHeaders, Headers, setGuard, type HeadersInitLike } from './headers.ts';
+import {
+  cloneHeaders,
+  fillHeaders,
+  Headers,
+  setGuard,
+  type HeadersInitLike,
+} from './headers.ts';
 import { getRequestEnv } from './request.ts';
 
-export type ResponseType = 'basic' | 'cors' | 'default' | 'error' | 'opaque' | 'opaqueredirect';
+export type ResponseType =
+  | 'basic'
+  | 'cors'
+  | 'default'
+  | 'error'
+  | 'opaque'
+  | 'opaqueredirect';
 
 export interface ResponseInitLike {
   status?: number;
@@ -53,22 +65,33 @@ function stateOf(r: Response): ResponseState {
   return s;
 }
 
-function initialize(state: ResponseState, init: ResponseInitLike, body: { body: InnerBody; type: string | null } | null): void {
+function initialize(
+  state: ResponseState,
+  init: ResponseInitLike,
+  body: { body: InnerBody; type: string | null } | null,
+): void {
   const status = init.status === undefined ? 200 : Number(init.status);
   if (!Number.isInteger(status) || status < 200 || status > 599) {
-    throw new RangeError(`Failed to construct 'Response': The status provided (${init.status}) is outside the range [200, 599].`);
+    throw new RangeError(
+      `Failed to construct 'Response': The status provided (${init.status}) is outside the range [200, 599].`,
+    );
   }
-  const statusText = init.statusText === undefined ? '' : String(init.statusText);
-  if (!REASON.test(statusText)) throw new TypeError("Failed to construct 'Response': Invalid statusText");
+  const statusText =
+    init.statusText === undefined ? '' : String(init.statusText);
+  if (!REASON.test(statusText))
+    throw new TypeError("Failed to construct 'Response': Invalid statusText");
   state.status = status;
   state.statusText = statusText;
   if (init.headers !== undefined) fillHeaders(state.headers, init.headers);
   if (body) {
     if (NULL_BODY_STATUS.includes(status)) {
-      throw new TypeError("Failed to construct 'Response': Response with null body status cannot have body");
+      throw new TypeError(
+        "Failed to construct 'Response': Response with null body status cannot have body",
+      );
     }
     state.body = body.body;
-    if (body.type !== null && !state.headers.has('content-type')) state.headers.append('content-type', body.type);
+    if (body.type !== null && !state.headers.has('content-type'))
+      state.headers.append('content-type', body.type);
   }
 }
 
@@ -89,11 +112,21 @@ export class Response implements BodyOwner {
       env,
     };
     STATE.set(this, state);
-    initialize(state, init, body === null || body === undefined ? null : extractBody(body, env));
+    initialize(
+      state,
+      init,
+      body === null || body === undefined ? null : extractBody(body, env),
+    );
   }
 
   static error(): Response {
-    const r = makeResponse({ type: 'error', status: 0, statusText: '', body: null, headersGuard: 'immutable' });
+    const r = makeResponse({
+      type: 'error',
+      status: 0,
+      statusText: '',
+      body: null,
+      headersGuard: 'immutable',
+    });
     return r;
   }
 
@@ -103,10 +136,21 @@ export class Response implements BodyOwner {
     try {
       parsed = env ? new URL(String(url), env.baseURL()) : new URL(String(url));
     } catch {
-      throw new TypeError(`Failed to execute 'redirect' on 'Response': Invalid URL "${String(url)}"`);
+      throw new TypeError(
+        `Failed to execute 'redirect' on 'Response': Invalid URL "${String(url)}"`,
+      );
     }
-    if (!REDIRECT_STATUS.includes(status)) throw new RangeError(`Failed to execute 'redirect' on 'Response': Invalid status code ${status}`);
-    const r = makeResponse({ type: 'default', status, statusText: '', body: null, headersGuard: 'immutable' });
+    if (!REDIRECT_STATUS.includes(status))
+      throw new RangeError(
+        `Failed to execute 'redirect' on 'Response': Invalid status code ${status}`,
+      );
+    const r = makeResponse({
+      type: 'default',
+      status,
+      statusText: '',
+      body: null,
+      headersGuard: 'immutable',
+    });
     stateOf(r).headers = (() => {
       const h = new Headers({ location: parsed.href });
       setGuard(h, 'immutable');
@@ -117,13 +161,28 @@ export class Response implements BodyOwner {
 
   static json(data: unknown, init: ResponseInitLike = {}): Response {
     const text = JSON.stringify(data);
-    if (text === undefined) throw new TypeError("Failed to execute 'json' on 'Response': The data is not JSON serializable");
+    if (text === undefined)
+      throw new TypeError(
+        "Failed to execute 'json' on 'Response': The data is not JSON serializable",
+      );
     const r = Object.create(Response.prototype) as Response;
     const headers = new Headers();
     setGuard(headers, 'response');
-    const state: ResponseState = { type: 'default', status: 200, statusText: '', headers, body: null, urlList: [], redirected: false, env: getRequestEnv() };
+    const state: ResponseState = {
+      type: 'default',
+      status: 200,
+      statusText: '',
+      headers,
+      body: null,
+      urlList: [],
+      redirected: false,
+      env: getRequestEnv(),
+    };
     STATE.set(r, state);
-    initialize(state, init ?? {}, { body: InnerBody.fromBytes(utf8Encode(text)), type: 'application/json' });
+    initialize(state, init ?? {}, {
+      body: InnerBody.fromBytes(utf8Encode(text)),
+      type: 'application/json',
+    });
     return r;
   }
 
@@ -161,9 +220,17 @@ export class Response implements BodyOwner {
 
   clone(): Response {
     const s = stateOf(this);
-    if (s.body?.unusable()) throw new TypeError("Failed to execute 'clone' on 'Response': Response body is already used");
+    if (s.body?.unusable())
+      throw new TypeError(
+        "Failed to execute 'clone' on 'Response': Response body is already used",
+      );
     const r = Object.create(Response.prototype) as Response;
-    STATE.set(r, { ...s, headers: cloneHeaders(s.headers), body: s.body ? s.body.tee() : null, urlList: [...s.urlList] });
+    STATE.set(r, {
+      ...s,
+      headers: cloneHeaders(s.headers),
+      body: s.body ? s.body.tee() : null,
+      urlList: [...s.urlList],
+    });
     return r;
   }
 

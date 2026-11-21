@@ -46,13 +46,21 @@ function corpusBytes(): number[][] {
     [0x41],
   ];
   // Valid multi-byte text and random bytes biased towards UTF-8 lead/continuation bytes.
-  out.push(Array.from(Buffer.from('héllo wörld — 日本語 😀 \u{10FFFF}', 'utf8')));
+  out.push(
+    Array.from(Buffer.from('héllo wörld — 日本語 😀 \u{10FFFF}', 'utf8')),
+  );
   for (let i = 0; i < 300; i++) {
     const n = Math.floor(r() * 24);
     const a: number[] = [];
     for (let j = 0; j < n; j++) {
       const k = r();
-      a.push(k < 0.3 ? Math.floor(r() * 0x80) : k < 0.6 ? 0x80 + Math.floor(r() * 0x40) : 0xc0 + Math.floor(r() * 0x40));
+      a.push(
+        k < 0.3
+          ? Math.floor(r() * 0x80)
+          : k < 0.6
+            ? 0x80 + Math.floor(r() * 0x40)
+            : 0xc0 + Math.floor(r() * 0x40),
+      );
     }
     out.push(a);
   }
@@ -61,13 +69,31 @@ function corpusBytes(): number[][] {
 
 function corpusStrings(): string[] {
   const r = rng(7);
-  const out = ['', 'abc', '\uD800', '\uDC00', 'a\uD800b', '😀', '\uDE00\uD83D', 'é日😀', '\u0000\u007f\u0080߿ࠀ￿'];
+  const out = [
+    '',
+    'abc',
+    '\uD800',
+    '\uDC00',
+    'a\uD800b',
+    '😀',
+    '\uDE00\uD83D',
+    'é日😀',
+    '\u0000\u007f\u0080߿ࠀ￿',
+  ];
   for (let i = 0; i < 200; i++) {
     let s = '';
     const n = Math.floor(r() * 20);
     for (let j = 0; j < n; j++) {
       const k = r();
-      s += String.fromCharCode(k < 0.4 ? Math.floor(r() * 0x80) : k < 0.6 ? Math.floor(r() * 0x800) : k < 0.8 ? 0xd800 + Math.floor(r() * 0x800) : Math.floor(r() * 0x10000));
+      s += String.fromCharCode(
+        k < 0.4
+          ? Math.floor(r() * 0x80)
+          : k < 0.6
+            ? Math.floor(r() * 0x800)
+            : k < 0.8
+              ? 0xd800 + Math.floor(r() * 0x800)
+              : Math.floor(r() * 0x10000),
+      );
     }
     out.push(s);
   }
@@ -115,17 +141,38 @@ describe('TextDecoder (NET-16)', () => {
   test('windows-1252 decodes every byte per the Encoding Standard index', async () => {
     // index-windows-1252.txt, pointers 0..31 (bytes 0x80..0x9F); every other byte maps to itself.
     const high = [
-      0x20ac, 0x81, 0x201a, 0x192, 0x201e, 0x2026, 0x2020, 0x2021, 0x2c6, 0x2030, 0x160, 0x2039, 0x152, 0x8d, 0x17d, 0x8f,
-      0x90, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x2dc, 0x2122, 0x161, 0x203a, 0x153, 0x9d, 0x17e, 0x178,
+      0x20ac, 0x81, 0x201a, 0x192, 0x201e, 0x2026, 0x2020, 0x2021, 0x2c6,
+      0x2030, 0x160, 0x2039, 0x152, 0x8d, 0x17d, 0x8f, 0x90, 0x2018, 0x2019,
+      0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x2dc, 0x2122, 0x161, 0x203a,
+      0x153, 0x9d, 0x17e, 0x178,
     ];
-    const want = Array.from({ length: 256 }, (_, b) => (b >= 0x80 && b < 0xa0 ? high[b - 0x80]! : b));
+    const want = Array.from({ length: 256 }, (_, b) =>
+      b >= 0x80 && b < 0xa0 ? high[b - 0x80]! : b,
+    );
     const { run } = await createGlueContext();
-    for (const label of ['windows-1252', 'latin1', 'ascii', 'iso-8859-1', 'us-ascii']) {
-      const got = run<string>(`new TextDecoder('${label}').decode(new Uint8Array(256).map((_, i) => i))`);
-      assert.deepEqual(Array.from(got, (c) => c.codePointAt(0)), want, label);
+    for (const label of [
+      'windows-1252',
+      'latin1',
+      'ascii',
+      'iso-8859-1',
+      'us-ascii',
+    ]) {
+      const got = run<string>(
+        `new TextDecoder('${label}').decode(new Uint8Array(256).map((_, i) => i))`,
+      );
+      assert.deepEqual(
+        Array.from(got, (c) => c.codePointAt(0)),
+        want,
+        label,
+      );
     }
     // windows-1252 has no BOM handling and never fails.
-    assert.equal(run(`new TextDecoder('latin1', { fatal: true }).decode(new Uint8Array([0xef, 0xbb, 0xbf]))`), '\u00ef\u00bb\u00bf');
+    assert.equal(
+      run(
+        `new TextDecoder('latin1', { fatal: true }).decode(new Uint8Array([0xef, 0xbb, 0xbf]))`,
+      ),
+      '\u00ef\u00bb\u00bf',
+    );
   });
 
   test('labels and errors match Node', async () => {
@@ -184,7 +231,9 @@ describe('TextEncoder (NET-16)', () => {
         decodeUtf8(bytes: Uint8Array, fatal: boolean) {
           calls.decodeUtf8++;
           try {
-            return new TextDecoder('utf-8', { fatal, ignoreBOM: true }).decode(bytes);
+            return new TextDecoder('utf-8', { fatal, ignoreBOM: true }).decode(
+              bytes,
+            );
           } catch {
             return null;
           }

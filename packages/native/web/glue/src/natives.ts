@@ -93,7 +93,9 @@ export interface GlueNatives {
    * are the Blob's own bytes, not a copy; the loader copies them) or `null`.
    */
   core?: {
-    setBlobResolver?(resolver: (url: string) => { bytes: Uint8Array; type: string } | null): void;
+    setBlobResolver?(
+      resolver: (url: string) => { bytes: Uint8Array; type: string } | null,
+    ): void;
   };
   /**
    * The generated app config's glue section (an object or a JSON string), set by the host before the

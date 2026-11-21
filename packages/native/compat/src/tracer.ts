@@ -73,7 +73,12 @@ export interface TracerConfig {
    * `navigator` / `crypto` members matching `absent` (and not in `keep`) are deleted before the app runs, and
    * `getContext` returns null for types not in `contexts`.
    */
-  trim?: { absent: string[]; keep: string[]; contexts: string[]; stubs?: string[] };
+  trim?: {
+    absent: string[];
+    keep: string[];
+    contexts: string[];
+    stubs?: string[];
+  };
   /**
    * WebSocket gating (NET-5) without Playwright's page-side WebSocket mock (whose own calls would be charged to
    * the app): a WebSocket to an origin that is neither the page's nor in `allow` is opened to `url` + the
@@ -159,7 +164,15 @@ export function installApiTracer(cfg: TracerConfig): void {
   function rec(key: string) {
     let r = recs.get(key);
     if (!r) {
-      r = { calls: 0, xrCalls: 0, app: 0, tool: 0, none: 0, site: undefined, phase: undefined };
+      r = {
+        calls: 0,
+        xrCalls: 0,
+        app: 0,
+        tool: 0,
+        none: 0,
+        site: undefined,
+        phase: undefined,
+      };
       recs.set(key, r);
     }
     return r;
@@ -193,12 +206,23 @@ export function installApiTracer(cfg: TracerConfig): void {
       }
       if (!file) file = named;
       if (!file) continue;
-      if (file.indexOf(cfg.selfMarker) >= 0 || named.indexOf(cfg.selfMarker) >= 0) continue;
-      if (file.indexOf(cfg.toolMarker) >= 0 || named.indexOf(cfg.toolMarker) >= 0) return 'tool';
+      if (
+        file.indexOf(cfg.selfMarker) >= 0 ||
+        named.indexOf(cfg.selfMarker) >= 0
+      )
+        continue;
+      if (
+        file.indexOf(cfg.toolMarker) >= 0 ||
+        named.indexOf(cfg.toolMarker) >= 0
+      )
+        return 'tool';
       if (/^(https?|blob|data|file):/.test(file)) {
         let short = file;
         if (short.startsWith('data:')) short = 'data:' + short.slice(5, 30);
-        else short = short.replace(/^[a-z]+:\/\/[^/]+/, '').replace(/^blob:[a-z]+:\/\/[^/]+/, 'blob:');
+        else
+          short = short
+            .replace(/^[a-z]+:\/\/[^/]+/, '')
+            .replace(/^blob:[a-z]+:\/\/[^/]+/, 'blob:');
         lastSite = short + ':' + c.getLineNumber() + ':' + c.getColumnNumber();
         return 'app';
       }
@@ -264,7 +288,8 @@ export function installApiTracer(cfg: TracerConfig): void {
     if (x === g) return cfg.role === 'main' ? 'Window' : 'WorkerGlobalScope';
     try {
       const t = apply(objToString, x, []).slice(8, -1);
-      if (t && t !== 'Object' && t !== 'Function' && t !== 'EventTarget') return t;
+      if (t && t !== 'Object' && t !== 'Function' && t !== 'EventTarget')
+        return t;
       // JS subclasses of EventTarget inherit its tag. The IWER emulator's XR* classes keep their names (on the
       // headset IWER host mode defines them); any other subclass (the app's own) counts as EventTarget, since that
       // is what the runtime has to provide for it
@@ -273,7 +298,11 @@ export function installApiTracer(cfg: TracerConfig): void {
         // only the real XR interfaces (globals, as IWER installs them); an app class that happens to be named XR* is
         // an app subclass of EventTarget like any other
         const gv = g[c.name];
-        if (gv && (gv === c || originals.get(gv) === c || originals.get(c) === gv)) return c.name;
+        if (
+          gv &&
+          (gv === c || originals.get(gv) === c || originals.get(c) === gv)
+        )
+          return c.name;
         return 'EventTarget';
       }
       if (t === 'EventTarget') return t;
@@ -298,7 +327,8 @@ export function installApiTracer(cfg: TracerConfig): void {
     } catch {
       return 'url:?';
     }
-    if (s.startsWith('data:')) return 'data:' + (s.slice(5).split(/[;,]/)[0] || 'text/plain');
+    if (s.startsWith('data:'))
+      return 'data:' + (s.slice(5).split(/[;,]/)[0] || 'text/plain');
     if (s.startsWith('blob:')) return 'blob:';
     let abs: any;
     try {
@@ -308,18 +338,29 @@ export function installApiTracer(cfg: TracerConfig): void {
     }
     const ext = (abs.pathname.match(/\.([a-z0-9]{1,6})$/i) || [])[1];
     const same = g.location && abs.origin === g.location.origin;
-    return (same ? 'same-origin' : 'cross-origin ' + abs.origin) + (ext ? ' .' + ext.toLowerCase() : '');
+    return (
+      (same ? 'same-origin' : 'cross-origin ' + abs.origin) +
+      (ext ? ' .' + ext.toLowerCase() : '')
+    );
   }
-  function gateWebSocket(args: any[], gate: { url: string; allow: string[] }): any[] {
+  function gateWebSocket(
+    args: any[],
+    gate: { url: string; allow: string[] },
+  ): any[] {
     let u: any;
     try {
       u = new URLCtor(String(args[0]), g.location.href);
     } catch {
       return args; // the native constructor throws its SyntaxError
     }
-    if (u.protocol === 'http:' || u.protocol === 'https:') u.protocol = u.protocol === 'http:' ? 'ws:' : 'wss:';
+    if (u.protocol === 'http:' || u.protocol === 'https:')
+      u.protocol = u.protocol === 'http:' ? 'ws:' : 'wss:';
     // what the WebSocket constructor rejects (a non-ws scheme, a fragment) goes to it unchanged, so it throws SyntaxError
-    if ((u.protocol !== 'ws:' && u.protocol !== 'wss:') || String(u.href).indexOf('#') >= 0) return args;
+    if (
+      (u.protocol !== 'ws:' && u.protocol !== 'wss:') ||
+      String(u.href).indexOf('#') >= 0
+    )
+      return args;
     const origin = u.origin;
     const own = String(g.location.origin).replace(/^http/, 'ws');
     if (origin === own) return args;
@@ -329,19 +370,32 @@ export function installApiTracer(cfg: TracerConfig): void {
     for (const a of gate.allow) {
       if (a === httpOrigin) return args;
       const m = /^(https?):\/\/\*\.(.+)$/.exec(a);
-      if (m && m[1] === httpScheme && u.hostname.endsWith('.' + m[2])) return args;
+      if (m && m[1] === httpScheme && u.hostname.endsWith('.' + m[2]))
+        return args;
     }
     return [gate.url + encodeURIComponent(u.href), ...args.slice(1)];
   }
   function audioFormat(buf: any): string {
     try {
-      const u8 = buf instanceof ArrayBuffer ? new Uint8Array(buf, 0, Math.min(12, buf.byteLength)) : new Uint8Array(buf.buffer, buf.byteOffset, Math.min(12, buf.byteLength));
+      const u8 =
+        buf instanceof ArrayBuffer
+          ? new Uint8Array(buf, 0, Math.min(12, buf.byteLength))
+          : new Uint8Array(
+              buf.buffer,
+              buf.byteOffset,
+              Math.min(12, buf.byteLength),
+            );
       const s = String.fromCharCode(u8[0], u8[1], u8[2], u8[3]);
       if (s === 'OggS') return 'ogg';
       if (s === 'RIFF') return 'wav';
       if (s === 'fLaC') return 'flac';
-      if (s.slice(0, 3) === 'ID3' || (u8[0] === 0xff && (u8[1] & 0xe0) === 0xe0)) return 'mp3';
-      if (String.fromCharCode(u8[4], u8[5], u8[6], u8[7]) === 'ftyp') return 'mp4/aac';
+      if (
+        s.slice(0, 3) === 'ID3' ||
+        (u8[0] === 0xff && (u8[1] & 0xe0) === 0xe0)
+      )
+        return 'mp3';
+      if (String.fromCharCode(u8[4], u8[5], u8[6], u8[7]) === 'ftyp')
+        return 'mp4/aac';
       return 'unknown';
     } catch {
       return 'unknown';
@@ -350,48 +404,98 @@ export function installApiTracer(cfg: TracerConfig): void {
 
   // ---- argument details --------------------------------------------------
   // key of the wrapped member -> fn(this, args, who, result)
-  const details: Record<string, (self: any, a: any[], who: string, res: any) => void> = {};
-  const ctxDetail = (base: string) => (_s: any, a: any[], who: string, res: any) => detail(base + '("' + str(a[0]) + '")' + (res === null ? ' -> null' : ''), who);
-  details['HTMLCanvasElement.getContext()'] = ctxDetail('HTMLCanvasElement.getContext');
-  details['OffscreenCanvas.getContext()'] = ctxDetail('OffscreenCanvas.getContext');
-  const extDetail = (base: string) => (_s: any, a: any[], who: string, res: any) => {
-    detail(base + '("' + str(a[0]) + '")' + (res ? '' : ' -> null'), who);
-    if (res && typeof res === 'object') {
-      const p = getProto(res);
-      if (p && p !== O.prototype && !wrappedProtos.has(p)) wrapProto(p, 'ext:' + str(a[0]));
-    }
-  };
-  details['WebGLRenderingContext.getExtension()'] = extDetail('WebGL.getExtension');
-  details['WebGL2RenderingContext.getExtension()'] = extDetail('WebGL.getExtension');
-  details['Document.createElement()'] = (_s, a, who) => detail('Document.createElement("' + str(a[0]).toLowerCase() + '")', who);
-  details['Document.createElementNS()'] = (_s, a, who) => detail('Document.createElementNS("' + str(a[1]) + '")', who);
-  details['EventTarget.addEventListener()'] = (s, a, who) => detail('on:' + brand(s) + '.' + str(a[0]), who);
-  details['fetch()'] = (_s, a, who) => detail('fetch(' + urlClass(a[0]) + ')', who);
-  details['XMLHttpRequest.open()'] = (_s, a, who) => detail('XMLHttpRequest.open(' + urlClass(a[1]) + ')', who);
-  details['XMLHttpRequest.responseType='] = (_s, a, who) => detail('XMLHttpRequest.responseType="' + str(a[0]) + '"', who);
-  details['HTMLImageElement.src='] = (_s, a, who) => detail('HTMLImageElement.src=(' + urlClass(a[0]) + ')', who);
-  details['HTMLMediaElement.src='] = (s, a, who) => detail(brand(s) + '.src=(' + urlClass(a[0]) + ')', who);
-  details['Window.matchMedia()'] = (_s, a, who) => detail('matchMedia("' + str(a[0]) + '")', who);
+  const details: Record<
+    string,
+    (self: any, a: any[], who: string, res: any) => void
+  > = {};
+  const ctxDetail =
+    (base: string) => (_s: any, a: any[], who: string, res: any) =>
+      detail(
+        base + '("' + str(a[0]) + '")' + (res === null ? ' -> null' : ''),
+        who,
+      );
+  details['HTMLCanvasElement.getContext()'] = ctxDetail(
+    'HTMLCanvasElement.getContext',
+  );
+  details['OffscreenCanvas.getContext()'] = ctxDetail(
+    'OffscreenCanvas.getContext',
+  );
+  const extDetail =
+    (base: string) => (_s: any, a: any[], who: string, res: any) => {
+      detail(base + '("' + str(a[0]) + '")' + (res ? '' : ' -> null'), who);
+      if (res && typeof res === 'object') {
+        const p = getProto(res);
+        if (p && p !== O.prototype && !wrappedProtos.has(p))
+          wrapProto(p, 'ext:' + str(a[0]));
+      }
+    };
+  details['WebGLRenderingContext.getExtension()'] =
+    extDetail('WebGL.getExtension');
+  details['WebGL2RenderingContext.getExtension()'] =
+    extDetail('WebGL.getExtension');
+  details['Document.createElement()'] = (_s, a, who) =>
+    detail('Document.createElement("' + str(a[0]).toLowerCase() + '")', who);
+  details['Document.createElementNS()'] = (_s, a, who) =>
+    detail('Document.createElementNS("' + str(a[1]) + '")', who);
+  details['EventTarget.addEventListener()'] = (s, a, who) =>
+    detail('on:' + brand(s) + '.' + str(a[0]), who);
+  details['fetch()'] = (_s, a, who) =>
+    detail('fetch(' + urlClass(a[0]) + ')', who);
+  details['XMLHttpRequest.open()'] = (_s, a, who) =>
+    detail('XMLHttpRequest.open(' + urlClass(a[1]) + ')', who);
+  details['XMLHttpRequest.responseType='] = (_s, a, who) =>
+    detail('XMLHttpRequest.responseType="' + str(a[0]) + '"', who);
+  details['HTMLImageElement.src='] = (_s, a, who) =>
+    detail('HTMLImageElement.src=(' + urlClass(a[0]) + ')', who);
+  details['HTMLMediaElement.src='] = (s, a, who) =>
+    detail(brand(s) + '.src=(' + urlClass(a[0]) + ')', who);
+  details['Window.matchMedia()'] = (_s, a, who) =>
+    detail('matchMedia("' + str(a[0]) + '")', who);
   details['matchMedia()'] = details['Window.matchMedia()'];
-  details['Permissions.query()'] = (_s, a, who) => detail('Permissions.query("' + str(a[0] && a[0].name) + '")', who);
-  details['BaseAudioContext.decodeAudioData()'] = (_s, a, who) => detail('decodeAudioData(' + audioFormat(a[0]) + ')', who);
-  details['createImageBitmap()'] = (_s, a, who) => detail('createImageBitmap(' + brand(a[0]) + (a[0] && a[0].type ? ' ' + str(a[0].type) : '') + ')', who);
-  details['CanvasRenderingContext2D.font='] = (_s, a, who) => detail('CanvasRenderingContext2D.font=(' + str(a[0]).replace(/[0-9.]+px/, 'Npx') + ')', who);
+  details['Permissions.query()'] = (_s, a, who) =>
+    detail('Permissions.query("' + str(a[0] && a[0].name) + '")', who);
+  details['BaseAudioContext.decodeAudioData()'] = (_s, a, who) =>
+    detail('decodeAudioData(' + audioFormat(a[0]) + ')', who);
+  details['createImageBitmap()'] = (_s, a, who) =>
+    detail(
+      'createImageBitmap(' +
+        brand(a[0]) +
+        (a[0] && a[0].type ? ' ' + str(a[0].type) : '') +
+        ')',
+      who,
+    );
+  details['CanvasRenderingContext2D.font='] = (_s, a, who) =>
+    detail(
+      'CanvasRenderingContext2D.font=(' +
+        str(a[0]).replace(/[0-9.]+px/, 'Npx') +
+        ')',
+      who,
+    );
   const xrInit = (base: string) => (_s: any, a: any[], who: string) => {
     detail(base + '("' + str(a[0]) + '")', who);
     const init = a[1] || {};
     for (const k of ['requiredFeatures', 'optionalFeatures']) {
       const list = init[k];
-      if (list && typeof list.length === 'number') for (let i = 0; i < list.length; i++) detail('XR feature ' + str(list[i]) + (k === 'requiredFeatures' ? ' (required)' : ' (optional)'), who);
+      if (list && typeof list.length === 'number')
+        for (let i = 0; i < list.length; i++)
+          detail(
+            'XR feature ' +
+              str(list[i]) +
+              (k === 'requiredFeatures' ? ' (required)' : ' (optional)'),
+            who,
+          );
     }
   };
   details['XRSystem.requestSession()'] = xrInit('XRSystem.requestSession');
   details['XRSystem.offerSession()'] = xrInit('XRSystem.offerSession');
-  details['XRSystem.isSessionSupported()'] = (_s, a, who) => detail('XRSystem.isSessionSupported("' + str(a[0]) + '")', who);
-  details['XRSession.requestReferenceSpace()'] = (_s, a, who) => detail('XRSession.requestReferenceSpace("' + str(a[0]) + '")', who);
+  details['XRSystem.isSessionSupported()'] = (_s, a, who) =>
+    detail('XRSystem.isSessionSupported("' + str(a[0]) + '")', who);
+  details['XRSession.requestReferenceSpace()'] = (_s, a, who) =>
+    detail('XRSession.requestReferenceSpace("' + str(a[0]) + '")', who);
   details['XRSession.updateRenderState()'] = (_s, a, who) => {
     const st = a[0] || {};
-    for (const k of O.keys(st)) detail('XRSession.updateRenderState({' + k + '})', who);
+    for (const k of O.keys(st))
+      detail('XRSession.updateRenderState({' + k + '})', who);
   };
   details['XRSession.requestAnimationFrame()'] = (_s, a, _who) => {
     // count XR frames: wrap the callback once per call
@@ -405,7 +509,10 @@ export function installApiTracer(cfg: TracerConfig): void {
   };
 
   // details that must see the arguments before the call (it detaches or replaces them)
-  const PRE_DETAILS = new Set(['XRSession.requestAnimationFrame()', 'BaseAudioContext.decodeAudioData()']);
+  const PRE_DETAILS = new Set([
+    'XRSession.requestAnimationFrame()',
+    'BaseAudioContext.decodeAudioData()',
+  ]);
 
   // ---- wrapping ----------------------------------------------------------
   function copyShape(w: any, orig: any) {
@@ -419,7 +526,15 @@ export function installApiTracer(cfg: TracerConfig): void {
   }
   /** Detail hooks are keyed without the global-scope prefix ('fetch()' also covers 'WorkerGlobalScope.fetch()'). */
   function detailFor(key: string) {
-    return details[key] || details[key.replace(/^(Window|WorkerGlobalScope|DedicatedWorkerGlobalScope)\./, '')];
+    return (
+      details[key] ||
+      details[
+        key.replace(
+          /^(Window|WorkerGlobalScope|DedicatedWorkerGlobalScope)\./,
+          '',
+        )
+      ]
+    );
   }
   function wrapMethod(orig: any, key: string) {
     const r = rec(key);
@@ -428,33 +543,33 @@ export function installApiTracer(cfg: TracerConfig): void {
     // method syntax: like native methods, the wrapper is not a constructor and has no prototype
     const w = {
       m(this: any, ...args: any[]) {
-      // members with detail hooks capture the stack on every call, so their detail rows are attributed exactly
-      const who = note(r, !!d && !pre);
-      const site = noteSite;
-      if (pre && d && !busy) {
-        busy++;
-        detailSite = site;
-        try {
-          d(this, args, who, undefined);
-        } catch {
-          /* ignore */
-        } finally {
-          busy--;
+        // members with detail hooks capture the stack on every call, so their detail rows are attributed exactly
+        const who = note(r, !!d && !pre);
+        const site = noteSite;
+        if (pre && d && !busy) {
+          busy++;
+          detailSite = site;
+          try {
+            d(this, args, who, undefined);
+          } catch {
+            /* ignore */
+          } finally {
+            busy--;
+          }
         }
-      }
-      const res = apply(orig, this, args);
-      if (d && !pre && !busy) {
-        busy++;
-        detailSite = site;
-        try {
-          d(this, args, who, res);
-        } catch {
-          /* ignore */
-        } finally {
-          busy--;
+        const res = apply(orig, this, args);
+        if (d && !pre && !busy) {
+          busy++;
+          detailSite = site;
+          try {
+            d(this, args, who, res);
+          } catch {
+            /* ignore */
+          } finally {
+            busy--;
+          }
         }
-      }
-      return res;
+        return res;
       },
     }.m;
     copyShape(w, orig);
@@ -462,7 +577,30 @@ export function installApiTracer(cfg: TracerConfig): void {
   }
   // ES built-in prototypes: objects returned by getters with these are not platform objects
   const ES_PROTOS = new WeakSetCtor<object>();
-  for (const c of [Object, Array, Function, Map, Set, WeakMap, WeakSet, Promise, Date, RegExp, Error, ArrayBuffer, DataView, Float32Array, Float64Array, Int8Array, Int16Array, Int32Array, Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array] as any[]) {
+  for (const c of [
+    Object,
+    Array,
+    Function,
+    Map,
+    Set,
+    WeakMap,
+    WeakSet,
+    Promise,
+    Date,
+    RegExp,
+    Error,
+    ArrayBuffer,
+    DataView,
+    Float32Array,
+    Float64Array,
+    Int8Array,
+    Int16Array,
+    Int32Array,
+    Uint8Array,
+    Uint8ClampedArray,
+    Uint16Array,
+    Uint32Array,
+  ] as any[]) {
     if (c && c.prototype) ES_PROTOS.add(c.prototype);
   }
   /**
@@ -489,7 +627,10 @@ export function installApiTracer(cfg: TracerConfig): void {
     busy++;
     try {
       // the global read is the tracer's own: inside busy, so it is not counted
-      if (!/^[A-Z][A-Za-z0-9]+$/.test(name) || (g[name] && g[name].prototype === p)) {
+      if (
+        !/^[A-Z][A-Za-z0-9]+$/.test(name) ||
+        (g[name] && g[name].prototype === p)
+      ) {
         wrappedProtos.add(p);
         return;
       }
@@ -551,9 +692,18 @@ export function installApiTracer(cfg: TracerConfig): void {
         if (prop === 'constructor') return;
         defProp(obj, prop, { ...desc, value: wrapMethod(v, base + '()') });
       } else {
-        const nd: PropertyDescriptor = { configurable: true, enumerable: desc.enumerable };
-        if (desc.get) nd.get = originals.has(desc.get) ? desc.get : wrapGetter(desc.get, base);
-        if (desc.set) nd.set = originals.has(desc.set) ? desc.set : wrapSetter(desc.set, base + '=');
+        const nd: PropertyDescriptor = {
+          configurable: true,
+          enumerable: desc.enumerable,
+        };
+        if (desc.get)
+          nd.get = originals.has(desc.get)
+            ? desc.get
+            : wrapGetter(desc.get, base);
+        if (desc.set)
+          nd.set = originals.has(desc.set)
+            ? desc.set
+            : wrapSetter(desc.set, base + '=');
         defProp(obj, prop, nd);
       }
     } catch (e) {
@@ -589,13 +739,21 @@ export function installApiTracer(cfg: TracerConfig): void {
     const p: any = new Proxy(target, {
       construct(t, args, nt) {
         // constructors with argument details capture the stack every time, and their detail rows get this call's site
-        const withDetail = name === 'Worker' || name === 'SharedWorker' || name === 'AudioContext' || name === 'webkitAudioContext' || name === 'WebSocket';
+        const withDetail =
+          name === 'Worker' ||
+          name === 'SharedWorker' ||
+          name === 'AudioContext' ||
+          name === 'webkitAudioContext' ||
+          name === 'WebSocket';
         const who = note(rNew, withDetail);
         detailSite = noteSite;
         if (name === 'WebSocket') {
           busy++;
           try {
-            detail('new WebSocket(' + urlClass(args[0]).split(' .')[0] + ')', who);
+            detail(
+              'new WebSocket(' + urlClass(args[0]).split(' .')[0] + ')',
+              who,
+            );
             if (cfg.wsBlock) args = gateWebSocket(args, cfg.wsBlock);
           } catch {
             /* ignore */
@@ -607,7 +765,16 @@ export function installApiTracer(cfg: TracerConfig): void {
           busy++;
           try {
             const opts = args[1] || {};
-            detail('new ' + name + '(' + (opts.type === 'module' ? 'module' : 'classic') + ', ' + urlClass(args[0]).split(' .')[0] + ')', who);
+            detail(
+              'new ' +
+                name +
+                '(' +
+                (opts.type === 'module' ? 'module' : 'classic') +
+                ', ' +
+                urlClass(args[0]).split(' .')[0] +
+                ')',
+              who,
+            );
             if (name === 'Worker') args = rewriteWorker(args);
           } catch {
             /* ignore */
@@ -620,7 +787,11 @@ export function installApiTracer(cfg: TracerConfig): void {
           try {
             const o = args[0] || {};
             if (o.sampleRate) detail('new AudioContext({sampleRate})', who);
-            if (o.latencyHint !== undefined) detail('new AudioContext({latencyHint: ' + str(o.latencyHint) + '})', who);
+            if (o.latencyHint !== undefined)
+              detail(
+                'new AudioContext({latencyHint: ' + str(o.latencyHint) + '})',
+                who,
+              );
           } catch {
             /* ignore */
           } finally {
@@ -636,8 +807,16 @@ export function installApiTracer(cfg: TracerConfig): void {
     });
     originals.set(p, target);
     try {
-      if (target.prototype && getOwn(target.prototype, 'constructor')?.configurable) {
-        defProp(target.prototype, 'constructor', { value: p, writable: true, configurable: true, enumerable: false });
+      if (
+        target.prototype &&
+        getOwn(target.prototype, 'constructor')?.configurable
+      ) {
+        defProp(target.prototype, 'constructor', {
+          value: p,
+          writable: true,
+          configurable: true,
+          enumerable: false,
+        });
       }
     } catch {
       /* ignore */
@@ -647,7 +826,12 @@ export function installApiTracer(cfg: TracerConfig): void {
 
   function wrapGlobal(name: string) {
     // __playwright__binding__ and friends: the harness's own globals (routeWebSocket installs a page-side mock)
-    if (ES_GLOBALS.has(name) || name.startsWith('__iwn') || name.startsWith('__playwright')) return;
+    if (
+      ES_GLOBALS.has(name) ||
+      name.startsWith('__iwn') ||
+      name.startsWith('__playwright')
+    )
+      return;
     let desc: PropertyDescriptor | undefined;
     try {
       desc = getOwn(g, name);
@@ -666,7 +850,11 @@ export function installApiTracer(cfg: TracerConfig): void {
             wrapProto(v.prototype, name + '.' + k);
             try {
               const dk = getOwn(ns, k);
-              if (dk && dk.configurable) defProp(ns, k, { ...dk, value: interfaceProxy(v, name + '.' + k) });
+              if (dk && dk.configurable)
+                defProp(ns, k, {
+                  ...dk,
+                  value: interfaceProxy(v, name + '.' + k),
+                });
             } catch {
               /* ignore */
             }
@@ -682,13 +870,24 @@ export function installApiTracer(cfg: TracerConfig): void {
     if ('value' in desc) {
       const v = desc.value;
       if (typeof v === 'function') {
-        const isInterface = /^[A-Z]/.test(name) && v.prototype && typeof v.prototype === 'object';
+        const isInterface =
+          /^[A-Z]/.test(name) && v.prototype && typeof v.prototype === 'object';
         if (isInterface) {
           // named constructors (Image, Audio, Option) share the prototype of their interface
           const pc = getOwn(v.prototype, 'constructor');
-          const protoName = pc && typeof pc.value === 'function' && pc.value.name ? pc.value.name : name;
+          const protoName =
+            pc && typeof pc.value === 'function' && pc.value.name
+              ? pc.value.name
+              : name;
           wrapProto(v.prototype, protoName);
-          for (const k of ownKeys(v)) if (typeof k === 'string' && k !== 'prototype' && k !== 'length' && k !== 'name') wrapMember(v, k, name);
+          for (const k of ownKeys(v))
+            if (
+              typeof k === 'string' &&
+              k !== 'prototype' &&
+              k !== 'length' &&
+              k !== 'name'
+            )
+              wrapMember(v, k, name);
           const proxy = interfaceProxy(v, name);
           const rRead = rec(name);
           let current: any = proxy;
@@ -748,7 +947,12 @@ export function installApiTracer(cfg: TracerConfig): void {
       let p = getProto(g);
       while (!filter && p && p !== O.prototype) {
         const c = getOwn(p, 'constructor');
-        const n = c && typeof c.value === 'function' && c.value.name ? c.value.name : cfg.role === 'main' ? 'Window' : 'WorkerGlobalScope';
+        const n =
+          c && typeof c.value === 'function' && c.value.name
+            ? c.value.name
+            : cfg.role === 'main'
+              ? 'Window'
+              : 'WorkerGlobalScope';
         wrapProto(p, n);
         p = getProto(p);
       }
@@ -758,7 +962,24 @@ export function installApiTracer(cfg: TracerConfig): void {
   }
 
   // ---- probes for missing members ----------------------------------------
-  const NOISE = new Set(['then', 'toJSON', 'constructor', '__proto__', '$$typeof', 'nodeType', 'tagName', 'asymmetricMatch', 'prototype', 'length', 'size', 'valueOf', 'toString', 'inspect', '_isVue', 'isReactComponent']);
+  const NOISE = new Set([
+    'then',
+    'toJSON',
+    'constructor',
+    '__proto__',
+    '$$typeof',
+    'nodeType',
+    'tagName',
+    'asymmetricMatch',
+    'prototype',
+    'length',
+    'size',
+    'valueOf',
+    'toString',
+    'inspect',
+    '_isVue',
+    'isReactComponent',
+  ]);
   /**
    * A probe spliced into a prototype chain: a Proxy over an empty object whose prototype is the real next
    * link, so lookups, `instanceof` and `isPrototypeOf` see the same chain as without the tracer.
@@ -784,7 +1005,8 @@ export function installApiTracer(cfg: TracerConfig): void {
       has(t, k) {
         const present = k in t;
         // `typeof X` / `'x' in obj` on any object whose chain ends here; the receiver is unknown
-        if (!present && typeof k === 'string' && !busy && !NOISE.has(k)) note(rec('miss:' + k + ' (in, ' + owner + ' chain)'));
+        if (!present && typeof k === 'string' && !busy && !NOISE.has(k))
+          note(rec('miss:' + k + ' (in, ' + owner + ' chain)'));
         return present;
       },
     };
@@ -795,7 +1017,13 @@ export function installApiTracer(cfg: TracerConfig): void {
     let probed = false;
     try {
       if (g.EventTarget && g.EventTarget.prototype) {
-        setProto(g.EventTarget.prototype, missTrap('EventTarget', getProto(g.EventTarget.prototype) || O.prototype));
+        setProto(
+          g.EventTarget.prototype,
+          missTrap(
+            'EventTarget',
+            getProto(g.EventTarget.prototype) || O.prototype,
+          ),
+        );
         probed = true;
       }
     } catch {
@@ -812,7 +1040,8 @@ export function installApiTracer(cfg: TracerConfig): void {
     }
     for (const n of ['Navigator', 'WorkerNavigator']) {
       try {
-        if (g[n] && g[n].prototype && getProto(g[n].prototype) === O.prototype) setProto(g[n].prototype, missTrap(n, O.prototype));
+        if (g[n] && g[n].prototype && getProto(g[n].prototype) === O.prototype)
+          setProto(g[n].prototype, missTrap(n, O.prototype));
       } catch (e) {
         skipped.push('miss probe ' + n + ': ' + str(e, 80));
       }
@@ -834,7 +1063,15 @@ export function installApiTracer(cfg: TracerConfig): void {
       // the static server prepends the tracer to worker scripts it serves; tell it the type
       try {
         const x = new origXHR();
-        x.open('GET', cfg.toolMarker + 'worker-type?type=' + (opts.type === 'module' ? 'module' : 'classic') + '&url=' + encodeURIComponent(abs), false);
+        x.open(
+          'GET',
+          cfg.toolMarker +
+            'worker-type?type=' +
+            (opts.type === 'module' ? 'module' : 'classic') +
+            '&url=' +
+            encodeURIComponent(abs),
+          false,
+        );
         x.send();
       } catch {
         /* ignore */
@@ -844,8 +1081,20 @@ export function installApiTracer(cfg: TracerConfig): void {
     const t = JSONstringify(cfg.workerTracerUrl);
     const u = JSONstringify(abs);
     const tag = '\n//# sourceURL=' + cfg.selfMarker + '-wrapper.js\n';
-    const src = opts.type === 'module' ? 'import ' + t + ';\nimport ' + u + ';' + tag : 'self.__iwnCompatWorkerUrl=' + u + ';importScripts(' + t + ');importScripts(' + u + ');' + tag;
-    const blobUrl = apply(origCreateObjectURL, URLCtor, [new origBlob([src], { type: 'text/javascript' })]);
+    const src =
+      opts.type === 'module'
+        ? 'import ' + t + ';\nimport ' + u + ';' + tag
+        : 'self.__iwnCompatWorkerUrl=' +
+          u +
+          ';importScripts(' +
+          t +
+          ');importScripts(' +
+          u +
+          ');' +
+          tag;
+    const blobUrl = apply(origCreateObjectURL, URLCtor, [
+      new origBlob([src], { type: 'text/javascript' }),
+    ]);
     return [blobUrl, ...args.slice(1)];
   }
 
@@ -859,7 +1108,12 @@ export function installApiTracer(cfg: TracerConfig): void {
       return apply(fnToString, o !== undefined ? o : this, []);
     };
     originals.set(ts, fnToString);
-    defProp(Function.prototype, 'toString', { value: ts, writable: true, configurable: true, enumerable: false });
+    defProp(Function.prototype, 'toString', {
+      value: ts,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   } catch {
     /* ignore */
   }
@@ -869,7 +1123,15 @@ export function installApiTracer(cfg: TracerConfig): void {
     const apis: Record<string, ApiRecord> = {};
     for (const [k, r] of recs) {
       if (!r.calls) continue;
-      apis[k] = { calls: r.calls, xrCalls: r.xrCalls, app: r.app, tool: r.tool, none: r.none, site: r.site, phase: r.phase };
+      apis[k] = {
+        calls: r.calls,
+        xrCalls: r.xrCalls,
+        app: r.app,
+        tool: r.tool,
+        none: r.none,
+        site: r.site,
+        phase: r.phase,
+      };
     }
     let url = '';
     try {
@@ -878,7 +1140,16 @@ export function installApiTracer(cfg: TracerConfig): void {
     } catch {
       /* ignore */
     }
-    return { role: cfg.role, url, id, phase, xrFrames, apis, skipped: skipped.slice(), removed: removed.slice() };
+    return {
+      role: cfg.role,
+      url,
+      id,
+      phase,
+      xrFrames,
+      apis,
+      skipped: skipped.slice(),
+      removed: removed.slice(),
+    };
   }
   g.__iwnCompat = {
     dump,
@@ -894,7 +1165,12 @@ export function installApiTracer(cfg: TracerConfig): void {
           const v = g[n];
           if (v === undefined) continue;
           try {
-            defProp(g, n, { value: originals.get(v) || v, writable: true, configurable: true, enumerable: false });
+            defProp(g, n, {
+              value: originals.get(v) || v,
+              writable: true,
+              configurable: true,
+              enumerable: false,
+            });
           } catch {
             continue;
           }
@@ -974,12 +1250,14 @@ export function installApiTracer(cfg: TracerConfig): void {
     const res = t.absent.map((src) => new RegExp(src));
     const keep = new Set(t.keep);
     const stubs = new Set(t.stubs || []);
-    const absent = (base: string) => !keep.has(base) && res.some((r) => r.test(base));
+    const absent = (base: string) =>
+      !keep.has(base) && res.some((r) => r.test(base));
     // globals: the global object and its prototype chain ([Global] members live on both)
     const gone = new Set<string>();
     for (let o = g; o && o !== O.prototype; o = getProto(o)) {
       for (const k of ownKeys(o)) {
-        if (typeof k !== 'string' || k.startsWith('__iwn') || !absent(k)) continue;
+        if (typeof k !== 'string' || k.startsWith('__iwn') || !absent(k))
+          continue;
         try {
           if (delete o[k]) gone.add(k);
         } catch {
@@ -990,9 +1268,14 @@ export function installApiTracer(cfg: TracerConfig): void {
     for (const k of gone) if (!(k in g)) removed.push(k);
     // members of navigator and crypto (prototypes and the instances)
     // (and BaseAudioContext.audioWorklet: AUD-6 has no AudioWorklet)
-    for (const [ifaceNames, prefix, inst] of [[['Navigator', 'WorkerNavigator'], 'Navigator', 'navigator'], [['Crypto'], 'Crypto', 'crypto'], [['BaseAudioContext'], 'BaseAudioContext', '']] as Array<[string[], string, string]>) {
+    for (const [ifaceNames, prefix, inst] of [
+      [['Navigator', 'WorkerNavigator'], 'Navigator', 'navigator'],
+      [['Crypto'], 'Crypto', 'crypto'],
+      [['BaseAudioContext'], 'BaseAudioContext', ''],
+    ] as Array<[string[], string, string]>) {
       const holders: any[] = [];
-      for (const n of ifaceNames) if (g[n] && g[n].prototype) holders.push(g[n].prototype);
+      for (const n of ifaceNames)
+        if (g[n] && g[n].prototype) holders.push(g[n].prototype);
       try {
         if (inst && g[inst]) holders.push(g[inst]);
       } catch {
@@ -1003,13 +1286,20 @@ export function installApiTracer(cfg: TracerConfig): void {
           if (typeof k === 'string' && stubs.has(prefix + '.' + k)) {
             // absent by design, but a runtime layer installs a stub: the headset's method throws NotSupportedError
             const desc = getOwn(h, k);
-            if (!desc || typeof desc.value !== 'function' || !desc.configurable) continue;
+            if (!desc || typeof desc.value !== 'function' || !desc.configurable)
+              continue;
             const orig = desc.value;
             const label = prefix + '.' + k;
             const w = {
               [k](this: any) {
                 const E = g.DOMException;
-                throw typeof E === 'function' ? new E(label + '() is not supported (a stub in the native runtime)', 'NotSupportedError') : new Error('NotSupportedError: ' + label + '()');
+                throw typeof E === 'function'
+                  ? new E(
+                      label +
+                        '() is not supported (a stub in the native runtime)',
+                      'NotSupportedError',
+                    )
+                  : new Error('NotSupportedError: ' + label + '()');
               },
             }[k]!;
             try {
@@ -1023,7 +1313,8 @@ export function installApiTracer(cfg: TracerConfig): void {
           }
           if (typeof k !== 'string' || !absent(prefix + '.' + k)) continue;
           try {
-            if (delete h[k] && removed.indexOf(prefix + '.' + k) < 0) removed.push(prefix + '.' + k);
+            if (delete h[k] && removed.indexOf(prefix + '.' + k) < 0)
+              removed.push(prefix + '.' + k);
           } catch {
             /* ignore */
           }
@@ -1035,7 +1326,8 @@ export function installApiTracer(cfg: TracerConfig): void {
     for (const n of ['HTMLCanvasElement', 'OffscreenCanvas']) {
       const proto = g[n] && g[n].prototype;
       const desc = proto && getOwn(proto, 'getContext');
-      if (!desc || typeof desc.value !== 'function' || !desc.configurable) continue;
+      if (!desc || typeof desc.value !== 'function' || !desc.configurable)
+        continue;
       const orig = desc.value;
       const w = {
         getContext(this: any, ...args: any[]) {
@@ -1075,7 +1367,12 @@ export function installApiTracer(cfg: TracerConfig): void {
     const flush = () => {
       busy++;
       try {
-        (apply(origFetch, g, [cfg.reportUrl, { method: 'POST', body: JSONstringify(dump()) }]) as Promise<any>)
+        (
+          apply(origFetch, g, [
+            cfg.reportUrl,
+            { method: 'POST', body: JSONstringify(dump()) },
+          ]) as Promise<any>
+        )
           .then((r: any) => r.text())
           .then(takePhase)
           .catch(() => {});

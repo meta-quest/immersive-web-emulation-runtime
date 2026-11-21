@@ -48,7 +48,7 @@ import type { GLContext, WebGLHooks, XrNatives } from './natives.ts';
 
 const TEXTURE_2D = 0x0de1;
 const TEXTURE_2D_ARRAY = 0x8c1a;
-const FRAMEBUFFER_BINDING = 0x8ca6;  // = DRAW_FRAMEBUFFER_BINDING
+const FRAMEBUFFER_BINDING = 0x8ca6; // = DRAW_FRAMEBUFFER_BINDING
 const MAX_TRACKED_FRAMEBUFFERS = 32;
 const NO_FRAMEBUFFERS: readonly object[] = [];
 
@@ -118,7 +118,11 @@ export class GraphicsBridge {
 
   /** A quad or cylinder layer's swapchain was created; `textureArray`: its images are TEXTURE_2D_ARRAYs. */
   addLayer(id: number, textureArray: boolean): void {
-    this.layers.push({ id, target: textureArray ? TEXTURE_2D_ARRAY : TEXTURE_2D, tex: null });
+    this.layers.push({
+      id,
+      target: textureArray ? TEXTURE_2D_ARRAY : TEXTURE_2D,
+      tex: null,
+    });
   }
 
   /** layer.destroy(): its texture refers to no image any more (the swapchain goes). */
@@ -126,7 +130,8 @@ export class GraphicsBridge {
     const i = this.layers.findIndex((l) => l.id === id);
     if (i < 0) return;
     const tex = this.layers[i].tex;
-    if (tex && this.gl && this.hooks) this.hooks.retargetTexture(this.gl, tex, 0, this.framebuffers);
+    if (tex && this.gl && this.hooks)
+      this.hooks.retargetTexture(this.gl, tex, 0, this.framebuffers);
     if (tex) this.layerTextures.delete(tex);
     this.layers.splice(i, 1);
   }
@@ -185,7 +190,10 @@ export class GraphicsBridge {
     this.reset();
     this.watchBinds(gl);
     // A framebuffer bound before the binding existed can still get the session's image attached without a new bind.
-    const bound = typeof gl.getParameter === 'function' ? gl.getParameter(FRAMEBUFFER_BINDING) : null;
+    const bound =
+      typeof gl.getParameter === 'function'
+        ? gl.getParameter(FRAMEBUFFER_BINDING)
+        : null;
     if (isFramebufferLike(bound)) this.track(bound);
   }
 
@@ -203,7 +211,8 @@ export class GraphicsBridge {
     this.layerTextures.clear();
     this.inFrame = false;
     this.clearAtFrameStart = false;
-    if (this.depth && this.gl && this.hooks) this.hooks.retargetTexture(this.gl, this.depth, 0, NO_FRAMEBUFFERS);
+    if (this.depth && this.gl && this.hooks)
+      this.hooks.retargetTexture(this.gl, this.depth, 0, NO_FRAMEBUFFERS);
     this.depth = null;
   }
 
@@ -222,7 +231,11 @@ export class GraphicsBridge {
   opaqueTexture(): object | null {
     if (!this.gl || !this.hooks) return null;
     if (!this.opaque) {
-      this.opaque = this.hooks.wrapTexture(this.gl, this.currentName, this.arraySize === 1 ? TEXTURE_2D : TEXTURE_2D_ARRAY);
+      this.opaque = this.hooks.wrapTexture(
+        this.gl,
+        this.currentName,
+        this.arraySize === 1 ? TEXTURE_2D : TEXTURE_2D_ARRAY,
+      );
     }
     return this.opaque;
   }
@@ -240,10 +253,23 @@ export class GraphicsBridge {
   }
 
   /** XR-DEPTH-2 matchDepthView: `source` (the frame's depth image) laid out in the render views; null when it cannot. */
-  reprojectDepth(source: object, width: number, height: number, views: number, matrices: Float32Array): object | null {
+  reprojectDepth(
+    source: object,
+    width: number,
+    height: number,
+    views: number,
+    matrices: Float32Array,
+  ): object | null {
     const gl = this.gl;
     if (!gl) return null;
-    return this.reprojection.draw(gl, source, width, height, Math.min(views, 2), matrices);
+    return this.reprojection.draw(
+      gl,
+      source,
+      width,
+      height,
+      Math.min(views, 2),
+      matrices,
+    );
   }
 
   /**
@@ -256,13 +282,22 @@ export class GraphicsBridge {
     const gl = this.gl;
     const hooks = this.hooks;
     const name = this.currentName;
-    if (!this.clearAtFrameStart || !gl || !hooks || !hooks.clearSessionFramebuffer || name === 0) return;
+    if (
+      !this.clearAtFrameStart ||
+      !gl ||
+      !hooks ||
+      !hooks.clearSessionFramebuffer ||
+      name === 0
+    )
+      return;
     const fbs = this.framebuffers;
     for (let i = 0; i < fbs.length; i++) {
       const object = colorAttachment(fbs[i]);
       if (object === undefined || object === null) continue;
       const own =
-        object === this.opaque || (this.wrappers.has(object as object) && (object as TextureLike)._name === name);
+        object === this.opaque ||
+        (this.wrappers.has(object as object) &&
+          (object as TextureLike)._name === name);
       if (!own) continue;
       hooks.clearSessionFramebuffer(gl, fbs[i]);
       this.clears++;
@@ -288,15 +323,16 @@ export class GraphicsBridge {
     this.pointLayers(true);
     const gl = this.gl;
     const hooks = this.hooks;
-    if (!gl || !hooks || name === 0) return;  // no image this frame: everything stays parked
-    if (this.opaque) hooks.retargetTexture(gl, this.opaque, name, this.framebuffers);
+    if (!gl || !hooks || name === 0) return; // no image this frame: everything stays parked
+    if (this.opaque)
+      hooks.retargetTexture(gl, this.opaque, name, this.framebuffers);
     // XRWebGLLayer: the image detached after the last frame goes back first; IWER then attaches this frame's image
     // when it differs (when the XR thread hands out the same image again, IWER attaches nothing).
     const fbs = this.parkedFbs;
     for (let i = 0; i < fbs.length; i++) {
       if (!gl.isFramebuffer(fbs[i])) continue;
       const tex = this.parkedTextures[i];
-      tex._name = 0;  // retargetTexture re-attaches only when the name changes
+      tex._name = 0; // retargetTexture re-attaches only when the name changes
       this.one[0] = fbs[i];
       hooks.retargetTexture(gl, tex, this.parkedNames[i], this.one);
     }
@@ -346,13 +382,14 @@ export class GraphicsBridge {
     for (let i = 0; i < fbs.length; i++) {
       const fb = fbs[i];
       const object = colorAttachment(fb);
-      if (object === undefined || !this.wrappers.has(object as object)) continue;
+      if (object === undefined || !this.wrappers.has(object as object))
+        continue;
       const tex = object as TextureLike;
       const texName = tex._name;
       if (texName === 0) continue;
       this.one[0] = fb;
-      hooks.retargetTexture(gl, tex, 0, this.one);  // GL: the attachment is detached (the wrapper's name set to 0) ...
-      tex._name = texName;                          // ... while the binding keeps the wrapper and its name
+      hooks.retargetTexture(gl, tex, 0, this.one); // GL: the attachment is detached (the wrapper's name set to 0) ...
+      tex._name = texName; // ... while the binding keeps the wrapper and its name
       this.parkedFbs.push(fb);
       this.parkedTextures.push(tex);
       this.parkedNames.push(texName);
@@ -370,9 +407,14 @@ export class GraphicsBridge {
       configurable: true,
       writable: true,
       enumerable: false,
-      value: function bindFramebuffer(this: GLContext, target: number, framebuffer: object | null) {
+      value: function bindFramebuffer(
+        this: GLContext,
+        target: number,
+        framebuffer: object | null,
+      ) {
         // only framebuffer objects (the binding itself rejects anything else)
-        if (isFramebufferLike(framebuffer) && list.indexOf(framebuffer) < 0) self.track(framebuffer);
+        if (isFramebufferLike(framebuffer) && list.indexOf(framebuffer) < 0)
+          self.track(framebuffer);
         return bind.call(this, target, framebuffer);
       },
     });
@@ -401,7 +443,12 @@ export class GraphicsBridge {
   /** Whether any attachment of `fb` is the opaque texture, an XRWebGLLayer image or a layer texture (no allocation). */
   private holdsSessionImage(fb: object): boolean {
     const atts = (fb as FramebufferLike)._attachments;
-    if (atts === undefined || (this.opaque === null && this.wrappers.size === 0 && this.layerTextures.size === 0)) {
+    if (
+      atts === undefined ||
+      (this.opaque === null &&
+        this.wrappers.size === 0 &&
+        this.layerTextures.size === 0)
+    ) {
       return false;
     }
     holdScan.opaque = this.opaque;
@@ -446,7 +493,11 @@ const COLOR_ATTACHMENT0 = 0x8ce0;
 function isFramebufferLike(fb: unknown): fb is object {
   if (typeof fb !== 'object' || fb === null) return false;
   const atts = (fb as FramebufferLike)._attachments;
-  return typeof atts === 'object' && atts !== null && typeof atts.forEach === 'function';
+  return (
+    typeof atts === 'object' &&
+    atts !== null &&
+    typeof atts.forEach === 'function'
+  );
 }
 
 /** Whether `fb` renders into the opaque texture (colour attachment 0; a Map lookup, no iterator per frame). */

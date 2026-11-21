@@ -9,11 +9,22 @@
 // node:sqlite (files in a temp dir, so "restarts" can reopen them) and a JSON file for the KV log.
 // Completions are asynchronous (setImmediate), as native completions are tasks.
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { SqlArea, SqlResult, SqlValue, StorageNatives } from '../src/natives.ts';
+import type {
+  SqlArea,
+  SqlResult,
+  SqlValue,
+  StorageNatives,
+} from '../src/natives.ts';
 
 export class FakeStorageNatives implements StorageNatives {
   readonly dir: string;
@@ -24,7 +35,10 @@ export class FakeStorageNatives implements StorageNatives {
   /** Fail the next statement whose SQL matches (simulates SQLITE_FULL & co.). */
   failNext: RegExp | null = null;
   #kv = new Map<string, string>();
-  #handles = new Map<number, { db: DatabaseSync; area: SqlArea; name: string }>();
+  #handles = new Map<
+    number,
+    { db: DatabaseSync; area: SqlArea; name: string }
+  >();
   #next = 1;
 
   constructor(dir: string) {
@@ -39,7 +53,11 @@ export class FakeStorageNatives implements StorageNatives {
 
   kvOpen() {
     if (existsSync(this.#kvPath())) {
-      this.#kv = new Map(JSON.parse(readFileSync(this.#kvPath(), 'utf8')) as Array<[string, string]>);
+      this.#kv = new Map(
+        JSON.parse(readFileSync(this.#kvPath(), 'utf8')) as Array<
+          [string, string]
+        >,
+      );
     }
     return { entries: [...this.#kv].flat(), warning: '', persistent: true };
   }
@@ -64,7 +82,13 @@ export class FakeStorageNatives implements StorageNatives {
   }
 
   sqlOpen(area: SqlArea, name: string): number {
-    if (!name || name.includes('/') || name.includes('\\') || name.startsWith('..')) throw new TypeError('sqlOpen: invalid database name');
+    if (
+      !name ||
+      name.includes('/') ||
+      name.includes('\\') ||
+      name.startsWith('..')
+    )
+      throw new TypeError('sqlOpen: invalid database name');
     const db = new DatabaseSync(join(this.dir, area, name));
     db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
     const h = this.#next++;
@@ -102,11 +126,20 @@ export class FakeStorageNatives implements StorageNatives {
       setImmediate(() => cb(results));
       return;
     }
-    const results: SqlResult[] = sql.map((s, i) => (entry ? this.#one(entry, s, args[i] ?? [], readOnly) : { error: 'database is closed' }));
+    const results: SqlResult[] = sql.map((s, i) =>
+      entry
+        ? this.#one(entry, s, args[i] ?? [], readOnly)
+        : { error: 'database is closed' },
+    );
     setImmediate(() => cb(results));
   }
 
-  #one(entry: { db: DatabaseSync }, s: string, args: SqlValue[], readOnly: boolean): SqlResult {
+  #one(
+    entry: { db: DatabaseSync },
+    s: string,
+    args: SqlValue[],
+    readOnly: boolean,
+  ): SqlResult {
     {
       try {
         if (this.failNext && this.failNext.test(s)) {
@@ -118,26 +151,42 @@ export class FakeStorageNatives implements StorageNatives {
           if (v === null || v === undefined) return null;
           if (typeof v === 'boolean') return v ? 1 : 0;
           if (v instanceof ArrayBuffer) return new Uint8Array(v);
-          if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+          if (ArrayBuffer.isView(v))
+            return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
           return v as string | number | bigint;
         });
         const returnsRows = stmt.columns().length > 0;
-        if (readOnly && !/^\s*(SELECT|PRAGMA|WITH)\b/i.test(s)) return { error: 'could not prepare statement (23 not authorized)' };
+        if (readOnly && !/^\s*(SELECT|PRAGMA|WITH)\b/i.test(s))
+          return { error: 'could not prepare statement (23 not authorized)' };
         if (returnsRows) {
-          const rows = (stmt.all(...bound) as Array<Record<string, unknown>>).map((row) => {
-            const out: Record<string, number | string | ArrayBuffer | null> = {};
+          const rows = (
+            stmt.all(...bound) as Array<Record<string, unknown>>
+          ).map((row) => {
+            const out: Record<string, number | string | ArrayBuffer | null> =
+              {};
             for (const [k, v] of Object.entries(row)) {
               if (v instanceof Uint8Array) this.blobBytesRead += v.byteLength;
-              out[k] = v instanceof Uint8Array ? v.slice().buffer : typeof v === 'bigint' ? Number(v) : (v as number | string | null);
+              out[k] =
+                v instanceof Uint8Array
+                  ? v.slice().buffer
+                  : typeof v === 'bigint'
+                    ? Number(v)
+                    : (v as number | string | null);
             }
             return out;
           });
           return { insertId: 0, rowsAffected: 0, rows };
         }
         const r = stmt.run(...bound);
-        return { insertId: Number(r.lastInsertRowid), rowsAffected: Number(r.changes), rows: [] };
+        return {
+          insertId: Number(r.lastInsertRowid),
+          rowsAffected: Number(r.changes),
+          rows: [],
+        };
       } catch (e) {
-        return { error: `could not execute statement (${(e as Error).message})` };
+        return {
+          error: `could not execute statement (${(e as Error).message})`,
+        };
       }
     }
   }
@@ -154,14 +203,19 @@ export class FakeStorageNatives implements StorageNatives {
     setImmediate(() => cb(null));
   }
 
-  sqlDelete(area: SqlArea, name: string, cb: (error: string | null) => void): void {
+  sqlDelete(
+    area: SqlArea,
+    name: string,
+    cb: (error: string | null) => void,
+  ): void {
     for (const e of this.#handles.values()) {
       if (e.area === area && e.name === name) {
         setImmediate(() => cb('database is open'));
         return;
       }
     }
-    for (const suffix of ['', '-wal', '-shm']) rmSync(join(this.dir, area, name + suffix), { force: true });
+    for (const suffix of ['', '-wal', '-shm'])
+      rmSync(join(this.dir, area, name + suffix), { force: true });
     setImmediate(() => cb(null));
   }
 

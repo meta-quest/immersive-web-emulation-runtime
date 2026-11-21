@@ -48,26 +48,112 @@ export function fakeSurface(): MeasuredSurface {
     generatedAt: 'test',
     packageRoot: '/x',
     layers: [
-      { layer: 'v8', how: 'eval', globals: ['Object', 'Intl', 'WebAssembly', 'console'], members: ['Intl.Segmenter', 'WebAssembly.instantiate', 'console.log'] },
-      { layer: 'runtime/core', how: 'eval', globals: ['setTimeout', 'requestAnimationFrame'], members: [] },
-      { layer: 'web/glue', how: 'eval', globals: ['URL', 'navigator', 'Navigator', 'EventTarget', 'TextDecoder', 'addEventListener'], members: ['URL.href', 'navigator.platform', 'EventTarget.addEventListener', 'TextDecoder.decode', 'Request.destination'] },
-      { layer: 'web/canvas2d', how: 'eval', globals: ['OffscreenCanvas', 'CanvasRenderingContext2D'], members: ['OffscreenCanvas.getContext', 'CanvasRenderingContext2D.fillText', 'CanvasRenderingContext2D.filter'], stubs: ['CanvasRenderingContext2D.filter'] },
-      { layer: 'web/webgl', how: 'eval', globals: ['WebGL2RenderingContext', 'WebGLActiveInfo'], members: ['WebGL2RenderingContext.drawElements'], tokens: ['OVR_multiview2'], fields: ['name', 'size'] },
-      { layer: 'web/audio', how: 'source', file: 'web/audio/src', globals: [], members: [], tokens: ['AudioContext', 'createGain'] },
+      {
+        layer: 'v8',
+        how: 'eval',
+        globals: ['Object', 'Intl', 'WebAssembly', 'console'],
+        members: ['Intl.Segmenter', 'WebAssembly.instantiate', 'console.log'],
+      },
+      {
+        layer: 'runtime/core',
+        how: 'eval',
+        globals: ['setTimeout', 'requestAnimationFrame'],
+        members: [],
+      },
+      {
+        layer: 'web/glue',
+        how: 'eval',
+        globals: [
+          'URL',
+          'navigator',
+          'Navigator',
+          'EventTarget',
+          'TextDecoder',
+          'addEventListener',
+        ],
+        members: [
+          'URL.href',
+          'navigator.platform',
+          'EventTarget.addEventListener',
+          'TextDecoder.decode',
+          'Request.destination',
+        ],
+      },
+      {
+        layer: 'web/canvas2d',
+        how: 'eval',
+        globals: ['OffscreenCanvas', 'CanvasRenderingContext2D'],
+        members: [
+          'OffscreenCanvas.getContext',
+          'CanvasRenderingContext2D.fillText',
+          'CanvasRenderingContext2D.filter',
+        ],
+        stubs: ['CanvasRenderingContext2D.filter'],
+      },
+      {
+        layer: 'web/webgl',
+        how: 'eval',
+        globals: ['WebGL2RenderingContext', 'WebGLActiveInfo'],
+        members: ['WebGL2RenderingContext.drawElements'],
+        tokens: ['OVR_multiview2'],
+        fields: ['name', 'size'],
+      },
+      {
+        layer: 'web/audio',
+        how: 'source',
+        file: 'web/audio/src',
+        globals: [],
+        members: [],
+        tokens: ['AudioContext', 'createGain'],
+      },
     ],
   };
-  return measuredSurface(inv, ['XRSession', 'XRSession.requestAnimationFrame', 'XRFrame.getViewerPose', 'XRSystem.offerSession', 'XRSystem.requestSession', 'Navigator.xr', 'Gamepad', 'Gamepad.buttons']);
+  return measuredSurface(inv, [
+    'XRSession',
+    'XRSession.requestAnimationFrame',
+    'XRFrame.getViewerPose',
+    'XRSystem.offerSession',
+    'XRSystem.requestSession',
+    'Navigator.xr',
+    'Gamepad',
+    'Gamepad.buttons',
+  ]);
 }
 
 export function rec(over: Partial<ApiRecord> = {}): ApiRecord {
-  return { calls: 1, xrCalls: 0, app: 1, tool: 0, none: 0, site: '/assets/index.js:1:1', phase: 'boot', ...over };
+  return {
+    calls: 1,
+    xrCalls: 0,
+    app: 1,
+    tool: 0,
+    none: 0,
+    site: '/assets/index.js:1:1',
+    phase: 'boot',
+    ...over,
+  };
 }
 
-export function dump(apis: Record<string, ApiRecord>, role: 'main' | 'worker' = 'main'): TraceDump {
-  return { role, url: 'http://127.0.0.1/', id: Math.random().toString(36).slice(2), phase: 'xr', xrFrames: 10, apis, skipped: [] };
+export function dump(
+  apis: Record<string, ApiRecord>,
+  role: 'main' | 'worker' = 'main',
+): TraceDump {
+  return {
+    role,
+    url: 'http://127.0.0.1/',
+    id: Math.random().toString(36).slice(2),
+    phase: 'xr',
+    xrFrames: 10,
+    apis,
+    skipped: [],
+  };
 }
 
-export function trace(sample: string, main: Record<string, ApiRecord>, workers: Array<Record<string, ApiRecord>> = [], over: Partial<TraceResult> = {}): TraceResult & { sample: string } {
+export function trace(
+  sample: string,
+  main: Record<string, ApiRecord>,
+  workers: Array<Record<string, ApiRecord>> = [],
+  over: Partial<TraceResult> = {},
+): TraceResult & { sample: string } {
   return {
     sample,
     dist: `/x/${sample}/dist`,

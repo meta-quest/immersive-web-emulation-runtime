@@ -24,7 +24,14 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { decodePng, encodePng, isPng, isWebp, resize, type RgbaImage } from './png.ts';
+import {
+  decodePng,
+  encodePng,
+  isPng,
+  isWebp,
+  resize,
+  type RgbaImage,
+} from './png.ts';
 import {
   codePoints,
   drawText,
@@ -79,7 +86,11 @@ export function renderSplashCard(input: SplashCardInput): SplashCard {
   const warnings: string[] = [];
   const W = CARD_WIDTH;
   const H = CARD_HEIGHT;
-  const out: RgbaImage = { width: W, height: H, data: new Uint8Array(W * H * 4) };
+  const out: RgbaImage = {
+    width: W,
+    height: H,
+    data: new Uint8Array(W * H * 4),
+  };
 
   // The name: fitted to the width, shortened with an ellipsis as a last resort.
   let text: string | null = input.appName.trim() || null;
@@ -103,17 +114,23 @@ export function renderSplashCard(input: SplashCardInput): SplashCard {
     const max = input.icon ? NAME_MAX_PX : NAME_ONLY_MAX_PX;
     fontPx = max;
     const w = measureText(font, text, fontPx);
-    if (w > avail) fontPx = Math.max(NAME_MIN_PX, Math.floor((max * avail) / w));
+    if (w > avail)
+      fontPx = Math.max(NAME_MIN_PX, Math.floor((max * avail) / w));
     if (measureText(font, text, fontPx) > avail) {
       const cps = codePoints(text);
-      while (cps.length > 1 && measureText(font, `${String.fromCodePoint(...cps)}…`, fontPx) > avail) cps.pop();
+      while (
+        cps.length > 1 &&
+        measureText(font, `${String.fromCodePoint(...cps)}…`, fontPx) > avail
+      )
+        cps.pop();
       text = `${String.fromCodePoint(...cps).trimEnd()}…`;
     }
   }
 
   const iconSize = text ? ICON_SIZE : ICON_ONLY_SIZE;
   const capPx = text && font ? (font.capHeight / font.unitsPerEm) * fontPx : 0;
-  const blockH = (input.icon ? iconSize : 0) + (input.icon && text ? GAP : 0) + capPx;
+  const blockH =
+    (input.icon ? iconSize : 0) + (input.icon && text ? GAP : 0) + capPx;
   const top = Math.round((H - blockH) / 2);
   if (input.icon) {
     const icon = roundedIcon(input.icon, iconSize);
@@ -129,7 +146,8 @@ export function renderSplashCard(input: SplashCardInput): SplashCard {
       overPixel(out.data, i * 4, 255, 255, 255, a);
     }
   }
-  if (!input.icon && !text) warnings.push('no icon and no name to draw: the splash is empty');
+  if (!input.icon && !text)
+    warnings.push('no icon and no name to draw: the splash is empty');
   return { image: out, text, fontPx, icon: !!input.icon, warnings };
 }
 
@@ -171,7 +189,12 @@ function overPixel(
   dst[o + 3] = Math.round(oa * 255);
 }
 
-function composite(dst: RgbaImage, src: RgbaImage, x0: number, y0: number): void {
+function composite(
+  dst: RgbaImage,
+  src: RgbaImage,
+  x0: number,
+  y0: number,
+): void {
   for (let y = 0; y < src.height; y++) {
     const dy = y0 + y;
     if (dy < 0 || dy >= dst.height) continue;
@@ -180,7 +203,14 @@ function composite(dst: RgbaImage, src: RgbaImage, x0: number, y0: number): void
       if (dx < 0 || dx >= dst.width) continue;
       const s = (y * src.width + x) * 4;
       if (src.data[s + 3] === 0) continue;
-      overPixel(dst.data, (dy * dst.width + dx) * 4, src.data[s], src.data[s + 1], src.data[s + 2], src.data[s + 3]);
+      overPixel(
+        dst.data,
+        (dy * dst.width + dx) * 4,
+        src.data[s],
+        src.data[s + 1],
+        src.data[s + 2],
+        src.data[s + 3],
+      );
     }
   }
 }
@@ -260,7 +290,9 @@ export function buildSplash(input: SplashBuildInput): SplashBuild {
     try {
       font = parseTrueType(input.fontBytes);
     } catch (e) {
-      warnings.push(`the template's font cannot be read (${(e as Error).message}): no app name on the splash`);
+      warnings.push(
+        `the template's font cannot be read (${(e as Error).message}): no app name on the splash`,
+      );
     }
   }
   const card = renderSplashCard({ appName: input.appName, icon, font });

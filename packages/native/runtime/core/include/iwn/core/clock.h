@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The JS clock (TMR-4): milliseconds since the process's JS clock zero on CLOCK_MONOTONIC, as a double. Timers,
 // window rAF time and performance.now() all use it. time_origin_ms() is the Unix-epoch time of that zero.
 #pragma once

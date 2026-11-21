@@ -11,7 +11,8 @@ import { installWebGL, type WebGLInstall } from '../../install.ts';
 
 let inst: WebGLInstall | null = null;
 export function realNatives(): GlNatives | null {
-  return ((globalThis as { __iwn?: { gl?: GlNatives } }).__iwn?.gl ?? null) as GlNatives | null;
+  return ((globalThis as { __iwn?: { gl?: GlNatives } }).__iwn?.gl ??
+    null) as GlNatives | null;
 }
 export function realInstall(): WebGLInstall | null {
   const n = realNatives();
@@ -19,4 +20,5 @@ export function realInstall(): WebGLInstall | null {
   inst ??= installWebGL(globalThis as unknown as Record<string, unknown>, n);
   return inst;
 }
-export const SKIP_REAL = realNatives() === null ? 'no __iwn.gl natives in this runtime' : false;
+export const SKIP_REAL =
+  realNatives() === null ? 'no __iwn.gl natives in this runtime' : false;

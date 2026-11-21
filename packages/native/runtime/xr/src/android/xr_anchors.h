@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Spatial anchors for WebXR (XR-ANCHOR-1): XR_FB_spatial_entity (xrCreateSpatialAnchorFB, component status, locate,
 // destroy), XR_FB_spatial_entity_storage (xrSaveSpaceFB, xrEraseSpaceFB, local storage) and XR_FB_spatial_entity_query
 // (load by UUID). Written from those extension specifications and the call sequences of Meta's OpenXR SDK samples

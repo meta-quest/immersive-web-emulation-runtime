@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Logging: two stable logcat tags (LOG-1), one for the runtime's own messages and one for JS console output and
 // JS errors. On the host the same calls go to stderr (tests can capture them with set_log_sink).
 #pragma once

@@ -21,10 +21,13 @@ test('case-insensitive names, combined values, sorted iteration', () => {
   assert.equal(h.get('b'), '1, 3');
   assert.equal(h.get('A'), '2');
   assert.ok(h.has('B'));
-  assert.deepEqual([...h], [
-    ['a', '2'],
-    ['b', '1, 3'],
-  ]);
+  assert.deepEqual(
+    [...h],
+    [
+      ['a', '2'],
+      ['b', '1, 3'],
+    ],
+  );
   assert.deepEqual([...h.keys()], ['a', 'b']);
   assert.deepEqual([...h.values()], ['2', '1, 3']);
   const seen: string[] = [];
@@ -51,10 +54,13 @@ test('set-cookie is never combined', () => {
   h.append('Set-Cookie', 'a=1');
   h.append('set-cookie', 'b=2');
   assert.deepEqual(h.getSetCookie(), ['a=1', 'b=2']);
-  assert.deepEqual([...h], [
-    ['set-cookie', 'a=1'],
-    ['set-cookie', 'b=2'],
-  ]);
+  assert.deepEqual(
+    [...h],
+    [
+      ['set-cookie', 'a=1'],
+      ['set-cookie', 'b=2'],
+    ],
+  );
   assert.equal(h.get('set-cookie'), 'a=1, b=2');
 });
 
@@ -66,8 +72,14 @@ test('values are trimmed of HTTP whitespace; invalid names and values throw Type
   assert.throws(() => h.append('x', 'a\0b'), TypeError);
   assert.throws(() => h.append('x', 'a\nb'), TypeError);
   assert.throws(() => h.get('a:b'), TypeError);
-  assert.throws(() => new Headers([['a']] as unknown as [string, string][]), TypeError);
-  assert.throws(() => new Headers('nope' as unknown as Record<string, string>), TypeError);
+  assert.throws(
+    () => new Headers([['a']] as unknown as [string, string][]),
+    TypeError,
+  );
+  assert.throws(
+    () => new Headers('nope' as unknown as Record<string, string>),
+    TypeError,
+  );
 });
 
 test('guards: immutable throws, request drops forbidden headers, response drops set-cookie', () => {

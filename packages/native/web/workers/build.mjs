@@ -28,11 +28,17 @@ export const buildOptions = {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   mkdirSync(join(here, 'dist'), { recursive: true });
   for (const minify of [false, true]) {
-    const outfile = join(here, 'dist', minify ? 'workers.min.js' : 'workers.js');
+    const outfile = join(
+      here,
+      'dist',
+      minify ? 'workers.min.js' : 'workers.js',
+    );
     await build({ ...buildOptions, minify, outfile });
     if (minify) {
       const bytes = readFileSync(outfile);
-      console.log(`workers.min.js: ${(bytes.length / 1024).toFixed(1)} KB, gzip ${(gzipSync(bytes).length / 1024).toFixed(1)} KB`);
+      console.log(
+        `workers.min.js: ${(bytes.length / 1024).toFixed(1)} KB, gzip ${(gzipSync(bytes).length / 1024).toFixed(1)} KB`,
+      );
     }
   }
 }

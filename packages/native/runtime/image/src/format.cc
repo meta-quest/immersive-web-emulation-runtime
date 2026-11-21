@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Format sniffing (signatures from the PNG, JPEG/JFIF, GIF89a, RIFF/WebP, BMP, ICO and ISO-BMFF/HEIF specs, and the
 // WHATWG MIME Sniffing standard's image table) and EXIF orientation lookup (TIFF 6.0 IFD layout, Exif 2.32 APP1,
 // PNG 1.5 eXIf chunk, WebP container EXIF chunk).

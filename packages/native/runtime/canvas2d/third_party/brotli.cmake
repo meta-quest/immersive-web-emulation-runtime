@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # Brotli 1.2.0 decoder (MIT, github.com/google/brotli), for WOFF2 fonts.
 if(NOT TARGET iwn_brotlidec)
   set(_br ${IWN_BROTLI_DIR}/c)

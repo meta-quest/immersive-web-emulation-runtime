@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // ES modules inside workers (WRK-3, MOD-2..5): module workers, static imports, dynamic import() in classic and
 // module workers, import.meta.url / import.meta.resolve(). Written from ECMA-262 §16.2 (module records, HostLoad...),
 // HTML §8.1.5 (resolve a module specifier, the module map keyed by URL, import.meta) and V8's module API.

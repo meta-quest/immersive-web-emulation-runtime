@@ -10,9 +10,17 @@
 // the canvas and WebGL streams (image-source protocol) and workers (ImageBitmap transfer).
 // Runs after the web glue (web/glue) so EventTarget, Event, DOMException, Blob and URL exist.
 
-import { createImageEnv, type ImageEnv, type ImageEnvOverrides } from './env.ts';
+import {
+  createImageEnv,
+  type ImageEnv,
+  type ImageEnvOverrides,
+} from './env.ts';
 import { makeCreateImageBitmap } from './create-image-bitmap.ts';
-import { defineImageElement, imageElementHandle, isImageElement } from './html-image-element.ts';
+import {
+  defineImageElement,
+  imageElementHandle,
+  isImageElement,
+} from './html-image-element.ts';
 import {
   bitmapHandle,
   cloneBitmap,
@@ -29,7 +37,9 @@ import type { ImageNatives, NativeImageHandle } from './natives.ts';
 import { IMAGE_SOURCE } from './source.ts';
 import { getImageSource } from './tex-source.ts';
 
-export const IMAGE_REGISTRY_KEY: unique symbol = Symbol.for('iwn.image') as never;
+export const IMAGE_REGISTRY_KEY: unique symbol = Symbol.for(
+  'iwn.image',
+) as never;
 
 export interface InstallImageOptions extends ImageEnvOverrides {
   /**
@@ -67,20 +77,37 @@ export interface ImageRegistry {
 }
 
 interface CloneRegistryLike {
-  registerCloneable(t: { is(v: object): boolean; clone(v: object, inner: (v: unknown) => unknown): unknown }): void;
-  registerTransferable(t: { is(v: object): boolean; transfer(v: object): unknown }): void;
+  registerCloneable(t: {
+    is(v: object): boolean;
+    clone(v: object, inner: (v: unknown) => unknown): unknown;
+  }): void;
+  registerTransferable(t: {
+    is(v: object): boolean;
+    transfer(v: object): unknown;
+  }): void;
 }
 
-export function installImage(global: typeof globalThis, options: InstallImageOptions = {}): ImageRegistry {
+export function installImage(
+  global: typeof globalThis,
+  options: InstallImageOptions = {},
+): ImageRegistry {
   const env = createImageEnv(global, options);
   setImageDataErrors(env.domException);
   setImageBitmapErrors(env.domException);
   const g = global as unknown as Record<string | symbol, unknown>;
   const mode = options.mode ?? 'all';
-  const worker = options.worker ?? (typeof g.importScripts === 'function' || typeof g.WorkerGlobalScope === 'function');
+  const worker =
+    options.worker ??
+    (typeof g.importScripts === 'function' ||
+      typeof g.WorkerGlobalScope === 'function');
   const def = (name: string, value: unknown) => {
     if (mode === 'missing' && name in g) return;
-    Object.defineProperty(global, name, { value, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(global, name, {
+      value,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   };
 
   def('ImageData', ImageData);
@@ -89,7 +116,11 @@ export function installImage(global: typeof globalThis, options: InstallImageOpt
 
   let createImageElement: (() => object) | undefined;
   if (!worker) {
-    const Base = options.Base ?? (typeof g.HTMLElement === 'function' ? (g.HTMLElement as new () => object) : undefined);
+    const Base =
+      options.Base ??
+      (typeof g.HTMLElement === 'function'
+        ? (g.HTMLElement as new () => object)
+        : undefined);
     const classes = defineImageElement(env, Base);
     def('HTMLImageElement', classes.HTMLImageElement);
     def('Image', classes.Image);
@@ -118,13 +149,29 @@ export function installImage(global: typeof globalThis, options: InstallImageOpt
   };
 
   // Same-realm structuredClone through the glue's registry, when it exposes one.
-  const glue = g[Symbol.for('iwn.glue')] as { cloneRegistry?: CloneRegistryLike } | undefined;
+  const glue = g[Symbol.for('iwn.glue')] as
+    | { cloneRegistry?: CloneRegistryLike }
+    | undefined;
   if (glue?.cloneRegistry) {
-    glue.cloneRegistry.registerCloneable({ is: (v) => v instanceof ImageData, clone: (v) => cloneImageData(v as ImageData) });
-    glue.cloneRegistry.registerCloneable({ is: isImageBitmap, clone: (v) => cloneBitmap(v as ImageBitmap) });
-    glue.cloneRegistry.registerTransferable({ is: isImageBitmap, transfer: (v) => transferBitmap(v as ImageBitmap) });
+    glue.cloneRegistry.registerCloneable({
+      is: (v) => v instanceof ImageData,
+      clone: (v) => cloneImageData(v as ImageData),
+    });
+    glue.cloneRegistry.registerCloneable({
+      is: isImageBitmap,
+      clone: (v) => cloneBitmap(v as ImageBitmap),
+    });
+    glue.cloneRegistry.registerTransferable({
+      is: isImageBitmap,
+      transfer: (v) => transferBitmap(v as ImageBitmap),
+    });
   }
 
-  Object.defineProperty(global, IMAGE_REGISTRY_KEY, { value: registry, writable: false, configurable: true, enumerable: false });
+  Object.defineProperty(global, IMAGE_REGISTRY_KEY, {
+    value: registry,
+    writable: false,
+    configurable: true,
+    enumerable: false,
+  });
   return registry;
 }

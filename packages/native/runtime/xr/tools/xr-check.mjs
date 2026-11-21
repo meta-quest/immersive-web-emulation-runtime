@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Talks to a running app's debug endpoint (docs/spec/14: ws://127.0.0.1:<port>/host, one request per connection,
 // the first WebSocket frame is the whole reply) for the XR module's device checks. Uses Node 24's global WebSocket.
 //
@@ -16,7 +23,11 @@ if (args[0] === '--port') {
   args.splice(0, 2);
 }
 
-export function request(method, params = {}, { timeoutMs = 60000, url = `ws://127.0.0.1:${port}/host` } = {}) {
+export function request(
+  method,
+  params = {},
+  { timeoutMs = 60000, url = `ws://127.0.0.1:${port}/host` } = {},
+) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url);
     const timer = setTimeout(() => {
@@ -28,7 +39,13 @@ export function request(method, params = {}, { timeoutMs = 60000, url = `ws://12
       clearTimeout(timer);
       ws.close();
       try {
-        resolve(JSON.parse(typeof e.data === 'string' ? e.data : Buffer.from(e.data).toString('utf8')));
+        resolve(
+          JSON.parse(
+            typeof e.data === 'string'
+              ? e.data
+              : Buffer.from(e.data).toString('utf8'),
+          ),
+        );
       } catch (err) {
         reject(err);
       }
@@ -43,7 +60,11 @@ export function request(method, params = {}, { timeoutMs = 60000, url = `ws://12
 async function main() {
   const [cmd, ...rest] = args;
   if (cmd === 'eval') {
-    const r = await request('eval', { expression: rest[0], awaitPromise: true, timeoutMs: 30000 });
+    const r = await request('eval', {
+      expression: rest[0],
+      awaitPromise: true,
+      timeoutMs: 30000,
+    });
     console.log(JSON.stringify(r, null, 2));
   } else if (cmd === 'stats') {
     const r = await request('stats');
@@ -52,10 +73,15 @@ async function main() {
     console.log(JSON.stringify(await request('info'), null, 2));
   } else if (cmd === 'shot') {
     const t0 = Date.now();
-    const r = await request('shot', { eye: rest[1] ?? 'both', scale: Number(rest[2] ?? 1) });
+    const r = await request('shot', {
+      eye: rest[1] ?? 'both',
+      scale: Number(rest[2] ?? 1),
+    });
     if (r.error) throw new Error(r.error);
     writeFileSync(rest[0], Buffer.from(r.png, 'base64'));
-    console.log(`${rest[0]}: ${r.width}x${r.height}, frame ${r.frame}, ${Date.now() - t0} ms`);
+    console.log(
+      `${rest[0]}: ${r.width}x${r.height}, frame ${r.frame}, ${Date.now() - t0} ms`,
+    );
   } else if (cmd === 'watch') {
     const n = Number(rest[0] ?? 10);
     for (let i = 0; i < n; i++) {
@@ -68,7 +94,9 @@ async function main() {
       await new Promise((r) => setTimeout(r, 1000));
     }
   } else {
-    console.error('usage: xr-check.mjs [--port N] eval <expr> | stats [section] | info | shot <out.png> [eye] [scale] | watch <s>');
+    console.error(
+      'usage: xr-check.mjs [--port N] eval <expr> | stats [section] | info | shot <out.png> [eye] [scale] | watch <s>',
+    );
     process.exit(2);
   }
 }

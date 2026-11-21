@@ -33,7 +33,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     await build({ ...buildOptions, minify, outfile });
     if (minify) {
       const bytes = readFileSync(outfile);
-      console.log(`net.min.js: ${(bytes.length / 1024).toFixed(1)} KB, gzip ${(gzipSync(bytes).length / 1024).toFixed(1)} KB`);
+      console.log(
+        `net.min.js: ${(bytes.length / 1024).toFixed(1)} KB, gzip ${(gzipSync(bytes).length / 1024).toFixed(1)} KB`,
+      );
     }
   }
 }

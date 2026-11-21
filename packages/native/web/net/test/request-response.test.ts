@@ -41,7 +41,9 @@ test('Response body consumers and bodyUsed', async () => {
   assert.deepEqual([...new Uint8Array(ab)], [1, 2, 3]);
   const bytes = await new Response(new Uint8Array([4, 5])).bytes();
   assert.ok(bytes instanceof Uint8Array);
-  const blob = await new Response('abc', { headers: { 'Content-Type': 'Text/Plain; Charset=UTF-8' } }).blob();
+  const blob = await new Response('abc', {
+    headers: { 'Content-Type': 'Text/Plain; Charset=UTF-8' },
+  }).blob();
   assert.equal(blob.type, 'text/plain;charset=utf-8');
   assert.equal(await blob.text(), 'abc');
   const fd = await new Response(new URLSearchParams('a=1&b=2')).formData();
@@ -49,7 +51,10 @@ test('Response body consumers and bodyUsed', async () => {
 });
 
 test('BOM is stripped by text(); invalid UTF-8 becomes U+FFFD', async () => {
-  assert.equal(await new Response(new Uint8Array([0xef, 0xbb, 0xbf, 0x41, 0xff])).text(), 'A�');
+  assert.equal(
+    await new Response(new Uint8Array([0xef, 0xbb, 0xbf, 0x41, 0xff])).text(),
+    'A�',
+  );
 });
 
 test('buffer bodies are copied at construction', async () => {
@@ -68,7 +73,8 @@ test('body stream: getReader, async iteration, locked body is unusable', async (
   assert.equal((await reader.read()).done, true);
   const r2 = new Response('it');
   let out = '';
-  for await (const chunk of r2.body as unknown as AsyncIterable<Uint8Array>) out += new TextDecoder().decode(chunk);
+  for await (const chunk of r2.body as unknown as AsyncIterable<Uint8Array>)
+    out += new TextDecoder().decode(chunk);
   assert.equal(out, 'it');
   const r3 = new Response('x');
   await r3.body!.cancel();
@@ -81,7 +87,14 @@ test('clone tees: both branches read the same bytes, used body cannot be cloned'
   assert.equal(await r.text(), 'twice');
   assert.equal(await c.text(), 'twice');
   assert.throws(() => r.clone(), TypeError);
-  const s = new Response(new ReadableStream({ start(ctrl) { ctrl.enqueue(new TextEncoder().encode('s')); ctrl.close(); } }));
+  const s = new Response(
+    new ReadableStream({
+      start(ctrl) {
+        ctrl.enqueue(new TextEncoder().encode('s'));
+        ctrl.close();
+      },
+    }),
+  );
   const sc = s.clone();
   assert.equal(await sc.text(), 's');
   assert.equal(await s.text(), 's');
@@ -119,7 +132,11 @@ test('Request: URL resolution, credentials, methods, GET with body', () => {
 });
 
 test('Request: headers guard drops forbidden headers, body content-type, clone, re-wrap', async () => {
-  const r = new Request('/x', { method: 'POST', body: 'hi', headers: { Host: 'evil', 'X-A': '1' } });
+  const r = new Request('/x', {
+    method: 'POST',
+    body: 'hi',
+    headers: { Host: 'evil', 'X-A': '1' },
+  });
   assert.equal(r.headers.get('host'), null);
   assert.equal(r.headers.get('x-a'), '1');
   assert.equal(r.headers.get('content-type'), 'text/plain;charset=UTF-8');
@@ -143,12 +160,21 @@ test('Request: signal follows the init signal', () => {
 test('streaming request bodies need duplex: half', () => {
   const body = new ReadableStream();
   assert.throws(() => new Request('/x', { method: 'POST', body }), TypeError);
-  assert.equal(new Request('/x', { method: 'POST', body: new ReadableStream(), duplex: 'half' }).duplex, 'half');
+  assert.equal(
+    new Request('/x', {
+      method: 'POST',
+      body: new ReadableStream(),
+      duplex: 'half',
+    }).duplex,
+    'half',
+  );
 });
 
 test('the streams polyfill works as the body stream implementation', async () => {
   const ponyfill = await import('web-streams-polyfill');
-  setReadableStreamForTests(ponyfill.ReadableStream as unknown as typeof ReadableStream);
+  setReadableStreamForTests(
+    ponyfill.ReadableStream as unknown as typeof ReadableStream,
+  );
   try {
     const r = new Response('poly');
     const reader = r.body!.getReader();

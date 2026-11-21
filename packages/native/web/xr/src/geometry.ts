@@ -10,10 +10,22 @@
 // .boundsGeometry), so IWER needs them on the global. matrixTransform accepts any DOMMatrix-like object (m11..m44).
 
 interface MatrixLike {
-  m11: number; m12: number; m13: number; m14: number;
-  m21: number; m22: number; m23: number; m24: number;
-  m31: number; m32: number; m33: number; m34: number;
-  m41: number; m42: number; m43: number; m44: number;
+  m11: number;
+  m12: number;
+  m13: number;
+  m14: number;
+  m21: number;
+  m22: number;
+  m23: number;
+  m24: number;
+  m31: number;
+  m32: number;
+  m33: number;
+  m34: number;
+  m41: number;
+  m42: number;
+  m43: number;
+  m44: number;
 }
 
 interface PointInit {
@@ -112,7 +124,12 @@ export function installGeometry(g: Record<string, unknown>): string[] {
     ['DOMPoint', DOMPoint],
   ] as const) {
     if (typeof g[name] === 'function') continue;
-    Object.defineProperty(g, name, { value, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(g, name, {
+      value,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
     installed.push(name);
   }
   return installed;

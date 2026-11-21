@@ -10,14 +10,14 @@ Sources: the behaviour spec (`docs/spec/`), V8 headers (`include/v8*.h`, `libpla
 
 ## Layout
 
-| path | what |
-|---|---|
+| path                | what                                                                                                                                                                                                                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `include/iwn/core/` | public headers. V8-free: `log.h`, `clock.h`, `event_loop.h`, `timer_queue.h`, `url.h`, `text.h`, `html_scan.h`, `json.h`, `websocket.h`, `loopback_server.h`, `code_cache_store.h`, `lifecycle.h`, `asset_source.h`, `config.h`. V8: `runtime.h` (API for modules), `platform.h`, `module_registry.h`, `runtime_host.h` (for the app shell) |
-| `src/base/` | V8-free logic, library `iwn_core_base` (Android + host) |
-| `src/v8/` | V8 binding layer, library `iwn_core` (Android only, built `-fno-rtti`) |
-| `js/bootstrap.js` | core JS (console, timers, rAF, microtasks, hooks), embedded into the library at build time |
-| `test/host/` | host unit tests (`iwn_core_base_tests`, 89 tests) and `iwn_loopback_echo` (real server, echo backend) |
-| `test/js/` | Node tests: `bootstrap.test.mjs` (fake natives), `loopback-echo.test.mjs` (Node clients vs the real server) |
+| `src/base/`         | V8-free logic, library `iwn_core_base` (Android + host)                                                                                                                                                                                                                                                                                     |
+| `src/v8/`           | V8 binding layer, library `iwn_core` (Android only, built `-fno-rtti`)                                                                                                                                                                                                                                                                      |
+| `js/bootstrap.js`   | core JS (console, timers, rAF, microtasks, hooks), embedded into the library at build time                                                                                                                                                                                                                                                  |
+| `test/host/`        | host unit tests (`iwn_core_base_tests`, 89 tests) and `iwn_loopback_echo` (real server, echo backend)                                                                                                                                                                                                                                       |
+| `test/js/`          | Node tests: `bootstrap.test.mjs` (fake natives), `loopback-echo.test.mjs` (Node clients vs the real server)                                                                                                                                                                                                                                 |
 
 ## Native module contract
 
@@ -74,7 +74,7 @@ until a `FramePump` is installed; the JS side snapshots the handles (`frameBegin
 callback (`frameCallback`) and then runs a checkpoint.
 
 Errors (LOOP-4, CDP-5): every page callback (timers, rAF and `queueMicrotask` callbacks, hooks, lifecycle and
-readiness events, posted tasks, `call_function`, classic scripts) runs inside a `PageCallScope`, a *verbose*
+readiness events, posted tasks, `call_function`, classic scripts) runs inside a `PageCallScope`, a _verbose_
 `v8::TryCatch`, with no JS `try/catch` around page code. That is Chrome's model: V8's exception prediction then
 classes the exception as uncaught, so DevTools' "Pause on uncaught exceptions" stops at the throw, and V8 reports it
 once through the message listener with its URL, line and column (the window `error` event, logcat, DevTools).
@@ -165,7 +165,7 @@ Logged per script: `code cache hit|miss|stale|corrupt`, then `consumed` / `rejec
   reported as uncaught and DevTools pauses on it; for the glue's `EventTarget` listener loop),
   `enqueueMicrotask` (native microtask, page catch scope), `reportException` (log + DevTools
   only), `reportError` (full "report an exception"), `lifecycleState()` (`{visibilityState, focused,
-  readyState}`: the glue's `document` should read it), `reload`, `close`, `inspectorSessions`, `runtimeVersion`,
+readyState}`: the glue's `document` should read it), `reload`, `close`, `inspectorSessions`, `runtimeVersion`,
   `v8Version`, `origin`, `documentUrl`, `isWorker`.
 - For the web glue (`web/glue/src/natives.ts`): `clock {now, timeOrigin}`, `loop {queueMicrotask}`,
   `clone {structuredClone}` (ValueSerializer, ArrayBuffer transfer), `crypto {random(view)}` (fills in place from
@@ -192,7 +192,7 @@ debug→D, log/info→I, warn→W, error/assert→E. Messages over 4000 bytes ar
 preferred), never truncated. One boot line with runtime/V8/device/OS/app/GL/OpenXR. `stats.logIntervalMs > 0`
 adds a periodic stats line (LOG-3; XR fields come with M3).
 
-## Inspector and debug endpoint (CDP-1..10, DBG-*)
+## Inspector and debug endpoint (CDP-1..10, DBG-\*)
 
 On the headset an abstract Unix socket per port, `<packageId>_devtools_<port>` (`inspector.port`, default 9229),
 reached with `adb forward tcp:<p> localabstract:<packageId>_devtools_<port>`; a connection from any uid other than

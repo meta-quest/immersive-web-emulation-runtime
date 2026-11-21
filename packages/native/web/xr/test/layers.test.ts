@@ -45,7 +45,10 @@ async function start(h: H, features = "['layers', 'local-floor']") {
   h.run(`globalThis.__session = null; navigator.xr.requestSession('immersive-vr', { optionalFeatures: ${features} })
     .then((s) => { globalThis.__session = s; }, (e) => { globalThis.__error = e; });`);
   await h.settle();
-  assert.ok(h.run('globalThis.__session'), `session: ${h.run('String(globalThis.__error)')}`);
+  assert.ok(
+    h.run('globalThis.__session'),
+    `session: ${h.run('String(globalThis.__error)')}`,
+  );
   h.run(`
     globalThis.__binding = new XRWebGLBinding(__session, __gl);
     globalThis.__proj = __binding.createProjectionLayer({ textureType: 'texture-array' });
@@ -93,17 +96,33 @@ test('XR-LAYER-1: createQuadLayer / createCylinderLayer make a swapchain per lay
   h.run(`__session.updateRenderState({ layers: [__proj, __arr1] });
     __session.requestAnimationFrame((t, f) => { globalThis.__arrSub = __binding.getSubImage(__arr1, f); });`);
   h.frame();
-  assert.equal(h.run('__arrSub.colorTexture._target'), 0x8c1a, 'TEXTURE_2D_ARRAY');
+  assert.equal(
+    h.run('__arrSub.colorTexture._target'),
+    0x8c1a,
+    'TEXTURE_2D_ARRAY',
+  );
   assert.equal(h.run('__arrSub.imageIndex'), 0);
-  assert.equal(h.run('__quad instanceof XRQuadLayer && __cyl instanceof XRCylinderLayer'), true);
-  assert.equal(h.run('typeof XRWebGLBinding.prototype.createQuadLayer'), 'function');
+  assert.equal(
+    h.run('__quad instanceof XRQuadLayer && __cyl instanceof XRCylinderLayer'),
+    true,
+  );
+  assert.equal(
+    h.run('typeof XRWebGLBinding.prototype.createQuadLayer'),
+    'function',
+  );
   assert.throws(
-    () => h.run('__binding.createQuadLayer({ space: __local, viewPixelWidth: 0.5, viewPixelHeight: 0.5 })'),
+    () =>
+      h.run(
+        '__binding.createQuadLayer({ space: __local, viewPixelWidth: 0.5, viewPixelHeight: 0.5 })',
+      ),
     (e: Error) => e.name === 'TypeError',
   );
   // the fake XR thread refuses an image over its limit; IWER turns the null into OperationError
   assert.throws(
-    () => h.run('__binding.createQuadLayer({ space: __local, viewPixelWidth: 5000, viewPixelHeight: 64 })'),
+    () =>
+      h.run(
+        '__binding.createQuadLayer({ space: __local, viewPixelWidth: 5000, viewPixelHeight: 64 })',
+      ),
     (e: Error) => e.name === 'OperationError',
   );
 });
@@ -113,10 +132,18 @@ test('XR-LAYER-1: without the native layer calls or with a buffer of another lay
     const h = createHarness(opts);
     await start(h);
     assert.throws(
-      () => h.run('__binding.createQuadLayer({ space: __local, viewPixelWidth: 64, viewPixelHeight: 64 })'),
+      () =>
+        h.run(
+          '__binding.createQuadLayer({ space: __local, viewPixelWidth: 64, viewPixelHeight: 64 })',
+        ),
       (e: Error) => e.name === 'NotSupportedError',
     );
-    if (opts.layerBufferVersion) assert.ok(h.logs.some((l) => /composition layer buffer of another layout/.test(l)));
+    if (opts.layerBufferVersion)
+      assert.ok(
+        h.logs.some((l) =>
+          /composition layer buffer of another layout/.test(l),
+        ),
+      );
   }
 });
 
@@ -133,24 +160,40 @@ test('XR-LAYER-1 / XR-SC-4: the frame list reaches the XR thread in renderState.
   `);
   // the list takes effect at the next frame; until a frame runs the buffer holds no list
   assert.equal(h.layerWords.u32[COUNT_AT], NO_LIST);
-  h.run('__session.requestAnimationFrame((t, f) => { __binding.getSubImage(__quad, f); })');
+  h.run(
+    '__session.requestAnimationFrame((t, f) => { __binding.getSubImage(__quad, f); })',
+  );
   h.frame();
   assert.equal(h.layerWords.u32[COUNT_AT], 3);
   assert.equal(entry(h, 0).kind, KIND_PROJECTION);
   const q = entry(h, 1);
   assert.equal(q.kind, KIND_QUAD);
   assert.equal(q.id, 1);
-  assert.equal(q.flags, FLAG_LISTED | FLAG_REDRAWN | FLAG_LOCATED);  // blendTextureSourceAlpha turned off
+  assert.equal(q.flags, FLAG_LISTED | FLAG_REDRAWN | FLAG_LOCATED); // blendTextureSourceAlpha turned off
   assert.equal(q.layout, LAYOUT_MONO);
   // the host's LOCAL pose (0.3, 1.5, -0.2) and the quad 1 m ahead of it; full size = twice the half-extents
-  assert.deepEqual(q.pose.map((v) => Number(v.toFixed(4))), [0.3, 1.5, -1.2, 0, 0, 0, 1]);
-  assert.deepEqual([q.a, q.b].map((v) => Number(v.toFixed(4))), [0.8, 0.4]);
+  assert.deepEqual(
+    q.pose.map((v) => Number(v.toFixed(4))),
+    [0.3, 1.5, -1.2, 0, 0, 0, 1],
+  );
+  assert.deepEqual(
+    [q.a, q.b].map((v) => Number(v.toFixed(4))),
+    [0.8, 0.4],
+  );
   const c = entry(h, 2);
   assert.equal(c.kind, KIND_CYLINDER);
-  assert.equal(c.flags, FLAG_LISTED | FLAG_LOCATED | FLAG_BLEND_ALPHA | FLAG_VIEWER);  // blending is the default
+  assert.equal(
+    c.flags,
+    FLAG_LISTED | FLAG_LOCATED | FLAG_BLEND_ALPHA | FLAG_VIEWER,
+  ); // blending is the default
   assert.equal(c.layout, LAYOUT_STEREO_ARRAY);
   assert.deepEqual([c.a, c.b, c.c], [1.5, 1, 3]);
-  assert.deepEqual(h.run('JSON.stringify([__iwnXR.stats().layerSwapchains, __iwnXR.stats().layerEntries])'), '[2,3]');
+  assert.deepEqual(
+    h.run(
+      'JSON.stringify([__iwnXR.stats().layerSwapchains, __iwnXR.stats().layerEntries])',
+    ),
+    '[2,3]',
+  );
 
   // a frame without a draw: nothing redrawn
   h.frame();
@@ -158,7 +201,9 @@ test('XR-LAYER-1 / XR-SC-4: the frame list reaches the XR thread in renderState.
 
   // a frame IWER lists nothing for (hidden: no callbacks, no list) must not leave the last list in the buffer, or
   // the XR thread would release images for redraws of an earlier frame
-  h.run('__session.requestAnimationFrame((t, f) => { __binding.getSubImage(__quad, f); })');
+  h.run(
+    '__session.requestAnimationFrame((t, f) => { __binding.getSubImage(__quad, f); })',
+  );
   h.frame();
   assert.equal(entry(h, 1).flags & FLAG_REDRAWN, FLAG_REDRAWN);
   h.events([{ type: 'visibilitychange', visible: false, focused: false }]);
@@ -181,7 +226,10 @@ test('XR-LAYER-1: a layer texture follows the image the XR thread acquired, is a
     });
   `);
   h.frame();
-  assert.deepEqual(h.calls.filter((c) => c[0] === 'acquireLayerImage'), [['acquireLayerImage', 1]]);
+  assert.deepEqual(
+    h.calls.filter((c) => c[0] === 'acquireLayerImage'),
+    [['acquireLayerImage', 1]],
+  );
   assert.equal(h.run('__first'), 900);
   assert.equal(h.run('__sub.colorTexture._target'), 0x0de1);
   assert.equal(h.run('__sub.colorTexture._name'), 0, 'parked after the frame');
@@ -189,15 +237,27 @@ test('XR-LAYER-1: a layer texture follows the image the XR thread acquired, is a
   // the XR thread put the next image in the buffer before the frame: the texture points at it during the frame,
   // and the app's framebuffer is re-pointed with it
   h.layerWords.u32[NAMES_AT + 0] = 777;
-  h.run('__session.requestAnimationFrame((t, f) => { globalThis.__inFrame = __binding.getSubImage(__quad, f).colorTexture._name; })');
+  h.run(
+    '__session.requestAnimationFrame((t, f) => { globalThis.__inFrame = __binding.getSubImage(__quad, f).colorTexture._name; })',
+  );
   h.retargets.length = 0;
   h.frame();
   assert.equal(h.run('__inFrame'), 777);
-  assert.equal(h.calls.filter((c) => c[0] === 'acquireLayerImage').length, 1, 'no second acquire');
+  assert.equal(
+    h.calls.filter((c) => c[0] === 'acquireLayerImage').length,
+    1,
+    'no second acquire',
+  );
   const quadTex = h.run('__sub.colorTexture');
   const mine = h.retargets.filter((r) => r.tex === quadTex);
-  assert.deepEqual(mine.map((r) => r.name), [777, 0]);
-  assert.ok(mine[0].fbs.includes(h.run('__lfb')), 'the framebuffer holding the layer texture is re-pointed');
+  assert.deepEqual(
+    mine.map((r) => r.name),
+    [777, 0],
+  );
+  assert.ok(
+    mine[0].fbs.includes(h.run('__lfb')),
+    'the framebuffer holding the layer texture is re-pointed',
+  );
 });
 
 test('XR-LAYER-1: destroy() releases the swapchain; the end of the session drops every layer texture', async () => {
@@ -209,15 +269,26 @@ test('XR-LAYER-1: destroy() releases the swapchain; the end of the session drops
     __session.updateRenderState({ layers: [__proj, __quad, __quad2] });
     __quad.destroy();
   `);
-  assert.deepEqual(h.calls.filter((c) => c[0] === 'destroyLayerSwapchain'), [['destroyLayerSwapchain', 1]]);
+  assert.deepEqual(
+    h.calls.filter((c) => c[0] === 'destroyLayerSwapchain'),
+    [['destroyLayerSwapchain', 1]],
+  );
   h.frame();
-  assert.equal(h.layerWords.u32[COUNT_AT], 2, 'the destroyed layer is not listed');
+  assert.equal(
+    h.layerWords.u32[COUNT_AT],
+    2,
+    'the destroyed layer is not listed',
+  );
   assert.equal(entry(h, 1).id, 2);
   assert.equal(h.run('__iwnXR.stats().layerSwapchains'), 1);
   h.run('__session.end()');
   await h.settle();
   assert.equal(h.run('__iwnXR.stats().layerSwapchains'), 0);
-  assert.equal(h.calls.filter((c) => c[0] === 'destroyLayerSwapchain').length, 1, 'the runtime drops the rest itself');
+  assert.equal(
+    h.calls.filter((c) => c[0] === 'destroyLayerSwapchain').length,
+    1,
+    'the runtime drops the rest itself',
+  );
 });
 
 test('XR-LAYER-1: an XRWebGLLayer session writes no list; a frame that drew only layers is fenced', async () => {

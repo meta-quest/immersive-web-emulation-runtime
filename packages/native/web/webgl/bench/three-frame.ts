@@ -22,33 +22,70 @@ export interface FrameResult {
   draws: number;
 }
 
-const now = (): number => (globalThis as { performance?: { now(): number } }).performance?.now() ?? Date.now();
+const now = (): number =>
+  (globalThis as { performance?: { now(): number } }).performance?.now() ??
+  Date.now();
 
-export function runThreeFrame(inst: WebGLInstall, label: string, frames = 300): FrameResult {
-  const canvas = { width: 256, height: 256, style: {}, addEventListener() {}, removeEventListener() {} };
-  const gl = inst.createContext(canvas as never, 'webgl2', { antialias: false }) as unknown as Ctx;
-  const r = new THREE.WebGLRenderer({ canvas: canvas as never, context: gl as never });
+export function runThreeFrame(
+  inst: WebGLInstall,
+  label: string,
+  frames = 300,
+): FrameResult {
+  const canvas = {
+    width: 256,
+    height: 256,
+    style: {},
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const gl = inst.createContext(canvas as never, 'webgl2', {
+    antialias: false,
+  }) as unknown as Ctx;
+  const r = new THREE.WebGLRenderer({
+    canvas: canvas as never,
+    context: gl as never,
+  });
   r.setSize(256, 256, false);
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(70, 1, 0.1, 100);
-  const tex = new THREE.DataTexture(new Uint8Array(64 * 64 * 4).fill(200), 64, 64);
+  const tex = new THREE.DataTexture(
+    new Uint8Array(64 * 64 * 4).fill(200),
+    64,
+    64,
+  );
   tex.needsUpdate = true;
-  const geos = [new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.SphereGeometry(0.2, 12, 8), new THREE.CylinderGeometry(0.1, 0.1, 0.4, 10)];
+  const geos = [
+    new THREE.BoxGeometry(0.3, 0.3, 0.3),
+    new THREE.SphereGeometry(0.2, 12, 8),
+    new THREE.CylinderGeometry(0.1, 0.1, 0.4, 10),
+  ];
   const mats = [
     new THREE.MeshStandardMaterial({ color: 0x8899ff, roughness: 0.6 }),
     new THREE.MeshStandardMaterial({ map: tex }),
     new THREE.MeshBasicMaterial({ color: 0xff8800 }),
     new THREE.MeshPhongMaterial({ color: 0x00ff88 }),
-    new THREE.MeshLambertMaterial({ color: 0xffffff, map: tex, transparent: true, opacity: 0.8 }),
+    new THREE.MeshLambertMaterial({
+      color: 0xffffff,
+      map: tex,
+      transparent: true,
+      opacity: 0.8,
+    }),
   ];
   const meshes: THREE.Mesh[] = [];
   for (let i = 0; i < 150; i++) {
     const m = new THREE.Mesh(geos[i % geos.length], mats[i % mats.length]);
-    m.position.set(((i % 15) - 7) * 0.5, (Math.floor(i / 15) - 5) * 0.5, -6 - (i % 3));
+    m.position.set(
+      ((i % 15) - 7) * 0.5,
+      (Math.floor(i / 15) - 5) * 0.5,
+      -6 - (i % 3),
+    );
     scene.add(m);
     meshes.push(m);
   }
-  scene.add(new THREE.DirectionalLight(0xffffff, 1.5), new THREE.AmbientLight(0x404040));
+  scene.add(
+    new THREE.DirectionalLight(0xffffff, 1.5),
+    new THREE.AmbientLight(0x404040),
+  );
   const step = (f: number): void => {
     cam.position.x = Math.sin(f * 0.01) * 0.5;
     cam.lookAt(0, 0, -6);
@@ -61,7 +98,12 @@ export function runThreeFrame(inst: WebGLInstall, label: string, frames = 300): 
   for (let f = 0; f < frames; f++) step(60 + f);
   const ms = (now() - t0) / frames;
   const s = readStats(gl);
-  return { label, msPerFrame: ms, nativeCallsPerFrame: s.nativeCalls / frames, draws: r.info.render.calls };
+  return {
+    label,
+    msPerFrame: ms,
+    nativeCallsPerFrame: s.nativeCalls / frames,
+    draws: r.info.render.calls,
+  };
 }
 
 export function formatFrame(x: FrameResult): string {

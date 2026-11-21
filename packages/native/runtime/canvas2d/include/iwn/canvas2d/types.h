@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Canvas 2D core types. Plain C++ (no V8): builds and is unit-tested on the x86_64 host.
 //
 // Conventions (HTML "the canvas element", CanvasRenderingContext2D):

@@ -17,7 +17,13 @@
 import whatwgURL from 'whatwg-url/webidl2js-wrapper.js';
 import { atob, btoa } from './base64.ts';
 import { cloneRegistry, createStructuredClone } from './clone.ts';
-import { AbortController, AbortSignal, addAbortAlgorithm, dependentCount, signalAbort } from './abort.ts';
+import {
+  AbortController,
+  AbortSignal,
+  addAbortAlgorithm,
+  dependentCount,
+  signalAbort,
+} from './abort.ts';
 import {
   base64Encode,
   Blob,
@@ -28,9 +34,21 @@ import {
   File,
   FileReader,
 } from './blob.ts';
-import { attachSubtle, createCrypto, Crypto, hasRandomSource, randomUUID, setRandomSource } from './crypto.ts';
+import {
+  attachSubtle,
+  createCrypto,
+  Crypto,
+  hasRandomSource,
+  randomUUID,
+  setRandomSource,
+} from './crypto.ts';
 import { DOMException } from './dom-exception.ts';
-import { setNativeEncoding, TextDecoder, TextEncoder, utf8Encode } from './encoding.ts';
+import {
+  setNativeEncoding,
+  TextDecoder,
+  TextEncoder,
+  utf8Encode,
+} from './encoding.ts';
 import {
   adoptEventTarget,
   CustomEvent,
@@ -50,7 +68,14 @@ import {
 } from './events.ts';
 import { type IntlReport, verifyIntl } from './intl.ts';
 import type { DeviceInfo, GlueConfig, GlueNatives } from './natives.ts';
-import { createNavigator, Navigator, Permissions, PermissionStatus, StorageManager, WorkerNavigator } from './navigator.ts';
+import {
+  createNavigator,
+  Navigator,
+  Permissions,
+  PermissionStatus,
+  StorageManager,
+  WorkerNavigator,
+} from './navigator.ts';
 import {
   type Clock,
   createClock,
@@ -61,7 +86,14 @@ import {
   PerformanceMeasure,
   setDetailCloner,
 } from './performance.ts';
-import { defineGlobal, defineGlobalGetter, type GlobalSetter, type InstallMode, INTERNAL, toDOMString } from './util.ts';
+import {
+  defineGlobal,
+  defineGlobalGetter,
+  type GlobalSetter,
+  type InstallMode,
+  INTERNAL,
+  toDOMString,
+} from './util.ts';
 import {
   createMatchMedia,
   createNavigation,
@@ -75,7 +107,14 @@ import {
   WorkerLocation,
 } from './window.ts';
 
-export type { BlobURLStore, GlueConfig, GlueNatives, DeviceInfo, IntlReport, InstallMode };
+export type {
+  BlobURLStore,
+  GlueConfig,
+  GlueNatives,
+  DeviceInfo,
+  IntlReport,
+  InstallMode,
+};
 export type GlueScope = 'window' | 'worker';
 
 export const GLUE_VERSION = '0.0.0';
@@ -110,7 +149,11 @@ export interface GlueRegistry {
     reportException: typeof reportException;
   };
   /** `dependentCount` is diagnostics (AbortSignal.any() bookkeeping of a source signal). */
-  abort: { addAbortAlgorithm: typeof addAbortAlgorithm; signalAbort: typeof signalAbort; dependentCount: typeof dependentCount };
+  abort: {
+    addAbortAlgorithm: typeof addAbortAlgorithm;
+    signalAbort: typeof signalAbort;
+    dependentCount: typeof dependentCount;
+  };
   /**
    * Makes platform objects serializable/transferable in structuredClone (ImageData, ImageBitmap,
    * MessagePort, ...) or marks them as throwing DataCloneError. Registered types always take the JS
@@ -147,13 +190,18 @@ export interface InstallOptions {
   scope?: GlueScope;
 }
 
-function parseConfig(c: GlueConfig | string | undefined, warn: (m: string) => void): GlueConfig {
+function parseConfig(
+  c: GlueConfig | string | undefined,
+  warn: (m: string) => void,
+): GlueConfig {
   if (c === undefined || c === null) return {};
   if (typeof c === 'string') {
     try {
       return JSON.parse(c) as GlueConfig;
     } catch (e) {
-      warn(`[iwer-native] glue config is not valid JSON (${String((e as Error)?.message ?? e)}); using defaults`);
+      warn(
+        `[iwer-native] glue config is not valid JSON (${String((e as Error)?.message ?? e)}); using defaults`,
+      );
       return {};
     }
   }
@@ -163,7 +211,16 @@ function parseConfig(c: GlueConfig | string | undefined, warn: (m: string) => vo
 /** Globals the core bootstrap pre-installs in a minimal form that the glue replaces even in `missing` mode. */
 const SUPERSEDED = new Set(['structuredClone', 'performance']);
 
-const WORKER_EVENTS = ['error', 'unhandledrejection', 'rejectionhandled', 'message', 'messageerror', 'online', 'offline', 'languagechange'];
+const WORKER_EVENTS = [
+  'error',
+  'unhandledrejection',
+  'rejectionhandled',
+  'message',
+  'messageerror',
+  'online',
+  'offline',
+  'languagechange',
+];
 
 const WINDOW_EVENTS = [
   'error',
@@ -194,11 +251,16 @@ function fallbackUUID(): string {
   const hex =
     Date.now().toString(16).padStart(12, '0').slice(-12) +
     uuidSeq.toString(16).padStart(8, '0') +
-    Math.floor(Math.random() * 0x1000000000000).toString(16).padStart(12, '0');
+    Math.floor(Math.random() * 0x1000000000000)
+      .toString(16)
+      .padStart(12, '0');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${((parseInt(hex[16]!, 16) & 3) | 8).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
-export function installGlue(global: typeof globalThis, options: InstallOptions = {}): GlueRegistry {
+export function installGlue(
+  global: typeof globalThis,
+  options: InstallOptions = {},
+): GlueRegistry {
   const g = global as unknown as Record<string, unknown>;
   const natives = options.natives ?? (g.__iwn as GlueNatives | undefined) ?? {};
   const mode = options.mode ?? 'missing';
@@ -209,14 +271,29 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
       c?.warn?.(m);
     });
   const config = options.config ?? parseConfig(natives.config, warn);
-  const scope: GlueScope = options.scope ?? (config.scope === 'worker' ? 'worker' : 'window');
+  const scope: GlueScope =
+    options.scope ?? (config.scope === 'worker' ? 'worker' : 'window');
   const isWindow = scope === 'window';
   const installed: string[] = [];
   const def = (name: string, value: unknown): void => {
-    if (defineGlobal(global, name, value, SUPERSEDED.has(name) ? 'all' : mode)) installed.push(name);
+    if (defineGlobal(global, name, value, SUPERSEDED.has(name) ? 'all' : mode))
+      installed.push(name);
   };
-  const defGet = (name: string, get: () => unknown, setter: GlobalSetter = 'readonly'): void => {
-    if (defineGlobalGetter(global, name, get, SUPERSEDED.has(name) ? 'all' : mode, setter)) installed.push(name);
+  const defGet = (
+    name: string,
+    get: () => unknown,
+    setter: GlobalSetter = 'readonly',
+  ): void => {
+    if (
+      defineGlobalGetter(
+        global,
+        name,
+        get,
+        SUPERSEDED.has(name) ? 'all' : mode,
+        setter,
+      )
+    )
+      installed.push(name);
   };
   // The core bootstrap aliases window and self to the global as plain writable data properties. Replace
   // such an alias with the WebIDL attribute even in `missing` mode (an engine-provided accessor stays).
@@ -225,7 +302,16 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     return !!d && 'value' in d && d.value === global && d.configurable === true;
   };
   const defAlias = (name: string, setter: GlobalSetter): void => {
-    if (defineGlobalGetter(global, name, () => global, isAlias(name) ? 'all' : mode, setter)) installed.push(name);
+    if (
+      defineGlobalGetter(
+        global,
+        name,
+        () => global,
+        isAlias(name) ? 'all' : mode,
+        setter,
+      )
+    )
+      installed.push(name);
   };
 
   if (isWindow) {
@@ -236,7 +322,11 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     // WRK-2: a worker global has self (readonly) and no window. The core bootstrap aliases window to
     // the global in every context; remove that alias here.
     const w = Object.getOwnPropertyDescriptor(global, 'window');
-    if (w && (w.value === global || (w.get && w.get.call(global) === global)) && w.configurable) {
+    if (
+      w &&
+      (w.value === global || (w.get && w.get.call(global) === global)) &&
+      w.configurable
+    ) {
       delete g.window;
     }
     defAlias('self', 'readonly');
@@ -252,7 +342,11 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
   setExceptionReporter((error) => {
     const report = g.reportError;
     if (typeof report === 'function') report.call(global, error);
-    else (g.console as { error?: (...a: unknown[]) => void } | undefined)?.error?.('Uncaught', error);
+    else
+      (g.console as { error?: (...a: unknown[]) => void } | undefined)?.error?.(
+        'Uncaught',
+        error,
+      );
   });
 
   def('DOMException', DOMException);
@@ -274,7 +368,11 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
   // The global object as an EventTarget (window.addEventListener / dispatchEvent).
   if (mode === 'all' || typeof g.addEventListener !== 'function') {
     adoptEventTarget(global);
-    for (const m of ['addEventListener', 'removeEventListener', 'dispatchEvent'] as const) {
+    for (const m of [
+      'addEventListener',
+      'removeEventListener',
+      'dispatchEvent',
+    ] as const) {
       Object.defineProperty(global, m, {
         value: EventTarget.prototype[m],
         writable: true,
@@ -283,7 +381,8 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
       });
     }
     for (const t of isWindow ? WINDOW_EVENTS : WORKER_EVENTS) {
-      if (mode === 'all' || !(`on${t}` in global)) defineEventHandler(global, t, () => global as unknown as EventTarget);
+      if (mode === 'all' || !(`on${t}` in global))
+        defineEventHandler(global, t, () => global as unknown as EventTarget);
     }
     installed.push('addEventListener', 'removeEventListener', 'dispatchEvent');
   }
@@ -296,7 +395,11 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     let p = Object.getPrototypeOf(link) as object | null;
     if (p !== null && p !== Object.prototype) {
       const own = Object.getOwnPropertyNames(p);
-      if (own.length <= 1 && own.every((n) => n === 'constructor') && Object.getOwnPropertySymbols(p).length === 0) {
+      if (
+        own.length <= 1 &&
+        own.every((n) => n === 'constructor') &&
+        Object.getOwnPropertySymbols(p).length === 0
+      ) {
         link = p;
         p = Object.getPrototypeOf(p) as object | null;
       }
@@ -315,11 +418,16 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
   // only logged (the "errors reporting" guard), so a throwing error handler cannot recurse.
   let reporting = false;
   const logUncaught = (error: unknown): void => {
-    (g.console as { error?: (...a: unknown[]) => void } | undefined)?.error?.('Uncaught', error);
+    (g.console as { error?: (...a: unknown[]) => void } | undefined)?.error?.(
+      'Uncaught',
+      error,
+    );
   };
   def('reportError', function reportError(error: unknown): void {
     if (arguments.length === 0) {
-      throw new TypeError("Failed to execute 'reportError' on 'Window': 1 argument required, but only 0 present.");
+      throw new TypeError(
+        "Failed to execute 'reportError' on 'Window': 1 argument required, but only 0 present.",
+      );
     }
     if (reporting) {
       logUncaught(error);
@@ -331,7 +439,11 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     } catch {
       text = Object.prototype.toString.call(error);
     }
-    const event = new ErrorEvent('error', { cancelable: true, message: `Uncaught ${text}`, error });
+    const event = new ErrorEvent('error', {
+      cancelable: true,
+      message: `Uncaught ${text}`,
+      error,
+    });
     reporting = true;
     let notCanceled: boolean;
     try {
@@ -346,7 +458,9 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
   const nativeQueue = natives.loop?.queueMicrotask;
   def('queueMicrotask', function queueMicrotask(callback: () => void): void {
     if (typeof callback !== 'function') {
-      throw new TypeError("Failed to execute 'queueMicrotask' on 'Window': The callback provided as parameter 1 is not a function.");
+      throw new TypeError(
+        "Failed to execute 'queueMicrotask' on 'Window': The callback provided as parameter 1 is not a function.",
+      );
     }
     const run = (): void => {
       try {
@@ -365,7 +479,10 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     is: (v) => v instanceof File,
     clone: (v) => {
       const f = v as File;
-      return new File([f], f.name, { type: f.type, lastModified: f.lastModified });
+      return new File([f], f.name, {
+        type: f.type,
+        lastModified: f.lastModified,
+      });
     },
   });
   cloneRegistry.registerCloneable({
@@ -377,7 +494,12 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     clone: (v) => {
       const e = v as DOMException;
       const c = new DOMException(e.message, e.name);
-      if (typeof e.stack === 'string') Object.defineProperty(c, 'stack', { value: e.stack, writable: true, configurable: true });
+      if (typeof e.stack === 'string')
+        Object.defineProperty(c, 'stack', {
+          value: e.stack,
+          writable: true,
+          configurable: true,
+        });
       return c;
     },
   });
@@ -400,12 +522,15 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     StorageManager,
   ];
   cloneRegistry.registerNonSerializable((v) => {
-    for (const C of platformClasses) if (v instanceof (C as new () => object)) return true;
+    for (const C of platformClasses)
+      if (v instanceof (C as new () => object)) return true;
     return false;
   });
   const nativeClone = natives.clone?.structuredClone;
   const structuredClone = createStructuredClone(
-    typeof nativeClone === 'function' ? (v, t) => nativeClone.call(natives.clone, v, t) : undefined,
+    typeof nativeClone === 'function'
+      ? (v, t) => nativeClone.call(natives.clone, v, t)
+      : undefined,
   );
   def('structuredClone', structuredClone);
   setDetailCloner((v) => (structuredClone as (v: unknown) => unknown)(v));
@@ -426,7 +551,9 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     if (!withSubtle) return false;
     def('SubtleCrypto', ctor);
     attachSubtle(crypto, instance);
-    cloneRegistry.registerNonSerializable((v) => v instanceof (ctor as new () => object));
+    cloneRegistry.registerNonSerializable(
+      (v) => v instanceof (ctor as new () => object),
+    );
     return true;
   };
 
@@ -441,16 +568,27 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
   // URL + blob URLs (NET-13): whatwg-url, the URL Standard's reference implementation. Keep the
   // engine's URL if it has one and mode is `missing`.
   if (mode === 'all' || typeof g.URL !== 'function') {
-    const holder: Record<string, unknown> = { Array, Object, Promise, String, TypeError };
+    const holder: Record<string, unknown> = {
+      Array,
+      Object,
+      Promise,
+      String,
+      TypeError,
+    };
     whatwgURL.URL.install(holder, ['Window']);
     whatwgURL.URLSearchParams.install(holder, ['Window']);
     def('URL', holder.URL);
     def('URLSearchParams', holder.URLSearchParams);
   }
   const URLCtor = g.URL as typeof URL;
-  const URLSearchParamsCtor = g.URLSearchParams as typeof URLSearchParams | undefined;
+  const URLSearchParamsCtor = g.URLSearchParams as
+    | typeof URLSearchParams
+    | undefined;
   cloneRegistry.registerNonSerializable(
-    (v) => v instanceof URLCtor || (typeof URLSearchParamsCtor === 'function' && v instanceof URLSearchParamsCtor),
+    (v) =>
+      v instanceof URLCtor ||
+      (typeof URLSearchParamsCtor === 'function' &&
+        v instanceof URLSearchParamsCtor),
   );
 
   // Location / history (DOM-5, DOM-3) on a window; WorkerLocation in a worker (WRK-2).
@@ -458,7 +596,9 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
   try {
     initial = new URLCtor(config.url ?? DEFAULT_URL).href;
   } catch {
-    warn(`[iwer-native] invalid app URL in config: ${String(config.url)}; using ${DEFAULT_URL}`);
+    warn(
+      `[iwer-native] invalid app URL in config: ${String(config.url)}; using ${DEFAULT_URL}`,
+    );
   }
   let navigation: Navigation | null = null;
   let currentOrigin: () => string;
@@ -474,14 +614,21 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
           // location.reload(), or assign/replace/href/search set to the current URL (DOM-5: same
           // document reloads, PROC-8): restart with the current document URL, query and fragment included
           // (the host keeps its startup URL unless told).
-          if (typeof app?.reload === 'function') app.reload(navigation?.current().href);
-          else warn('[iwer-native] location.reload() is not available in this host');
+          if (typeof app?.reload === 'function')
+            app.reload(navigation?.current().href);
+          else
+            warn(
+              '[iwer-native] location.reload() is not available in this host',
+            );
           return;
         }
         // Another same-origin document. Only a host that can restart at a given URL (`app.navigate`)
         // gets it; `app.reload()` would restart the current URL, so a conditional redirect would loop.
         if (typeof app?.navigate === 'function') app.navigate(url);
-        else warn(`[iwer-native] navigation to another document is not supported by this host; ignored: ${url}`);
+        else
+          warn(
+            `[iwer-native] navigation to another document is not supported by this host; ignored: ${url}`,
+          );
       },
       warn,
     });
@@ -492,9 +639,13 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     def('Location', Location);
     def('History', History);
     // [PutForwards=href]: `location = url` navigates.
-    defGet('location', () => location, (v) => {
-      location.href = v as string;
-    });
+    defGet(
+      'location',
+      () => location,
+      (v) => {
+        location.href = v as string;
+      },
+    );
     defGet('history', () => history);
     defGet('origin', () => nav.current().origin, 'replaceable');
     // DOM-1: a top-level browsing context with no frames: top/parent/frames are the window,
@@ -505,9 +656,16 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     defGet('frameElement', () => null);
     defGet('opener', () => null, 'replaceable');
     let windowName = '';
-    defGet('name', () => windowName, (v) => {
-      windowName = toDOMString(v, "Failed to set the 'name' property on 'Window'");
-    });
+    defGet(
+      'name',
+      () => windowName,
+      (v) => {
+        windowName = toDOMString(
+          v,
+          "Failed to set the 'name' property on 'Window'",
+        );
+      },
+    );
   } else {
     const workerURL = new URLCtor(initial);
     const location = new WorkerLocation(INTERNAL, workerURL);
@@ -541,7 +699,9 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     Object.defineProperty(U, 'createObjectURL', {
       value: function createObjectURL(obj: unknown): string {
         if (!(obj instanceof Blob)) {
-          throw new TypeError("Failed to execute 'createObjectURL' on 'URL': Overload resolution failed.");
+          throw new TypeError(
+            "Failed to execute 'createObjectURL' on 'URL': Overload resolution failed.",
+          );
         }
         return blobUrls.create(obj);
       },
@@ -552,9 +712,13 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     Object.defineProperty(U, 'revokeObjectURL', {
       value: function revokeObjectURL(url: string): void {
         if (arguments.length === 0) {
-          throw new TypeError("Failed to execute 'revokeObjectURL' on 'URL': 1 argument required, but only 0 present.");
+          throw new TypeError(
+            "Failed to execute 'revokeObjectURL' on 'URL': 1 argument required, but only 0 present.",
+          );
         }
-        blobUrls.revoke(toDOMString(url, "Failed to execute 'revokeObjectURL' on 'URL'"));
+        blobUrls.revoke(
+          toDOMString(url, "Failed to execute 'revokeObjectURL' on 'URL'"),
+        );
       },
       writable: true,
       configurable: true,
@@ -595,7 +759,8 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
   // DOM glue defines them, else the configured fixed viewport.
   if (isWindow) {
     const viewport = config.viewport ?? DEFAULT_VIEWPORT;
-    const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+    const num = (v: unknown, d: number): number =>
+      typeof v === 'number' && Number.isFinite(v) ? v : d;
     def('MediaQueryList', MediaQueryList);
     def(
       'matchMedia',

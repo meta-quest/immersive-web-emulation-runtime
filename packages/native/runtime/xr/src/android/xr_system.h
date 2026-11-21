@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The XR system (Android): one OpenXR instance and session for the process, owned by a dedicated XR thread
 // ("iwn-xr"), and the frame protocol with the main JS thread. Spec: docs/spec/08 (XR-*), 09 (XRF-*), 10 (IN-*).
 //

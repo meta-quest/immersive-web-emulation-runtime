@@ -21,7 +21,14 @@ import type { GLContext } from './natives.ts';
 type Handle = object;
 /** The WebGL 2 calls the passes make (the page's context; web/xr builds without the DOM types). */
 interface GL2 {
-  texStorage3D?(target: number, levels: number, format: number, width: number, height: number, depth: number): void;
+  texStorage3D?(
+    target: number,
+    levels: number,
+    format: number,
+    width: number,
+    height: number,
+    depth: number,
+  ): void;
   getParameter(pname: number): unknown;
   isEnabled(cap: number): boolean;
   enable(cap: number): void;
@@ -36,10 +43,22 @@ interface GL2 {
   depthFunc(func: number): void;
   depthMask(flag: boolean): void;
   depthRange(near: number, far: number): void;
-  framebufferTextureLayer(target: number, attachment: number, texture: Handle | null, level: number, layer: number): void;
+  framebufferTextureLayer(
+    target: number,
+    attachment: number,
+    texture: Handle | null,
+    level: number,
+    layer: number,
+  ): void;
   uniform1i(location: Handle | null, x: number): void;
   uniform1f(location: Handle | null, x: number): void;
-  uniformMatrix4fv(location: Handle | null, transpose: boolean, data: Float32Array, offset: number, length: number): void;
+  uniformMatrix4fv(
+    location: Handle | null,
+    transpose: boolean,
+    data: Float32Array,
+    offset: number,
+    length: number,
+  ): void;
   drawArrays(mode: number, first: number, count: number): void;
   drawBuffers(buffers: number[]): void;
   readBuffer(src: number): void;
@@ -121,8 +140,10 @@ const COMPILE_STATUS = 0x8b81;
 const LINK_STATUS = 0x8b82;
 // the capabilities the passes switch: depth test on, the rest off
 const DEPTH_TEST = 0x0b71;
-const OFF_CAPS = [0x0b90 /* STENCIL_TEST */, 0x0b44 /* CULL_FACE */, 0x0c11 /* SCISSOR_TEST */,
-  0x8c89 /* RASTERIZER_DISCARD */, 0x8037 /* POLYGON_OFFSET_FILL */];
+const OFF_CAPS = [
+  0x0b90 /* STENCIL_TEST */, 0x0b44 /* CULL_FACE */, 0x0c11 /* SCISSOR_TEST */,
+  0x8c89 /* RASTERIZER_DISCARD */, 0x8037 /* POLYGON_OFFSET_FILL */,
+];
 
 interface Resources {
   program: Handle;
@@ -152,10 +173,16 @@ export class DepthReprojection {
    * views into the context's own texture and returns that texture; null when the context cannot (WebGL 1, a program
    * that does not build): the caller then hands out the depth views' own images.
    */
-  draw(context: GLContext, source: object, width: number, height: number, views: number,
-    matrices: Float32Array): object | null {
+  draw(
+    context: GLContext,
+    source: object,
+    width: number,
+    height: number,
+    views: number,
+    matrices: Float32Array,
+  ): object | null {
     const gl = context as unknown as GL2;
-    if (typeof gl.texStorage3D !== 'function') return null;  // WebGL 1
+    if (typeof gl.texStorage3D !== 'function') return null; // WebGL 1
     let r = this.resources.get(context);
     if (r === undefined) {
       r = this.build(gl);
@@ -175,19 +202,25 @@ export class DepthReprojection {
     const texture = gl.getParameter(TEXTURE_BINDING_2D_ARRAY) as Handle | null;
     const sampler = gl.getParameter(SAMPLER_BINDING) as Handle | null;
     const viewport = gl.getParameter(VIEWPORT) as Int32Array;
-    const vx = viewport[0], vy = viewport[1], vw = viewport[2], vh = viewport[3];
+    const vx = viewport[0],
+      vy = viewport[1],
+      vw = viewport[2],
+      vh = viewport[3];
     const depthTest = gl.isEnabled(DEPTH_TEST);
-    for (let i = 0; i < OFF_CAPS.length; i++) this.offWas[i] = gl.isEnabled(OFF_CAPS[i]);
+    for (let i = 0; i < OFF_CAPS.length; i++)
+      this.offWas[i] = gl.isEnabled(OFF_CAPS[i]);
     const depthFunc = gl.getParameter(DEPTH_FUNC) as number;
     const depthMask = gl.getParameter(DEPTH_WRITEMASK) as boolean;
     const range = gl.getParameter(DEPTH_RANGE) as Float32Array;
-    const near = range[0], far = range[1];
+    const near = range[0],
+      far = range[1];
 
     gl.bindFramebuffer(FRAMEBUFFER, r.framebuffer);
     gl.viewport(0, 0, width, height);
     // depth test on (gl_FragDepth is written only then), every fragment passing
     if (!depthTest) gl.enable(DEPTH_TEST);
-    for (let i = 0; i < OFF_CAPS.length; i++) if (this.offWas[i]) gl.disable(OFF_CAPS[i]);
+    for (let i = 0; i < OFF_CAPS.length; i++)
+      if (this.offWas[i]) gl.disable(OFF_CAPS[i]);
     gl.depthFunc(ALWAYS);
     gl.depthMask(true);
     gl.depthRange(0, 1);
@@ -197,7 +230,13 @@ export class DepthReprojection {
     if (sampler) gl.bindSampler(0, null);
     gl.uniform1i(r.depth, 0);
     for (let view = 0; view < views; view++) {
-      gl.framebufferTextureLayer(FRAMEBUFFER, DEPTH_ATTACHMENT, r.target, 0, view);
+      gl.framebufferTextureLayer(
+        FRAMEBUFFER,
+        DEPTH_ATTACHMENT,
+        r.target,
+        0,
+        view,
+      );
       gl.uniformMatrix4fv(r.matrix, false, matrices, view * 16, 16);
       gl.uniform1f(r.layer, view);
       gl.drawArrays(TRIANGLES, 0, 3);
@@ -211,7 +250,8 @@ export class DepthReprojection {
     gl.depthRange(near, far);
     gl.depthMask(depthMask);
     gl.depthFunc(depthFunc);
-    for (let i = 0; i < OFF_CAPS.length; i++) if (this.offWas[i]) gl.enable(OFF_CAPS[i]);
+    for (let i = 0; i < OFF_CAPS.length; i++)
+      if (this.offWas[i]) gl.enable(OFF_CAPS[i]);
     if (!depthTest) gl.disable(DEPTH_TEST);
     gl.viewport(vx, vy, vw, vh);
     gl.bindFramebuffer(0x8ca9 /* DRAW_FRAMEBUFFER */, draw);
@@ -235,7 +275,9 @@ export class DepthReprojection {
     gl.deleteShader(vs);
     gl.deleteShader(fs);
     if (!gl.getProgramParameter(program, LINK_STATUS)) {
-      this.log(`@iwer/native: depth reprojection program: ${gl.getProgramInfoLog(program) ?? ''}`);
+      this.log(
+        `@iwer/native: depth reprojection program: ${gl.getProgramInfoLog(program) ?? ''}`,
+      );
       gl.deleteProgram(program);
       return null;
     }
@@ -243,7 +285,7 @@ export class DepthReprojection {
     const draw = gl.getParameter(DRAW_FRAMEBUFFER_BINDING) as Handle | null;
     const read = gl.getParameter(READ_FRAMEBUFFER_BINDING) as Handle | null;
     gl.bindFramebuffer(FRAMEBUFFER, framebuffer);
-    gl.drawBuffers([NONE]);  // depth only
+    gl.drawBuffers([NONE]); // depth only
     gl.readBuffer(NONE);
     gl.bindFramebuffer(0x8ca9, draw);
     gl.bindFramebuffer(0x8ca8, read);
@@ -266,7 +308,9 @@ export class DepthReprojection {
     gl.shaderSource(s, source);
     gl.compileShader(s);
     if (!gl.getShaderParameter(s, COMPILE_STATUS)) {
-      this.log(`@iwer/native: depth reprojection shader: ${gl.getShaderInfoLog(s) ?? ''}`);
+      this.log(
+        `@iwer/native: depth reprojection shader: ${gl.getShaderInfoLog(s) ?? ''}`,
+      );
       gl.deleteShader(s);
       return null;
     }

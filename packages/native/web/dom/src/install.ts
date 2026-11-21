@@ -22,9 +22,29 @@ import {
   XMLDocument,
   buildHTMLDocument,
 } from './document.ts';
-import { BaseEvent, G, defineHandler, entryDocumentSource, isWorkerScope, warn } from './env.ts';
-import { DOMMatrix, DOMMatrixReadOnly, DOMQuad, DOMRect, DOMRectList, DOMRectReadOnly, installPoints } from './geometry.ts';
-import { GLOBAL_HANDLERS, HTMLAudioElement, HTMLOptionElement, HTML_INTERFACES } from './html-elements.ts';
+import {
+  BaseEvent,
+  G,
+  defineHandler,
+  entryDocumentSource,
+  isWorkerScope,
+  warn,
+} from './env.ts';
+import {
+  DOMMatrix,
+  DOMMatrixReadOnly,
+  DOMQuad,
+  DOMRect,
+  DOMRectList,
+  DOMRectReadOnly,
+  installPoints,
+} from './geometry.ts';
+import {
+  GLOBAL_HANDLERS,
+  HTMLAudioElement,
+  HTMLOptionElement,
+  HTML_INTERFACES,
+} from './html-elements.ts';
 import {
   Attr,
   CDATASection,
@@ -55,7 +75,14 @@ import {
   setNodeListClass,
 } from './observers.ts';
 import { UI_EVENTS } from './ui-events.ts';
-import { CSS, Screen, ScreenOrientation, VisualViewport, Window, installWindowMembers } from './window.ts';
+import {
+  CSS,
+  Screen,
+  ScreenOrientation,
+  VisualViewport,
+  Window,
+  installWindowMembers,
+} from './window.ts';
 import { XMLSerializer } from './document.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -81,26 +108,47 @@ export interface DomRegistry {
 /** Named constructors `new Audio(src)` and `new Option(text, value, defaultSelected, selected)` (HTML). */
 function namedConstructors(doc: Document): Record<string, unknown> {
   const Audio = function Audio(this: unknown, src?: string) {
-    if (!new.target) throw new TypeError("Failed to construct 'Audio': Please use the 'new' operator.");
+    if (!new.target)
+      throw new TypeError(
+        "Failed to construct 'Audio': Please use the 'new' operator.",
+      );
     const el = doc.createElement('audio');
     el.setAttribute('preload', 'auto');
     if (src !== undefined) el.setAttribute('src', String(src));
     return el;
   } as unknown as { prototype: unknown };
-  Object.defineProperty(Audio, 'prototype', { value: HTMLAudioElement.prototype, writable: false });
-  const Option = function Option(this: unknown, text?: string, value?: string, defaultSelected?: boolean, selected?: boolean) {
-    if (!new.target) throw new TypeError("Failed to construct 'Option': Please use the 'new' operator.");
+  Object.defineProperty(Audio, 'prototype', {
+    value: HTMLAudioElement.prototype,
+    writable: false,
+  });
+  const Option = function Option(
+    this: unknown,
+    text?: string,
+    value?: string,
+    defaultSelected?: boolean,
+    selected?: boolean,
+  ) {
+    if (!new.target)
+      throw new TypeError(
+        "Failed to construct 'Option': Please use the 'new' operator.",
+      );
     const el = doc.createElement('option');
     if (text !== undefined && text !== '') el.textContent = String(text);
     if (value !== undefined) el.setAttribute('value', String(value));
     if (defaultSelected || selected) el.setAttribute('selected', '');
     return el;
   } as unknown as { prototype: unknown };
-  Object.defineProperty(Option, 'prototype', { value: HTMLOptionElement.prototype, writable: false });
+  Object.defineProperty(Option, 'prototype', {
+    value: HTMLOptionElement.prototype,
+    writable: false,
+  });
   return { Audio, Option };
 }
 
-export function installDom(global: typeof globalThis = globalThis, options: InstallDomOptions = {}): DomRegistry | null {
+export function installDom(
+  global: typeof globalThis = globalThis,
+  options: InstallDomOptions = {},
+): DomRegistry | null {
   const g = global as any;
   if (isWorkerScope()) return null;
   const mode = options.mode ?? 'missing';
@@ -111,19 +159,64 @@ export function installDom(global: typeof globalThis = globalThis, options: Inst
   const installed: string[] = [];
   const def = (name: string, value: unknown) => {
     if (mode === 'missing' && typeof g[name] !== 'undefined') return;
-    Object.defineProperty(g, name, { value, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(g, name, {
+      value,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
     installed.push(name);
   };
 
   setNodeListClass(NodeList as unknown as new () => unknown[]);
 
   const interfaces: Record<string, unknown> = {
-    Node, CharacterData, Text, CDATASection, Comment, ProcessingInstruction, DocumentType, DocumentFragment, ShadowRoot,
-    Attr, NamedNodeMap, NodeList, HTMLCollection, DOMTokenList, Element, Document, HTMLDocument: Document, XMLDocument,
-    DOMImplementation, DOMParser, XMLSerializer, Range, Selection, TreeWalker, NodeIterator: TreeWalker, NodeFilter,
-    CSSStyleDeclaration, MutationObserver, MutationRecord, ResizeObserver, ResizeObserverEntry, ResizeObserverSize,
-    IntersectionObserver, IntersectionObserverEntry, DOMRectReadOnly, DOMRect, DOMRectList, DOMMatrixReadOnly, DOMMatrix,
-    WebKitCSSMatrix: DOMMatrix, DOMQuad, Screen, ScreenOrientation, VisualViewport, Window, CSS,
+    Node,
+    CharacterData,
+    Text,
+    CDATASection,
+    Comment,
+    ProcessingInstruction,
+    DocumentType,
+    DocumentFragment,
+    ShadowRoot,
+    Attr,
+    NamedNodeMap,
+    NodeList,
+    HTMLCollection,
+    DOMTokenList,
+    Element,
+    Document,
+    HTMLDocument: Document,
+    XMLDocument,
+    DOMImplementation,
+    DOMParser,
+    XMLSerializer,
+    Range,
+    Selection,
+    TreeWalker,
+    NodeIterator: TreeWalker,
+    NodeFilter,
+    CSSStyleDeclaration,
+    MutationObserver,
+    MutationRecord,
+    ResizeObserver,
+    ResizeObserverEntry,
+    ResizeObserverSize,
+    IntersectionObserver,
+    IntersectionObserverEntry,
+    DOMRectReadOnly,
+    DOMRect,
+    DOMRectList,
+    DOMMatrixReadOnly,
+    DOMMatrix,
+    WebKitCSSMatrix: DOMMatrix,
+    DOMQuad,
+    Screen,
+    ScreenOrientation,
+    VisualViewport,
+    Window,
+    CSS,
     ...HTML_INTERFACES,
     ...UI_EVENTS,
   };
@@ -135,15 +228,28 @@ export function installDom(global: typeof globalThis = globalThis, options: Inst
   doc._inert = false;
   doc._defaultView = g;
   setDefaultDocument(doc);
-  const markup = options.html !== undefined ? options.html : entryDocumentSource();
+  const markup =
+    options.html !== undefined ? options.html : entryDocumentSource();
   try {
-    buildHTMLDocument(doc, markup ?? '<!doctype html><html><head></head><body></body></html>');
+    buildHTMLDocument(
+      doc,
+      markup ?? '<!doctype html><html><head></head><body></body></html>',
+    );
   } catch (e) {
-    warn(`the entry document could not be parsed (${e instanceof Error ? e.message : String(e)}); starting from an empty one`);
+    warn(
+      `the entry document could not be parsed (${e instanceof Error ? e.message : String(e)}); starting from an empty one`,
+    );
     for (const k of [...doc.childNodes]) doc.removeChild(k);
-    buildHTMLDocument(doc, '<!doctype html><html><head></head><body></body></html>');
+    buildHTMLDocument(
+      doc,
+      '<!doctype html><html><head></head><body></body></html>',
+    );
   }
-  Object.defineProperty(g, 'document', { get: () => doc, configurable: true, enumerable: true });
+  Object.defineProperty(g, 'document', {
+    get: () => doc,
+    configurable: true,
+    enumerable: true,
+  });
   installed.push('document');
 
   // readystatechange before the core's DOMContentLoaded and load (registered first, so it runs first; the core
@@ -156,13 +262,15 @@ export function installDom(global: typeof globalThis = globalThis, options: Inst
     }
   };
   doc.addEventListener('DOMContentLoaded', fireReadyState);
-  if (typeof g.addEventListener === 'function') g.addEventListener('load', fireReadyState);
+  if (typeof g.addEventListener === 'function')
+    g.addEventListener('load', fireReadyState);
 
   installed.push(...installWindowMembers(g, mode));
   for (const t of GLOBAL_HANDLERS) {
     if (!(`on${t}` in g)) defineHandler(g, t);
   }
-  for (const [name, value] of Object.entries(namedConstructors(doc))) def(name, value);
+  for (const [name, value] of Object.entries(namedConstructors(doc)))
+    def(name, value);
 
   // structuredClone: nodes are platform objects that cannot be cloned (DataCloneError); geometry types clone.
   const glue = g[Symbol.for('iwn.glue')];
@@ -174,12 +282,17 @@ export function installDom(global: typeof globalThis = globalThis, options: Inst
         is: (v: object) => v instanceof DOMRectReadOnly,
         clone: (v: object) => {
           const r = v as DOMRectReadOnly;
-          return v instanceof DOMRect ? new DOMRect(r.x, r.y, r.width, r.height) : new DOMRectReadOnly(r.x, r.y, r.width, r.height);
+          return v instanceof DOMRect
+            ? new DOMRect(r.x, r.y, r.width, r.height)
+            : new DOMRectReadOnly(r.x, r.y, r.width, r.height);
         },
       });
       reg.registerCloneable?.({
         is: (v: object) => v instanceof DOMMatrixReadOnly,
-        clone: (v: object) => (v instanceof DOMMatrix ? DOMMatrix.fromMatrix(v as any) : DOMMatrixReadOnly.fromMatrix(v as any)),
+        clone: (v: object) =>
+          v instanceof DOMMatrix
+            ? DOMMatrix.fromMatrix(v as any)
+            : DOMMatrixReadOnly.fromMatrix(v as any),
       });
     } catch {
       // the clone registry is optional
@@ -191,9 +304,17 @@ export function installDom(global: typeof globalThis = globalThis, options: Inst
     document: doc,
     installed,
     buildHTMLDocument,
-    stats: () => ({ elements: doc.getElementsByTagName('*').length, connectedCanvases: connectedCanvasCount() }),
+    stats: () => ({
+      elements: doc.getElementsByTagName('*').length,
+      connectedCanvases: connectedCanvasCount(),
+    }),
   };
-  Object.defineProperty(g, DOM_REGISTRY_KEY, { value: registry, configurable: true, enumerable: false, writable: false });
+  Object.defineProperty(g, DOM_REGISTRY_KEY, {
+    value: registry,
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
   void Element;
   void G;
   return registry;

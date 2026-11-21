@@ -13,11 +13,36 @@
 // body/html elements and ancestors of a connected canvas, zeros otherwise.
 
 import { createStyle, resetStyle, type CSSStyleDeclaration } from './css.ts';
-import { BaseEventTarget, G, GET_THE_PARENT, HTML_NS, XMLNS_NS, XML_NS, domException, lower, str, viewport } from './env.ts';
+import {
+  BaseEventTarget,
+  G,
+  GET_THE_PARENT,
+  HTML_NS,
+  XMLNS_NS,
+  XML_NS,
+  domException,
+  lower,
+  str,
+  viewport,
+} from './env.ts';
 import { DOMRect, DOMRectList } from './geometry.ts';
-import { parseInto, serializeChildren, serializeNode, type NodeFactory } from './html.ts';
-import { notifyAttribute, notifyCharacterData, notifyChildList } from './observers.ts';
-import { matchesSelector, parseSelector, simpleIdSelector, type MatchElement } from './selectors.ts';
+import {
+  parseInto,
+  serializeChildren,
+  serializeNode,
+  type NodeFactory,
+} from './html.ts';
+import {
+  notifyAttribute,
+  notifyCharacterData,
+  notifyChildList,
+} from './observers.ts';
+import {
+  matchesSelector,
+  parseSelector,
+  simpleIdSelector,
+  type MatchElement,
+} from './selectors.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -49,7 +74,10 @@ export class NodeList extends Array<Node> {
   item(index: number): Node | null {
     return this[Number(index) >>> 0] ?? null;
   }
-  override forEach(cb: (value: Node, index: number, list: Node[]) => void, thisArg?: unknown): void {
+  override forEach(
+    cb: (value: Node, index: number, list: Node[]) => void,
+    thisArg?: unknown,
+  ): void {
     for (let i = 0; i < this.length; i++) cb.call(thisArg, this[i]!, i, this);
   }
   get [Symbol.toStringTag](): string {
@@ -66,7 +94,8 @@ export class HTMLCollection extends Array<Element> {
   }
   namedItem(name: string): Element | null {
     const n = str(name);
-    for (const el of this) if (el.id === n || el.getAttribute('name') === n) return el;
+    for (const el of this)
+      if (el.id === n || el.getAttribute('name') === n) return el;
     return null;
   }
   get [Symbol.toStringTag](): string {
@@ -171,14 +200,19 @@ export class Node extends BaseEventTarget {
     return d ? String(d.baseURI) : '';
   }
   get textContent(): string | null {
-    if (this.nodeType === DOCUMENT_NODE || this.nodeType === DOCUMENT_TYPE_NODE) return null;
+    if (this.nodeType === DOCUMENT_NODE || this.nodeType === DOCUMENT_TYPE_NODE)
+      return null;
     let out = '';
     const walk = (n: Node) => {
       const k = n._kids;
       if (!k) return;
       for (const c of k) {
         if (c instanceof CharacterData) {
-          if (c.nodeType !== COMMENT_NODE && c.nodeType !== PROCESSING_INSTRUCTION_NODE) out += c.data;
+          if (
+            c.nodeType !== COMMENT_NODE &&
+            c.nodeType !== PROCESSING_INSTRUCTION_NODE
+          )
+            out += c.data;
         } else walk(c);
       }
     };
@@ -186,7 +220,8 @@ export class Node extends BaseEventTarget {
     return out;
   }
   set textContent(v: string | null) {
-    if (this.nodeType === DOCUMENT_NODE || this.nodeType === DOCUMENT_TYPE_NODE) return;
+    if (this.nodeType === DOCUMENT_NODE || this.nodeType === DOCUMENT_TYPE_NODE)
+      return;
     const text = v === null || v === undefined ? '' : str(v);
     replaceAll(this, text === '' ? null : this._doc.createTextNode(text));
   }
@@ -199,7 +234,8 @@ export class Node extends BaseEventTarget {
     return !!this._kids && this._kids.length > 0;
   }
   contains(other: Node | null): boolean {
-    for (let n: Node | null = other; n; n = n._parent) if (n === this) return true;
+    for (let n: Node | null = other; n; n = n._parent)
+      if (n === this) return true;
     return false;
   }
   compareDocumentPosition(other: Node): number {
@@ -218,20 +254,37 @@ export class Node extends BaseEventTarget {
     let i = 0;
     while (a[i] === b[i]) i++;
     const parent = a[i - 1]!;
-    return parent._kids!.indexOf(a[i]!) < parent._kids!.indexOf(b[i]!) ? 0x04 : 0x02;
+    return parent._kids!.indexOf(a[i]!) < parent._kids!.indexOf(b[i]!)
+      ? 0x04
+      : 0x02;
   }
   isEqualNode(other: Node | null): boolean {
-    if (!other || other.nodeType !== this.nodeType || other.nodeName !== this.nodeName) return false;
-    if (this instanceof CharacterData && (other as CharacterData).data !== this.data) return false;
+    if (
+      !other ||
+      other.nodeType !== this.nodeType ||
+      other.nodeName !== this.nodeName
+    )
+      return false;
+    if (
+      this instanceof CharacterData &&
+      (other as CharacterData).data !== this.data
+    )
+      return false;
     if (this instanceof Element) {
       const o = other as Element;
-      if (o.namespaceURI !== this.namespaceURI || o._attrs.length !== this._attrs.length) return false;
-      for (const a of this._attrs) if (o.getAttributeNS(a.ns, a.local) !== a.value) return false;
+      if (
+        o.namespaceURI !== this.namespaceURI ||
+        o._attrs.length !== this._attrs.length
+      )
+        return false;
+      for (const a of this._attrs)
+        if (o.getAttributeNS(a.ns, a.local) !== a.value) return false;
     }
     const ka = this._kids ?? [];
     const kb = other._kids ?? [];
     if (ka.length !== kb.length) return false;
-    for (let i = 0; i < ka.length; i++) if (!ka[i]!.isEqualNode(kb[i]!)) return false;
+    for (let i = 0; i < ka.length; i++)
+      if (!ka[i]!.isEqualNode(kb[i]!)) return false;
     return true;
   }
   isSameNode(other: Node | null): boolean {
@@ -242,8 +295,11 @@ export class Node extends BaseEventTarget {
     if (prefix === 'xmlns') return XMLNS_NS;
     for (let n: Node | null = this; n; n = n._parent) {
       if (n instanceof Element) {
-        if (n.namespaceURI && (n.prefix ?? null) === (prefix || null)) return n.namespaceURI;
-        const v = prefix ? n.getAttributeNS(XMLNS_NS, prefix) : n.getAttributeNS(XMLNS_NS, 'xmlns');
+        if (n.namespaceURI && (n.prefix ?? null) === (prefix || null))
+          return n.namespaceURI;
+        const v = prefix
+          ? n.getAttributeNS(XMLNS_NS, prefix)
+          : n.getAttributeNS(XMLNS_NS, 'xmlns');
         if (v !== null) return v || null;
       }
     }
@@ -280,21 +336,31 @@ export class Node extends BaseEventTarget {
     return insert(this, node, child ?? null) as T;
   }
   removeChild<T extends Node>(child: T): T {
-    if (!child || child._parent !== this) throw domException("Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.", 'NotFoundError');
+    if (!child || child._parent !== this)
+      throw domException(
+        "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.",
+        'NotFoundError',
+      );
     remove(child, true);
     return child;
   }
   replaceChild<T extends Node>(node: Node, child: T): T {
-    if (!child || child._parent !== this) throw domException("Failed to execute 'replaceChild' on 'Node': The node to be replaced is not a child of this node.", 'NotFoundError');
+    if (!child || child._parent !== this)
+      throw domException(
+        "Failed to execute 'replaceChild' on 'Node': The node to be replaced is not a child of this node.",
+        'NotFoundError',
+      );
     if (node === child) return child;
-    const next = child.nextSibling === node ? node.nextSibling : child.nextSibling;
+    const next =
+      child.nextSibling === node ? node.nextSibling : child.nextSibling;
     remove(child, true);
     insert(this, node, next);
     return child;
   }
   cloneNode(deep = false): Node {
     const c = this._clone(this._doc);
-    if (deep) for (const k of this._kids ?? []) c.appendChild(k.cloneNode(true));
+    if (deep)
+      for (const k of this._kids ?? []) c.appendChild(k.cloneNode(true));
     return c;
   }
   /** @internal */ _clone(_doc: any): Node {
@@ -309,9 +375,13 @@ export class Node extends BaseEventTarget {
 
 // DOM "get the parent": the parent node; a document's is its window, except for `load` (HTML §8.1.8.4 / DOM §4.4).
 Object.defineProperty(Node.prototype, GET_THE_PARENT, {
-  value: function getTheParent(this: Node, event: { type?: string } | undefined): unknown {
+  value: function getTheParent(
+    this: Node,
+    event: { type?: string } | undefined,
+  ): unknown {
     if (this._parent) return this._parent;
-    if (this.nodeType === DOCUMENT_NODE && event?.type !== 'load') return (this as any)._defaultView ?? null;
+    if (this.nodeType === DOCUMENT_NODE && event?.type !== 'load')
+      return (this as any)._defaultView ?? null;
     return null;
   },
   configurable: true,
@@ -319,10 +389,24 @@ Object.defineProperty(Node.prototype, GET_THE_PARENT, {
 });
 
 for (const [k, v] of Object.entries({
-  ELEMENT_NODE, ATTRIBUTE_NODE: 2, TEXT_NODE, CDATA_SECTION_NODE, ENTITY_REFERENCE_NODE: 5, ENTITY_NODE: 6,
-  PROCESSING_INSTRUCTION_NODE, COMMENT_NODE, DOCUMENT_NODE, DOCUMENT_TYPE_NODE, DOCUMENT_FRAGMENT_NODE, NOTATION_NODE: 12,
-  DOCUMENT_POSITION_DISCONNECTED: 1, DOCUMENT_POSITION_PRECEDING: 2, DOCUMENT_POSITION_FOLLOWING: 4,
-  DOCUMENT_POSITION_CONTAINS: 8, DOCUMENT_POSITION_CONTAINED_BY: 16, DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: 32,
+  ELEMENT_NODE,
+  ATTRIBUTE_NODE: 2,
+  TEXT_NODE,
+  CDATA_SECTION_NODE,
+  ENTITY_REFERENCE_NODE: 5,
+  ENTITY_NODE: 6,
+  PROCESSING_INSTRUCTION_NODE,
+  COMMENT_NODE,
+  DOCUMENT_NODE,
+  DOCUMENT_TYPE_NODE,
+  DOCUMENT_FRAGMENT_NODE,
+  NOTATION_NODE: 12,
+  DOCUMENT_POSITION_DISCONNECTED: 1,
+  DOCUMENT_POSITION_PRECEDING: 2,
+  DOCUMENT_POSITION_FOLLOWING: 4,
+  DOCUMENT_POSITION_CONTAINS: 8,
+  DOCUMENT_POSITION_CONTAINED_BY: 16,
+  DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: 32,
 })) {
   Object.defineProperty(Node.prototype, k, { value: v, enumerable: true });
 }
@@ -334,7 +418,8 @@ function isConnectedTree(node: Node): boolean {
 function forEachInclusiveDescendant(node: Node, fn: (n: Node) => void): void {
   fn(node);
   const k = node._kids;
-  if (k) for (let i = 0; i < k.length; i++) forEachInclusiveDescendant(k[i]!, fn);
+  if (k)
+    for (let i = 0; i < k.length; i++) forEachInclusiveDescendant(k[i]!, fn);
 }
 
 function adopt(node: Node, doc: any): void {
@@ -346,17 +431,39 @@ function adopt(node: Node, doc: any): void {
 
 /** Pre-insert (DOM §4.2.3), simplified: hierarchy checks, fragments, connection hooks, mutation records. */
 function insert(parent: Node, node: Node, child: Node | null): Node {
-  if (!(node instanceof Node)) throw new TypeError("Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'.");
+  if (!(node instanceof Node))
+    throw new TypeError(
+      "Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'.",
+    );
   const pt = parent.nodeType;
-  if (pt !== DOCUMENT_NODE && pt !== DOCUMENT_FRAGMENT_NODE && pt !== ELEMENT_NODE) {
-    throw domException('This node type does not support children.', 'HierarchyRequestError');
+  if (
+    pt !== DOCUMENT_NODE &&
+    pt !== DOCUMENT_FRAGMENT_NODE &&
+    pt !== ELEMENT_NODE
+  ) {
+    throw domException(
+      'This node type does not support children.',
+      'HierarchyRequestError',
+    );
   }
-  if (node.contains(parent)) throw domException('The new child element contains the parent.', 'HierarchyRequestError');
+  if (node.contains(parent))
+    throw domException(
+      'The new child element contains the parent.',
+      'HierarchyRequestError',
+    );
   if (child && child._parent !== parent) {
-    throw domException("Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node.", 'NotFoundError');
+    throw domException(
+      "Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node.",
+      'NotFoundError',
+    );
   }
-  if (node.nodeType === DOCUMENT_NODE) throw domException('A document cannot be inserted.', 'HierarchyRequestError');
-  const nodes: Node[] = node.nodeType === DOCUMENT_FRAGMENT_NODE ? [...(node._kids ?? [])] : [node];
+  if (node.nodeType === DOCUMENT_NODE)
+    throw domException(
+      'A document cannot be inserted.',
+      'HierarchyRequestError',
+    );
+  const nodes: Node[] =
+    node.nodeType === DOCUMENT_FRAGMENT_NODE ? [...(node._kids ?? [])] : [node];
   if (node.nodeType === DOCUMENT_FRAGMENT_NODE) {
     for (const n of nodes) remove(n, false);
     if (nodes.length) notifyChildList(node, [], nodes, null, null);
@@ -376,7 +483,9 @@ function insert(parent: Node, node: Node, child: Node | null): Node {
     n._parent = parent;
   }
   notifyChildList(parent, nodes, [], prev, child);
-  if (isConnectedTree(parent)) for (const n of nodes) forEachInclusiveDescendant(n, (d) => d._connectedChanged(true));
+  if (isConnectedTree(parent))
+    for (const n of nodes)
+      forEachInclusiveDescendant(n, (d) => d._connectedChanged(true));
   return node;
 }
 
@@ -391,7 +500,8 @@ function remove(node: Node, notify: boolean): void {
   kids.splice(i, 1);
   node._parent = null;
   if (notify) notifyChildList(parent, [], [node], prev, next);
-  if (wasConnected) forEachInclusiveDescendant(node, (d) => d._connectedChanged(false));
+  if (wasConnected)
+    forEachInclusiveDescendant(node, (d) => d._connectedChanged(false));
 }
 
 /** Replace all children with `node` (or nothing): textContent / innerHTML setters. */
@@ -402,7 +512,10 @@ function replaceAll(parent: Node, node: Node | null): void {
   if (parent._kids) parent._kids.length = 0;
   const added: Node[] = [];
   if (node) {
-    const nodes = node.nodeType === DOCUMENT_FRAGMENT_NODE ? [...(node._kids ?? [])] : [node];
+    const nodes =
+      node.nodeType === DOCUMENT_FRAGMENT_NODE
+        ? [...(node._kids ?? [])]
+        : [node];
     if (node.nodeType === DOCUMENT_FRAGMENT_NODE && node._kids) {
       for (const n of nodes) n._parent = null;
       node._kids.length = 0;
@@ -416,15 +529,21 @@ function replaceAll(parent: Node, node: Node | null): void {
       added.push(n);
     }
   }
-  if (removed.length || added.length) notifyChildList(parent, added, removed, null, null);
-  if (wasConnected) for (const r of removed) forEachInclusiveDescendant(r, (d) => d._connectedChanged(false));
-  if (isConnectedTree(parent)) for (const a of added) forEachInclusiveDescendant(a, (d) => d._connectedChanged(true));
+  if (removed.length || added.length)
+    notifyChildList(parent, added, removed, null, null);
+  if (wasConnected)
+    for (const r of removed)
+      forEachInclusiveDescendant(r, (d) => d._connectedChanged(false));
+  if (isConnectedTree(parent))
+    for (const a of added)
+      forEachInclusiveDescendant(a, (d) => d._connectedChanged(true));
 }
 
 function toNodes(doc: any, items: unknown[]): Node {
   if (items.length === 1 && items[0] instanceof Node) return items[0];
   const frag = doc.createDocumentFragment() as Node;
-  for (const it of items) frag.appendChild(it instanceof Node ? it : doc.createTextNode(str(it)));
+  for (const it of items)
+    frag.appendChild(it instanceof Node ? it : doc.createTextNode(str(it)));
   return frag;
 }
 
@@ -432,7 +551,11 @@ function toNodes(doc: any, items: unknown[]): Node {
 const parentNodeMixin = {
   get children(): HTMLCollection {
     const self = this as unknown as Node;
-    return collection(([...(self._kids ?? [])] as Node[]).filter((k) => k instanceof Element) as Element[]);
+    return collection(
+      ([...(self._kids ?? [])] as Node[]).filter(
+        (k) => k instanceof Element,
+      ) as Element[],
+    );
   },
   get firstElementChild(): Element | null {
     const self = this as unknown as Node;
@@ -441,19 +564,29 @@ const parentNodeMixin = {
   },
   get lastElementChild(): Element | null {
     const k = (this as unknown as Node)._kids ?? [];
-    for (let i = k.length - 1; i >= 0; i--) if (k[i] instanceof Element) return k[i] as Element;
+    for (let i = k.length - 1; i >= 0; i--)
+      if (k[i] instanceof Element) return k[i] as Element;
     return null;
   },
   get childElementCount(): number {
     let n = 0;
-    for (const k of (this as unknown as Node)._kids ?? []) if (k instanceof Element) n++;
+    for (const k of (this as unknown as Node)._kids ?? [])
+      if (k instanceof Element) n++;
     return n;
   },
   append(this: Node, ...items: unknown[]): void {
-    insert(this, toNodes(this.nodeType === DOCUMENT_NODE ? this : this._doc, items), null);
+    insert(
+      this,
+      toNodes(this.nodeType === DOCUMENT_NODE ? this : this._doc, items),
+      null,
+    );
   },
   prepend(this: Node, ...items: unknown[]): void {
-    insert(this, toNodes(this.nodeType === DOCUMENT_NODE ? this : this._doc, items), this.firstChild);
+    insert(
+      this,
+      toNodes(this.nodeType === DOCUMENT_NODE ? this : this._doc, items),
+      this.firstChild,
+    );
   },
   replaceChildren(this: Node, ...items: unknown[]): void {
     const doc = this.nodeType === DOCUMENT_NODE ? this : this._doc;
@@ -463,22 +596,47 @@ const parentNodeMixin = {
     const sel = str(selectors);
     const id = simpleIdSelector(sel);
     let found: Element | null = null;
-    walkElements(this, (el) => {
-      if (id !== null ? el.id === id : matchesSelector(el as unknown as MatchElement, sel, this instanceof Element ? (this as unknown as MatchElement) : null)) {
-        found = el;
-        return true;
-      }
-      return false;
-    }, () => parseSelector(sel));
+    walkElements(
+      this,
+      (el) => {
+        if (
+          id !== null
+            ? el.id === id
+            : matchesSelector(
+                el as unknown as MatchElement,
+                sel,
+                this instanceof Element
+                  ? (this as unknown as MatchElement)
+                  : null,
+              )
+        ) {
+          found = el;
+          return true;
+        }
+        return false;
+      },
+      () => parseSelector(sel),
+    );
     return found;
   },
   querySelectorAll(this: Node, selectors: string): NodeList {
     const sel = str(selectors);
     const out = new NodeList();
-    walkElements(this, (el) => {
-      if (matchesSelector(el as unknown as MatchElement, sel, this instanceof Element ? (this as unknown as MatchElement) : null)) out.push(el);
-      return false;
-    }, () => parseSelector(sel));
+    walkElements(
+      this,
+      (el) => {
+        if (
+          matchesSelector(
+            el as unknown as MatchElement,
+            sel,
+            this instanceof Element ? (this as unknown as MatchElement) : null,
+          )
+        )
+          out.push(el);
+        return false;
+      },
+      () => parseSelector(sel),
+    );
     return out;
   },
   getElementsByTagName(this: Node, qualifiedName: string): HTMLCollection {
@@ -486,21 +644,37 @@ const parentNodeMixin = {
     const lq = lower(q);
     const out: Element[] = [];
     walkElements(this, (el) => {
-      if (q === '*' || (el.namespaceURI === HTML_NS ? el.localName === lq || el.tagName === q : el.tagName === q || el.localName === q)) out.push(el);
+      if (
+        q === '*' ||
+        (el.namespaceURI === HTML_NS
+          ? el.localName === lq || el.tagName === q
+          : el.tagName === q || el.localName === q)
+      )
+        out.push(el);
       return false;
     });
     return collection(out);
   },
-  getElementsByTagNameNS(this: Node, ns: string | null, localName: string): HTMLCollection {
+  getElementsByTagNameNS(
+    this: Node,
+    ns: string | null,
+    localName: string,
+  ): HTMLCollection {
     const out: Element[] = [];
     walkElements(this, (el) => {
-      if ((ns === '*' || el.namespaceURI === (ns || null)) && (localName === '*' || el.localName === localName)) out.push(el);
+      if (
+        (ns === '*' || el.namespaceURI === (ns || null)) &&
+        (localName === '*' || el.localName === localName)
+      )
+        out.push(el);
       return false;
     });
     return collection(out);
   },
   getElementsByClassName(this: Node, classNames: string): HTMLCollection {
-    const want = str(classNames).split(/[\t\n\f\r ]+/).filter(Boolean);
+    const want = str(classNames)
+      .split(/[\t\n\f\r ]+/)
+      .filter(Boolean);
     const out: Element[] = [];
     if (!want.length) return collection(out);
     walkElements(this, (el) => {
@@ -536,11 +710,17 @@ const childNodeMixin = {
 
 const nonDocumentTypeChildMixin = {
   get previousElementSibling(): Element | null {
-    for (let s = (this as unknown as Node).previousSibling; s; s = s.previousSibling) if (s instanceof Element) return s;
+    for (
+      let s = (this as unknown as Node).previousSibling;
+      s;
+      s = s.previousSibling
+    )
+      if (s instanceof Element) return s;
     return null;
   },
   get nextElementSibling(): Element | null {
-    for (let s = (this as unknown as Node).nextSibling; s; s = s.nextSibling) if (s instanceof Element) return s;
+    for (let s = (this as unknown as Node).nextSibling; s; s = s.nextSibling)
+      if (s instanceof Element) return s;
     return null;
   },
 };
@@ -548,12 +728,20 @@ const nonDocumentTypeChildMixin = {
 export function applyMixin(target: object, mixin: object): void {
   for (const key of Object.getOwnPropertyNames(mixin)) {
     const d = Object.getOwnPropertyDescriptor(mixin, key)!;
-    Object.defineProperty(target, key, { ...d, enumerable: true, configurable: true });
+    Object.defineProperty(target, key, {
+      ...d,
+      enumerable: true,
+      configurable: true,
+    });
   }
 }
 
 /** Depth-first pre-order walk of the element descendants of `root`; `fn` returns true to stop. */
-function walkElements(root: Node, fn: (el: Element) => boolean, validate?: () => unknown): void {
+function walkElements(
+  root: Node,
+  fn: (el: Element) => boolean,
+  validate?: () => unknown,
+): void {
   validate?.();
   const stack: Node[] = [];
   const k = root._kids;
@@ -561,7 +749,10 @@ function walkElements(root: Node, fn: (el: Element) => boolean, validate?: () =>
   while (stack.length) {
     const n = stack.pop()!;
     if (n instanceof Element && fn(n)) return;
-    const kids = n instanceof Element && n.localName === 'template' && (n as any)._content ? null : n._kids;
+    const kids =
+      n instanceof Element && n.localName === 'template' && (n as any)._content
+        ? null
+        : n._kids;
     if (kids) for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]!);
   }
 }
@@ -604,13 +795,17 @@ export class CharacterData extends Node {
     this.data = this._data + str(data);
   }
   insertData(offset: number, data: string): void {
-    this.data = this._data.slice(0, offset) + str(data) + this._data.slice(offset);
+    this.data =
+      this._data.slice(0, offset) + str(data) + this._data.slice(offset);
   }
   deleteData(offset: number, count: number): void {
     this.data = this._data.slice(0, offset) + this._data.slice(offset + count);
   }
   replaceData(offset: number, count: number, data: string): void {
-    this.data = this._data.slice(0, offset) + str(data) + this._data.slice(offset + count);
+    this.data =
+      this._data.slice(0, offset) +
+      str(data) +
+      this._data.slice(offset + count);
   }
   override _clone(_doc: any): Node {
     return new (this.constructor as new (d: string) => Node)(this._data);
@@ -789,7 +984,13 @@ export class Attr extends Node {
   /** @internal */ _owner: Element | null;
   constructor(rec?: AttrRecord, owner: Element | null = null) {
     super();
-    this._rec = rec ?? { ns: null, prefix: null, local: '', name: '', value: '' };
+    this._rec = rec ?? {
+      ns: null,
+      prefix: null,
+      local: '',
+      name: '',
+      value: '',
+    };
     this._owner = owner;
   }
   override get nodeType(): number {
@@ -811,10 +1012,14 @@ export class Attr extends Node {
     return this._rec.prefix;
   }
   get value(): string {
-    return this._owner ? (this._owner.getAttributeNS(this._rec.ns, this._rec.local) ?? this._rec.value) : this._rec.value;
+    return this._owner
+      ? (this._owner.getAttributeNS(this._rec.ns, this._rec.local) ??
+          this._rec.value)
+      : this._rec.value;
   }
   set value(v: string) {
-    if (this._owner) this._owner.setAttributeNS(this._rec.ns, this._rec.name, str(v));
+    if (this._owner)
+      this._owner.setAttributeNS(this._rec.ns, this._rec.name, str(v));
     else this._rec.value = str(v);
   }
   override get nodeValue(): string {
@@ -853,7 +1058,11 @@ export class NamedNodeMap extends Array<Attr> {
   }
   removeNamedItem(name: string): Attr {
     const a = this._owner.getAttributeNode(name);
-    if (!a) throw domException(`No item with name '${name}' was found.`, 'NotFoundError');
+    if (!a)
+      throw domException(
+        `No item with name '${name}' was found.`,
+        'NotFoundError',
+      );
     this._owner.removeAttribute(name);
     return a;
   }
@@ -877,7 +1086,8 @@ export class DOMTokenList {
     const v = this._el.getAttribute(this._attr);
     if (!v) return [];
     const out: string[] = [];
-    for (const t of v.split(/[\t\n\f\r ]+/)) if (t && !out.includes(t)) out.push(t);
+    for (const t of v.split(/[\t\n\f\r ]+/))
+      if (t && !out.includes(t)) out.push(t);
     return out;
   }
   /** @internal */ _write(tokens: string[]): void {
@@ -885,8 +1095,16 @@ export class DOMTokenList {
   }
   /** @internal */ _check(t: string): string {
     const s = str(t);
-    if (s === '') throw domException('The token provided must not be empty.', 'SyntaxError');
-    if (/[\t\n\f\r ]/.test(s)) throw domException(`The token provided ('${s}') contains HTML space characters, which are not valid in tokens.`, 'InvalidCharacterError');
+    if (s === '')
+      throw domException(
+        'The token provided must not be empty.',
+        'SyntaxError',
+      );
+    if (/[\t\n\f\r ]/.test(s))
+      throw domException(
+        `The token provided ('${s}') contains HTML space characters, which are not valid in tokens.`,
+        'InvalidCharacterError',
+      );
     return s;
   }
   get length(): number {
@@ -941,10 +1159,14 @@ export class DOMTokenList {
     return true;
   }
   supports(token: string): boolean {
-    if (!this._supported) throw new TypeError(`DOMTokenList has no supported tokens.`);
+    if (!this._supported)
+      throw new TypeError(`DOMTokenList has no supported tokens.`);
     return this._supported.has(lower(str(token)));
   }
-  forEach(cb: (value: string, index: number, list: DOMTokenList) => void, thisArg?: unknown): void {
+  forEach(
+    cb: (value: string, index: number, list: DOMTokenList) => void,
+    thisArg?: unknown,
+  ): void {
     this._tokens().forEach((t, i) => cb.call(thisArg, t, i, this));
   }
   keys(): IterableIterator<number> {
@@ -973,18 +1195,45 @@ const NAME_RE = /^[^\s"'>/=\x00-\x1f\x7f]+$/;
 
 /** Interface name -> local name, for `new HTMLImageElement()`-style construction by other runtime layers. */
 const TAG_OF_INTERFACE: Record<string, string> = {
-  HTMLImageElement: 'img', HTMLCanvasElement: 'canvas', HTMLVideoElement: 'video', HTMLAudioElement: 'audio',
-  HTMLDivElement: 'div', HTMLSpanElement: 'span', HTMLInputElement: 'input', HTMLAnchorElement: 'a',
-  HTMLScriptElement: 'script', HTMLLinkElement: 'link', HTMLStyleElement: 'style', HTMLButtonElement: 'button',
-  HTMLTextAreaElement: 'textarea', HTMLParagraphElement: 'p', HTMLBodyElement: 'body', HTMLHeadElement: 'head',
-  HTMLHtmlElement: 'html', HTMLTemplateElement: 'template', HTMLIFrameElement: 'iframe', HTMLSelectElement: 'select',
-  HTMLOptionElement: 'option', HTMLLabelElement: 'label', HTMLFormElement: 'form', HTMLMetaElement: 'meta',
-  HTMLTitleElement: 'title', HTMLSourceElement: 'source', HTMLPreElement: 'pre', HTMLUListElement: 'ul',
-  HTMLOListElement: 'ol', HTMLLIElement: 'li', HTMLTableElement: 'table', HTMLBRElement: 'br', HTMLHRElement: 'hr',
+  HTMLImageElement: 'img',
+  HTMLCanvasElement: 'canvas',
+  HTMLVideoElement: 'video',
+  HTMLAudioElement: 'audio',
+  HTMLDivElement: 'div',
+  HTMLSpanElement: 'span',
+  HTMLInputElement: 'input',
+  HTMLAnchorElement: 'a',
+  HTMLScriptElement: 'script',
+  HTMLLinkElement: 'link',
+  HTMLStyleElement: 'style',
+  HTMLButtonElement: 'button',
+  HTMLTextAreaElement: 'textarea',
+  HTMLParagraphElement: 'p',
+  HTMLBodyElement: 'body',
+  HTMLHeadElement: 'head',
+  HTMLHtmlElement: 'html',
+  HTMLTemplateElement: 'template',
+  HTMLIFrameElement: 'iframe',
+  HTMLSelectElement: 'select',
+  HTMLOptionElement: 'option',
+  HTMLLabelElement: 'label',
+  HTMLFormElement: 'form',
+  HTMLMetaElement: 'meta',
+  HTMLTitleElement: 'title',
+  HTMLSourceElement: 'source',
+  HTMLPreElement: 'pre',
+  HTMLUListElement: 'ul',
+  HTMLOListElement: 'ol',
+  HTMLLIElement: 'li',
+  HTMLTableElement: 'table',
+  HTMLBRElement: 'br',
+  HTMLHRElement: 'hr',
 };
 
-const dataKey = (prop: string) => `data-${prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`;
-const dataProp = (attr: string) => attr.slice(5).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+const dataKey = (prop: string) =>
+  `data-${prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`;
+const dataProp = (attr: string) =>
+  attr.slice(5).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
 export class Element extends Node {
   /** @internal */ _ns: string | null;
@@ -999,11 +1248,21 @@ export class Element extends Node {
   scrollTop = 0;
   scrollLeft = 0;
 
-  constructor(localName?: string, namespace?: string | null, prefix?: string | null) {
+  constructor(
+    localName?: string,
+    namespace?: string | null,
+    prefix?: string | null,
+  ) {
     super();
     const fromInterface = (new.target as { name?: string }).name ?? '';
-    const tag = (new.target.prototype as unknown as Record<symbol, unknown>)[Symbol.toStringTag];
-    const name = localName ?? TAG_OF_INTERFACE[fromInterface] ?? (typeof tag === 'string' ? TAG_OF_INTERFACE[tag] : undefined) ?? 'div';
+    const tag = (new.target.prototype as unknown as Record<symbol, unknown>)[
+      Symbol.toStringTag
+    ];
+    const name =
+      localName ??
+      TAG_OF_INTERFACE[fromInterface] ??
+      (typeof tag === 'string' ? TAG_OF_INTERFACE[tag] : undefined) ??
+      'div';
     this._ns = namespace === undefined ? HTML_NS : namespace;
     this._prefix = prefix ?? null;
     this._local = name;
@@ -1078,11 +1337,19 @@ export class Element extends Node {
         return typeof key === 'string' && el.hasAttribute(dataKey(key));
       },
       ownKeys() {
-        return el._attrs.filter((a) => a.ns === null && a.name.startsWith('data-')).map((a) => dataProp(a.name));
+        return el._attrs
+          .filter((a) => a.ns === null && a.name.startsWith('data-'))
+          .map((a) => dataProp(a.name));
       },
       getOwnPropertyDescriptor(_t, key) {
-        if (typeof key !== 'string' || !el.hasAttribute(dataKey(key))) return undefined;
-        return { value: el.getAttribute(dataKey(key)), writable: true, enumerable: true, configurable: true };
+        if (typeof key !== 'string' || !el.hasAttribute(dataKey(key)))
+          return undefined;
+        return {
+          value: el.getAttribute(dataKey(key)),
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        };
       },
     });
     return this._dataset;
@@ -1121,9 +1388,13 @@ export class Element extends Node {
     for (const a of this._attrs) if (a.name === n) return a;
     return undefined;
   }
-  /** @internal */ _findNS(ns: string | null, local: string): AttrRecord | undefined {
+  /** @internal */ _findNS(
+    ns: string | null,
+    local: string,
+  ): AttrRecord | undefined {
     const want = ns || null;
-    for (const a of this._attrs) if (a.ns === want && a.local === local) return a;
+    for (const a of this._attrs)
+      if (a.ns === want && a.local === local) return a;
     return undefined;
   }
   getAttribute(name: string): string | null {
@@ -1140,18 +1411,31 @@ export class Element extends Node {
   }
   setAttribute(name: string, value: string): void {
     const raw = str(name);
-    if (!NAME_RE.test(raw)) throw domException(`Failed to execute 'setAttribute' on 'Element': '${raw}' is not a valid attribute name.`, 'InvalidCharacterError');
+    if (!NAME_RE.test(raw))
+      throw domException(
+        `Failed to execute 'setAttribute' on 'Element': '${raw}' is not a valid attribute name.`,
+        'InvalidCharacterError',
+      );
     const n = this._attrName(raw);
     const v = str(value);
     const rec = this._find(n);
     const old = rec ? rec.value : null;
     if (rec) rec.value = v;
-    else this._attrs.push({ ns: null, prefix: null, local: n, name: n, value: v });
+    else
+      this._attrs.push({ ns: null, prefix: null, local: n, name: n, value: v });
     this._attributeChanged(n, null, old, v);
   }
-  setAttributeNS(ns: string | null, qualifiedName: string, value: string): void {
+  setAttributeNS(
+    ns: string | null,
+    qualifiedName: string,
+    value: string,
+  ): void {
     const q = str(qualifiedName);
-    if (!NAME_RE.test(q)) throw domException(`'${q}' is not a valid attribute name.`, 'InvalidCharacterError');
+    if (!NAME_RE.test(q))
+      throw domException(
+        `'${q}' is not a valid attribute name.`,
+        'InvalidCharacterError',
+      );
     const colon = q.indexOf(':');
     const prefix = colon > 0 ? q.slice(0, colon) : null;
     const local = colon > 0 ? q.slice(colon + 1) : q;
@@ -1163,7 +1447,8 @@ export class Element extends Node {
       rec.value = v;
       rec.prefix = prefix;
       rec.name = q;
-    } else this._attrs.push({ ns: namespace, prefix, local, name: q, value: v });
+    } else
+      this._attrs.push({ ns: namespace, prefix, local, name: q, value: v });
     this._attributeChanged(local, namespace, old, v);
   }
   removeAttribute(name: string): void {
@@ -1205,7 +1490,8 @@ export class Element extends Node {
   }
   setAttributeNode(attr: Attr): Attr | null {
     const old = this.getAttributeNode(attr.name);
-    if (attr.namespaceURI) this.setAttributeNS(attr.namespaceURI, attr.name, attr.value);
+    if (attr.namespaceURI)
+      this.setAttributeNS(attr.namespaceURI, attr.name, attr.value);
     else this.setAttribute(attr.name, attr.value);
     attr._owner = this;
     return old;
@@ -1218,16 +1504,31 @@ export class Element extends Node {
     return attr;
   }
   /** @internal: reflection and mutation records for every attribute change. */
-  _attributeChanged(local: string, ns: string | null, old: string | null, value: string | null): void {
-    if (local === 'style' && ns === null && this._style && !this._styleSync) resetStyle(this._style, value ?? '');
+  _attributeChanged(
+    local: string,
+    ns: string | null,
+    old: string | null,
+    value: string | null,
+  ): void {
+    if (local === 'style' && ns === null && this._style && !this._styleSync)
+      resetStyle(this._style, value ?? '');
     notifyAttribute(this, local, ns, old);
     this._reflect(local, ns, old, value);
   }
   /** @internal: subclasses react to their own attributes (src, width, ...). */
-  _reflect(_local: string, _ns: string | null, _old: string | null, _value: string | null): void {}
+  _reflect(
+    _local: string,
+    _ns: string | null,
+    _old: string | null,
+    _value: string | null,
+  ): void {}
 
   matches(selectors: string): boolean {
-    return matchesSelector(this as unknown as MatchElement, str(selectors), this as unknown as MatchElement);
+    return matchesSelector(
+      this as unknown as MatchElement,
+      str(selectors),
+      this as unknown as MatchElement,
+    );
   }
   webkitMatchesSelector(selectors: string): boolean {
     return this.matches(selectors);
@@ -1236,38 +1537,71 @@ export class Element extends Node {
     const sel = str(selectors);
     parseSelector(sel);
     for (let n: Node | null = this; n instanceof Element; n = n._parent) {
-      if (matchesSelector(n as unknown as MatchElement, sel, this as unknown as MatchElement)) return n;
+      if (
+        matchesSelector(
+          n as unknown as MatchElement,
+          sel,
+          this as unknown as MatchElement,
+        )
+      )
+        return n;
     }
     return null;
   }
   get innerHTML(): string {
-    return serializeChildren(this as any, !this._isHTMLDocument() || this._ns !== HTML_NS);
+    return serializeChildren(
+      this as any,
+      !this._isHTMLDocument() || this._ns !== HTML_NS,
+    );
   }
   set innerHTML(v: string) {
     const doc = this._doc;
     const frag = doc.createDocumentFragment();
-    const res = parseInto(frag, v === null ? '' : str(v), doc as NodeFactory, { xml: !this._isHTMLDocument(), contextNs: this._ns });
+    const res = parseInto(frag, v === null ? '' : str(v), doc as NodeFactory, {
+      xml: !this._isHTMLDocument(),
+      contextNs: this._ns,
+    });
     markParserScripts(res.scripts);
     // a template's markup replaces its contents (HTML innerHTML setter), not its children
-    const target = this.localName === 'template' && this._ns === HTML_NS && (this as any).content ? (this as any).content : this;
+    const target =
+      this.localName === 'template' &&
+      this._ns === HTML_NS &&
+      (this as any).content
+        ? (this as any).content
+        : this;
     replaceAll(target, frag);
   }
   get outerHTML(): string {
-    return serializeNode(this as any, !this._isHTMLDocument() || this._ns !== HTML_NS);
+    return serializeNode(
+      this as any,
+      !this._isHTMLDocument() || this._ns !== HTML_NS,
+    );
   }
   set outerHTML(v: string) {
     const p = this._parent;
     if (!p) return;
-    if (p.nodeType === DOCUMENT_NODE) throw domException('This element has no parent element.', 'NoModificationAllowedError');
+    if (p.nodeType === DOCUMENT_NODE)
+      throw domException(
+        'This element has no parent element.',
+        'NoModificationAllowedError',
+      );
     const frag = this._doc.createDocumentFragment();
-    markParserScripts(parseInto(frag, str(v), this._doc as NodeFactory, { contextNs: (p as Element)._ns ?? HTML_NS }).scripts);
+    markParserScripts(
+      parseInto(frag, str(v), this._doc as NodeFactory, {
+        contextNs: (p as Element)._ns ?? HTML_NS,
+      }).scripts,
+    );
     const next = this.nextSibling;
     remove(this, true);
     insert(p, frag, next);
   }
   insertAdjacentHTML(position: string, text: string): void {
     const frag = this._doc.createDocumentFragment();
-    markParserScripts(parseInto(frag, str(text), this._doc as NodeFactory, { contextNs: this._ns }).scripts);
+    markParserScripts(
+      parseInto(frag, str(text), this._doc as NodeFactory, {
+        contextNs: this._ns,
+      }).scripts,
+    );
     this._insertAdjacent(position, frag);
   }
   insertAdjacentElement(position: string, el: Element): Element | null {
@@ -1293,7 +1627,10 @@ export class Element extends Node {
         insert(this._parent, node, this.nextSibling);
         return true;
       default:
-        throw domException(`The value provided ('${position}') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.`, 'SyntaxError');
+        throw domException(
+          `The value provided ('${position}') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.`,
+          'SyntaxError',
+        );
     }
   }
   get innerText(): string {
@@ -1306,7 +1643,11 @@ export class Element extends Node {
     return this.textContent ?? '';
   }
   attachShadow(init: { mode?: string } = {}): ShadowRoot {
-    if (this._shadow) throw domException('Shadow root cannot be created on a host which already hosts a shadow tree.', 'NotSupportedError');
+    if (this._shadow)
+      throw domException(
+        'Shadow root cannot be created on a host which already hosts a shadow tree.',
+        'NotSupportedError',
+      );
     const root = new ShadowRoot();
     root._doc = this._doc;
     root._host = this;
@@ -1320,7 +1661,11 @@ export class Element extends Node {
   // Geometry (CSSOM View, DOM-8): no layout. The window rect for the canvas and what holds it, zeros otherwise.
   /** @internal */ _fillsWindow(): boolean {
     if (this.localName === 'canvas' && this._ns === HTML_NS) return true;
-    if (this._ns === HTML_NS && (this.localName === 'body' || this.localName === 'html')) return true;
+    if (
+      this._ns === HTML_NS &&
+      (this.localName === 'body' || this.localName === 'html')
+    )
+      return true;
     for (const c of connectedCanvases) if (this.contains(c)) return true;
     return false;
   }
@@ -1368,14 +1713,22 @@ export class Element extends Node {
   requestFullscreen(_options?: unknown): Promise<void> {
     return Promise.resolve();
   }
-  animate(): { cancel(): void; finished: Promise<void>; play(): void; pause(): void } {
+  animate(): {
+    cancel(): void;
+    finished: Promise<void>;
+    play(): void;
+    pause(): void;
+  } {
     return { cancel() {}, finished: Promise.resolve(), play() {}, pause() {} };
   }
   getAnimations(): unknown[] {
     return [];
   }
   override _clone(doc: any): Node {
-    const c = doc.createElementNS(this._ns, this._prefix ? `${this._prefix}:${this._local}` : this._local) as Element;
+    const c = doc.createElementNS(
+      this._ns,
+      this._prefix ? `${this._prefix}:${this._local}` : this._local,
+    ) as Element;
     for (const a of this._attrs) c._attrs.push({ ...a });
     for (const a of this._attrs) c._reflect(a.local, a.ns, null, a.value);
     return c;
@@ -1417,12 +1770,22 @@ export interface DocumentFragment {
 /** Scripts the parser created never run (the core already ran the entry document's; innerHTML scripts never run). */
 export const ALREADY_STARTED = Symbol('iwn.dom.alreadyStarted');
 function markParserScripts(scripts: unknown[]): void {
-  for (const s of scripts) (s as Record<symbol, boolean>)[ALREADY_STARTED] = true;
+  for (const s of scripts)
+    (s as Record<symbol, boolean>)[ALREADY_STARTED] = true;
 }
 export { markParserScripts };
 
-export const mixins = { parentNodeMixin, childNodeMixin, nonDocumentTypeChildMixin };
-export { insert as insertNode, replaceAll as replaceAllChildren, walkElements, forEachInclusiveDescendant };
+export const mixins = {
+  parentNodeMixin,
+  childNodeMixin,
+  nonDocumentTypeChildMixin,
+};
+export {
+  insert as insertNode,
+  replaceAll as replaceAllChildren,
+  walkElements,
+  forEachInclusiveDescendant,
+};
 
 /** For tests and diagnostics. */
 export function connectedCanvasCount(): number {

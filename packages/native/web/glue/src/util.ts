@@ -36,7 +36,10 @@ export function defineGlobal(
  *   origin, performance, devicePixelRatio on Window).
  * - a function: [PutForwards]; assignment calls it (Window.location forwards to location.href).
  */
-export type GlobalSetter = 'readonly' | 'replaceable' | ((value: unknown) => void);
+export type GlobalSetter =
+  | 'readonly'
+  | 'replaceable'
+  | ((value: unknown) => void);
 
 /** Defines a WebIDL-style accessor attribute on the global. */
 export function defineGlobalGetter(
@@ -99,7 +102,8 @@ export function illegalConstructor(): TypeError {
 export function bytesOf(source: unknown, what: string): Uint8Array {
   // WebIDL "get a copy of the bytes held by the buffer source": a detached buffer holds no bytes.
   if (ArrayBuffer.isView(source)) {
-    if ((source.buffer as { detached?: boolean }).detached) return new Uint8Array(0);
+    if ((source.buffer as { detached?: boolean }).detached)
+      return new Uint8Array(0);
     return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
   }
   if (
@@ -126,14 +130,20 @@ export function isBufferSource(source: unknown): boolean {
 
 /** WebIDL dictionary argument check: undefined, null or an object (functions are objects). */
 export function checkDictionary(v: unknown, message: string): void {
-  if (v !== undefined && v !== null && typeof v !== 'object' && typeof v !== 'function') {
+  if (
+    v !== undefined &&
+    v !== null &&
+    typeof v !== 'object' &&
+    typeof v !== 'function'
+  ) {
     throw new TypeError(message);
   }
 }
 
 /** WebIDL DOMString conversion: ToString, except that Symbols throw TypeError. */
 export function toDOMString(v: unknown, what: string): string {
-  if (typeof v === 'symbol') throw new TypeError(`${what}: Cannot convert a Symbol value to a string`);
+  if (typeof v === 'symbol')
+    throw new TypeError(`${what}: Cannot convert a Symbol value to a string`);
   return String(v);
 }
 
@@ -154,5 +164,10 @@ export function toUnsignedLongLong(v: unknown): number {
 
 /** Sets a constructor's `length` to its WebIDL required-argument count. */
 export function setLength(fn: Function, n: number): void {
-  Object.defineProperty(fn, 'length', { value: n, writable: false, enumerable: false, configurable: true });
+  Object.defineProperty(fn, 'length', {
+    value: n,
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
 }

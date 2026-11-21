@@ -18,7 +18,10 @@ import { commands, FakeNatives, microtask, tick } from './fake-natives.ts';
 function setup() {
   const natives = new FakeNatives();
   const logs: string[] = [];
-  const api = createWebAudio(natives, { experimental: true, log: (m) => logs.push(m) });
+  const api = createWebAudio(natives, {
+    experimental: true,
+    log: (m) => logs.push(m),
+  });
   return { natives, api, logs };
 }
 
@@ -30,13 +33,32 @@ describe('install', () => {
   test('defines globals and webkit alias; absent media/worklet nodes', () => {
     const target: Record<string, unknown> = {};
     installWebAudio(target, new FakeNatives(), { experimental: true });
-    for (const n of ['AudioContext', 'OfflineAudioContext', 'AudioBuffer', 'GainNode', 'PannerNode', 'AudioParam',
-      'AudioBufferSourceNode', 'BiquadFilterNode', 'AnalyserNode', 'ConvolverNode', 'StereoPannerNode', 'PeriodicWave']) {
+    for (const n of [
+      'AudioContext',
+      'OfflineAudioContext',
+      'AudioBuffer',
+      'GainNode',
+      'PannerNode',
+      'AudioParam',
+      'AudioBufferSourceNode',
+      'BiquadFilterNode',
+      'AnalyserNode',
+      'ConvolverNode',
+      'StereoPannerNode',
+      'PeriodicWave',
+    ]) {
       assert.equal(typeof target[n], 'function', n);
     }
     assert.equal(target.webkitAudioContext, target.AudioContext);
-    assert.equal((target.AudioContext as { name: string }).name, 'AudioContext');
-    for (const n of ['MediaElementAudioSourceNode', 'MediaStreamAudioSourceNode', 'AudioWorkletNode']) {
+    assert.equal(
+      (target.AudioContext as { name: string }).name,
+      'AudioContext',
+    );
+    for (const n of [
+      'MediaElementAudioSourceNode',
+      'MediaStreamAudioSourceNode',
+      'AudioWorkletNode',
+    ]) {
       assert.equal(target[n], undefined, n);
     }
   });
@@ -44,45 +66,97 @@ describe('install', () => {
   test('alpha surface (default): beyond-basic nodes throw NotSupportedError naming the API, OfflineAudioContext is absent', () => {
     const target: Record<string, unknown> = {};
     installWebAudio(target, new FakeNatives());
-    for (const n of ['AudioContext', 'AudioBuffer', 'GainNode', 'PannerNode', 'AudioListener', 'AudioBufferSourceNode', 'AudioParam']) {
+    for (const n of [
+      'AudioContext',
+      'AudioBuffer',
+      'GainNode',
+      'PannerNode',
+      'AudioListener',
+      'AudioBufferSourceNode',
+      'AudioParam',
+    ]) {
       assert.equal(typeof target[n], 'function', n);
     }
     assert.equal(target.OfflineAudioContext, undefined);
     assert.equal(target.webkitOfflineAudioContext, undefined);
     assert.equal(target.OfflineAudioCompletionEvent, undefined);
-    const Ctx = target.AudioContext as new () => Record<string, (...a: unknown[]) => unknown>;
+    const Ctx = target.AudioContext as new () => Record<
+      string,
+      (...a: unknown[]) => unknown
+    >;
     const ctx = new Ctx();
     // the basic set works
     ctx.createGain!();
     ctx.createPanner!();
     ctx.createBufferSource!();
     const nodes: [string, string][] = [
-      ['OscillatorNode', 'createOscillator'], ['ConstantSourceNode', 'createConstantSource'], ['StereoPannerNode', 'createStereoPanner'],
-      ['BiquadFilterNode', 'createBiquadFilter'], ['DelayNode', 'createDelay'], ['AnalyserNode', 'createAnalyser'],
-      ['ConvolverNode', 'createConvolver'], ['ChannelSplitterNode', 'createChannelSplitter'], ['ChannelMergerNode', 'createChannelMerger'],
+      ['OscillatorNode', 'createOscillator'],
+      ['ConstantSourceNode', 'createConstantSource'],
+      ['StereoPannerNode', 'createStereoPanner'],
+      ['BiquadFilterNode', 'createBiquadFilter'],
+      ['DelayNode', 'createDelay'],
+      ['AnalyserNode', 'createAnalyser'],
+      ['ConvolverNode', 'createConvolver'],
+      ['ChannelSplitterNode', 'createChannelSplitter'],
+      ['ChannelMergerNode', 'createChannelMerger'],
       ['PeriodicWave', 'createPeriodicWave'],
     ];
     for (const [name, factory] of nodes) {
       const cls = target[name] as new (...a: unknown[]) => unknown;
-      assert.throws(() => new cls(ctx), (e: Error) => e.name === 'NotSupportedError' && e.message.includes(name), name);
-      assert.throws(() => ctx[factory]!([0, 1], [0, 0]), (e: Error) => e.name === 'NotSupportedError' && e.message.includes(name), factory);
+      assert.throws(
+        () => new cls(ctx),
+        (e: Error) =>
+          e.name === 'NotSupportedError' && e.message.includes(name),
+        name,
+      );
+      assert.throws(
+        () => ctx[factory]!([0, 1], [0, 0]),
+        (e: Error) =>
+          e.name === 'NotSupportedError' && e.message.includes(name),
+        factory,
+      );
     }
-    for (const n of ['DynamicsCompressorNode', 'WaveShaperNode', 'IIRFilterNode']) {
-      assert.throws(() => new (target[n] as new () => unknown)(), (e: Error) => e.name === 'NotSupportedError', n);
+    for (const n of [
+      'DynamicsCompressorNode',
+      'WaveShaperNode',
+      'IIRFilterNode',
+    ]) {
+      assert.throws(
+        () => new (target[n] as new () => unknown)(),
+        (e: Error) => e.name === 'NotSupportedError',
+        n,
+      );
     }
     // a second, experimental install is unaffected by the first one's gate
     const t2: Record<string, unknown> = {};
     installWebAudio(t2, new FakeNatives(), { experimental: true });
-    const ctx2 = new (t2.AudioContext as new () => Record<string, () => unknown>)();
+    const ctx2 = new (t2.AudioContext as new () => Record<
+      string,
+      () => unknown
+    >)();
     assert.ok(ctx2.createOscillator!());
     assert.equal(typeof t2.OfflineAudioContext, 'function');
   });
 
   test('AudioBuffer larger than 1 GiB of samples throws NotSupportedError before allocating', () => {
     const api = createWebAudio(new FakeNatives());
-    assert.throws(() => new api.AudioBuffer({ length: 1e9, sampleRate: 48000 }), (e: Error) => e.name === 'NotSupportedError');
-    assert.throws(() => new api.AudioBuffer({ length: 2 ** 23 + 1, numberOfChannels: 32, sampleRate: 48000 }), (e: Error) => e.name === 'NotSupportedError');
-    assert.equal(new api.AudioBuffer({ length: 1000, sampleRate: 48000 }).length, 1000);
+    assert.throws(
+      () => new api.AudioBuffer({ length: 1e9, sampleRate: 48000 }),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.throws(
+      () =>
+        new api.AudioBuffer({
+          length: 2 ** 23 + 1,
+          numberOfChannels: 32,
+          sampleRate: 48000,
+        }),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.equal(
+      new api.AudioBuffer({ length: 1000, sampleRate: 48000 }).length,
+      1000,
+    );
   });
 
   test('rejects a protocol mismatch', () => {
@@ -94,9 +168,21 @@ describe('install', () => {
   test('SHOULD nodes not implemented throw NotSupportedError naming the node', () => {
     const { api } = setup();
     const ctx = new api.AudioContext();
-    assert.throws(() => new api.DynamicsCompressorNode(ctx), (e: Error) => e.name === 'NotSupportedError' && /DynamicsCompressorNode/.test(e.message));
-    assert.throws(() => ctx.createWaveShaper(), (e: Error) => e.name === 'NotSupportedError' && /WaveShaperNode/.test(e.message));
-    assert.equal((ctx as unknown as Record<string, unknown>).createMediaElementSource, undefined);
+    assert.throws(
+      () => new api.DynamicsCompressorNode(ctx),
+      (e: Error) =>
+        e.name === 'NotSupportedError' &&
+        /DynamicsCompressorNode/.test(e.message),
+    );
+    assert.throws(
+      () => ctx.createWaveShaper(),
+      (e: Error) =>
+        e.name === 'NotSupportedError' && /WaveShaperNode/.test(e.message),
+    );
+    assert.equal(
+      (ctx as unknown as Record<string, unknown>).createMediaElementSource,
+      undefined,
+    );
   });
 });
 
@@ -146,10 +232,16 @@ describe('AudioContext state (AUD-1)', () => {
 
   test('sampleRate option is validated and passed to natives', () => {
     const { api } = setup();
-    assert.throws(() => new api.AudioContext({ sampleRate: 100 }), (e: Error) => e.name === 'NotSupportedError');
+    assert.throws(
+      () => new api.AudioContext({ sampleRate: 100 }),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
     const ctx = new api.AudioContext({ sampleRate: 44100 });
     assert.equal(ctx.sampleRate, 44100);
-    assert.throws(() => new api.AudioContext({ latencyHint: 'bogus' as 'playback' }), TypeError);
+    assert.throws(
+      () => new api.AudioContext({ latencyHint: 'bogus' as 'playback' }),
+      TypeError,
+    );
   });
 });
 
@@ -169,7 +261,17 @@ describe('batching (AUD-10, AUD-11)', () => {
     await microtask();
     assert.equal(natives.submits, before + 1);
     const cmds = commands(natives.ctx().batches.at(-1)!);
-    assert.deepEqual(cmds.map((c) => c[0]), [Op.CreateNode, Op.CreateNode, Op.Connect, Op.Connect, Op.ParamEvent, Op.ParamEvent]);
+    assert.deepEqual(
+      cmds.map((c) => c[0]),
+      [
+        Op.CreateNode,
+        Op.CreateNode,
+        Op.Connect,
+        Op.Connect,
+        Op.ParamEvent,
+        Op.ParamEvent,
+      ],
+    );
   });
 
   test('a task that changes nothing submits nothing', async () => {
@@ -198,7 +300,7 @@ describe('batching (AUD-10, AUD-11)', () => {
       s.start();
     }
     const dt = performance.now() - t0;
-    assert.ok(dt < 20, `100 voices took ${dt.toFixed(2)} ms`);  // device budget 1 ms (AUD-11); host CI is noisy
+    assert.ok(dt < 20, `100 voices took ${dt.toFixed(2)} ms`); // device budget 1 ms (AUD-11); host CI is noisy
   });
 });
 
@@ -216,7 +318,7 @@ describe('AudioParam (AUD-5)', () => {
     assert.equal(osc.frequency.value, 1000);
     await microtask();
     const slot = commands(natives.ctx().batches.at(-1)!)[0][3];
-    natives.ctx().params[slot] = 999;  // render thread computed a value
+    natives.ctx().params[slot] = 999; // render thread computed a value
     assert.equal(osc.frequency.value, 1000, 'still in flight');
     natives.render(1, 128);
     assert.equal(osc.frequency.value, 999, 'applied: reads the rendered value');
@@ -232,7 +334,10 @@ describe('AudioParam (AUD-5)', () => {
     assert.throws(() => g.setValueAtTime(NaN, 1), TypeError);
     assert.throws(() => g.exponentialRampToValueAtTime(0, 1), RangeError);
     assert.throws(() => g.setTargetAtTime(1, 0, -1), RangeError);
-    assert.throws(() => g.setValueCurveAtTime([1], 0, 1), (e: Error) => e.name === 'InvalidStateError');
+    assert.throws(
+      () => g.setValueCurveAtTime([1], 0, 1),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
     assert.throws(() => g.setValueCurveAtTime([1, 2], 0, 0), RangeError);
     assert.throws(() => g.cancelScheduledValues(-1), RangeError);
     assert.equal(g.setValueAtTime(1, 0), g, 'methods chain');
@@ -243,11 +348,17 @@ describe('AudioParam (AUD-5)', () => {
     const ctx = new api.AudioContext();
     const g = ctx.createGain().gain;
     g.setValueCurveAtTime([0, 1, 0], 1, 1);
-    assert.throws(() => g.setValueAtTime(1, 1.5), (e: Error) => e.name === 'NotSupportedError');
-    assert.throws(() => g.setValueCurveAtTime([0, 1], 1.5, 1), (e: Error) => e.name === 'NotSupportedError');
-    g.setValueAtTime(1, 2);  // at the curve end: allowed
+    assert.throws(
+      () => g.setValueAtTime(1, 1.5),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.throws(
+      () => g.setValueCurveAtTime([0, 1], 1.5, 1),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    g.setValueAtTime(1, 2); // at the curve end: allowed
     g.cancelScheduledValues(0);
-    g.setValueAtTime(1, 1.5);  // curve removed
+    g.setValueAtTime(1, 1.5); // curve removed
   });
 
   test('events carry kind, time, value, insert time; past times clamp to currentTime', async () => {
@@ -262,10 +373,33 @@ describe('AudioParam (AUD-5)', () => {
     g.cancelAndHoldAtTime(5);
     await microtask();
     const cmds = commands(natives.ctx().batches.at(-1)!).slice(1);
-    assert.deepEqual(cmds[0], [Op.ParamEvent, cmds[0][1], ParamKind.SetTarget, 1, 0.5, 0.1, 1, 0]);
+    assert.deepEqual(cmds[0], [
+      Op.ParamEvent,
+      cmds[0][1],
+      ParamKind.SetTarget,
+      1,
+      0.5,
+      0.1,
+      1,
+      0,
+    ]);
     assert.deepEqual(cmds[1].slice(2, 5), [ParamKind.LinearRamp, 3, 1]);
-    assert.deepEqual(cmds[2].slice(2), [ParamKind.SetCurve, 4, 0, 2, 1, 3, 1, 2, 3]);
-    assert.deepEqual(cmds[3].slice(0, 1).concat(cmds[3].slice(2)), [Op.ParamCancel, 5, 1]);
+    assert.deepEqual(cmds[2].slice(2), [
+      ParamKind.SetCurve,
+      4,
+      0,
+      2,
+      1,
+      3,
+      1,
+      2,
+      3,
+    ]);
+    assert.deepEqual(cmds[3].slice(0, 1).concat(cmds[3].slice(2)), [
+      Op.ParamCancel,
+      5,
+      1,
+    ]);
   });
 
   test('automationRate: fixed for AudioBufferSourceNode params', () => {
@@ -273,7 +407,10 @@ describe('AudioParam (AUD-5)', () => {
     const ctx = new api.AudioContext();
     const s = ctx.createBufferSource();
     assert.equal(s.playbackRate.automationRate, 'k-rate');
-    assert.throws(() => (s.playbackRate.automationRate = 'a-rate'), (e: Error) => e.name === 'InvalidStateError');
+    assert.throws(
+      () => (s.playbackRate.automationRate = 'a-rate'),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
     const g = ctx.createGain();
     g.gain.automationRate = 'k-rate';
     assert.equal(g.gain.automationRate, 'k-rate');
@@ -281,7 +418,10 @@ describe('AudioParam (AUD-5)', () => {
 
   test('AudioParam has no public constructor', () => {
     const { api } = setup();
-    assert.throws(() => new (api.AudioParam as unknown as new () => unknown)(), TypeError);
+    assert.throws(
+      () => new (api.AudioParam as unknown as new () => unknown)(),
+      TypeError,
+    );
   });
 });
 
@@ -294,9 +434,18 @@ describe('AudioNode (AUD-4)', () => {
     const d = ctx.createDelay();
     assert.equal(g.connect(d), d);
     assert.equal(g.connect(d.delayTime), undefined);
-    assert.throws(() => g.connect(d, 1), (e: Error) => e.name === 'IndexSizeError');
-    assert.throws(() => g.connect(d, 0, 3), (e: Error) => e.name === 'IndexSizeError');
-    assert.throws(() => g.connect(other.createGain()), (e: Error) => e.name === 'InvalidAccessError');
+    assert.throws(
+      () => g.connect(d, 1),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
+    assert.throws(
+      () => g.connect(d, 0, 3),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
+    assert.throws(
+      () => g.connect(other.createGain()),
+      (e: Error) => e.name === 'InvalidAccessError',
+    );
     assert.throws(() => g.connect({} as never), TypeError);
   });
 
@@ -310,15 +459,26 @@ describe('AudioNode (AUD-4)', () => {
     src.connect(a);
     src.connect(b);
     src.connect(a.gain);
-    assert.throws(() => src.disconnect(ctx.destination), (e: Error) => e.name === 'InvalidAccessError');
+    assert.throws(
+      () => src.disconnect(ctx.destination),
+      (e: Error) => e.name === 'InvalidAccessError',
+    );
     src.disconnect(b);
     src.disconnect(a.gain);
-    assert.throws(() => src.disconnect(a.gain), (e: Error) => e.name === 'InvalidAccessError');
-    assert.throws(() => src.disconnect(1), (e: Error) => e.name === 'IndexSizeError');
+    assert.throws(
+      () => src.disconnect(a.gain),
+      (e: Error) => e.name === 'InvalidAccessError',
+    );
+    assert.throws(
+      () => src.disconnect(1),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
     src.disconnect(0);
     src.disconnect();
     await microtask();
-    const ops = natives.allCommands().filter((c) => c[0] === Op.Disconnect || c[0] === Op.DisconnectParam);
+    const ops = natives
+      .allCommands()
+      .filter((c) => c[0] === Op.Disconnect || c[0] === Op.DisconnectParam);
     assert.equal(ops.length, 4);
   });
 
@@ -330,15 +490,33 @@ describe('AudioNode (AUD-4)', () => {
     assert.equal(g.channelCountMode, 'max');
     g.channelCountMode = 'bogus' as 'max';
     assert.equal(g.channelCountMode, 'max', 'invalid enum assignment ignored');
-    assert.throws(() => (g.channelCount = 0), (e: Error) => e.name === 'NotSupportedError');
+    assert.throws(
+      () => (g.channelCount = 0),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
     const p = ctx.createPanner();
-    assert.throws(() => (p.channelCount = 3), (e: Error) => e.name === 'NotSupportedError');
-    assert.throws(() => (p.channelCountMode = 'max'), (e: Error) => e.name === 'NotSupportedError');
+    assert.throws(
+      () => (p.channelCount = 3),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.throws(
+      () => (p.channelCountMode = 'max'),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
     const sp = ctx.createChannelSplitter(4);
     assert.equal(sp.numberOfOutputs, 4);
-    assert.throws(() => (sp.channelCount = 2), (e: Error) => e.name === 'InvalidStateError');
-    assert.throws(() => (sp.channelInterpretation = 'speakers'), (e: Error) => e.name === 'InvalidStateError');
-    assert.throws(() => (ctx.destination.channelCount = 3), (e: Error) => e.name === 'IndexSizeError');
+    assert.throws(
+      () => (sp.channelCount = 2),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
+    assert.throws(
+      () => (sp.channelInterpretation = 'speakers'),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
+    assert.throws(
+      () => (ctx.destination.channelCount = 3),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
     assert.equal(ctx.destination.maxChannelCount, 2);
     assert.throws(() => new api.GainNode({} as never), TypeError);
   });
@@ -347,7 +525,12 @@ describe('AudioNode (AUD-4)', () => {
     const { natives, api } = setup();
     const ctx = new api.AudioContext();
     await tick();
-    const g = new api.GainNode(ctx, { gain: 0.25, channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'discrete' });
+    const g = new api.GainNode(ctx, {
+      gain: 0.25,
+      channelCount: 1,
+      channelCountMode: 'explicit',
+      channelInterpretation: 'discrete',
+    });
     assert.equal(g.gain.value, 0.25);
     await microtask();
     const cmds = commands(natives.ctx().batches.at(-1)!);
@@ -362,13 +545,19 @@ describe('nodes (AUD-6)', () => {
     const ctx = new api.AudioContext();
     await tick();
     const s = ctx.createBufferSource();
-    assert.throws(() => s.stop(), (e: Error) => e.name === 'InvalidStateError');
+    assert.throws(
+      () => s.stop(),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
     assert.throws(() => s.start(-1), RangeError);
     let ended = 0;
     s.onended = () => ended++;
     s.addEventListener('ended', () => ended++);
     s.start(0, 0.5);
-    assert.throws(() => s.start(), (e: Error) => e.name === 'InvalidStateError');
+    assert.throws(
+      () => s.start(),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
     s.stop(1);
     await microtask();
     const id = commands(natives.ctx().batches.at(-1)!)[0][1];
@@ -381,10 +570,18 @@ describe('nodes (AUD-6)', () => {
     const { api } = setup();
     const ctx = new api.AudioContext();
     const b = ctx.createBuffer(1, 10, 48000);
-    const s = new api.AudioBufferSourceNode(ctx, { buffer: b, loop: true, loopStart: 0.1, loopEnd: 0.2 });
+    const s = new api.AudioBufferSourceNode(ctx, {
+      buffer: b,
+      loop: true,
+      loopStart: 0.1,
+      loopEnd: 0.2,
+    });
     assert.equal(s.buffer, b);
     assert.equal(s.loop, true);
-    assert.throws(() => (s.buffer = ctx.createBuffer(1, 10, 48000)), (e: Error) => e.name === 'InvalidStateError');
+    assert.throws(
+      () => (s.buffer = ctx.createBuffer(1, 10, 48000)),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
     s.buffer = null;
     assert.throws(() => s.start(0, -1), RangeError);
   });
@@ -400,9 +597,15 @@ describe('nodes (AUD-6)', () => {
     assert.throws(() => (p.refDistance = -1), RangeError);
     assert.throws(() => (p.maxDistance = 0), RangeError);
     assert.throws(() => (p.rolloffFactor = -1), RangeError);
-    assert.throws(() => (p.coneOuterGain = 2), (e: Error) => e.name === 'InvalidStateError');
+    assert.throws(
+      () => (p.coneOuterGain = 2),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
     p.setPosition(1, 2, 3);
-    assert.deepEqual([p.positionX.value, p.positionY.value, p.positionZ.value], [1, 2, 3]);
+    assert.deepEqual(
+      [p.positionX.value, p.positionY.value, p.positionZ.value],
+      [1, 2, 3],
+    );
     p.setOrientation(0, 0, -1);
     assert.equal(p.orientationZ.value, -1);
     ctx.listener.setPosition(4, 5, 6);
@@ -419,27 +622,66 @@ describe('nodes (AUD-6)', () => {
     bq.type = 'nope' as 'lowpass';
     assert.equal(bq.type, 'highpass');
     const f = new Float32Array([100, 200]);
-    assert.throws(() => bq.getFrequencyResponse(f, new Float32Array(1), new Float32Array(2)), (e: Error) => e.name === 'InvalidAccessError');
+    assert.throws(
+      () =>
+        bq.getFrequencyResponse(f, new Float32Array(1), new Float32Array(2)),
+      (e: Error) => e.name === 'InvalidAccessError',
+    );
     const mag = new Float32Array(2);
     bq.getFrequencyResponse(f, mag, new Float32Array(2));
     assert.deepEqual(Array.from(mag), [1, 1]);
     const an = ctx.createAnalyser();
     assert.equal(an.frequencyBinCount, 1024);
-    assert.throws(() => (an.fftSize = 1000), (e: Error) => e.name === 'IndexSizeError');
-    assert.throws(() => (an.minDecibels = -10), (e: Error) => e.name === 'IndexSizeError');
-    assert.throws(() => (an.smoothingTimeConstant = 2), (e: Error) => e.name === 'IndexSizeError');
-    assert.throws(() => ctx.createDelay(0), (e: Error) => e.name === 'NotSupportedError');
-    assert.throws(() => ctx.createDelay(200), (e: Error) => e.name === 'NotSupportedError');
+    assert.throws(
+      () => (an.fftSize = 1000),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
+    assert.throws(
+      () => (an.minDecibels = -10),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
+    assert.throws(
+      () => (an.smoothingTimeConstant = 2),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
+    assert.throws(
+      () => ctx.createDelay(0),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.throws(
+      () => ctx.createDelay(200),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
     const conv = ctx.createConvolver();
-    assert.throws(() => (conv.buffer = ctx.createBuffer(3, 10, 48000)), (e: Error) => e.name === 'NotSupportedError');
-    assert.throws(() => (conv.buffer = ctx.createBuffer(2, 10, 44100)), (e: Error) => e.name === 'NotSupportedError');
+    assert.throws(
+      () => (conv.buffer = ctx.createBuffer(3, 10, 48000)),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.throws(
+      () => (conv.buffer = ctx.createBuffer(2, 10, 44100)),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
     conv.buffer = ctx.createBuffer(2, 10, 48000);
     const osc = ctx.createOscillator();
-    assert.throws(() => (osc.type = 'custom'), (e: Error) => e.name === 'InvalidStateError');
-    osc.setPeriodicWave(ctx.createPeriodicWave(new Float32Array([0, 1]), new Float32Array([0, 0])));
+    assert.throws(
+      () => (osc.type = 'custom'),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
+    osc.setPeriodicWave(
+      ctx.createPeriodicWave(
+        new Float32Array([0, 1]),
+        new Float32Array([0, 0]),
+      ),
+    );
     assert.equal(osc.type, 'custom');
-    assert.throws(() => ctx.createPeriodicWave([0, 1], [0]), (e: Error) => e.name === 'IndexSizeError');
-    assert.throws(() => new api.OscillatorNode(ctx, { type: 'custom' }), (e: Error) => e.name === 'InvalidStateError');
+    assert.throws(
+      () => ctx.createPeriodicWave([0, 1], [0]),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
+    assert.throws(
+      () => new api.OscillatorNode(ctx, { type: 'custom' }),
+      (e: Error) => e.name === 'InvalidStateError',
+    );
   });
 
   test('property writes become SetProp commands', async () => {
@@ -450,21 +692,48 @@ describe('nodes (AUD-6)', () => {
     p.distanceModel = 'linear';
     p.panningModel = 'HRTF';
     await microtask();
-    const props = natives.allCommands().filter((c) => c[0] === Op.SetProp).map((c) => [c[2], c[3]]);
-    assert.deepEqual(props, [[Prop.DistanceModel, 0], [Prop.PanningModel, 1]]);
+    const props = natives
+      .allCommands()
+      .filter((c) => c[0] === Op.SetProp)
+      .map((c) => [c[2], c[3]]);
+    assert.deepEqual(props, [
+      [Prop.DistanceModel, 0],
+      [Prop.PanningModel, 1],
+    ]);
   });
 });
 
 describe('AudioBuffer (AUD-7)', () => {
   test('constructor, limits, aliasing getChannelData, copy methods', () => {
     const { api } = setup();
-    assert.throws(() => new api.AudioBuffer({ length: 0, sampleRate: 48000 }), (e: Error) => e.name === 'NotSupportedError');
-    assert.throws(() => new api.AudioBuffer({ length: 10, sampleRate: 100 }), (e: Error) => e.name === 'NotSupportedError');
-    assert.throws(() => new api.AudioBuffer({ numberOfChannels: 33, length: 10, sampleRate: 48000 }), (e: Error) => e.name === 'NotSupportedError');
-    const b = new api.AudioBuffer({ numberOfChannels: 2, length: 4, sampleRate: 8000 });
+    assert.throws(
+      () => new api.AudioBuffer({ length: 0, sampleRate: 48000 }),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.throws(
+      () => new api.AudioBuffer({ length: 10, sampleRate: 100 }),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.throws(
+      () =>
+        new api.AudioBuffer({
+          numberOfChannels: 33,
+          length: 10,
+          sampleRate: 48000,
+        }),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    const b = new api.AudioBuffer({
+      numberOfChannels: 2,
+      length: 4,
+      sampleRate: 8000,
+    });
     assert.equal(b.duration, 0.0005);
     assert.equal(b.getChannelData(0), b.getChannelData(0));
-    assert.throws(() => b.getChannelData(2), (e: Error) => e.name === 'IndexSizeError');
+    assert.throws(
+      () => b.getChannelData(2),
+      (e: Error) => e.name === 'IndexSizeError',
+    );
     b.copyToChannel(new Float32Array([1, 2, 3, 4, 5]), 1, 1);
     assert.deepEqual(Array.from(b.getChannelData(1)), [0, 1, 2, 3]);
     const out = new Float32Array(2);
@@ -498,7 +767,9 @@ describe('decodeAudioData (AUD-8, AUD-9)', () => {
     const ctx = new api.AudioContext();
     await tick();
     const urls = new WeakMap<object, string>();
-    (globalThis as { __iwnResourceUrls?: WeakMap<object, string> }).__iwnResourceUrls = urls;
+    (
+      globalThis as { __iwnResourceUrls?: WeakMap<object, string> }
+    ).__iwnResourceUrls = urls;
     try {
       for (let i = 0; i < 3; i++) {
         const data = new Uint8Array([60, 104, 116, 109, 108]).buffer;
@@ -506,7 +777,13 @@ describe('decodeAudioData (AUD-8, AUD-9)', () => {
         let errCb: DOMException | null = null;
         const p = ctx.decodeAudioData(data, null, (e) => (errCb = e));
         const req = natives.decodes.at(-1)!;
-        natives.emit(EventType.DecodeError, 1, req.requestId, 0, 'unrecognized audio format');
+        natives.emit(
+          EventType.DecodeError,
+          1,
+          req.requestId,
+          0,
+          'unrecognized audio format',
+        );
         await rejectsWith(p, 'EncodingError');
         assert.equal((errCb as DOMException | null)?.name, 'EncodingError');
       }
@@ -514,7 +791,10 @@ describe('decodeAudioData (AUD-8, AUD-9)', () => {
       delete (globalThis as { __iwnResourceUrls?: unknown }).__iwnResourceUrls;
     }
     assert.equal(logs.length, 1);
-    assert.match(logs[0], /assets\/sfx\/broken\.mp3.*unrecognized audio format/);
+    assert.match(
+      logs[0],
+      /assets\/sfx\/broken\.mp3.*unrecognized audio format/,
+    );
   });
 
   test('argument errors', async () => {
@@ -530,13 +810,22 @@ describe('decodeAudioData (AUD-8, AUD-9)', () => {
 describe('OfflineAudioContext (AUD-3)', () => {
   test('constructor forms, startRendering once, complete event', async () => {
     const { natives, api } = setup();
-    assert.throws(() => new api.OfflineAudioContext(0, 10, 48000), (e: Error) => e.name === 'NotSupportedError');
-    const ctx = new api.OfflineAudioContext({ numberOfChannels: 2, length: 256, sampleRate: 44100 });
+    assert.throws(
+      () => new api.OfflineAudioContext(0, 10, 48000),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    const ctx = new api.OfflineAudioContext({
+      numberOfChannels: 2,
+      length: 256,
+      sampleRate: 44100,
+    });
     assert.equal(ctx.length, 256);
     assert.equal(ctx.sampleRate, 44100);
     assert.equal(ctx.state, 'suspended');
     let completed: unknown = null;
-    ctx.oncomplete = (e) => (completed = (e as unknown as { renderedBuffer: unknown }).renderedBuffer);
+    ctx.oncomplete = (e) =>
+      (completed = (e as unknown as { renderedBuffer: unknown })
+        .renderedBuffer);
     const p = ctx.startRendering();
     assert.equal(ctx.state, 'running');
     await rejectsWith(ctx.startRendering(), 'InvalidStateError');
@@ -582,7 +871,10 @@ describe('page visibility (AUD-2)', () => {
     doc.dispatchEvent(new Event('visibilitychange'));
     doc.visibilityState = 'visible';
     doc.dispatchEvent(new Event('visibilitychange'));
-    assert.deepEqual(calls, [[4, true], [4, false]]);
+    assert.deepEqual(calls, [
+      [4, true],
+      [4, false],
+    ]);
   });
 });
 

@@ -20,9 +20,17 @@ export interface NetNatives {
    */
   readAsset(
     urlPath: string,
-    cb: (status: number, buffer: ArrayBuffer | null, mime: string, mapped: boolean) => void,
+    cb: (
+      status: number,
+      buffer: ArrayBuffer | null,
+      mime: string,
+      mapped: boolean,
+    ) => void,
   ): void;
-  httpStart(request: NativeHttpRequest, onEvent: (type: number, ...args: unknown[]) => void): number;
+  httpStart(
+    request: NativeHttpRequest,
+    onEvent: (type: number, ...args: unknown[]) => void,
+  ): number;
   /** The consumer took `bytes` of delivered body; lets the native reader continue. */
   httpAck(id: number, bytes: number): void;
   httpAbort(id: number): void;
@@ -30,7 +38,11 @@ export interface NetNatives {
    * WebSocket transport. Outside the alpha's supported surface: present only when the app opts in
    * ("network": {"experimentalWebSocket": true}); without it the WebSocket global is not installed.
    */
-  wsConnect?(url: string, protocols: string[], onEvent: (type: number, ...args: unknown[]) => void): number;
+  wsConnect?(
+    url: string,
+    protocols: string[],
+    onEvent: (type: number, ...args: unknown[]) => void,
+  ): number;
   wsSend?(id: number, data: string | ArrayBuffer | ArrayBufferView): void;
   /** code 0 = no status code. */
   wsClose?(id: number, code: number, reason: string): void;
@@ -39,22 +51,41 @@ export interface NetNatives {
    * isolates. The page isolate has no httpSync, which is how the JS layer knows to refuse synchronous
    * requests there. `totalTimeoutMs` (0 = none) bounds the whole request (XHR `timeout`).
    */
-  httpSync?(request: NativeHttpRequest & { totalTimeoutMs?: number }): NativeSyncResponse;
+  httpSync?(
+    request: NativeHttpRequest & { totalTimeoutMs?: number },
+  ): NativeSyncResponse;
   /** Blocking asset read (worker isolates only), same results as readAsset. */
-  readAssetSync?(urlPath: string): { status: number; buffer: ArrayBuffer | null; mime: string };
+  readAssetSync?(urlPath: string): {
+    status: number;
+    buffer: ArrayBuffer | null;
+    mime: string;
+  };
 }
 
-export type WsNatives = Required<Pick<NetNatives, 'wsConnect' | 'wsSend' | 'wsClose'>>;
+export type WsNatives = Required<
+  Pick<NetNatives, 'wsConnect' | 'wsSend' | 'wsClose'>
+>;
 
 /** The WebSocket transport when the native module has it (experimental opt-in), else null. */
 export function wsNatives(n: NetNatives | null | undefined): WsNatives | null {
-  return n && typeof n.wsConnect === 'function' && typeof n.wsSend === 'function' && typeof n.wsClose === 'function'
+  return n &&
+    typeof n.wsConnect === 'function' &&
+    typeof n.wsSend === 'function' &&
+    typeof n.wsClose === 'function'
     ? (n as WsNatives)
     : null;
 }
 
 export type NativeSyncResponse =
-  | { status: number; statusText: string; headers: string[]; url: string; flags: number; body: ArrayBuffer; errorKind?: undefined }
+  | {
+      status: number;
+      statusText: string;
+      headers: string[];
+      url: string;
+      flags: number;
+      body: ArrayBuffer;
+      errorKind?: undefined;
+    }
   | { errorKind: string; errorMessage: string };
 
 export interface NetConfig {

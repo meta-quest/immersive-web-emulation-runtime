@@ -65,7 +65,9 @@ const STRETCH_KEYWORDS: Record<string, number> = {
 export interface FontRuntime {
   natives: Canvas2DNatives;
   manager: FontManager;
-  fetch?: (url: string) => Promise<{ ok: boolean; arrayBuffer(): Promise<ArrayBuffer> }>;
+  fetch?: (
+    url: string,
+  ) => Promise<{ ok: boolean; arrayBuffer(): Promise<ArrayBuffer> }>;
 }
 let runtime: FontRuntime | null = null;
 export function setFontRuntime(r: FontRuntime | null): void {
@@ -108,7 +110,8 @@ function toBytes(src: BinaryData): Uint8Array {
   return new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
 }
 
-const listenerSupport: { Event?: new (type: string) => object } = globalThis as never;
+const listenerSupport: { Event?: new (type: string) => object } =
+  globalThis as never;
 
 /** Minimal EventTarget behaviour (the web glue's EventTarget is not a dependency of this module). */
 class SimpleEvents {
@@ -123,9 +126,13 @@ class SimpleEvents {
     if (cb) this.#listeners.get(type)?.delete(cb);
   }
   dispatchEvent(event: { type: string }): boolean {
-    const handler = (this as unknown as Record<string, unknown>)[`on${event.type}`];
-    if (typeof handler === 'function') (handler as (e: unknown) => void).call(this, event);
-    for (const cb of this.#listeners.get(event.type) ?? []) cb.call(this, event);
+    const handler = (this as unknown as Record<string, unknown>)[
+      `on${event.type}`
+    ];
+    if (typeof handler === 'function')
+      (handler as (e: unknown) => void).call(this, event);
+    for (const cb of this.#listeners.get(event.type) ?? [])
+      cb.call(this, event);
     return true;
   }
   protected fire(type: string, extra: Record<string, unknown> = {}): void {
@@ -170,7 +177,11 @@ export class FontFace {
   /** @internal sets notified on status changes */
   _sets = new Set<FontFaceSet>();
 
-  constructor(family: string, source: string | BinaryData, descriptors: FontFaceDescriptors = {}) {
+  constructor(
+    family: string,
+    source: string | BinaryData,
+    descriptors: FontFaceDescriptors = {},
+  ) {
     this.family = String(family).replace(/^["']|["']$/g, '');
     this.style = descriptors.style ?? 'normal';
     this.weight = descriptors.weight ?? 'normal';
@@ -198,7 +209,13 @@ export class FontFace {
     } else {
       this.#source = String(source);
     }
-    if (parseWeightRange(this.weight) === null) this.#fail(domException(`Invalid weight descriptor "${this.weight}"`, 'SyntaxError'));
+    if (parseWeightRange(this.weight) === null)
+      this.#fail(
+        domException(
+          `Invalid weight descriptor "${this.weight}"`,
+          'SyntaxError',
+        ),
+      );
   }
 
   get status(): FontFaceStatus {
@@ -217,12 +234,19 @@ export class FontFace {
   #finishBinary(bytes: Uint8Array): void {
     const rt = runtime;
     if (!rt) {
-      this.#fail(domException('Canvas 2D natives are not installed.', 'NotSupportedError'));
+      this.#fail(
+        domException(
+          'Canvas 2D natives are not installed.',
+          'NotSupportedError',
+        ),
+      );
       return;
     }
     const r = rt.natives.loadFace(bytes, 0);
     if (typeof r === 'string') {
-      this.#fail(domException(`Font data could not be parsed: ${r}`, 'SyntaxError'));
+      this.#fail(
+        domException(`Font data could not be parsed: ${r}`, 'SyntaxError'),
+      );
       return;
     }
     this._face = r;
@@ -244,7 +268,12 @@ export class FontFace {
   async #loadFromSrc(src: string): Promise<void> {
     const rt = runtime;
     if (!rt) {
-      this.#fail(domException('Canvas 2D natives are not installed.', 'NotSupportedError'));
+      this.#fail(
+        domException(
+          'Canvas 2D natives are not installed.',
+          'NotSupportedError',
+        ),
+      );
       return;
     }
     const entries = parseSrc(src);
@@ -263,14 +292,16 @@ export class FontFace {
           }
           continue;
         }
-        const f = rt.fetch ?? (globalThis as { fetch?: FontRuntime['fetch'] }).fetch;
+        const f =
+          rt.fetch ?? (globalThis as { fetch?: FontRuntime['fetch'] }).fetch;
         if (!f) {
           lastError = 'fetch is not available';
           continue;
         }
         // Relative URLs resolve against the document (CSS Font Loading: the FontFace's base URL).
         let url = e.value;
-        const base = (globalThis as { location?: { href?: string } }).location?.href;
+        const base = (globalThis as { location?: { href?: string } }).location
+          ?.href;
         try {
           if (base) url = new URL(e.value, base).href;
         } catch {
@@ -293,7 +324,12 @@ export class FontFace {
       }
     }
     if (!this._face) {
-      this.#fail(domException(`Failed to load font "${this.family}" from ${src}${lastError ? ` (${lastError})` : ''}`, 'NetworkError'));
+      this.#fail(
+        domException(
+          `Failed to load font "${this.family}" from ${src}${lastError ? ` (${lastError})` : ''}`,
+          'NetworkError',
+        ),
+      );
       return;
     }
     this.#status = 'loaded';
@@ -319,13 +355,19 @@ export class FontFace {
   }
 }
 
-function parseSrc(src: string): { kind: 'url' | 'local'; value: string }[] | null {
+function parseSrc(
+  src: string,
+): { kind: 'url' | 'local'; value: string }[] | null {
   const out: { kind: 'url' | 'local'; value: string }[] = [];
-  const re = /\s*(url|local)\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)(?:\s*(?:format|tech)\([^)]*\))*\s*(,|$)/gy;
+  const re =
+    /\s*(url|local)\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)(?:\s*(?:format|tech)\([^)]*\))*\s*(,|$)/gy;
   let m: RegExpExecArray | null;
   let last = 0;
   while ((m = re.exec(src)) !== null) {
-    out.push({ kind: m[1] === 'url' ? 'url' : 'local', value: (m[2] ?? m[3] ?? m[4] ?? '').trim() });
+    out.push({
+      kind: m[1] === 'url' ? 'url' : 'local',
+      value: (m[2] ?? m[3] ?? m[4] ?? '').trim(),
+    });
     last = re.lastIndex;
     if (m[5] === '') break;
   }
@@ -360,7 +402,10 @@ export class FontFaceSet extends SimpleEvents {
   }
 
   add(face: FontFace): this {
-    if (!(face instanceof FontFace)) throw new TypeError("Failed to execute 'add' on 'FontFaceSet': parameter 1 is not of type 'FontFace'.");
+    if (!(face instanceof FontFace))
+      throw new TypeError(
+        "Failed to execute 'add' on 'FontFaceSet': parameter 1 is not of type 'FontFace'.",
+      );
     if (this.#faces.has(face)) return this;
     this.#faces.add(face);
     face._sets.add(this);
@@ -386,7 +431,10 @@ export class FontFaceSet extends SimpleEvents {
   has(face: FontFace): boolean {
     return this.#faces.has(face);
   }
-  forEach(cb: (face: FontFace, face2: FontFace, set: FontFaceSet) => void, thisArg?: unknown): void {
+  forEach(
+    cb: (face: FontFace, face2: FontFace, set: FontFaceSet) => void,
+    thisArg?: unknown,
+  ): void {
     for (const f of [...this.#faces]) cb.call(thisArg, f, f, this);
   }
   values(): IterableIterator<FontFace> {
@@ -419,7 +467,9 @@ export class FontFaceSet extends SimpleEvents {
       const res = this.#readyResolve;
       this.#readyResolve = null;
       const failed = [...this.#faces].filter((f) => f.status === 'error');
-      this.fire('loadingdone', { fontfaces: [...this.#faces].filter((f) => f.status === 'loaded') });
+      this.fire('loadingdone', {
+        fontfaces: [...this.#faces].filter((f) => f.status === 'loaded'),
+      });
       if (failed.length) this.fire('loadingerror', { fontfaces: failed });
       res?.(this);
     }
@@ -428,12 +478,16 @@ export class FontFaceSet extends SimpleEvents {
   #matching(font: string): FontFace[] {
     const p = parseFont(font, DEFAULT_FONT_SIZE);
     if (!p) throw domException(`Could not parse font "${font}"`, 'SyntaxError');
-    const names = new Set(p.families.filter((_, i) => !p.generic[i]).map((f) => f.toLowerCase()));
+    const names = new Set(
+      p.families.filter((_, i) => !p.generic[i]).map((f) => f.toLowerCase()),
+    );
     return [...this.#faces].filter((f) => names.has(f.family.toLowerCase()));
   }
 
   check(font: string, _text = ' '): boolean {
-    return this.#matching(font).every((f) => f.status === 'loaded' || f.status === 'error');
+    return this.#matching(font).every(
+      (f) => f.status === 'loaded' || f.status === 'error',
+    );
   }
 
   load(font: string, _text = ' '): Promise<FontFace[]> {
@@ -459,9 +513,14 @@ function pickStretch(cands: FaceEntry[], want: number): FaceEntry[] {
 }
 
 function pickStyle(cands: FaceEntry[], style: string): FaceEntry[] {
-  const kind = (c: FaceEntry) => (c.italic ? 'italic' : c.oblique ? 'oblique' : 'normal');
+  const kind = (c: FaceEntry) =>
+    c.italic ? 'italic' : c.oblique ? 'oblique' : 'normal';
   const order =
-    style === 'italic' ? ['italic', 'oblique', 'normal'] : style === 'oblique' ? ['oblique', 'italic', 'normal'] : ['normal', 'oblique', 'italic'];
+    style === 'italic'
+      ? ['italic', 'oblique', 'normal']
+      : style === 'oblique'
+        ? ['oblique', 'italic', 'normal']
+        : ['normal', 'oblique', 'italic'];
   for (const k of order) {
     const m = cands.filter((c) => kind(c) === k);
     if (m.length) return m;
@@ -491,11 +550,22 @@ function pickWeight(cands: FaceEntry[], w: number): FaceEntry {
   return cands.slice().sort((a, b) => dist(a) - dist(b))[0]!;
 }
 
-export function matchFace(cands: FaceEntry[], p: { style: string; weight: number; stretchPercent: number }): FaceEntry {
-  return pickWeight(pickStyle(pickStretch(cands, p.stretchPercent), p.style), p.weight);
+export function matchFace(
+  cands: FaceEntry[],
+  p: { style: string; weight: number; stretchPercent: number },
+): FaceEntry {
+  return pickWeight(
+    pickStyle(pickStretch(cands, p.stretchPercent), p.style),
+    p.weight,
+  );
 }
 
-const SANS_GENERICS = new Set(['sans-serif', 'system-ui', 'ui-sans-serif', 'ui-rounded']);
+const SANS_GENERICS = new Set([
+  'sans-serif',
+  'system-ui',
+  'ui-sans-serif',
+  'ui-rounded',
+]);
 const MONO_GENERICS = new Set(['monospace', 'ui-monospace']);
 
 export interface FontOptions {
@@ -519,7 +589,10 @@ export class FontManager {
   #n: Canvas2DNatives;
   #version = 0;
   #defaults: Map<string, FaceEntry[]> | null = null;
-  #system: Map<string, { path: string; weight: number; italic: boolean; index: number }[]> | null = null;
+  #system: Map<
+    string,
+    { path: string; weight: number; italic: boolean; index: number }[]
+  > | null = null;
   #opened = new Map<string, FaceEntry | null>();
   #openedFiles = new Map<string, NativeFace | null>();
   #cache = new Map<string, NativeFont>();
@@ -577,9 +650,15 @@ export class FontManager {
     return m;
   }
 
-  #systemMap(): Map<string, { path: string; weight: number; italic: boolean; index: number }[]> {
+  #systemMap(): Map<
+    string,
+    { path: string; weight: number; italic: boolean; index: number }[]
+  > {
     if (this.#system) return this.#system;
-    const m = new Map<string, { path: string; weight: number; italic: boolean; index: number }[]>();
+    const m = new Map<
+      string,
+      { path: string; weight: number; italic: boolean; index: number }[]
+    >();
     try {
       for (const fam of this.#n.systemFamilies()) {
         const key = fam.name.toLowerCase();
@@ -609,7 +688,14 @@ export class FontManager {
           face = this.#n.loadFaceFile(f.path, f.index);
           this.#openedFiles.set(fileKey, face);
         }
-        e = face ? { ...this.#entryFor(face), weightMin: f.weight, weightMax: f.weight, italic: f.italic } : null;
+        e = face
+          ? {
+              ...this.#entryFor(face),
+              weightMin: f.weight,
+              weightMax: f.weight,
+              italic: f.italic,
+            }
+          : null;
         this.#opened.set(key, e);
       }
       if (e) out.push(e);
@@ -640,8 +726,10 @@ export class FontManager {
       return this.#openSystem(low);
     }
     const defaults = this.#defaultsMap();
-    if (SANS_GENERICS.has(low)) return defaults.get('sans-serif') ?? this.#openSystem('sans-serif');
-    if (MONO_GENERICS.has(low)) return defaults.get('monospace') ?? this.#openSystem('monospace');
+    if (SANS_GENERICS.has(low))
+      return defaults.get('sans-serif') ?? this.#openSystem('sans-serif');
+    if (MONO_GENERICS.has(low))
+      return defaults.get('monospace') ?? this.#openSystem('monospace');
     const sys = this.#openSystem(low === 'ui-serif' ? 'serif' : low);
     if (sys.length) return sys;
     return defaults.get('sans-serif') ?? [];
@@ -651,12 +739,25 @@ export class FontManager {
    * resolve() for the hot path (fillText / measureText after a font switch): positional options and a lookup keyed by
    * the parsed font object, so a cached font is found without building a key string or an options object (C2D-12).
    */
-  resolveFast(p: ParsedFont, kerning: boolean, smallCaps: boolean, letterSpacing: number, wordSpacing: number, stretch: number): NativeFont {
+  resolveFast(
+    p: ParsedFont,
+    kerning: boolean,
+    smallCaps: boolean,
+    letterSpacing: number,
+    wordSpacing: number,
+    stretch: number,
+  ): NativeFont {
     let list = this.#fast.get(p);
     if (list !== undefined) {
       for (let i = 0; i < list.length; i++) {
         const e = list[i]!;
-        if (e.kerning === kerning && e.smallCaps === smallCaps && e.letterSpacing === letterSpacing && e.wordSpacing === wordSpacing && e.stretch === stretch) {
+        if (
+          e.kerning === kerning &&
+          e.smallCaps === smallCaps &&
+          e.letterSpacing === letterSpacing &&
+          e.wordSpacing === wordSpacing &&
+          e.stretch === stretch
+        ) {
           return e.font;
         }
       }
@@ -664,9 +765,22 @@ export class FontManager {
       list = [];
       this.#fast.set(p, list);
     }
-    const font = this.resolve(p, { kerning, smallCaps, letterSpacing, wordSpacing, stretchPercent: stretch });
+    const font = this.resolve(p, {
+      kerning,
+      smallCaps,
+      letterSpacing,
+      wordSpacing,
+      stretchPercent: stretch,
+    });
     if (list.length >= 16) list.length = 0;
-    list.push({ kerning, smallCaps, letterSpacing, wordSpacing, stretch, font });
+    list.push({
+      kerning,
+      smallCaps,
+      letterSpacing,
+      wordSpacing,
+      stretch,
+      font,
+    });
     return font;
   }
 

@@ -24,8 +24,22 @@ Anything usable as `TexImageSource` / `CanvasImageSource` implements a method un
 
 ```ts
 type ImageSourceDescriptor =
-  | { kind: 'handle'; handle: NativeImageHandle; origin; width; height; premultiplied }  // native pixels
-  | { kind: 'pixels'; data: Uint8ClampedArray | Uint8Array; origin; width; height; premultiplied }; // JS pixels
+  | {
+      kind: 'handle';
+      handle: NativeImageHandle;
+      origin;
+      width;
+      height;
+      premultiplied;
+    } // native pixels
+  | {
+      kind: 'pixels';
+      data: Uint8ClampedArray | Uint8Array;
+      origin;
+      width;
+      height;
+      premultiplied;
+    }; // JS pixels
 // origin: 'bitmap' | 'image' | 'imagedata' | 'canvas' | 'webgl-canvas'
 ```
 
@@ -43,7 +57,7 @@ type ImageSourceDescriptor =
 ## 3. `texImage2D` / `texSubImage2D` from a source (WebGL)
 
 1. `const d = getImageSource(source, 'texImage2D')` (throws as above, GL-17). The upload size is `d.width x
-   d.height` (WebGL 2 sub-rectangle uploads apply `UNPACK_SKIP_PIXELS/ROWS` and `UNPACK_ROW_LENGTH` inside it,
+d.height` (WebGL 2 sub-rectangle uploads apply `UNPACK_SKIP_PIXELS/ROWS` and `UNPACK_ROW_LENGTH` inside it,
    §5.35).
 2. Flags (GL-16): if `d.origin === 'bitmap'`, **ignore** `UNPACK_FLIP_Y_WEBGL` and `UNPACK_PREMULTIPLY_ALPHA_WEBGL`
    (the bitmap's own options already decided its pixels). Otherwise flip rows if `UNPACK_FLIP_Y_WEBGL`, and
@@ -76,9 +90,9 @@ Zero-copy path toward the GPU: an `AHardwareBuffer` store (`PixelStore::Backing:
 `hardware_buffer()`: `R8G8B8A8_UNORM`, usage `CPU_READ_OFTEN | CPU_WRITE_OFTEN | GPU_SAMPLED_IMAGE |
 GPU_COLOR_OUTPUT`) is imported once with `eglGetNativeClientBufferANDROID` + `eglCreateImageKHR(EGL_NATIVE_BUFFER_ANDROID)`
 into a texture of the share group (`glEGLImageTargetTexture2DOES`) and blitted GPU-side into the app's RGBA8 (or
-unsized RGBA/UNSIGNED_BYTE) `TEXTURE_2D` level (`glBlitFramebuffer`, flipped by the blit for `UNPACK_FLIP_Y_WEBGL`;
+unsized RGBA/UNSIGNED*BYTE) `TEXTURE_2D` level (`glBlitFramebuffer`, flipped by the blit for `UNPACK_FLIP_Y_WEBGL`;
 `runtime/gl` `gl_image.cc`) instead of a CPU upload: no flip copy and no driver-side memcpy on the GL thread. The app
-texture never *becomes* the EGLImage (WebGL semantics: the app owns its texture's storage, may `generateMipmap`, may
+texture never \_becomes* the EGLImage (WebGL semantics: the app owns its texture's storage, may `generateMipmap`, may
 respecify). A blit clips silently, so a sub-image that does not fit its level goes to the CPU path, whose
 `glTexSubImage2D` raises `INVALID_VALUE` (the binding refuses it first when it knows the level). Other targets and
 formats, and alpha conversions, fall back to the CPU path: `Read()` on such a store locks the buffer for CPU access,

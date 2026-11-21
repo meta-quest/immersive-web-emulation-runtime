@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // V8 binding of the passthrough cameras (XR-CAM-1): globalThis.__iwn.camera, the natives web/xr's getUserMedia
 // (src/camera.ts) uses. Registered as its own module from the XR module's library (runtime/xr/CMakeLists.txt). The
 // camera itself is src/android/xr_camera.cc; frames reach JS as image-module handles (runtime/image INTEROP.md), so

@@ -42,7 +42,12 @@ export interface XrInfo {
   depthHandRemoval?: boolean;
   explicitGrant?: boolean;
   /** XR-LAYER-1: quad and cylinder layers (cylinder needs XR_KHR_composition_layer_cylinder). */
-  compositionLayers?: { quad: boolean; cylinder: boolean; maxLayers: number; bufferVersion: number };
+  compositionLayers?: {
+    quad: boolean;
+    cylinder: boolean;
+    maxLayers: number;
+    bufferVersion: number;
+  };
   layoutVersion?: number;
   extensions?: string[];
 }
@@ -114,7 +119,9 @@ export interface XrNatives {
   info(): XrInfo;
   record(): ArrayBuffer;
   readonly layoutVersion: number;
-  setFrameHandler(handler: ((kind: number, events?: XrNativeEvent[]) => void) | null): void;
+  setFrameHandler(
+    handler: ((kind: number, events?: XrNativeEvent[]) => void) | null,
+  ): void;
   beginSwapchain(
     arraySize: number,
     scale: number,
@@ -127,8 +134,18 @@ export interface XrNatives {
   requestFrameRate(hz: number): boolean;
   setFoveation(level: number): void;
   setPassthroughVisible(visible: boolean): void;
-  haptic(hand: number, intensity: number, durationMs: number, frequencyHz: number): void;
-  sessionStarted(immersiveAR: boolean, handTracking: boolean, planes: boolean, meshes: boolean): void;
+  haptic(
+    hand: number,
+    intensity: number,
+    durationMs: number,
+    frequencyHz: number,
+  ): void;
+  sessionStarted(
+    immersiveAR: boolean,
+    handTracking: boolean,
+    planes: boolean,
+    meshes: boolean,
+  ): void;
   offered(): void;
   /** Every offerSession()/requestSession() still pending was rejected and no session exists (XR-LIFE-7). */
   offerRejected?(): void;
@@ -171,7 +188,15 @@ export interface XrNatives {
   sceneStatus?(): Record<string, unknown>;
   // Spatial anchors (xr_anchors_binding.cc); a request number of 0 means refused at once.
   anchorPoses?(): ArrayBuffer;
-  anchorCreate?(px: number, py: number, pz: number, qx: number, qy: number, qz: number, qw: number): number;
+  anchorCreate?(
+    px: number,
+    py: number,
+    pz: number,
+    qx: number,
+    qy: number,
+    qz: number,
+    qw: number,
+  ): number;
   anchorPersist?(anchor: number): number;
   anchorRestore?(uuid: string): number;
   anchorErase?(uuid: string): number;
@@ -196,7 +221,12 @@ export interface GLContext {
 /** The WebGL prelude's host hooks (web/webgl/host.ts) this adapter uses. */
 export interface WebGLHooks {
   wrapTexture(gl: GLContext, name: number, target?: number): object;
-  retargetTexture(gl: GLContext, tex: object, name: number, framebuffers: Iterable<object>): void;
+  retargetTexture(
+    gl: GLContext,
+    tex: object,
+    name: number,
+    framebuffers: Iterable<object>,
+  ): void;
   invalidateDepthStencil(gl: GLContext, fb: object): void;
   /** XR-DEPTH-2: clear a framebuffer holding the session image at frame start (older preludes lack it). */
   clearSessionFramebuffer?(gl: GLContext, fb: object): void;

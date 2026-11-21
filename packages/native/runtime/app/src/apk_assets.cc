@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // AssetSource over the APK's assets (Android NDK AAssetManager). Uncompressed entries are memory-mapped by
 // AAsset_getBuffer (NET-3); compressed ones are inflated once into memory the AAsset owns.
 #include "apk_assets.h"

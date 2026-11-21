@@ -24,7 +24,16 @@ test('globals exist in the page and have WebIDL shapes', async () => {
     coi: crossOriginIsolated, hc: navigator.hardwareConcurrency,
     enumerable: Object.keys(globalThis).includes('Worker'),
   })`);
-  assert.deepEqual(r, { worker: 'function', channel: 'function', port: 'function', portCtor: 'TypeError', tag: '[object MessagePort]', coi: true, hc: 4, enumerable: false });
+  assert.deepEqual(r, {
+    worker: 'function',
+    channel: 'function',
+    port: 'function',
+    portCtor: 'TypeError',
+    tag: '[object MessagePort]',
+    coi: true,
+    hc: 4,
+    enumerable: false,
+  });
 });
 
 test('MessageChannel: queued until start, in order, implicit start via onmessage', async () => {
@@ -37,13 +46,34 @@ test('MessageChannel: queued until start, in order, implicit start via onmessage
     ch.port2.addEventListener('message', (e) => got.push('L' + e.data));
   `);
   await settle();
-  assert.deepEqual(page.json('got'), [], 'addEventListener alone does not start the port');
+  assert.deepEqual(
+    page.json('got'),
+    [],
+    'addEventListener alone does not start the port',
+  );
   page.run(`ch.port2.onmessage = (e) => got.push(e.data);`);
   await settle();
-  assert.deepEqual(page.json('got'), ['L0', 0, 'L1', 1, 'L2', 2, 'L3', 3, 'L4', 4]);
-  page.run(`got.length = 0; ch.port2.onmessage = null; ch.port1.postMessage('after');`);
+  assert.deepEqual(page.json('got'), [
+    'L0',
+    0,
+    'L1',
+    1,
+    'L2',
+    2,
+    'L3',
+    3,
+    'L4',
+    4,
+  ]);
+  page.run(
+    `got.length = 0; ch.port2.onmessage = null; ch.port1.postMessage('after');`,
+  );
   await settle();
-  assert.deepEqual(page.json('got'), ['Lafter'], 'still started after removing the handler');
+  assert.deepEqual(
+    page.json('got'),
+    ['Lafter'],
+    'still started after removing the handler',
+  );
 });
 
 test('MessageEvent is trusted with data, ports and empty origin; each message is its own task', async () => {
@@ -58,7 +88,12 @@ test('MessageEvent is trusted with data, ports and empty origin; each message is
     ch.port1.postMessage('a'); ch.port1.postMessage('b');
   `);
   await settle();
-  assert.deepEqual(page.json('order'), [[true, 'a', true, '', true], 'micro a', [true, 'b', true, '', true], 'micro b']);
+  assert.deepEqual(page.json('order'), [
+    [true, 'a', true, '', true],
+    'micro a',
+    [true, 'b', true, '', true],
+    'micro b',
+  ]);
 });
 
 test('structured clone: values, cycles and platform objects (Blob, File, DOMException)', async () => {
@@ -86,8 +121,18 @@ test('structured clone: values, cycles and platform objects (Blob, File, DOMExce
   await until(() => page.run('out'));
   await settle();
   assert.deepEqual(page.json('out'), {
-    cycle: true, map: 1, set: [1, 2], date: 5, re: '/x/gi', err: ['RangeError', 'r'], big: 'bigint', u8: [1, 2, 3],
-    blob: [true, 'text/plain', 'hi'], file: [true, 'a.txt', 7, 'f'], dex: [true, 'AbortError', 'm'], sameBlob: true,
+    cycle: true,
+    map: 1,
+    set: [1, 2],
+    date: 5,
+    re: '/x/gi',
+    err: ['RangeError', 'r'],
+    big: 'bigint',
+    u8: [1, 2, 3],
+    blob: [true, 'text/plain', 'hi'],
+    file: [true, 'a.txt', 7, 'f'],
+    dex: [true, 'AbortError', 'm'],
+    sameBlob: true,
   });
 });
 
@@ -104,8 +149,21 @@ test('DataCloneError at the sender, synchronously, for functions, symbols, non-s
     })();
   `);
   const r = page.json('cloneErrs');
-  assert.deepEqual(r, ['DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError', 'DataCloneError',
-    'DataCloneError', 'TypeError', 'DataCloneError', 'DataCloneError', 'DataCloneError', 'TypeError', 'ok', 'ok']);
+  assert.deepEqual(r, [
+    'DataCloneError',
+    'DataCloneError',
+    'DataCloneError',
+    'DataCloneError',
+    'DataCloneError',
+    'DataCloneError',
+    'TypeError',
+    'DataCloneError',
+    'DataCloneError',
+    'DataCloneError',
+    'TypeError',
+    'ok',
+    'ok',
+  ]);
 });
 
 test('ArrayBuffer transfer detaches the sender; nothing is detached when serialization throws', async () => {
@@ -123,7 +181,13 @@ test('ArrayBuffer transfer detaches the sender; nothing is detached when seriali
     globalThis.optsForm = (() => { const b = new ArrayBuffer(2); ch.port1.postMessage(b, { transfer: [b] }); return b.byteLength; })();
   `);
   await until(() => page.run('got'));
-  assert.deepEqual(page.json('[thrown, keepLen, senderLen, optsForm, got]'), ['DataCloneError', 4, 0, 0, [8, 42]]);
+  assert.deepEqual(page.json('[thrown, keepLen, senderLen, optsForm, got]'), [
+    'DataCloneError',
+    4,
+    0,
+    0,
+    [8, 42],
+  ]);
 });
 
 test('MessagePort transfer: queue travels, event.ports, sender port inert', async () => {
@@ -143,7 +207,11 @@ test('MessagePort transfer: queue travels, event.ports, sender port inert', asyn
     globalThis.a = a;
   `);
   await until(() => page.run('log.length >= 3'));
-  assert.deepEqual(page.json('log'), [[1, true, true], 'via transferred: queued before transfer', 'via transferred: after transfer']);
+  assert.deepEqual(page.json('log'), [
+    [1, true, true],
+    'via transferred: queued before transfer',
+    'via transferred: after transfer',
+  ]);
 });
 
 test('close() disentangles: later posts are dropped on both sides', async () => {
@@ -157,10 +225,16 @@ test('close() disentangles: later posts are dropped on both sides', async () => 
     globalThis.ch = ch;
   `);
   await settle();
-  page.run(`ch.port1.close(); ch.port1.postMessage(2); ch.port2.postMessage(3);`);
+  page.run(
+    `ch.port1.close(); ch.port1.postMessage(2); ch.port2.postMessage(3);`,
+  );
   await settle();
   assert.deepEqual(page.json('got'), [1]);
-  assert.equal(world.ports.size, 1, 'the closed port is gone, its peer is disentangled');
+  assert.equal(
+    world.ports.size,
+    1,
+    'the closed port is gone, its peer is disentangled',
+  );
 });
 
 test('Worker: classic script, messages both ways, name, location, self, WorkerGlobalScope chain (WRK-1, WRK-2)', async () => {
@@ -184,9 +258,23 @@ test('Worker: classic script, messages both ways, name, location, self, WorkerGl
   `);
   await until(() => page.run('reply'));
   assert.deepEqual(page.json('reply'), {
-    echo: 'hi', name: 'echo', href: 'https://app.local/assets/w.js', wgs: true, dwgs: true, et: true,
-    types: ['undefined', 'undefined', 'function', 'function', 'function', 'undefined'], hc: 4,
-    tag: '[object DedicatedWorkerGlobalScope]', coi: true,
+    echo: 'hi',
+    name: 'echo',
+    href: 'https://app.local/assets/w.js',
+    wgs: true,
+    dwgs: true,
+    et: true,
+    types: [
+      'undefined',
+      'undefined',
+      'function',
+      'function',
+      'function',
+      'undefined',
+    ],
+    hc: 4,
+    tag: '[object DedicatedWorkerGlobalScope]',
+    coi: true,
   });
 });
 
@@ -211,15 +299,25 @@ test('Worker URLs: relative to the document, data: and blob:, bad URL SyntaxErro
   `);
   await until(() => page.run('got.length >= 3'));
   const got = (page.json('got') as string[]).sort();
-  assert.deepEqual(got, ['blob blob:|https://app.local', 'data data:|null', 'revoked error false']);
-  assert.deepEqual(page.json('errs'), ['SecurityError', 'SyntaxError', 'TypeError']);
+  assert.deepEqual(got, [
+    'blob blob:|https://app.local',
+    'data data:|null',
+    'revoked error false',
+  ]);
+  assert.deepEqual(page.json('errs'), [
+    'SecurityError',
+    'SyntaxError',
+    'TypeError',
+  ]);
 });
 
 test('importScripts: same-origin, data:, worker-made blob:, in order, NetworkError, SyntaxError (WRK-4, REG-12)', async () => {
   const { page } = await createPage({
     files: {
-      'https://app.local/lib/a.js': 'self.order = (self.order || []).concat("a");',
-      'https://app.local/lib/b.js': 'self.order = (self.order || []).concat("b");',
+      'https://app.local/lib/a.js':
+        'self.order = (self.order || []).concat("a");',
+      'https://app.local/lib/b.js':
+        'self.order = (self.order || []).concat("b");',
       'https://app.local/w.js': W(`
         importScripts('lib/a.js', '/lib/b.js', 'data:text/javascript,self.order.push("data")');
         const u = URL.createObjectURL(new Blob(['self.order.push("blob")']));
@@ -232,18 +330,27 @@ test('importScripts: same-origin, data:, worker-made blob:, in order, NetworkErr
       `),
     },
   });
-  page.run(`globalThis.r = null; new Worker('/w.js').onmessage = (e) => { r = e.data; };`);
+  page.run(
+    `globalThis.r = null; new Worker('/w.js').onmessage = (e) => { r = e.data; };`,
+  );
   await until(() => page.run('r'));
-  assert.deepEqual(page.json('r'), { order: ['a', 'b', 'data', 'blob'], errs: ['NetworkError', 'SyntaxError', 'RangeError'] });
+  assert.deepEqual(page.json('r'), {
+    order: ['a', 'b', 'data', 'blob'],
+    errs: ['NetworkError', 'SyntaxError', 'RangeError'],
+  });
 });
 
 test('importScripts in a module worker throws TypeError', async () => {
   const { page } = await createPage({
     files: {
-      'https://app.local/m.js': W(`try { importScripts('x.js'); postMessage('no'); } catch (e) { postMessage(e.name); }`),
+      'https://app.local/m.js': W(
+        `try { importScripts('x.js'); postMessage('no'); } catch (e) { postMessage(e.name); }`,
+      ),
     },
   });
-  page.run(`globalThis.r = null; new Worker('/m.js', { type: 'module' }).onmessage = (e) => { r = e.data; };`);
+  page.run(
+    `globalThis.r = null; new Worker('/m.js', { type: 'module' }).onmessage = (e) => { r = e.data; };`,
+  );
   await until(() => page.run('r'));
   assert.equal(page.run('r'), 'TypeError');
 });
@@ -251,8 +358,10 @@ test('importScripts in a module worker throws TypeError', async () => {
 test('errors: worker global first, then the Worker (ErrorEvent), preventDefault suppresses the log (WRK-7)', async () => {
   const { page, world } = await createPage({
     files: {
-      'https://app.local/throws.js': 'setTimeout(() => { throw new TypeError("bad thing"); }, 0);',
-      'https://app.local/handled.js': 'self.addEventListener("error", (e) => { e.preventDefault(); postMessage("seen " + e.message); }); setTimeout(() => { throw new Error("x"); });',
+      'https://app.local/throws.js':
+        'setTimeout(() => { throw new TypeError("bad thing"); }, 0);',
+      'https://app.local/handled.js':
+        'self.addEventListener("error", (e) => { e.preventDefault(); postMessage("seen " + e.message); }); setTimeout(() => { throw new Error("x"); });',
     },
   });
   page.run(`
@@ -269,20 +378,41 @@ test('errors: worker global first, then the Worker (ErrorEvent), preventDefault 
   await until(() => (page.run('ev') as unknown[]).length >= 4);
   await settle();
   const ev = page.run('ev') as unknown[];
-  assert.ok(ev.some((e) => Array.isArray(e) && e[0] === true && /bad thing/.test(e[1] as string) && e[3] === true));
+  assert.ok(
+    ev.some(
+      (e) =>
+        Array.isArray(e) &&
+        e[0] === true &&
+        /bad thing/.test(e[1] as string) &&
+        e[3] === true,
+    ),
+  );
   assert.ok(ev.includes('prevented'));
-  assert.ok(ev.includes('seen Uncaught Error: x') || ev.some((e) => typeof e === 'string' && e.startsWith('seen')));
+  assert.ok(
+    ev.includes('seen Uncaught Error: x') ||
+      ev.some((e) => typeof e === 'string' && e.startsWith('seen')),
+  );
   assert.ok(!ev.includes('should not reach the Worker'));
-  assert.ok(ev.includes('window saw it'), 'not cancelled at the Worker: reported one level up (HTML §10.2.5)');
+  assert.ok(
+    ev.includes('window saw it'),
+    'not cancelled at the Worker: reported one level up (HTML §10.2.5)',
+  );
   page.run(`globalThis.onerror = null;`);
   // Without a window handler the page logs it with the worker's name.
   page.run(`new Worker('/throws.js', { name: 'logged' });`);
-  await until(() => world.logs.some((l) => l.realm === 'main' && /\[worker \d+ 'logged'\] Uncaught/.test(l.text)));
+  await until(() =>
+    world.logs.some(
+      (l) =>
+        l.realm === 'main' && /\[worker \d+ 'logged'\] Uncaught/.test(l.text),
+    ),
+  );
 });
 
 test('a script that fails to load fires a plain error event (WRK-7)', async () => {
   const { page } = await createPage();
-  page.run(`globalThis.e = null; const w = new Worker('/nope.js'); w.onerror = (x) => { e = [x.type, x instanceof ErrorEvent]; };`);
+  page.run(
+    `globalThis.e = null; const w = new Worker('/nope.js'); w.onerror = (x) => { e = [x.type, x instanceof ErrorEvent]; };`,
+  );
   await until(() => page.run('e'));
   assert.deepEqual(page.json('e'), ['error', false]);
 });
@@ -290,7 +420,10 @@ test('a script that fails to load fires a plain error event (WRK-7)', async () =
 test('terminate(): no more events, pending messages dropped, slot released (WRK-8, WRK-9)', async () => {
   const { page, world } = await createPage({
     maxWorkers: 2,
-    files: { 'https://app.local/tick.js': 'setInterval(() => postMessage("tick"), 1); onmessage = (e) => postMessage(e.data);' },
+    files: {
+      'https://app.local/tick.js':
+        'setInterval(() => postMessage("tick"), 1); onmessage = (e) => postMessage(e.data);',
+    },
   });
   page.run(`
     globalThis.ticks = 0;
@@ -305,7 +438,12 @@ test('terminate(): no more events, pending messages dropped, slot released (WRK-
   await settle(50);
   assert.ok((page.run('ticks') as number) <= (page.run('at') as number) + 1);
   assert.equal(world.live, 1);
-  assert.equal(page.run(`(() => { try { new Worker('/tick.js'); return 'ok'; } catch (e) { return e.name; } })()`), 'ok');
+  assert.equal(
+    page.run(
+      `(() => { try { new Worker('/tick.js'); return 'ok'; } catch (e) { return e.name; } })()`,
+    ),
+    'ok',
+  );
   page.run('w2.terminate()');
 });
 
@@ -313,8 +451,12 @@ test('self.close() ends the worker; the creator drops it', async () => {
   const { page, world } = await createPage({
     files: { 'https://app.local/c.js': 'postMessage("bye"); close();' },
   });
-  page.run(`globalThis.m = []; const w = new Worker('/c.js'); w.onmessage = (e) => m.push(e.data);`);
-  await until(() => world.live === 0 && (page.run('m') as string[]).length === 1);
+  page.run(
+    `globalThis.m = []; const w = new Worker('/c.js'); w.onmessage = (e) => m.push(e.data);`,
+  );
+  await until(
+    () => world.live === 0 && (page.run('m') as string[]).length === 1,
+  );
   assert.deepEqual(page.json('m'), ['bye']);
 });
 
@@ -326,7 +468,8 @@ test('nested workers and a port handed through the page (comlink-style round tri
         inner.onmessage = (e) => postMessage('inner said ' + e.data);
         onmessage = (e) => { if (e.ports[0]) { const p = e.ports[0]; p.onmessage = (m) => p.postMessage(m.data * 2); } else inner.postMessage(e.data); };
       `),
-      'https://app.local/inner.js': 'onmessage = (e) => postMessage(e.data + "!");',
+      'https://app.local/inner.js':
+        'onmessage = (e) => postMessage(e.data + "!");',
     },
   });
   page.run(`
@@ -340,12 +483,18 @@ test('nested workers and a port handed through the page (comlink-style round tri
     ch.port1.postMessage(21);
   `);
   await until(() => (page.run('got') as string[]).length >= 2);
-  assert.deepEqual((page.json('got') as string[]).sort(), ['doubled 42', 'inner said ping!']);
+  assert.deepEqual((page.json('got') as string[]).sort(), [
+    'doubled 42',
+    'inner said ping!',
+  ]);
 });
 
 test('messages posted before the worker ran are delivered after its script, in order', async () => {
   const { page } = await createPage({
-    files: { 'https://app.local/o.js': 'const got = []; onmessage = (e) => { got.push(e.data); if (got.length === 100) postMessage(got); };' },
+    files: {
+      'https://app.local/o.js':
+        'const got = []; onmessage = (e) => { got.push(e.data); if (got.length === 100) postMessage(got); };',
+    },
   });
   page.run(`
     globalThis.r = null;
@@ -354,12 +503,25 @@ test('messages posted before the worker ran are delivered after its script, in o
     for (let i = 0; i < 100; i++) w.postMessage(i);
   `);
   await until(() => page.run('r'));
-  assert.deepEqual(page.json('r'), Array.from({ length: 100 }, (_, i) => i));
+  assert.deepEqual(
+    page.json('r'),
+    Array.from({ length: 100 }, (_, i) => i),
+  );
 });
 
 test('crossOriginIsolated follows the policy and navigator.hardwareConcurrency is capped in both globals (WRK-12)', async () => {
-  const { page } = await createPage({ files: { 'https://app.local/h.js': 'postMessage([navigator.hardwareConcurrency, crossOriginIsolated])' } });
-  page.run(`globalThis.r = null; new Worker('/h.js').onmessage = (e) => { r = e.data; };`);
+  const { page } = await createPage({
+    files: {
+      'https://app.local/h.js':
+        'postMessage([navigator.hardwareConcurrency, crossOriginIsolated])',
+    },
+  });
+  page.run(
+    `globalThis.r = null; new Worker('/h.js').onmessage = (e) => { r = e.data; };`,
+  );
   await until(() => page.run('r'));
-  assert.deepEqual(page.json('[navigator.hardwareConcurrency, r]'), [4, [4, true]]);
+  assert.deepEqual(page.json('[navigator.hardwareConcurrency, r]'), [
+    4,
+    [4, true],
+  ]);
 });

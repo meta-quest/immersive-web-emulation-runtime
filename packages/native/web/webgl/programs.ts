@@ -21,7 +21,12 @@ import {
   WebGLUniformLocation,
   type UniformCell,
 } from './objects.ts';
-import { decodeProgramRecord, lookupUniform, uniformLocationOf, type ProgramRecord } from './reflection.ts';
+import {
+  decodeProgramRecord,
+  lookupUniform,
+  uniformLocationOf,
+  type ProgramRecord,
+} from './reflection.ts';
 import { rewriteShader, type UpgradeOptions } from './shader-rewrite.ts';
 
 const INVALID_INDEX = 0xffffffff;
@@ -44,7 +49,13 @@ const extras = new WeakMap<WebGLProgram, ProgramExtras>();
 export function programExtras(p: WebGLProgram): ProgramExtras {
   let x = extras.get(p);
   if (!x) {
-    x = { locations: new Map(), samplerUnits: new Map(), samplers: [], cells: new Map(), cellGroups: new Map() };
+    x = {
+      locations: new Map(),
+      samplerUnits: new Map(),
+      samplers: [],
+      cells: new Map(),
+      cellGroups: new Map(),
+    };
     extras.set(p, x);
   }
   return x;
@@ -102,8 +113,13 @@ export const programMethods = {
   },
   isShader(this: Ctx, shader: unknown): boolean {
     if (this._lost || shader === null || shader === undefined) return false;
-    if (!(shader instanceof WebGLShader)) throw new TypeError('isShader: argument is not a WebGLShader');
-    return shader._ctx === this && shader._gen === this._gen && (!shader._deleted || this._inUse(shader));
+    if (!(shader instanceof WebGLShader))
+      throw new TypeError('isShader: argument is not a WebGLShader');
+    return (
+      shader._ctx === this &&
+      shader._gen === this._gen &&
+      (!shader._deleted || this._inUse(shader))
+    );
   },
   deleteShader(this: Ctx, shader: unknown): void {
     if (this._skip()) return;
@@ -119,7 +135,12 @@ export const programMethods = {
     if (!this._ok(shader, WebGLShader, false, 'shaderSource')) return;
     const src = String(source);
     shader._source = src;
-    const r = rewriteShader(driverCharset(src), shader._type === E.VERTEX_SHADER, (name) => glslExtensionEnabled(this, name), upgradeOptions(this, false));
+    const r = rewriteShader(
+      driverCharset(src),
+      shader._type === E.VERTEX_SHADER,
+      (name) => glslExtensionEnabled(this, name),
+      upgradeOptions(this, false),
+    );
     shader._pendingTranslated = r.source;
     shader._pendingEssl100 = r.essl100;
     shader._pendingUpgraded = r.upgraded;
@@ -146,7 +167,8 @@ export const programMethods = {
   getShaderParameter(this: Ctx, shader: WebGLShader, pname: number): unknown {
     if (this._skip()) return null;
     pname >>>= 0;
-    if (!this._ok(shader, WebGLShader, false, 'getShaderParameter')) return null;
+    if (!this._ok(shader, WebGLShader, false, 'getShaderParameter'))
+      return null;
     switch (pname) {
       case E.SHADER_TYPE:
         return shader._type;
@@ -169,7 +191,11 @@ export const programMethods = {
     fetchShader(this, shader);
     return shader._infoLog;
   },
-  getShaderPrecisionFormat(this: Ctx, shadertype: number, precisiontype: number): WebGLShaderPrecisionFormat | null {
+  getShaderPrecisionFormat(
+    this: Ctx,
+    shadertype: number,
+    precisiontype: number,
+  ): WebGLShaderPrecisionFormat | null {
     if (this._skip()) return null;
     shadertype >>>= 0;
     precisiontype >>>= 0;
@@ -182,15 +208,31 @@ export const programMethods = {
       return null;
     }
     const key = shadertype * 16 + (precisiontype - E.LOW_FLOAT);
-    let cached = this._limitCache.get(-key) as [number, number, number] | undefined;
+    let cached = this._limitCache.get(-key) as
+      | [number, number, number]
+      | undefined;
     if (!cached) {
       const a = this._i32;
       a[0] = a[1] = a[2] = 0;
-      this._n.getShaderPrecisionFormat(shadertype, precisiontype, a, 0, 8, a, 8, 4);
+      this._n.getShaderPrecisionFormat(
+        shadertype,
+        precisiontype,
+        a,
+        0,
+        8,
+        a,
+        8,
+        4,
+      );
       cached = [a[0], a[1], a[2]];
       this._limitCache.set(-key, cached);
     }
-    return new WebGLShaderPrecisionFormat(INTERNAL, cached[0], cached[1], cached[2]);
+    return new WebGLShaderPrecisionFormat(
+      INTERNAL,
+      cached[0],
+      cached[1],
+      cached[2],
+    );
   },
 
   createProgram(this: Ctx): WebGLProgram | null {
@@ -201,8 +243,13 @@ export const programMethods = {
   },
   isProgram(this: Ctx, program: unknown): boolean {
     if (this._lost || program === null || program === undefined) return false;
-    if (!(program instanceof WebGLProgram)) throw new TypeError('isProgram: argument is not a WebGLProgram');
-    return program._ctx === this && program._gen === this._gen && (!program._deleted || this._inUse(program));
+    if (!(program instanceof WebGLProgram))
+      throw new TypeError('isProgram: argument is not a WebGLProgram');
+    return (
+      program._ctx === this &&
+      program._gen === this._gen &&
+      (!program._deleted || this._inUse(program))
+    );
   },
   deleteProgram(this: Ctx, program: unknown): void {
     if (this._skip()) return;
@@ -216,44 +263,64 @@ export const programMethods = {
   },
   attachShader(this: Ctx, program: WebGLProgram, shader: WebGLShader): void {
     if (this._skip()) return;
-    if (!this._ok(program, WebGLProgram, false, 'attachShader') || !this._ok(shader, WebGLShader, false, 'attachShader')) return;
+    if (
+      !this._ok(program, WebGLProgram, false, 'attachShader') ||
+      !this._ok(shader, WebGLShader, false, 'attachShader')
+    )
+      return;
     const slot = shader._type === E.VERTEX_SHADER ? '_vs' : '_fs';
-    if (program[slot] !== null) return this._e(E.INVALID_OPERATION, 'attachShader');
+    if (program[slot] !== null)
+      return this._e(E.INVALID_OPERATION, 'attachShader');
     program[slot] = shader;
     shader._attachCount++;
     this._n.attachShader(program._name, shader._name);
   },
   detachShader(this: Ctx, program: WebGLProgram, shader: WebGLShader): void {
     if (this._skip()) return;
-    if (!this._ok(program, WebGLProgram, false, 'detachShader') || !this._ok(shader, WebGLShader, false, 'detachShader')) return;
+    if (
+      !this._ok(program, WebGLProgram, false, 'detachShader') ||
+      !this._ok(shader, WebGLShader, false, 'detachShader')
+    )
+      return;
     const slot = shader._type === E.VERTEX_SHADER ? '_vs' : '_fs';
-    if (program[slot] !== shader) return this._e(E.INVALID_OPERATION, 'detachShader');
+    if (program[slot] !== shader)
+      return this._e(E.INVALID_OPERATION, 'detachShader');
     program[slot] = null;
     shader._attachCount--;
     this._n.detachShader(program._name, shader._name);
   },
   getAttachedShaders(this: Ctx, program: WebGLProgram): WebGLShader[] | null {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getAttachedShaders')) return null;
+    if (!this._ok(program, WebGLProgram, false, 'getAttachedShaders'))
+      return null;
     const out: WebGLShader[] = [];
     if (program._vs) out.push(program._vs);
     if (program._fs) out.push(program._fs);
     return out;
   },
-  bindAttribLocation(this: Ctx, program: WebGLProgram, index: number, name: string): void {
+  bindAttribLocation(
+    this: Ctx,
+    program: WebGLProgram,
+    index: number,
+    name: string,
+  ): void {
     if (this._skip()) return;
     if (!this._ok(program, WebGLProgram, false, 'bindAttribLocation')) return;
     index >>>= 0;
     const n = String(name);
-    if (!validName(this, n)) return this._e(E.INVALID_VALUE, 'bindAttribLocation');
-    if (reservedName(n) || n.startsWith('gl_')) return this._e(E.INVALID_OPERATION, 'bindAttribLocation');
-    if (index >= this._maxAttribs) return this._e(E.INVALID_VALUE, 'bindAttribLocation');
+    if (!validName(this, n))
+      return this._e(E.INVALID_VALUE, 'bindAttribLocation');
+    if (reservedName(n) || n.startsWith('gl_'))
+      return this._e(E.INVALID_OPERATION, 'bindAttribLocation');
+    if (index >= this._maxAttribs)
+      return this._e(E.INVALID_VALUE, 'bindAttribLocation');
     this._n.bindAttribLocation(program._name, index, n);
   },
   linkProgram(this: Ctx, program: WebGLProgram): void {
     if (this._skip()) return;
     if (!this._ok(program, WebGLProgram, false, 'linkProgram')) return;
-    if (this._tf._active && this._tf._program === program) return this._e(E.INVALID_OPERATION, 'linkProgram');
+    if (this._tf._active && this._tf._program === program)
+      return this._e(E.INVALID_OPERATION, 'linkProgram');
     const vs = program._vs;
     const fs = program._fs;
     if (vs && fs && vs._upgraded !== fs._upgraded) {
@@ -276,7 +343,8 @@ export const programMethods = {
     x.cells.clear();
     x.cellGroups.clear();
     if (this._program === program) {
-      this._feedbackDirty = true; this._texDirty = true;
+      this._feedbackDirty = true;
+      this._texDirty = true;
       this._attribsDirty = true;
     }
   },
@@ -285,14 +353,17 @@ export const programMethods = {
     if (!this._ok(program, WebGLProgram, true, 'useProgram')) return;
     const p = program ?? null;
     if (this._program === p) return;
-    if (this._tf._active && !this._tf._paused) return this._e(E.INVALID_OPERATION, 'useProgram');
+    if (this._tf._active && !this._tf._paused)
+      return this._e(E.INVALID_OPERATION, 'useProgram');
     if (p !== null) {
       const rec = this._programRecord(p);
-      if (!rec || !rec.linked) return this._e(E.INVALID_OPERATION, 'useProgram');
+      if (!rec || !rec.linked)
+        return this._e(E.INVALID_OPERATION, 'useProgram');
     }
     const prev = this._program;
     this._program = p;
-    this._feedbackDirty = true; this._texDirty = true;
+    this._feedbackDirty = true;
+    this._texDirty = true;
     this._attribsDirty = true;
     this._n.useProgram(p ? p._name : 0);
     if (prev && prev._deleted && !this._inUse(prev)) releaseProgram(prev);
@@ -304,10 +375,15 @@ export const programMethods = {
     program._validateStatus = !!r[0];
     program._validateLog = r[1] ?? '';
   },
-  getProgramParameter(this: Ctx, program: WebGLProgram, pname: number): unknown {
+  getProgramParameter(
+    this: Ctx,
+    program: WebGLProgram,
+    pname: number,
+  ): unknown {
     if (this._skip()) return null;
     pname >>>= 0;
-    if (!this._ok(program, WebGLProgram, false, 'getProgramParameter')) return null;
+    if (!this._ok(program, WebGLProgram, false, 'getProgramParameter'))
+      return null;
     switch (pname) {
       case E.DELETE_STATUS:
         return program._deleted;
@@ -343,7 +419,8 @@ export const programMethods = {
   },
   getProgramInfoLog(this: Ctx, program: WebGLProgram): string | null {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getProgramInfoLog')) return null;
+    if (!this._ok(program, WebGLProgram, false, 'getProgramInfoLog'))
+      return null;
     if (program._validateLog) return program._validateLog;
     const rec = this._programRecord(program);
     return rec ? rec.infoLog : '';
@@ -362,7 +439,11 @@ export const programMethods = {
     const a = rec.attribByName.get(n);
     return a ? a.location : -1;
   },
-  getActiveAttrib(this: Ctx, program: WebGLProgram, index: number): WebGLActiveInfo | null {
+  getActiveAttrib(
+    this: Ctx,
+    program: WebGLProgram,
+    index: number,
+  ): WebGLActiveInfo | null {
     if (this._skip()) return null;
     if (!this._ok(program, WebGLProgram, false, 'getActiveAttrib')) return null;
     const rec = this._programRecord(program);
@@ -373,9 +454,14 @@ export const programMethods = {
     }
     return new WebGLActiveInfo(INTERNAL, a.size, a.type, a.name);
   },
-  getActiveUniform(this: Ctx, program: WebGLProgram, index: number): WebGLActiveInfo | null {
+  getActiveUniform(
+    this: Ctx,
+    program: WebGLProgram,
+    index: number,
+  ): WebGLActiveInfo | null {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getActiveUniform')) return null;
+    if (!this._ok(program, WebGLProgram, false, 'getActiveUniform'))
+      return null;
     const rec = this._programRecord(program);
     const u = rec ? rec.uniforms[index >>> 0] : undefined;
     if (!u) {
@@ -384,9 +470,14 @@ export const programMethods = {
     }
     return new WebGLActiveInfo(INTERNAL, u.size, u.type, u.name);
   },
-  getUniformLocation(this: Ctx, program: WebGLProgram, name: string): WebGLUniformLocation | null {
+  getUniformLocation(
+    this: Ctx,
+    program: WebGLProgram,
+    name: string,
+  ): WebGLUniformLocation | null {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getUniformLocation')) return null;
+    if (!this._ok(program, WebGLProgram, false, 'getUniformLocation'))
+      return null;
     const n = String(name);
     if (!validName(this, n)) {
       this._e(E.INVALID_VALUE, 'getUniformLocation');
@@ -408,11 +499,14 @@ export const programMethods = {
       }
       x.locations.set(n, hit);
     }
-    return hit === null ? null : new WebGLUniformLocation(INTERNAL, program, hit[0], hit[1], hit[2]);
+    return hit === null
+      ? null
+      : new WebGLUniformLocation(INTERNAL, program, hit[0], hit[1], hit[2]);
   },
   getUniformBlockIndex(this: Ctx, program: WebGLProgram, name: string): number {
     if (this._skip()) return INVALID_INDEX;
-    if (!this._ok(program, WebGLProgram, false, 'getUniformBlockIndex')) return INVALID_INDEX;
+    if (!this._ok(program, WebGLProgram, false, 'getUniformBlockIndex'))
+      return INVALID_INDEX;
     const rec = linkedRecord(this, program, 'getUniformBlockIndex');
     if (!rec) return INVALID_INDEX;
     const n = String(name);
@@ -420,9 +514,14 @@ export const programMethods = {
     if (i === undefined) i = rec.blockByName.get(n + '[0]');
     return i === undefined ? INVALID_INDEX : i;
   },
-  getActiveUniformBlockName(this: Ctx, program: WebGLProgram, index: number): string | null {
+  getActiveUniformBlockName(
+    this: Ctx,
+    program: WebGLProgram,
+    index: number,
+  ): string | null {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getActiveUniformBlockName')) return null;
+    if (!this._ok(program, WebGLProgram, false, 'getActiveUniformBlockName'))
+      return null;
     const rec = linkedRecord(this, program, 'getActiveUniformBlockName');
     if (!rec) return null;
     const b = rec.blocks[index >>> 0];
@@ -432,9 +531,17 @@ export const programMethods = {
     }
     return b.name;
   },
-  getActiveUniformBlockParameter(this: Ctx, program: WebGLProgram, index: number, pname: number): unknown {
+  getActiveUniformBlockParameter(
+    this: Ctx,
+    program: WebGLProgram,
+    index: number,
+    pname: number,
+  ): unknown {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getActiveUniformBlockParameter')) return null;
+    if (
+      !this._ok(program, WebGLProgram, false, 'getActiveUniformBlockParameter')
+    )
+      return null;
     const rec = linkedRecord(this, program, 'getActiveUniformBlockParameter');
     if (!rec) return null;
     const b = rec.blocks[index >>> 0];
@@ -459,7 +566,12 @@ export const programMethods = {
     this._e(E.INVALID_ENUM, 'getActiveUniformBlockParameter');
     return null;
   },
-  uniformBlockBinding(this: Ctx, program: WebGLProgram, index: number, binding: number): void {
+  uniformBlockBinding(
+    this: Ctx,
+    program: WebGLProgram,
+    index: number,
+    binding: number,
+  ): void {
     if (this._skip()) return;
     if (!this._ok(program, WebGLProgram, false, 'uniformBlockBinding')) return;
     const rec = linkedRecord(this, program, 'uniformBlockBinding');
@@ -467,15 +579,25 @@ export const programMethods = {
     index >>>= 0;
     binding >>>= 0;
     const b = rec.blocks[index];
-    if (!b || binding >= this._maxUboBindings) return this._e(E.INVALID_VALUE, 'uniformBlockBinding');
+    if (!b || binding >= this._maxUboBindings)
+      return this._e(E.INVALID_VALUE, 'uniformBlockBinding');
     if (b.binding === binding) return;
     b.binding = binding;
     this._n.uniformBlockBinding(program._name, index, binding);
   },
-  getUniformIndices(this: Ctx, program: WebGLProgram, names: unknown): number[] | null {
+  getUniformIndices(
+    this: Ctx,
+    program: WebGLProgram,
+    names: unknown,
+  ): number[] | null {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getUniformIndices')) return null;
-    if (names === null || typeof names !== 'object' || typeof (names as Iterable<unknown>)[Symbol.iterator] !== 'function') {
+    if (!this._ok(program, WebGLProgram, false, 'getUniformIndices'))
+      return null;
+    if (
+      names === null ||
+      typeof names !== 'object' ||
+      typeof (names as Iterable<unknown>)[Symbol.iterator] !== 'function'
+    ) {
       throw new TypeError('getUniformIndices: uniformNames is not a sequence');
     }
     const rec = linkedRecord(this, program, 'getUniformIndices');
@@ -495,14 +617,29 @@ export const programMethods = {
     }
     return out;
   },
-  getActiveUniforms(this: Ctx, program: WebGLProgram, indices: unknown, pname: number): unknown {
+  getActiveUniforms(
+    this: Ctx,
+    program: WebGLProgram,
+    indices: unknown,
+    pname: number,
+  ): unknown {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getActiveUniforms')) return null;
-    if (indices === null || typeof indices !== 'object' || typeof (indices as Iterable<unknown>)[Symbol.iterator] !== 'function') {
-      throw new TypeError('getActiveUniforms: uniformIndices is not a sequence');
+    if (!this._ok(program, WebGLProgram, false, 'getActiveUniforms'))
+      return null;
+    if (
+      indices === null ||
+      typeof indices !== 'object' ||
+      typeof (indices as Iterable<unknown>)[Symbol.iterator] !== 'function'
+    ) {
+      throw new TypeError(
+        'getActiveUniforms: uniformIndices is not a sequence',
+      );
     }
     const rec = this._programRecord(program);
-    const list = Array.from(indices as Iterable<unknown>, (v) => Number(v) >>> 0);
+    const list = Array.from(
+      indices as Iterable<unknown>,
+      (v) => Number(v) >>> 0,
+    );
     const n = rec ? rec.uniforms.length : 0;
     for (const i of list) {
       if (i >= n) {
@@ -530,21 +667,43 @@ export const programMethods = {
     this._e(E.INVALID_ENUM, 'getActiveUniforms');
     return null;
   },
-  transformFeedbackVaryings(this: Ctx, program: WebGLProgram, varyings: unknown, bufferMode: number): void {
+  transformFeedbackVaryings(
+    this: Ctx,
+    program: WebGLProgram,
+    varyings: unknown,
+    bufferMode: number,
+  ): void {
     if (this._skip()) return;
-    if (!this._ok(program, WebGLProgram, false, 'transformFeedbackVaryings')) return;
-    if (varyings === null || typeof varyings !== 'object' || typeof (varyings as Iterable<unknown>)[Symbol.iterator] !== 'function') {
-      throw new TypeError('transformFeedbackVaryings: varyings is not a sequence');
+    if (!this._ok(program, WebGLProgram, false, 'transformFeedbackVaryings'))
+      return;
+    if (
+      varyings === null ||
+      typeof varyings !== 'object' ||
+      typeof (varyings as Iterable<unknown>)[Symbol.iterator] !== 'function'
+    ) {
+      throw new TypeError(
+        'transformFeedbackVaryings: varyings is not a sequence',
+      );
     }
     bufferMode >>>= 0;
     const list = Array.from(varyings as Iterable<unknown>, String);
-    if (bufferMode !== E.INTERLEAVED_ATTRIBS && bufferMode !== E.SEPARATE_ATTRIBS) return this._e(E.INVALID_ENUM, 'transformFeedbackVaryings');
-    if (bufferMode === E.SEPARATE_ATTRIBS && list.length > this._maxTfBuffers) return this._e(E.INVALID_VALUE, 'transformFeedbackVaryings');
+    if (
+      bufferMode !== E.INTERLEAVED_ATTRIBS &&
+      bufferMode !== E.SEPARATE_ATTRIBS
+    )
+      return this._e(E.INVALID_ENUM, 'transformFeedbackVaryings');
+    if (bufferMode === E.SEPARATE_ATTRIBS && list.length > this._maxTfBuffers)
+      return this._e(E.INVALID_VALUE, 'transformFeedbackVaryings');
     this._n.transformFeedbackVaryings(program._name, list, bufferMode);
   },
-  getTransformFeedbackVarying(this: Ctx, program: WebGLProgram, index: number): WebGLActiveInfo | null {
+  getTransformFeedbackVarying(
+    this: Ctx,
+    program: WebGLProgram,
+    index: number,
+  ): WebGLActiveInfo | null {
     if (this._skip()) return null;
-    if (!this._ok(program, WebGLProgram, false, 'getTransformFeedbackVarying')) return null;
+    if (!this._ok(program, WebGLProgram, false, 'getTransformFeedbackVarying'))
+      return null;
     const rec = this._programRecord(program);
     const v = rec ? rec.varyings[index >>> 0] : undefined;
     if (!v) {
@@ -555,7 +714,8 @@ export const programMethods = {
   },
   getFragDataLocation(this: Ctx, program: WebGLProgram, name: string): number {
     if (this._skip()) return -1;
-    if (!this._ok(program, WebGLProgram, false, 'getFragDataLocation')) return -1;
+    if (!this._ok(program, WebGLProgram, false, 'getFragDataLocation'))
+      return -1;
     if (!linkedRecord(this, program, 'getFragDataLocation')) return -1;
     const n = String(name);
     // built-in outputs (gl_FragColor / gl_FragData of ESSL 1.00 programs) have no location in WebGL; some
@@ -581,7 +741,8 @@ function validName(ctx: Ctx, name: string): boolean {
 }
 const GLSL_CHARS = (() => {
   const t = new Uint8Array(128);
-  const ok = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.+-/*%<>[](){}^|&~=!:;,?# ';
+  const ok =
+    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.+-/*%<>[](){}^|&~=!:;,?# ';
   for (const ch of ok) t[ch.charCodeAt(0)] = 1;
   return t;
 })();
@@ -600,7 +761,10 @@ function driverCharset(src: string): string {
   const n = src.length;
   while (i < n) {
     const c = src.charCodeAt(i);
-    if (c === 0x2f && (src.charCodeAt(i + 1) === 0x2f || src.charCodeAt(i + 1) === 0x2a)) {
+    if (
+      c === 0x2f &&
+      (src.charCodeAt(i + 1) === 0x2f || src.charCodeAt(i + 1) === 0x2a)
+    ) {
       const block = src.charCodeAt(i + 1) === 0x2a;
       let end = block ? src.indexOf('*/', i + 2) : src.indexOf('\n', i + 2);
       end = end < 0 ? n : block ? end + 2 : end;
@@ -632,7 +796,12 @@ function upgradeOptions(ctx: Ctx, force: boolean): UpgradeOptions | undefined {
  * compiled source as ESSL 3.00 too (drivers link only shaders of one version). The upgrade sticks to the shader.
  */
 function upgradeCompiled(ctx: Ctx, shader: WebGLShader): void {
-  const r = rewriteShader(shader._compiledSource, shader._type === E.VERTEX_SHADER, (name) => glslExtensionEnabled(ctx, name), upgradeOptions(ctx, true));
+  const r = rewriteShader(
+    shader._compiledSource,
+    shader._type === E.VERTEX_SHADER,
+    (name) => glslExtensionEnabled(ctx, name),
+    upgradeOptions(ctx, true),
+  );
   if (!r.upgraded) return;
   ctx._n.shaderSource(shader._name, r.source);
   ctx._n.compileShader(shader._name);
@@ -675,7 +844,11 @@ function glslExtensionEnabled(ctx: Ctx, name: string): boolean {
   }
 }
 
-function linkedRecord(ctx: Ctx, program: WebGLProgram, what: string): ProgramRecord | null {
+function linkedRecord(
+  ctx: Ctx,
+  program: WebGLProgram,
+  what: string,
+): ProgramRecord | null {
   const rec = ctx._programRecord(program);
   if (!rec || !rec.linked) {
     ctx._e(E.INVALID_OPERATION, what);

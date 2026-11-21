@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // UAX #9 for one paragraph without explicit embeddings (see bidi.h). Rule names below are UAX #9's.
 
 #include "bidi.h"

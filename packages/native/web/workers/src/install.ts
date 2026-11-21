@@ -17,7 +17,13 @@
 // Install after the web glue (EventTarget, MessageEvent, ErrorEvent, DOMException, Blob) and after the image prelude
 // (ImageBitmap/ImageData); run it as the last runtime prelude so it sees every platform interface.
 
-import type { GlueLike, ImageLike, WorkersHooks, WorkersInfo, WorkersNatives } from './natives.ts';
+import type {
+  GlueLike,
+  ImageLike,
+  WorkersHooks,
+  WorkersInfo,
+  WorkersNatives,
+} from './natives.ts';
 
 export interface InstallWorkersOptions {
   natives?: WorkersNatives;
@@ -38,56 +44,136 @@ export const REGISTRY_KEY: unique symbol = Symbol.for('iwn.workers') as never;
 // interface, whose instances are not serializable unless handled below (HTML: platform objects without
 // [Serializable] throw DataCloneError).
 const ES_GLOBALS = new Set([
-  'Object', 'Function', 'Array', 'Number', 'Boolean', 'String', 'Symbol', 'BigInt', 'Date', 'RegExp', 'Error',
-  'AggregateError', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError',
-  'SuppressedError', 'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'Proxy',
-  'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array',
-  'Uint16Array', 'Int32Array', 'Uint32Array', 'Float16Array', 'Float32Array', 'Float64Array', 'BigInt64Array',
-  'BigUint64Array', 'Iterator', 'DisposableStack', 'AsyncDisposableStack', 'eval', 'parseInt', 'parseFloat',
-  'isNaN', 'isFinite', 'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape',
+  'Object',
+  'Function',
+  'Array',
+  'Number',
+  'Boolean',
+  'String',
+  'Symbol',
+  'BigInt',
+  'Date',
+  'RegExp',
+  'Error',
+  'AggregateError',
+  'EvalError',
+  'RangeError',
+  'ReferenceError',
+  'SyntaxError',
+  'TypeError',
+  'URIError',
+  'SuppressedError',
+  'Map',
+  'Set',
+  'WeakMap',
+  'WeakSet',
+  'WeakRef',
+  'FinalizationRegistry',
+  'Promise',
+  'Proxy',
+  'ArrayBuffer',
+  'SharedArrayBuffer',
+  'DataView',
+  'Int8Array',
+  'Uint8Array',
+  'Uint8ClampedArray',
+  'Int16Array',
+  'Uint16Array',
+  'Int32Array',
+  'Uint32Array',
+  'Float16Array',
+  'Float32Array',
+  'Float64Array',
+  'BigInt64Array',
+  'BigUint64Array',
+  'Iterator',
+  'DisposableStack',
+  'AsyncDisposableStack',
+  'eval',
+  'parseInt',
+  'parseFloat',
+  'isNaN',
+  'isFinite',
+  'decodeURI',
+  'decodeURIComponent',
+  'encodeURI',
+  'encodeURIComponent',
+  'escape',
+  'unescape',
 ]);
 
 // Serializable geometry interfaces (Geometry Interfaces §serialization): cloned through their JSON form.
-const GEOMETRY = ['DOMPointReadOnly', 'DOMPoint', 'DOMRectReadOnly', 'DOMRect', 'DOMQuad', 'DOMMatrixReadOnly', 'DOMMatrix'];
+const GEOMETRY = [
+  'DOMPointReadOnly',
+  'DOMPoint',
+  'DOMRectReadOnly',
+  'DOMRect',
+  'DOMQuad',
+  'DOMMatrixReadOnly',
+  'DOMMatrix',
+];
 
 type Target = EventTarget;
 type AnyRecord = Record<string | symbol, unknown>;
 
 const INTERNAL = Symbol('iwn.workers.internal');
 
-export function installWorkers(global: typeof globalThis, options: InstallWorkersOptions = {}): WorkersRegistry | null {
+export function installWorkers(
+  global: typeof globalThis,
+  options: InstallWorkersOptions = {},
+): WorkersRegistry | null {
   const g = global as unknown as AnyRecord;
-  const natives = options.natives ?? ((g.__iwn as AnyRecord | undefined)?.workers as WorkersNatives | undefined);
-  const glue = options.glue ?? (g[Symbol.for('iwn.glue')] as GlueLike | undefined);
+  const natives =
+    options.natives ??
+    ((g.__iwn as AnyRecord | undefined)?.workers as WorkersNatives | undefined);
+  const glue =
+    options.glue ?? (g[Symbol.for('iwn.glue')] as GlueLike | undefined);
   if (!natives || !glue) return null;
   const N: WorkersNatives = natives;
   const G: GlueLike = glue;
   const image: ImageLike | null =
-    options.image !== undefined ? options.image : ((g[Symbol.for('iwn.image')] as ImageLike | undefined) ?? null);
+    options.image !== undefined
+      ? options.image
+      : ((g[Symbol.for('iwn.image')] as ImageLike | undefined) ?? null);
   const info = N.info();
   const isWorker = info.isWorker;
 
   const EventTargetCtor = g.EventTarget as typeof EventTarget;
   const MessageEventCtor = g.MessageEvent as typeof MessageEvent;
-  const ErrorEventCtor = (g.ErrorEvent as typeof ErrorEvent | undefined) ?? null;
+  const ErrorEventCtor =
+    (g.ErrorEvent as typeof ErrorEvent | undefined) ?? null;
   const EventCtor = g.Event as typeof Event;
   const DOMExceptionCtor = g.DOMException as typeof DOMException;
   const BlobCtor = g.Blob as (new (...a: unknown[]) => Blob) | undefined;
-  const FileCtor = g.File as (new (bits: unknown[], name: string, opts?: object) => File) | undefined;
-  const ImageDataCtor = g.ImageData as (new (data: Uint8ClampedArray, w: number, h: number, o?: object) => object) | undefined;
-  const coreLog = ((g.__iwn as AnyRecord | undefined)?.core as AnyRecord | undefined)?.log as
-    | ((level: number, text: string) => void)
+  const FileCtor = g.File as
+    | (new (bits: unknown[], name: string, opts?: object) => File)
     | undefined;
+  const ImageDataCtor = g.ImageData as
+    | (new (
+        data: Uint8ClampedArray,
+        w: number,
+        h: number,
+        o?: object,
+      ) => object)
+    | undefined;
+  const coreLog = (
+    (g.__iwn as AnyRecord | undefined)?.core as AnyRecord | undefined
+  )?.log as ((level: number, text: string) => void) | undefined;
 
-  const domException = (message: string, name: string): DOMException => new DOMExceptionCtor(message, name);
-  const dataCloneError = (message: string): DOMException => domException(message, 'DataCloneError');
+  const domException = (message: string, name: string): DOMException =>
+    new DOMExceptionCtor(message, name);
+  const dataCloneError = (message: string): DOMException =>
+    domException(message, 'DataCloneError');
   const log = (level: number, text: string): void => {
     if (coreLog) coreLog(level, text);
     else if (level >= 3) (g.console as Console).error(text);
     else (g.console as Console).log(text);
   };
 
-  const abByteLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')!.get!;
+  const abByteLength = Object.getOwnPropertyDescriptor(
+    ArrayBuffer.prototype,
+    'byteLength',
+  )!.get!;
   const isArrayBuffer = (v: unknown): v is ArrayBuffer => {
     if (typeof v !== 'object' || v === null) return false;
     try {
@@ -99,7 +185,10 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
   };
   const sabByteLength =
     typeof SharedArrayBuffer === 'function'
-      ? Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, 'byteLength')!.get!
+      ? Object.getOwnPropertyDescriptor(
+          SharedArrayBuffer.prototype,
+          'byteLength',
+        )!.get!
       : null;
   const isSharedArrayBuffer = (v: unknown): boolean => {
     if (!sabByteLength || typeof v !== 'object' || v === null) return false;
@@ -124,12 +213,18 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       N.close(id);
     }
   });
-  const targetOf = (port: number): Target | undefined => strongTargets.get(port) ?? weakPorts.get(port)?.deref();
+  const targetOf = (port: number): Target | undefined =>
+    strongTargets.get(port) ?? weakPorts.get(port)?.deref();
 
   // ---------------------------------------------------------------------------------------------------------------
   // MessagePort (HTML §9.4.3)
 
-  let portState!: (p: MessagePort) => { id: number; started: boolean; detached: boolean; closed: boolean };
+  let portState!: (p: MessagePort) => {
+    id: number;
+    started: boolean;
+    detached: boolean;
+    closed: boolean;
+  };
 
   class MessagePort extends EventTargetCtor {
     #id: number;
@@ -161,7 +256,12 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
           set closed(v: boolean) {
             self.#closed = v;
           },
-        } as { id: number; started: boolean; detached: boolean; closed: boolean };
+        } as {
+          id: number;
+          started: boolean;
+          detached: boolean;
+          closed: boolean;
+        };
       };
     }
     constructor(token?: unknown, id?: number) {
@@ -173,9 +273,11 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
     }
     postMessage(message: unknown, transfer: unknown = undefined): void {
       if (arguments.length === 0) {
-        throw new TypeError("Failed to execute 'postMessage' on 'MessagePort': 1 argument required, but only 0 present.");
+        throw new TypeError(
+          "Failed to execute 'postMessage' on 'MessagePort': 1 argument required, but only 0 present.",
+        );
       }
-      if (this.#detached) return;  // a transferred-away port is inert
+      if (this.#detached) return; // a transferred-away port is inert
       sendMessage(this.#id, message, transfer, this, 'MessagePort');
     }
     start(): void {
@@ -194,18 +296,25 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       }
     }
   }
-  Object.defineProperty(MessagePort.prototype, Symbol.toStringTag, { value: 'MessagePort', configurable: true });
+  Object.defineProperty(MessagePort.prototype, Symbol.toStringTag, {
+    value: 'MessagePort',
+    configurable: true,
+  });
   G.events.defineEventHandler(MessagePort.prototype, 'message');
   G.events.defineEventHandler(MessagePort.prototype, 'messageerror');
   G.events.defineEventHandler(MessagePort.prototype, 'close');
   {
     // HTML: setting onmessage starts the port (implicit start()); addEventListener does not.
-    const d = Object.getOwnPropertyDescriptor(MessagePort.prototype, 'onmessage')!;
+    const d = Object.getOwnPropertyDescriptor(
+      MessagePort.prototype,
+      'onmessage',
+    )!;
     Object.defineProperty(MessagePort.prototype, 'onmessage', {
       get: d.get,
       set(this: MessagePort, v: unknown) {
         d.set!.call(this, v);
-        if (typeof v === 'function' || (typeof v === 'object' && v !== null)) this.start();
+        if (typeof v === 'function' || (typeof v === 'object' && v !== null))
+          this.start();
       },
       configurable: true,
       enumerable: true,
@@ -243,7 +352,10 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       return this.#port2;
     }
   }
-  Object.defineProperty(MessageChannel.prototype, Symbol.toStringTag, { value: 'MessageChannel', configurable: true });
+  Object.defineProperty(MessageChannel.prototype, Symbol.toStringTag, {
+    value: 'MessageChannel',
+    configurable: true,
+  });
 
   // ---------------------------------------------------------------------------------------------------------------
   // Serialization: transfer lists and host objects (HTML §2.7.3, §9.3.3 "message port post message steps")
@@ -268,51 +380,86 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
   function normalizeTransfer(transfer: unknown, where: string): object[] {
     // postMessage(message, transfer) or postMessage(message, { transfer }) (StructuredSerializeOptions).
     let list: unknown = transfer;
-    if (transfer !== undefined && transfer !== null && typeof transfer === 'object' && !(Symbol.iterator in transfer)) {
+    if (
+      transfer !== undefined &&
+      transfer !== null &&
+      typeof transfer === 'object' &&
+      !(Symbol.iterator in transfer)
+    ) {
       list = (transfer as { transfer?: unknown }).transfer;
     }
     if (list === undefined || list === null) {
-      if (transfer === null) throw new TypeError(`Failed to execute 'postMessage' on '${where}': The provided value cannot be converted to a sequence.`);
+      if (transfer === null)
+        throw new TypeError(
+          `Failed to execute 'postMessage' on '${where}': The provided value cannot be converted to a sequence.`,
+        );
       return [];
     }
     if (typeof list !== 'object' || !(Symbol.iterator in list)) {
-      throw new TypeError(`Failed to execute 'postMessage' on '${where}': The provided value cannot be converted to a sequence.`);
+      throw new TypeError(
+        `Failed to execute 'postMessage' on '${where}': The provided value cannot be converted to a sequence.`,
+      );
     }
     const out: object[] = [];
     for (const item of list as Iterable<unknown>) {
-      if ((typeof item !== 'object' && typeof item !== 'function') || item === null) {
-        throw new TypeError(`Failed to execute 'postMessage' on '${where}': Value at index ${out.length} is not an object.`);
+      if (
+        (typeof item !== 'object' && typeof item !== 'function') ||
+        item === null
+      ) {
+        throw new TypeError(
+          `Failed to execute 'postMessage' on '${where}': Value at index ${out.length} is not an object.`,
+        );
       }
       out.push(item as object);
     }
     return out;
   }
 
-  function sendMessage(fromPort: number, message: unknown, transferArg: unknown, source: MessagePort | null, where: string): void {
+  function sendMessage(
+    fromPort: number,
+    message: unknown,
+    transferArg: unknown,
+    source: MessagePort | null,
+    where: string,
+  ): void {
     const transfer = normalizeTransfer(transferArg, where);
     refreshPrototypes();
     const buffers: ArrayBuffer[] = [];
     const state: SendState = { ports: [], bitmaps: [], clonedTokens: [] };
     const seen = new Set<object>();
     transfer.forEach((t, i) => {
-      if (seen.has(t)) throw dataCloneError(`Value at index ${i} is a duplicate of an earlier value in the transfer list.`);
+      if (seen.has(t))
+        throw dataCloneError(
+          `Value at index ${i} is a duplicate of an earlier value in the transfer list.`,
+        );
       seen.add(t);
       if (isArrayBuffer(t)) {
         buffers.push(t);
       } else if (t instanceof MessagePort) {
         const s = portState(t);
-        if (t === source) throw dataCloneError('Port at index ' + i + ' is the source port.');
-        if (s.detached) throw dataCloneError(`Port at index ${i} is already detached.`);
+        if (t === source)
+          throw dataCloneError('Port at index ' + i + ' is the source port.');
+        if (s.detached)
+          throw dataCloneError(`Port at index ${i} is already detached.`);
         state.ports.push(t);
       } else if (image?.isImageBitmap(t)) {
-        if ((t as { width: number }).width === 0 && (t as { height: number }).height === 0) {
-          throw dataCloneError(`ImageBitmap at index ${i} is detached and could not be transferred.`);
+        if (
+          (t as { width: number }).width === 0 &&
+          (t as { height: number }).height === 0
+        ) {
+          throw dataCloneError(
+            `ImageBitmap at index ${i} is detached and could not be transferred.`,
+          );
         }
         state.bitmaps.push(t);
       } else if (isSharedArrayBuffer(t)) {
-        throw dataCloneError(`SharedArrayBuffer at index ${i} is not transferable (post it in the message instead).`);
+        throw dataCloneError(
+          `SharedArrayBuffer at index ${i} is not transferable (post it in the message instead).`,
+        );
       } else {
-        throw dataCloneError(`Value at index ${i} does not have a transferable type (${typeName(t)}).`);
+        throw dataCloneError(
+          `Value at index ${i} does not have a transferable type (${typeName(t)}).`,
+        );
       }
     });
     sending = state;
@@ -327,14 +474,16 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
     }
     // Serialization succeeded: now detach the platform transferables (nothing is detached when it throws).
     const portIds = state.ports.map(detachPort);
-    const tokens = state.bitmaps.map((b) => image!.clone.exportBitmap(b).iwnImageBitmap).concat(state.clonedTokens);
+    const tokens = state.bitmaps
+      .map((b) => image!.clone.exportBitmap(b).iwnImageBitmap)
+      .concat(state.clonedTokens);
     N.post(fromPort, pending, portIds, tokens);
   }
 
   const discardTokens = (tokens: number[]): void => {
-    const imageNatives = ((g.__iwn as AnyRecord | undefined)?.image as AnyRecord | undefined)?.discardTransfer as
-      | ((id: number) => void)
-      | undefined;
+    const imageNatives = (
+      (g.__iwn as AnyRecord | undefined)?.image as AnyRecord | undefined
+    )?.discardTransfer as ((id: number) => void) | undefined;
     if (imageNatives) for (const t of tokens) imageNatives(t);
   };
 
@@ -342,7 +491,10 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
     const m = new Map<object, string>();
     for (const name of GEOMETRY) {
       const c = g[name] as unknown;
-      const proto = typeof c === 'function' ? (c as { prototype?: object }).prototype : undefined;
+      const proto =
+        typeof c === 'function'
+          ? (c as { prototype?: object }).prototype
+          : undefined;
       if (proto) m.set(proto, name);
     }
     return m;
@@ -352,7 +504,10 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
   function hostWrite(value: object): object {
     if (value instanceof MessagePort) {
       const i = sending ? sending.ports.indexOf(value) : -1;
-      if (i < 0) throw dataCloneError('A MessagePort could not be cloned because it was not transferred.');
+      if (i < 0)
+        throw dataCloneError(
+          'A MessagePort could not be cloned because it was not transferred.',
+        );
       return { t: 'port', i };
     }
     if (image?.isImageBitmap(value)) {
@@ -360,21 +515,44 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       const i = sending.bitmaps.indexOf(value);
       if (i >= 0) return { t: 'bitmap', i };
       // Serializable (not transferred): a new bitmap on the same pixels travels as a token.
-      const token = image.clone.exportBitmap(image.clone.cloneBitmap(value)).iwnImageBitmap;
+      const token = image.clone.exportBitmap(
+        image.clone.cloneBitmap(value),
+      ).iwnImageBitmap;
       sending.clonedTokens.push(token);
-      return { t: 'bitmap', i: sending.bitmaps.length + sending.clonedTokens.length - 1 };
+      return {
+        t: 'bitmap',
+        i: sending.bitmaps.length + sending.clonedTokens.length - 1,
+      };
     }
     if (ImageDataCtor && value instanceof ImageDataCtor) {
-      const d = value as unknown as { data: Uint8ClampedArray; width: number; height: number; colorSpace?: string };
-      if (d.data.byteLength === 0 && d.width * d.height > 0) throw dataCloneError('ImageData is detached and could not be cloned.');
-      return { t: 'imagedata', data: d.data.slice(), w: d.width, h: d.height, cs: d.colorSpace ?? 'srgb' };
+      const d = value as unknown as {
+        data: Uint8ClampedArray;
+        width: number;
+        height: number;
+        colorSpace?: string;
+      };
+      if (d.data.byteLength === 0 && d.width * d.height > 0)
+        throw dataCloneError('ImageData is detached and could not be cloned.');
+      return {
+        t: 'imagedata',
+        data: d.data.slice(),
+        w: d.width,
+        h: d.height,
+        cs: d.colorSpace ?? 'srgb',
+      };
     }
     if (BlobCtor && value instanceof BlobCtor) {
       const bytes = G.blobBytes(value).slice();
       const type = (value as Blob).type;
       if (FileCtor && value instanceof FileCtor) {
         const f = value as File;
-        return { t: 'file', bytes, type, name: f.name, lastModified: f.lastModified };
+        return {
+          t: 'file',
+          bytes,
+          type,
+          name: f.name,
+          lastModified: f.lastModified,
+        };
       }
       return { t: 'blob', bytes, type };
     }
@@ -382,17 +560,31 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       const e = value as DOMException;
       return { t: 'domexception', name: e.name, message: e.message };
     }
-    for (let p = Object.getPrototypeOf(value); p; p = Object.getPrototypeOf(p)) {
+    for (
+      let p = Object.getPrototypeOf(value);
+      p;
+      p = Object.getPrototypeOf(p)
+    ) {
       const name = geometry.get(p);
-      if (name) return { t: 'geom', name, json: (value as { toJSON(): object }).toJSON() };
+      if (name)
+        return {
+          t: 'geom',
+          name,
+          json: (value as { toJSON(): object }).toJSON(),
+        };
     }
     throw dataCloneError(`${typeName(value)} object could not be cloned.`);
   }
 
   // Per received message: the MessagePort wrappers (created once, shared by event.ports and the data) and the
   // ImageBitmap tokens imported from it.
-  const received = new WeakMap<object, { ports: MessagePort[]; imported: Set<number> }>();
-  const receiveState = (portIds: number[]): { ports: MessagePort[]; imported: Set<number> } => {
+  const received = new WeakMap<
+    object,
+    { ports: MessagePort[]; imported: Set<number> }
+  >();
+  const receiveState = (
+    portIds: number[],
+  ): { ports: MessagePort[]; imported: Set<number> } => {
     let s = received.get(portIds);
     if (!s) {
       s = { ports: portIds.map(wrapPort), imported: new Set() };
@@ -410,26 +602,43 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
         return p;
       }
       case 'bitmap': {
-        if (!image) throw dataCloneError('ImageBitmap is not available in this global.');
+        if (!image)
+          throw dataCloneError('ImageBitmap is not available in this global.');
         const token = tokens[d.i as number];
-        if (token === undefined) throw dataCloneError('A transferred ImageBitmap is missing.');
+        if (token === undefined)
+          throw dataCloneError('A transferred ImageBitmap is missing.');
         receiveState(portIds).imported.add(token);
         return image.clone.importBitmap({ iwnImageBitmap: token });
       }
       case 'imagedata':
-        if (!ImageDataCtor) throw dataCloneError('ImageData is not available in this global.');
-        return new ImageDataCtor(d.data as Uint8ClampedArray, d.w as number, d.h as number, { colorSpace: d.cs });
+        if (!ImageDataCtor)
+          throw dataCloneError('ImageData is not available in this global.');
+        return new ImageDataCtor(
+          d.data as Uint8ClampedArray,
+          d.w as number,
+          d.h as number,
+          { colorSpace: d.cs },
+        );
       case 'blob':
         return G.blobFromBytes(d.bytes as Uint8Array, d.type as string);
       case 'file':
-        if (!FileCtor) return G.blobFromBytes(d.bytes as Uint8Array, d.type as string);
-        return new FileCtor([d.bytes], d.name as string, { type: d.type, lastModified: d.lastModified });
+        if (!FileCtor)
+          return G.blobFromBytes(d.bytes as Uint8Array, d.type as string);
+        return new FileCtor([d.bytes], d.name as string, {
+          type: d.type,
+          lastModified: d.lastModified,
+        });
       case 'domexception':
         return domException(d.message as string, d.name as string);
       case 'geom': {
         const ctor = g[d.name as string] as AnyRecord | undefined;
-        const from = ctor && (ctor.fromMatrix ?? ctor.fromPoint ?? ctor.fromRect ?? ctor.fromQuad);
-        if (typeof from !== 'function') throw dataCloneError(`${String(d.name)} is not available in this global.`);
+        const from =
+          ctor &&
+          (ctor.fromMatrix ?? ctor.fromPoint ?? ctor.fromRect ?? ctor.fromQuad);
+        if (typeof from !== 'function')
+          throw dataCloneError(
+            `${String(d.name)} is not available in this global.`,
+          );
         return (from as (o: object) => object).call(ctor, d.json as object);
       }
       default:
@@ -442,14 +651,24 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
   const hostPrototypes: object[] = [];
   const known = new Set<object>();
   const addProto = (p: unknown): void => {
-    if (p && (typeof p === 'object' || typeof p === 'function') && !known.has(p as object)) {
+    if (
+      p &&
+      (typeof p === 'object' || typeof p === 'function') &&
+      !known.has(p as object)
+    ) {
       known.add(p as object);
       hostPrototypes.push(p as object);
     }
   };
   addProto(MessagePort.prototype);
   for (const name of Object.getOwnPropertyNames(global)) {
-    if (ES_GLOBALS.has(name) || name === 'WebAssembly' || name === 'Intl' || name === 'Atomics') continue;
+    if (
+      ES_GLOBALS.has(name) ||
+      name === 'WebAssembly' ||
+      name === 'Intl' ||
+      name === 'Atomics'
+    )
+      continue;
     let v: unknown;
     try {
       const desc = Object.getOwnPropertyDescriptor(global, name);
@@ -459,7 +678,8 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
     }
     if (typeof v === 'function' && /^[A-Z]/.test(name)) {
       const proto = (v as { prototype?: unknown }).prototype;
-      if (proto && typeof proto === 'object' && proto !== Object.prototype) addProto(proto);
+      if (proto && typeof proto === 'object' && proto !== Object.prototype)
+        addProto(proto);
     }
   }
 
@@ -487,7 +707,9 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       const desc = Object.getOwnPropertyDescriptor(global, name);
       const v = desc && 'value' in desc ? desc.value : undefined;
       if (typeof v !== 'function' || !/^[A-Z]/.test(name)) continue;
-      const proto = (v as { prototype?: unknown }).prototype as AnyRecord | undefined;
+      const proto = (v as { prototype?: unknown }).prototype as
+        | AnyRecord
+        | undefined;
       if (!proto || typeof proto !== 'object' || known.has(proto)) continue;
       const tag = Object.getOwnPropertyDescriptor(proto, Symbol.toStringTag);
       if (tag && tag.value === name) addProto(proto);
@@ -508,15 +730,23 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
   };
 
   const deviceInfo = (): object | null => {
-    const dev = ((g.__iwn as AnyRecord | undefined)?.device as AnyRecord | undefined)?.info as (() => AnyRecord) | undefined;
+    const dev = (
+      (g.__iwn as AnyRecord | undefined)?.device as AnyRecord | undefined
+    )?.info as (() => AnyRecord) | undefined;
     let d: AnyRecord = {};
     try {
       d = { ...(dev ? dev() : {}) };
     } catch {
       d = {};
     }
-    const cores = typeof d.hardwareConcurrency === 'number' ? (d.hardwareConcurrency as number) : 4;
-    d.hardwareConcurrency = Math.max(1, Math.min(cores, info.hardwareConcurrencyCap));
+    const cores =
+      typeof d.hardwareConcurrency === 'number'
+        ? (d.hardwareConcurrency as number)
+        : 4;
+    d.hardwareConcurrency = Math.max(
+      1,
+      Math.min(cores, info.hardwareConcurrencyCap),
+    );
     return d;
   };
 
@@ -543,22 +773,32 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
         } as { id: number; port: number; dead: boolean };
       };
     }
-    constructor(scriptURL: string | URL, options: { type?: string; name?: string; credentials?: string } = {}) {
+    constructor(
+      scriptURL: string | URL,
+      options: { type?: string; name?: string; credentials?: string } = {},
+    ) {
       if (arguments.length === 0) {
-        throw new TypeError("Failed to construct 'Worker': 1 argument required, but only 0 present.");
+        throw new TypeError(
+          "Failed to construct 'Worker': 1 argument required, but only 0 present.",
+        );
       }
       super();
       const opts = options ?? {};
       const type = opts.type === undefined ? 'classic' : String(opts.type);
       if (type !== 'classic' && type !== 'module') {
-        throw new TypeError(`Failed to construct 'Worker': The provided value '${type}' is not a valid enum value of type WorkerType.`);
+        throw new TypeError(
+          `Failed to construct 'Worker': The provided value '${type}' is not a valid enum value of type WorkerType.`,
+        );
       }
       const name = opts.name === undefined ? '' : String(opts.name);
       let url: URL;
       try {
         url = new (g.URL as typeof URL)(String(scriptURL), baseURL());
       } catch {
-        throw domException(`Failed to construct 'Worker': The URL '${String(scriptURL)}' is invalid.`, 'SyntaxError');
+        throw domException(
+          `Failed to construct 'Worker': The URL '${String(scriptURL)}' is invalid.`,
+          'SyntaxError',
+        );
       }
       let source: Uint8Array | null = null;
       if (url.protocol === 'blob:') {
@@ -574,7 +814,13 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
         }
         source = G.blobBytes(blob);
       }
-      const [id, port] = N.create(url.href, type as 'classic' | 'module', name, source, deviceInfo());
+      const [id, port] = N.create(
+        url.href,
+        type as 'classic' | 'module',
+        name,
+        source,
+        deviceInfo(),
+      );
       this.#id = id;
       this.#port = port;
       workers.set(id, this);
@@ -582,7 +828,9 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
     }
     postMessage(message: unknown, transfer: unknown = undefined): void {
       if (arguments.length === 0) {
-        throw new TypeError("Failed to execute 'postMessage' on 'Worker': 1 argument required, but only 0 present.");
+        throw new TypeError(
+          "Failed to execute 'postMessage' on 'Worker': 1 argument required, but only 0 present.",
+        );
       }
       if (this.#dead) return;
       sendMessage(this.#port, message, transfer, null, 'Worker');
@@ -595,13 +843,23 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       strongTargets.delete(this.#port);
     }
   }
-  Object.defineProperty(Worker.prototype, Symbol.toStringTag, { value: 'Worker', configurable: true });
-  for (const t of ['message', 'messageerror', 'error']) G.events.defineEventHandler(Worker.prototype, t);
+  Object.defineProperty(Worker.prototype, Symbol.toStringTag, {
+    value: 'Worker',
+    configurable: true,
+  });
+  for (const t of ['message', 'messageerror', 'error'])
+    G.events.defineEventHandler(Worker.prototype, t);
 
   // ---------------------------------------------------------------------------------------------------------------
   // Native events
 
-  function reportUnhandledWorkerError(info: { message: string; filename: string; lineno: number; colno: number; label: string }): void {
+  function reportUnhandledWorkerError(info: {
+    message: string;
+    filename: string;
+    lineno: number;
+    colno: number;
+    label: string;
+  }): void {
     // HTML §10.2.5: not cancelled at the Worker object -> report again one level up (this global).
     let notCancelled = true;
     if (ErrorEventCtor) {
@@ -613,14 +871,19 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
         error: null,
         cancelable: true,
       });
-      notCancelled = G.events.dispatchTrusted(global as unknown as EventTarget, ev);
+      notCancelled = G.events.dispatchTrusted(
+        global as unknown as EventTarget,
+        ev,
+      );
     }
     if (!notCancelled) return;
     if (isWorker && N.forwardError) {
       N.forwardError(info.message, info.filename, info.lineno, info.colno);
       return;
     }
-    const where = info.filename ? `\n    at ${info.filename}:${info.lineno}:${info.colno}` : '';
+    const where = info.filename
+      ? `\n    at ${info.filename}:${info.lineno}:${info.colno}`
+      : '';
     log(3, `[${info.label}] Uncaught ${info.message}${where}`);
   }
 
@@ -634,7 +897,9 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
         const state = receiveState(portIds);
         const target = targetOf(port);
         if (target) {
-          const init: MessageEventInit = { ports: state.ports as unknown as MessagePortLike[] } as MessageEventInit;
+          const init: MessageEventInit = {
+            ports: state.ports as unknown as MessagePortLike[],
+          } as MessageEventInit;
           if (kind === 'message') init.data = args[1];
           G.events.dispatchTrusted(target, new MessageEventCtor(kind, init));
         }
@@ -645,7 +910,13 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       }
       case 'error': {
         const w = workers.get(args[0] as number);
-        const info = args[1] as { message: string; filename: string; lineno: number; colno: number; label: string };
+        const info = args[1] as {
+          message: string;
+          filename: string;
+          lineno: number;
+          colno: number;
+          label: string;
+        };
         let notCancelled = true;
         if (w && ErrorEventCtor) {
           const ev = new ErrorEventCtor('error', {
@@ -686,7 +957,12 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
   // Globals
 
   const def = (target: object, name: string, value: unknown): void => {
-    Object.defineProperty(target, name, { value, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(target, name, {
+      value,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   };
   def(global, 'MessagePort', MessagePort);
   def(global, 'MessageChannel', MessageChannel);
@@ -712,7 +988,10 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
           ...d,
           get(this: unknown) {
             const n = Number(orig.call(this));
-            return Math.max(1, Math.min(Number.isFinite(n) ? n : 1, info.hardwareConcurrencyCap));
+            return Math.max(
+              1,
+              Math.min(Number.isFinite(n) ? n : 1, info.hardwareConcurrencyCap),
+            );
           },
         });
         break;
@@ -734,20 +1013,37 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
     const WorkerGlobalScope = function WorkerGlobalScope(): never {
       return illegal();
     } as unknown as { prototype: object };
-    const DedicatedWorkerGlobalScope = function DedicatedWorkerGlobalScope(): never {
-      return illegal();
-    } as unknown as { prototype: object };
+    const DedicatedWorkerGlobalScope =
+      function DedicatedWorkerGlobalScope(): never {
+        return illegal();
+      } as unknown as { prototype: object };
     const current = Object.getPrototypeOf(global) as object | null;
     const wgsProto = Object.create(current);
     const dwgsProto = Object.create(wgsProto);
-    Object.defineProperty(wgsProto, 'constructor', { value: WorkerGlobalScope, writable: true, configurable: true });
-    Object.defineProperty(wgsProto, Symbol.toStringTag, { value: 'WorkerGlobalScope', configurable: true });
-    Object.defineProperty(dwgsProto, 'constructor', { value: DedicatedWorkerGlobalScope, writable: true, configurable: true });
-    Object.defineProperty(dwgsProto, Symbol.toStringTag, { value: 'DedicatedWorkerGlobalScope', configurable: true });
+    Object.defineProperty(wgsProto, 'constructor', {
+      value: WorkerGlobalScope,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(wgsProto, Symbol.toStringTag, {
+      value: 'WorkerGlobalScope',
+      configurable: true,
+    });
+    Object.defineProperty(dwgsProto, 'constructor', {
+      value: DedicatedWorkerGlobalScope,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(dwgsProto, Symbol.toStringTag, {
+      value: 'DedicatedWorkerGlobalScope',
+      configurable: true,
+    });
     WorkerGlobalScope.prototype = wgsProto;
     DedicatedWorkerGlobalScope.prototype = dwgsProto;
     Object.defineProperty(WorkerGlobalScope, 'prototype', { writable: false });
-    Object.defineProperty(DedicatedWorkerGlobalScope, 'prototype', { writable: false });
+    Object.defineProperty(DedicatedWorkerGlobalScope, 'prototype', {
+      writable: false,
+    });
 
     const module = info.type === 'module';
     const methods = {
@@ -757,7 +1053,13 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
             "Failed to execute 'postMessage' on 'DedicatedWorkerGlobalScope': 1 argument required, but only 0 present.",
           );
         }
-        sendMessage(insidePort, message, transfer, null, 'DedicatedWorkerGlobalScope');
+        sendMessage(
+          insidePort,
+          message,
+          transfer,
+          null,
+          'DedicatedWorkerGlobalScope',
+        );
       },
       close(): void {
         N.closeSelf!();
@@ -765,27 +1067,38 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
       importScripts(...urls: unknown[]): void {
         // HTML §10.3.4: module workers throw; classic workers fetch and run each URL in order, synchronously.
         if (module) {
-          throw new TypeError("Failed to execute 'importScripts' on 'WorkerGlobalScope': Module scripts don't support importScripts().");
+          throw new TypeError(
+            "Failed to execute 'importScripts' on 'WorkerGlobalScope': Module scripts don't support importScripts().",
+          );
         }
         const base = info.url ?? '';
         const resolved = urls.map((u) => {
           try {
             return new (g.URL as typeof URL)(String(u), base).href;
           } catch {
-            throw domException(`Failed to execute 'importScripts' on 'WorkerGlobalScope': The URL '${String(u)}' is invalid.`, 'SyntaxError');
+            throw domException(
+              `Failed to execute 'importScripts' on 'WorkerGlobalScope': The URL '${String(u)}' is invalid.`,
+              'SyntaxError',
+            );
           }
         });
         const sources = resolved.map((href) => {
           if (href.startsWith('blob:')) {
             const blob = G.blobUrls.resolve(href);
             if (!blob) {
-              throw domException(`Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at '${href}' failed to load.`, 'NetworkError');
+              throw domException(
+                `Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at '${href}' failed to load.`,
+                'NetworkError',
+              );
             }
-            return new (g.TextDecoder as typeof TextDecoder)().decode(G.blobBytes(blob));
+            return new (g.TextDecoder as typeof TextDecoder)().decode(
+              G.blobBytes(blob),
+            );
           }
           return N.readScript!(href);
         });
-        for (let i = 0; i < resolved.length; i++) N.evalScript!(sources[i]!, resolved[i]!);
+        for (let i = 0; i < resolved.length; i++)
+          N.evalScript!(sources[i]!, resolved[i]!);
       },
     };
     def(dwgsProto, 'postMessage', methods.postMessage);
@@ -797,9 +1110,15 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
     });
     def(wgsProto, 'importScripts', methods.importScripts);
     // The native stubs defined these as own properties before the preludes ran; the prototype versions replace them.
-    for (const n of ['importScripts', 'WorkerGlobalScope', 'DedicatedWorkerGlobalScope']) delete (global as AnyRecord)[n];
+    for (const n of [
+      'importScripts',
+      'WorkerGlobalScope',
+      'DedicatedWorkerGlobalScope',
+    ])
+      delete (global as AnyRecord)[n];
     // Window-only members the core bootstrap installs everywhere (HTML: requestIdleCallback is a Window API).
-    for (const n of ['requestIdleCallback', 'cancelIdleCallback']) delete (global as AnyRecord)[n];
+    for (const n of ['requestIdleCallback', 'cancelIdleCallback'])
+      delete (global as AnyRecord)[n];
     def(global, 'WorkerGlobalScope', WorkerGlobalScope);
     def(global, 'DedicatedWorkerGlobalScope', DedicatedWorkerGlobalScope);
     Object.setPrototypeOf(global, dwgsProto);
@@ -811,7 +1130,12 @@ export function installWorkers(global: typeof globalThis, options: InstallWorker
     info: () => N.info(),
     stats: () => N.stats(),
   };
-  Object.defineProperty(global, REGISTRY_KEY, { value: registry, configurable: true, enumerable: false, writable: false });
+  Object.defineProperty(global, REGISTRY_KEY, {
+    value: registry,
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
   return registry;
 }
 

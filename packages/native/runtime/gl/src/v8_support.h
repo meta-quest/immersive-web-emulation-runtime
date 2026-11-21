@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Helpers shared by the generated natives (generated/gl_natives.gen.cc) and the hand-written V8 glue.
 // Compiles against V8 15.5 (device) and the V8 that ships inside Node 24 (13.6, host test addon).
 //

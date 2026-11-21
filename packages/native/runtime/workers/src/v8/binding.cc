@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The workers module's V8 binding: iwn_register_workers (NATIVE MODULE CONTRACT) installs globalThis.__iwn.workers
 // in the page and in every worker global. JS side: web/workers (Worker, MessageChannel, MessagePort, the worker
 // global's postMessage/close/importScripts). Spec: 05-workers.md (WRK-1..12), JS-2, PROC-7, CC-5.

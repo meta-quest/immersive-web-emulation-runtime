@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The XR frame record (docs/spec/09, XRF-1..7), V8-free. One block of native memory, allocated once per process,
 // that the XR thread writes before each XR frame and JS reads in place through typed-array views over an
 // ArrayBuffer with an external backing store (the V8 sandbox is off). Offsets come from the generated layout

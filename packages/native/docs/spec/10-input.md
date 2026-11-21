@@ -21,7 +21,7 @@ WebXR reaches its input-state slot (IN-2): grip and aim poses, trigger value/tou
 thumbstick x/y/click/touch, A/X and B/Y click/touch, thumbrest touch, the left menu button, and haptics
 (IN-7). The poses a frame's callbacks see are located for that frame's predicted display time, and button
 and axis values are no older than that frame.
-*Check:* each control on a Quest 3 Touch Plus controller (and a Touch Pro where one is available) changes the
+_Check:_ each control on a Quest 3 Touch Plus controller (and a Touch Pro where one is available) changes the
 matching state slot (debug-endpoint probe of the gamepad); a controller held still in front of the headset
 while the head turns does not lag or swim (human check).
 
@@ -33,13 +33,13 @@ untracked (`getPose` → `null`). The tracked flags are not passed on: host spac
 `emulatedPosition: false` (HOST-INPUT.md); whether a merely inferred (valid but not tracked) position
 should count as emulated is part of README open question 6. Profiles reported to
 the app match Quest Browser's list for the connected controller model.
-*Check:* compare `inputSource.profiles`, button count, axes with Quest Browser on the same controller.
+_Check:_ compare `inputSource.profiles`, button count, axes with Quest Browser on the same controller.
 
 **IN-3 (MUST).** `pressed` for analog buttons uses Quest Browser's thresholds with hysteresis (trigger and
 squeeze; measured in Quest Browser and recorded here before M3), `touched` is true whenever pressed, and
 digital buttons map their click action. A held button at the moment a source appears raises no press until
 the next frame (HOST-INPUT).
-*Check:* sweep the trigger slowly: `selectstart`/`selectend` values match Quest Browser within ±0.05.
+_Check:_ sweep the trigger slowly: `selectstart`/`selectend` values match Quest Browser within ±0.05.
 
 **IN-4 (MUST).** Source switching follows the interaction profile the runtime reports per hand, as in Quest
 Browser: controllers listed while a controller profile (Touch, Touch Plus, Touch Pro) is active for that hand;
@@ -49,7 +49,7 @@ from the hand's aim, grip from the palm, select from the pinch, no joints); neit
 suggests bindings for the hand interaction profile and not for `khr/simple_controller`, which Horizon OS
 otherwise binds tracked hands to. A switch produces one `inputsourceschange` with removed/added (IWER does
 this on mode change).
-*Check:* while wearing the headset, set the controllers down until hands are listed, then pick them up
+_Check:_ while wearing the headset, set the controllers down until hands are listed, then pick them up
 again; the app logs exactly one `inputsourceschange` per transition, with the controllers removed and the
 hands added (and the reverse). This is a human step; until someone performs it, the check is recorded as
 not yet run.
@@ -58,7 +58,7 @@ not yet run.
 
 **IN-5 (MUST).** With `hand-tracking` enabled, `XR_EXT_hand_tracking` joints are located once per frame relative to the frame's base space; OpenXR joint i+1 → WebXR joint i (OpenXR's 26 joints minus the palm, which becomes the palm pose; WebXR has 25); radii
 passed through; per-joint validity from the location flags.
-*Check:* `frame.fillPoses(hand.values(), ref, buf)` returns true with all 25 joints tracked while both
+_Check:_ `frame.fillPoses(hand.values(), ref, buf)` returns true with all 25 joints tracked while both
 hands are visible; joint positions match the real hand (human check).
 
 **IN-6 (MUST).** Hand gamepad and select: index-pinch drives button 0 (`pressed` from the runtime's pinch
@@ -69,7 +69,7 @@ are the microgestures (swipe left, swipe right, swipe forward, swipe backward, t
 runtime reports the gesture), the order Quest Browser reports them in. Slots 1-3 stay empty. The aim
 pose from `XR_FB_hand_tracking_aim` is the target ray when present (else a documented derivation from the
 joints). The grip pose of a hand is the palm (HOST-INPUT: palm stands in when grip is invalid).
-*Check:* the menu slot reports pressed at the moment the left-hand system gesture completes; index pinch fires
+_Check:_ the menu slot reports pressed at the moment the left-hand system gesture completes; index pinch fires
 `select*`; a thumb swipe or tap presses its button for the frames the runtime reports it; objects attached to
 the hand grip follow the palm.
 
@@ -79,15 +79,15 @@ the hand grip follow the palm.
 vibration to that hand (amplitude = intensity, duration, `XR_FREQUENCY_UNSPECIFIED` when 0); a new pulse
 replaces a running one; `pulse()` resolves `true` after the duration (or at once, per HOST-INPUT, if the
 runtime returns no promise; pick one and document). Hands have no actuators.
-*Check:* `gamepad.hapticActuators[0].pulse(1, 100)` buzzes the right controller for ~100 ms.
+_Check:_ `gamepad.hapticActuators[0].pulse(1, 100)` buzzes the right controller for ~100 ms.
 
 ## Non-XR input
 
 **IN-8 (withdrawn for this release).** There is no 2D panel mode (XR-IDLE), so no touch/mouse →
 Pointer Events path is required. If a panel mode is added later (README open question 11), this ID is
 reused for its pointer and keyboard events.
-*Check:* none while withdrawn.
+_Check:_ none while withdrawn.
 
 **IN-9 (MUST).** `navigator.getGamepads()` returns an empty list (XR gamepads are not listed there, as in
 browsers).
-*Check:* test.
+_Check:_ test.

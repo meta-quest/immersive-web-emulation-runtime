@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # runtime/app: libiwernative.so, the library the template APK's NativeActivity loads (android.app.lib_name).
 # Links the core and every registered native module; writes apk-libs.txt listing the shared libraries the APK
 # must carry (this library, libv8android.so, libc++_shared.so, plus anything modules add with

@@ -10,7 +10,12 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, describe, test } from 'node:test';
-import { decodePng, encodePng, placeholderIcon, type RgbaImage } from '../src/png.ts';
+import {
+  decodePng,
+  encodePng,
+  placeholderIcon,
+  type RgbaImage,
+} from '../src/png.ts';
 import {
   buildSplash,
   CARD_HEIGHT,
@@ -116,7 +121,9 @@ describe('rasterizer', () => {
     const rev = tri.map(([a, b, c, d]) => [c, d, a, b]).reverse() as typeof tri;
     assert.ok(Math.abs(area(rasterize(rev, 20, 20)) - 54) < 0.3);
     // Shapes partly outside the mask are clipped, not wrapped.
-    assert.ok(Math.abs(area(rasterize(square(-5, -5, 5, 5), 20, 20)) - 25) < 0.01);
+    assert.ok(
+      Math.abs(area(rasterize(square(-5, -5, 5, 5), 20, 20)) - 25) < 0.01,
+    );
   });
 
   test('text: ink where the advances say, with anti-aliased edges', () => {
@@ -136,7 +143,9 @@ describe('rasterizer', () => {
     // Cap height 1456/2048 of 64 px above the baseline at y = 60: the "I" stem spans rows ~15..59.
     const stem = font.outline(font.glyphId('I'.codePointAt(0)!))[0];
     const xs = stem.map((p) => p.x);
-    const sx = Math.round(10 + ((Math.min(...xs) + Math.max(...xs)) / 2) * (64 / 2048));
+    const sx = Math.round(
+      10 + ((Math.min(...xs) + Math.max(...xs)) / 2) * (64 / 2048),
+    );
     assert.ok(m.data[20 * 260 + sx] > 200 && m.data[58 * 260 + sx] > 200);
     assert.equal(m.data[62 * 260 + sx], 0);
     assert.equal(m.data[12 * 260 + sx], 0);
@@ -165,7 +174,8 @@ describe('generated splash card', () => {
     assert.ok(Math.abs((box.x0 + box.x1) / 2 - CARD_WIDTH / 2) < 4);
     assert.ok(Math.abs((box.y0 + box.y1) / 2 - CARD_HEIGHT / 2) < 24);
     // The icon (opaque, blue) at the top centre, white text below it.
-    const icon = (x: number, y: number) => img.data.slice((y * img.width + x) * 4, (y * img.width + x) * 4 + 4);
+    const icon = (x: number, y: number) =>
+      img.data.slice((y * img.width + x) * 4, (y * img.width + x) * 4 + 4);
     const blue = icon(CARD_WIDTH / 2 - 60, box.y0 + 40);
     assert.equal(blue[3], 255);
     assert.ok(blue[2] > 150 && blue[0] < 60, `icon pixel ${[...blue]}`);
@@ -194,13 +204,24 @@ describe('generated splash card', () => {
       ['ショーケース', font],
       ['Showcase', null],
     ] as const) {
-      const card = renderSplashCard({ appName, icon: placeholderIcon(256), font: f });
+      const card = renderSplashCard({
+        appName,
+        icon: placeholderIcon(256),
+        font: f,
+      });
       assert.equal(card.text, null);
       assert.equal(card.warnings.length, 1);
       const box = inkBox(card.image);
-      assert.ok(box.x1 - box.x0 + 1 === 256 && box.y1 - box.y0 + 1 === 256, JSON.stringify(box));
+      assert.ok(
+        box.x1 - box.x0 + 1 === 256 && box.y1 - box.y0 + 1 === 256,
+        JSON.stringify(box),
+      );
     }
-    const nameOnly = renderSplashCard({ appName: 'Proto Showcase VR', icon: null, font });
+    const nameOnly = renderSplashCard({
+      appName: 'Proto Showcase VR',
+      icon: null,
+      font,
+    });
     assert.equal(nameOnly.fontPx, 104);
     assert.equal(nameOnly.icon, false);
   });
@@ -223,9 +244,18 @@ describe('buildSplash', () => {
     assert.equal(r.width, 64);
     assert.deepEqual(r.warnings, []);
     const big = path.join(scratch, 'big.png');
-    writeFileSync(big, encodePng({ width: 1600, height: 8, data: new Uint8Array(1600 * 8 * 4) }));
+    writeFileSync(
+      big,
+      encodePng({ width: 1600, height: 8, data: new Uint8Array(1600 * 8 * 4) }),
+    );
     assert.match(
-      buildSplash({ appName: 'x', iconFile: null, defaultIcon: null, imageFile: big, fontBytes: null }).warnings[0],
+      buildSplash({
+        appName: 'x',
+        iconFile: null,
+        defaultIcon: null,
+        imageFile: big,
+        fontBytes: null,
+      }).warnings[0],
       /1600x8; Meta recommends at most 1500x1500/,
     );
   });
@@ -234,21 +264,43 @@ describe('buildSplash', () => {
     const file = path.join(scratch, 'splash-not.png');
     writeFileSync(file, 'GIF89a');
     assert.throws(
-      () => buildSplash({ appName: 'x', iconFile: null, defaultIcon: null, imageFile: file, fontBytes: null }),
+      () =>
+        buildSplash({
+          appName: 'x',
+          iconFile: null,
+          defaultIcon: null,
+          imageFile: file,
+          fontBytes: null,
+        }),
       SplashError,
     );
     const huge = path.join(scratch, 'huge.png');
-    writeFileSync(huge, encodePng({ width: 4097, height: 2, data: new Uint8Array(4097 * 2 * 4) }));
+    writeFileSync(
+      huge,
+      encodePng({ width: 4097, height: 2, data: new Uint8Array(4097 * 2 * 4) }),
+    );
     assert.throws(
-      () => buildSplash({ appName: 'x', iconFile: null, defaultIcon: null, imageFile: huge, fontBytes: null }),
+      () =>
+        buildSplash({
+          appName: 'x',
+          iconFile: null,
+          defaultIcon: null,
+          imageFile: huge,
+          fontBytes: null,
+        }),
       /4097x2; the runtime takes at most 4096 px per side/,
     );
   });
 
   test('generated from the configured PNG icon; a WebP icon gives the name only', () => {
     const iconFile = path.join(scratch, 'icon.png');
-    const red: RgbaImage = { width: 32, height: 32, data: new Uint8Array(32 * 32 * 4) };
-    for (let i = 0; i < red.data.length; i += 4) red.data.set([230, 20, 20, 255], i);
+    const red: RgbaImage = {
+      width: 32,
+      height: 32,
+      data: new Uint8Array(32 * 32 * 4),
+    };
+    for (let i = 0; i < red.data.length; i += 4)
+      red.data.set([230, 20, 20, 255], i);
     writeFileSync(iconFile, encodePng(red));
     const r = buildSplash({
       appName: 'Red',
@@ -264,8 +316,20 @@ describe('buildSplash', () => {
     const p = (box.y0 + 30) * img.width + CARD_WIDTH / 2;
     assert.deepEqual([...img.data.slice(p * 4, p * 4 + 4)], [230, 20, 20, 255]);
     const webp = path.join(scratch, 'icon.webp');
-    writeFileSync(webp, Buffer.concat([Buffer.from('RIFF\0\0\0\0WEBPVP8 ', 'latin1'), Buffer.alloc(32)]));
-    const w = buildSplash({ appName: 'Red', iconFile: webp, defaultIcon: null, imageFile: null, fontBytes: ROBOTO_BOLD });
+    writeFileSync(
+      webp,
+      Buffer.concat([
+        Buffer.from('RIFF\0\0\0\0WEBPVP8 ', 'latin1'),
+        Buffer.alloc(32),
+      ]),
+    );
+    const w = buildSplash({
+      appName: 'Red',
+      iconFile: webp,
+      defaultIcon: null,
+      imageFile: null,
+      fontBytes: ROBOTO_BOLD,
+    });
     assert.equal(w.icon, false);
     assert.equal(w.text, 'Red');
     assert.match(w.warnings.join('\n'), /icon is WebP/);

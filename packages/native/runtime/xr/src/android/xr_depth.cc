@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Environment depth (xr_depth.h). Written from the XR_META_environment_depth specification: provider and swapchain
 // creation, xrStartEnvironmentDepthProviderMETA, xrAcquireEnvironmentDepthImageMETA
 // (XR_ENVIRONMENT_DEPTH_NOT_AVAILABLE_META until the first image), hand removal, and teardown in reverse order.

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Canvas 2D raster core: surfaces, paints, clip masks and the drawing operations behind CanvasRenderingContext2D.
 // Plain C++ (no V8). The JS layer (web/canvas2d) keeps the context state and the spec semantics (argument
 // validation, save/restore, the current default path); this layer rasterises.

@@ -36,10 +36,14 @@ export function resolveImageURL(src: string, base: string): string {
   let start = 0;
   let end = src.length;
   while (start < end && src.charCodeAt(start) <= 0x20) start++;
-  if (end - start >= 5 && src.slice(start, start + 5).toLowerCase() === 'data:') {
+  if (
+    end - start >= 5 &&
+    src.slice(start, start + 5).toLowerCase() === 'data:'
+  ) {
     while (end > start && src.charCodeAt(end - 1) <= 0x20) end--;
     let s = start === 0 && end === src.length ? src : src.slice(start, end);
-    if (s.indexOf('\t') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) s = s.replace(/[\t\n\r]/g, '');
+    if (s.indexOf('\t') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0)
+      s = s.replace(/[\t\n\r]/g, '');
     return s.startsWith('data:') ? s : 'data:' + s.slice(5);
   }
   return new URL(src, base).href;
@@ -62,7 +66,15 @@ export function forgivingBase64(input: string): Uint8Array | null {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
     const v =
-      c >= 65 && c <= 90 ? c - 65 : c >= 97 && c <= 122 ? c - 71 : c >= 48 && c <= 57 ? c + 4 : c === 43 ? 62 : 63;
+      c >= 65 && c <= 90
+        ? c - 65
+        : c >= 97 && c <= 122
+          ? c - 71
+          : c >= 48 && c <= 57
+            ? c + 4
+            : c === 43
+              ? 62
+              : 63;
     buffer = (buffer << 6) | v;
     bits += 6;
     if (bits >= 8) {
@@ -79,7 +91,11 @@ function percentDecode(s: string): Uint8Array {
   const enc = new TextEncoder();
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
-    if (c === 0x25 && i + 2 < s.length && /^[0-9A-Fa-f]{2}$/.test(s.slice(i + 1, i + 3))) {
+    if (
+      c === 0x25 &&
+      i + 2 < s.length &&
+      /^[0-9A-Fa-f]{2}$/.test(s.slice(i + 1, i + 3))
+    ) {
       bytes.push(parseInt(s.slice(i + 1, i + 3), 16));
       i += 2;
     } else if (c < 0x80) {
@@ -105,7 +121,8 @@ interface DataURLParts {
 
 /** Splits a data: URL (Fetch's data: URL processor, steps before decoding the body). Null when malformed. */
 export function splitDataURL(href: string): DataURLParts | null {
-  if (href.length < 5 || href.slice(0, 5).toLowerCase() !== 'data:') return null;
+  if (href.length < 5 || href.slice(0, 5).toLowerCase() !== 'data:')
+    return null;
   const hash = href.indexOf('#', 5);
   const comma = href.indexOf(',', 5);
   if (comma < 0 || (hash >= 0 && hash < comma)) return null;
@@ -114,11 +131,17 @@ export function splitDataURL(href: string): DataURLParts | null {
   const b64 = /;[\t\n\f\r ]*base64[\t\n\f\r ]*$/i.exec(mime);
   if (b64) mime = mime.slice(0, b64.index);
   if (mime.startsWith(';')) mime = 'text/plain' + mime;
-  return { type: mime.split(';')[0]!.trim().toLowerCase() || 'text/plain', base64: b64 !== null, body };
+  return {
+    type: mime.split(';')[0]!.trim().toLowerCase() || 'text/plain',
+    base64: b64 !== null,
+    body,
+  };
 }
 
 /** Fetch's data: URL processor. Returns null for a malformed URL (the image then fires `error`). */
-export function parseDataURL(href: string): { bytes: Uint8Array; type: string } | null {
+export function parseDataURL(
+  href: string,
+): { bytes: Uint8Array; type: string } | null {
   const parts = splitDataURL(href);
   if (!parts) return null;
   const { body } = parts;
@@ -129,7 +152,8 @@ export function parseDataURL(href: string): { bytes: Uint8Array; type: string } 
       // Rare: percent-encoded base64. Rebuild the text from the decoded bytes in chunks.
       const raw = percentDecode(body);
       const parts: string[] = [];
-      for (let i = 0; i < raw.length; i += 8192) parts.push(String.fromCharCode(...raw.subarray(i, i + 8192)));
+      for (let i = 0; i < raw.length; i += 8192)
+        parts.push(String.fromCharCode(...raw.subarray(i, i + 8192)));
       text = parts.join('');
     }
     const decoded = forgivingBase64(text);
@@ -162,7 +186,8 @@ export async function loadImageBytes(
     if (options.allowBase64 && env.decodeBase64) {
       const parts = splitDataURL(href);
       if (!parts) throw new ImageLoadError('Malformed data: URL');
-      if (parts.base64 && parts.body.indexOf('%') < 0) return { base64: parts.body, type: parts.type, url: href };
+      if (parts.base64 && parts.body.indexOf('%') < 0)
+        return { base64: parts.body, type: parts.type, url: href };
     }
     const parsed = parseDataURL(href);
     if (!parsed) throw new ImageLoadError('Malformed data: URL');
@@ -176,11 +201,21 @@ export async function loadImageBytes(
   if (!env.fetch) throw new ImageLoadError('fetch is not available');
   let response;
   try {
-    response = await env.fetch(href, { credentials: crossOrigin === 'use-credentials' ? 'include' : 'same-origin' });
+    response = await env.fetch(href, {
+      credentials:
+        crossOrigin === 'use-credentials' ? 'include' : 'same-origin',
+    });
   } catch (e) {
-    throw new ImageLoadError(`Network error loading ${href}: ${String((e as Error)?.message ?? e)}`);
+    throw new ImageLoadError(
+      `Network error loading ${href}: ${String((e as Error)?.message ?? e)}`,
+    );
   }
-  if (!response.ok) throw new ImageLoadError(`HTTP ${response.status} loading ${href}`);
+  if (!response.ok)
+    throw new ImageLoadError(`HTTP ${response.status} loading ${href}`);
   const buffer = await response.arrayBuffer();
-  return { bytes: new Uint8Array(buffer), type: response.headers?.get('content-type') ?? '', url: href };
+  return {
+    bytes: new Uint8Array(buffer),
+    type: response.headers?.get('content-type') ?? '',
+    url: href,
+  };
 }

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Android runtime permissions (XR-PERM-1): the ones Horizon OS grants only after its system dialog (USE_SCENE for the
 // Scene API, CAMERA + HEADSET_CAMERA for the passthrough cameras). Activity.requestPermissions shows the dialog;
 // NativeActivity drops onRequestPermissionsResult, so a worker thread polls Context.checkSelfPermission and judges

@@ -13,9 +13,17 @@
 
 import type { NativeImageHandle } from './natives.ts';
 
-export const IMAGE_SOURCE: unique symbol = Symbol.for('iwn.image.source') as never;
+export const IMAGE_SOURCE: unique symbol = Symbol.for(
+  'iwn.image.source',
+) as never;
 
-export type ImageSourceOrigin = 'bitmap' | 'image' | 'imagedata' | 'canvas' | 'webgl-canvas' | 'video';
+export type ImageSourceOrigin =
+  | 'bitmap'
+  | 'image'
+  | 'imagedata'
+  | 'canvas'
+  | 'webgl-canvas'
+  | 'video';
 
 interface DescriptorBase {
   /** What produced it. WebGL ignores UNPACK_FLIP_Y_WEBGL / UNPACK_PREMULTIPLY_ALPHA_WEBGL for 'bitmap' (GL-16). */
@@ -48,7 +56,9 @@ export interface ImageSourceProvider {
   [IMAGE_SOURCE](): ImageSourceDescriptor;
 }
 
-export function isImageSourceProvider(value: unknown): value is ImageSourceProvider {
+export function isImageSourceProvider(
+  value: unknown,
+): value is ImageSourceProvider {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -64,5 +74,9 @@ export function isVideoLike(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) return false;
   if (isImageSourceProvider(value)) return false;
   const name = (value as { constructor?: { name?: string } }).constructor?.name;
-  return name === 'HTMLVideoElement' || name === 'VideoFrame' || 'videoWidth' in value;
+  return (
+    name === 'HTMLVideoElement' ||
+    name === 'VideoFrame' ||
+    'videoWidth' in value
+  );
 }

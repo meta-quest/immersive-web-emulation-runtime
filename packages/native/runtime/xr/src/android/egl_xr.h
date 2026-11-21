@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The XR thread's EGL context (Android). Created in the GL module's share group (runtime/gl: one display, a root
 // ES 3.2 context owning the share group, one context per WebGL context), so the swapchain textures OpenXR creates
 // for this context are GL names every WebGL context can use. This context is the one handed to xrCreateSession

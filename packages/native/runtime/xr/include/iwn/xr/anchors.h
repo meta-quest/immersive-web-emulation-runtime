@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Spatial anchors, the V8-free and OpenXR-call-free part (XR-ANCHOR-1): the slot table the JS thread and the XR thread
 // share, the pose buffer JS reads every frame, and the UUID text form. The Android side (android/xr_anchors.h) makes
 // the OpenXR calls (XR_FB_spatial_entity, _storage, _query) and keeps the handles; this part is unit-tested on the host.

@@ -25,7 +25,8 @@ export const RUNTIME_KEY_PREFIX = '\u0000iwn:';
 
 function quotaError(): DOMException {
   const D = (globalThis as { DOMException?: typeof DOMException }).DOMException;
-  const message = "Failed to execute 'setItem' on 'Storage': Setting the value exceeded the quota.";
+  const message =
+    "Failed to execute 'setItem' on 'Storage': Setting the value exceeded the quota.";
   if (D) return new D(message, 'QuotaExceededError');
   const e = new Error(message);
   e.name = 'QuotaExceededError';
@@ -45,7 +46,11 @@ class Area {
   used = 0;
   quota: number;
   backend: StorageBackend | null;
-  constructor(entries: Iterable<[string, string]>, backend: StorageBackend | null, quota: number) {
+  constructor(
+    entries: Iterable<[string, string]>,
+    backend: StorageBackend | null,
+    quota: number,
+  ) {
     for (const [k, v] of entries) {
       if (k.startsWith(RUNTIME_KEY_PREFIX)) {
         this.runtime.set(k.slice(RUNTIME_KEY_PREFIX.length), v);
@@ -93,7 +98,8 @@ export class Storage {
     value = String(value);
     const old = a.map.get(key);
     if (old === value) return;
-    const delta = old === undefined ? key.length + value.length : value.length - old.length;
+    const delta =
+      old === undefined ? key.length + value.length : value.length - old.length;
     if (a.used + delta > a.quota) throw quotaError();
     a.map.set(key, value);
     a.used += delta;
@@ -128,7 +134,11 @@ export function runtimeItem(storage: Storage, key: string): string | null {
 }
 
 /** Sets (null: removes) a runtime entry of `storage`, persisted with the area. */
-export function setRuntimeItem(storage: Storage, key: string, value: string | null): void {
+export function setRuntimeItem(
+  storage: Storage,
+  key: string,
+  value: string | null,
+): void {
   const a = areaOf(storage);
   if (value === null) {
     if (a.runtime.delete(key)) a.backend?.remove(RUNTIME_KEY_PREFIX + key);
@@ -140,7 +150,11 @@ export function setRuntimeItem(storage: Storage, key: string, value: string | nu
 }
 
 const PROTO_KEYS = new Set<string | symbol>();
-for (let p: object | null = Storage.prototype; p; p = Object.getPrototypeOf(p)) {
+for (
+  let p: object | null = Storage.prototype;
+  p;
+  p = Object.getPrototypeOf(p)
+) {
   for (const k of Reflect.ownKeys(p)) PROTO_KEYS.add(k);
 }
 
@@ -158,7 +172,11 @@ export function createStorage(
   AREAS.set(target, area);
   const proxy = new Proxy(target, {
     get(t, prop, receiver) {
-      if (typeof prop === 'symbol' || PROTO_KEYS.has(prop) || !area.map.has(prop)) {
+      if (
+        typeof prop === 'symbol' ||
+        PROTO_KEYS.has(prop) ||
+        !area.map.has(prop)
+      ) {
         return Reflect.get(t, prop, receiver === proxy ? t : receiver);
       }
       return area.map.get(prop);
@@ -183,13 +201,23 @@ export function createStorage(
       return [...area.map.keys(), ...Reflect.ownKeys(t)];
     },
     getOwnPropertyDescriptor(t, prop) {
-      if (typeof prop === 'string' && area.map.has(prop) && !PROTO_KEYS.has(prop)) {
-        return { value: area.map.get(prop), writable: true, enumerable: true, configurable: true };
+      if (
+        typeof prop === 'string' &&
+        area.map.has(prop) &&
+        !PROTO_KEYS.has(prop)
+      ) {
+        return {
+          value: area.map.get(prop),
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        };
       }
       return Reflect.getOwnPropertyDescriptor(t, prop);
     },
     defineProperty(t, prop, desc) {
-      if (typeof prop === 'symbol') return Reflect.defineProperty(t, prop, desc);
+      if (typeof prop === 'symbol')
+        return Reflect.defineProperty(t, prop, desc);
       if ('value' in desc) {
         Storage.prototype.setItem.call(t, prop, desc.value);
         return true;
@@ -203,18 +231,24 @@ export function createStorage(
 }
 
 /** localStorage over the native KV log. */
-export function createLocalStorage(natives: StorageNatives | null, warn: (m: string) => void): Storage {
+export function createLocalStorage(
+  natives: StorageNatives | null,
+  warn: (m: string) => void,
+): Storage {
   if (!natives) return createStorage([], null);
   let opened: ReturnType<StorageNatives['kvOpen']>;
   try {
     opened = natives.kvOpen();
   } catch (e) {
-    warn(`[iwer-native] localStorage: native store unavailable (${String(e)}); using memory only`);
+    warn(
+      `[iwer-native] localStorage: native store unavailable (${String(e)}); using memory only`,
+    );
     return createStorage([], null);
   }
   if (opened.warning) warn(`[iwer-native] localStorage: ${opened.warning}`);
   const pairs: Array<[string, string]> = [];
-  for (let i = 0; i + 1 < opened.entries.length; i += 2) pairs.push([opened.entries[i], opened.entries[i + 1]]);
+  for (let i = 0; i + 1 < opened.entries.length; i += 2)
+    pairs.push([opened.entries[i], opened.entries[i + 1]]);
   return createStorage(
     pairs,
     opened.persistent

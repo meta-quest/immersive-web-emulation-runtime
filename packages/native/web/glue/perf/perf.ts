@@ -12,7 +12,10 @@
 import { createGlueContext, fakeNatives } from '../test/harness.ts';
 
 const { natives } = fakeNatives({
-  clone: { structuredClone: (v: unknown, t: unknown[]) => structuredClone(v, { transfer: t as never }) },
+  clone: {
+    structuredClone: (v: unknown, t: unknown[]) =>
+      structuredClone(v, { transfer: t as never }),
+  },
 });
 const { run } = await createGlueContext({ natives });
 run(`
@@ -33,16 +36,30 @@ const cases: [string, string, number][] = [
   ['atob 4 MB', `atob(b64)`, 250],
   ['structuredClone 20k objects (routed)', `structuredClone(objs)`, 150],
   ['structuredClone 1e6 numbers (routed)', `structuredClone(nums)`, 250],
-  ['  reference: bare hook, 20k objects', `__iwn.clone.structuredClone(objs, [])`, Infinity],
-  ['  reference: bare hook, 1e6 numbers', `__iwn.clone.structuredClone(nums, [])`, Infinity],
+  [
+    '  reference: bare hook, 20k objects',
+    `__iwn.clone.structuredClone(objs, [])`,
+    Infinity,
+  ],
+  [
+    '  reference: bare hook, 1e6 numbers',
+    `__iwn.clone.structuredClone(nums, [])`,
+    Infinity,
+  ],
   ['structuredClone sparse length 1e8', `structuredClone(sparse)`, 50],
-  ['structuredClone 20k objects (JS path)', `structuredClone([objs, new Blob([])])`, 300],
+  [
+    'structuredClone 20k objects (JS path)',
+    `structuredClone([objs, new Blob([])])`,
+    300,
+  ],
 ];
 let failed = 0;
 for (const [name, code, budget] of cases) {
   const ms = run<number>(`best(() => ${code})`);
   const ok = ms <= budget;
   if (!ok) failed++;
-  console.log(`${ok ? 'ok  ' : 'SLOW'} ${name}: ${ms} ms (budget ${budget} ms)`);
+  console.log(
+    `${ok ? 'ok  ' : 'SLOW'} ${name}: ${ms} ms (budget ${budget} ms)`,
+  );
 }
 process.exitCode = failed ? 1 : 0;

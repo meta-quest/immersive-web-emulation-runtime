@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Eye-buffer screenshots for the debug endpoint's `shot` method (docs/spec/14 DBG-SHOT, REG-18: `screencap` is
 // black during an immersive session, so the capture comes from the runtime).
 //

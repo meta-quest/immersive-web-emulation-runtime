@@ -11,7 +11,14 @@
 // elements with no box (0x0) do not fire, as in browsers. IntersectionObserver fires once with
 // isIntersecting: true (there is no viewport to scroll out of).
 
-import { BaseEventTarget, G, queueMicro, queueTask, reportException, viewport } from './env.ts';
+import {
+  BaseEventTarget,
+  G,
+  queueMicro,
+  queueTask,
+  reportException,
+  viewport,
+} from './env.ts';
 import { DOMRectReadOnly } from './geometry.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -47,7 +54,9 @@ export class MutationRecord {
   readonly attributeName: string | null;
   readonly attributeNamespace: string | null;
   readonly oldValue: string | null;
-  constructor(init: Partial<MutationRecord> & { type: string; target: unknown }) {
+  constructor(
+    init: Partial<MutationRecord> & { type: string; target: unknown },
+  ) {
     this.type = init.type;
     this.target = init.target;
     this.addedNodes = makeList(init.addedNodes ?? []);
@@ -75,17 +84,37 @@ function makeList(nodes: unknown[]): unknown[] {
 }
 
 export class MutationObserver {
-  /** @internal */ _callback: (records: MutationRecord[], observer: MutationObserver) => unknown;
+  /** @internal */ _callback: (
+    records: MutationRecord[],
+    observer: MutationObserver,
+  ) => unknown;
   /** @internal */ _records: MutationRecord[] = [];
   /** @internal */ _targets = new Set<object>();
   /** @internal */ _seq = ++observerSeq;
-  constructor(callback: (records: MutationRecord[], observer: MutationObserver) => unknown) {
-    if (typeof callback !== 'function') throw new TypeError("Failed to construct 'MutationObserver': parameter 1 is not of type 'MutationCallback'.");
+  constructor(
+    callback: (
+      records: MutationRecord[],
+      observer: MutationObserver,
+    ) => unknown,
+  ) {
+    if (typeof callback !== 'function')
+      throw new TypeError(
+        "Failed to construct 'MutationObserver': parameter 1 is not of type 'MutationCallback'.",
+      );
     this._callback = callback;
   }
-  observe(target: object, init: Partial<Record<keyof MOOptions, unknown>> = {}): void {
-    if (!target || typeof target !== 'object' || typeof (target as { nodeType?: unknown }).nodeType !== 'number') {
-      throw new TypeError("Failed to execute 'observe' on 'MutationObserver': parameter 1 is not of type 'Node'.");
+  observe(
+    target: object,
+    init: Partial<Record<keyof MOOptions, unknown>> = {},
+  ): void {
+    if (
+      !target ||
+      typeof target !== 'object' ||
+      typeof (target as { nodeType?: unknown }).nodeType !== 'number'
+    ) {
+      throw new TypeError(
+        "Failed to execute 'observe' on 'MutationObserver': parameter 1 is not of type 'Node'.",
+      );
     }
     const o: MOOptions = {
       childList: !!init.childList,
@@ -94,16 +123,38 @@ export class MutationObserver {
       subtree: !!init.subtree,
       attributeOldValue: !!init.attributeOldValue,
       characterDataOldValue: !!init.characterDataOldValue,
-      attributeFilter: Array.isArray(init.attributeFilter) ? (init.attributeFilter as unknown[]).map(String) : null,
+      attributeFilter: Array.isArray(init.attributeFilter)
+        ? (init.attributeFilter as unknown[]).map(String)
+        : null,
     };
-    if (init.attributes === undefined && (init.attributeOldValue !== undefined || init.attributeFilter !== undefined)) o.attributes = true;
-    if (init.characterData === undefined && init.characterDataOldValue !== undefined) o.characterData = true;
+    if (
+      init.attributes === undefined &&
+      (init.attributeOldValue !== undefined ||
+        init.attributeFilter !== undefined)
+    )
+      o.attributes = true;
+    if (
+      init.characterData === undefined &&
+      init.characterDataOldValue !== undefined
+    )
+      o.characterData = true;
     if (!o.childList && !o.attributes && !o.characterData) {
-      throw new TypeError("Failed to execute 'observe' on 'MutationObserver': The options object must set at least one of 'attributes', 'characterData', or 'childList' to true.");
+      throw new TypeError(
+        "Failed to execute 'observe' on 'MutationObserver': The options object must set at least one of 'attributes', 'characterData', or 'childList' to true.",
+      );
     }
-    if (o.attributeOldValue && !o.attributes) throw new TypeError("The options object may only set 'attributeOldValue' to true when 'attributes' is true or not present.");
-    if (o.attributeFilter && !o.attributes) throw new TypeError("The options object may only set 'attributeFilter' when 'attributes' is true or not present.");
-    if (o.characterDataOldValue && !o.characterData) throw new TypeError("The options object may only set 'characterDataOldValue' to true when 'characterData' is true or not present.");
+    if (o.attributeOldValue && !o.attributes)
+      throw new TypeError(
+        "The options object may only set 'attributeOldValue' to true when 'attributes' is true or not present.",
+      );
+    if (o.attributeFilter && !o.attributes)
+      throw new TypeError(
+        "The options object may only set 'attributeFilter' when 'attributes' is true or not present.",
+      );
+    if (o.characterDataOldValue && !o.characterData)
+      throw new TypeError(
+        "The options object may only set 'characterDataOldValue' to true when 'characterData' is true or not present.",
+      );
     let list = registrations.get(target);
     if (!list) {
       list = [];
@@ -177,12 +228,22 @@ function queueRecord(
       if (node !== target && !options.subtree) continue;
       if (type === 'attributes') {
         if (!options.attributes) continue;
-        if (options.attributeFilter && (ns !== null || !options.attributeFilter.includes(name!))) continue;
+        if (
+          options.attributeFilter &&
+          (ns !== null || !options.attributeFilter.includes(name!))
+        )
+          continue;
       }
       if (type === 'characterData' && !options.characterData) continue;
       if (type === 'childList' && !options.childList) continue;
-      const wantsOld = (type === 'attributes' && options.attributeOldValue) || (type === 'characterData' && options.characterDataOldValue);
-      if (!interested.has(observer) || wantsOld) interested.set(observer, wantsOld ? oldValue : (interested.get(observer) ?? null));
+      const wantsOld =
+        (type === 'attributes' && options.attributeOldValue) ||
+        (type === 'characterData' && options.characterDataOldValue);
+      if (!interested.has(observer) || wantsOld)
+        interested.set(
+          observer,
+          wantsOld ? oldValue : (interested.get(observer) ?? null),
+        );
     }
   }
   for (const [observer, old] of interested) {
@@ -207,17 +268,48 @@ function queueRecord(
   }
 }
 
-export function notifyChildList(target: unknown, added: unknown[], removed: unknown[], prev: unknown, next: unknown): void {
+export function notifyChildList(
+  target: unknown,
+  added: unknown[],
+  removed: unknown[],
+  prev: unknown,
+  next: unknown,
+): void {
   if (registrationCount === 0) return;
-  queueRecord('childList', target, null, null, null, added, removed, prev, next);
+  queueRecord(
+    'childList',
+    target,
+    null,
+    null,
+    null,
+    added,
+    removed,
+    prev,
+    next,
+  );
 }
-export function notifyAttribute(target: unknown, name: string, ns: string | null, oldValue: string | null): void {
+export function notifyAttribute(
+  target: unknown,
+  name: string,
+  ns: string | null,
+  oldValue: string | null,
+): void {
   if (registrationCount === 0) return;
   queueRecord('attributes', target, name, ns, oldValue, [], [], null, null);
 }
 export function notifyCharacterData(target: unknown, oldValue: string): void {
   if (registrationCount === 0) return;
-  queueRecord('characterData', target, null, null, oldValue, [], [], null, null);
+  queueRecord(
+    'characterData',
+    target,
+    null,
+    null,
+    oldValue,
+    [],
+    [],
+    null,
+    null,
+  );
 }
 
 // --- ResizeObserver ----------------------------------------------------------------------------------------------
@@ -244,9 +336,15 @@ export class ResizeObserverEntry {
     this.target = target;
     this.contentRect = new DOMRectReadOnly(0, 0, width, height);
     const dpr = typeof G.devicePixelRatio === 'number' ? G.devicePixelRatio : 1;
-    this.borderBoxSize = Object.freeze([new ResizeObserverSize(width, height)]) as ResizeObserverSize[];
-    this.contentBoxSize = Object.freeze([new ResizeObserverSize(width, height)]) as ResizeObserverSize[];
-    this.devicePixelContentBoxSize = Object.freeze([new ResizeObserverSize(width * dpr, height * dpr)]) as ResizeObserverSize[];
+    this.borderBoxSize = Object.freeze([
+      new ResizeObserverSize(width, height),
+    ]) as ResizeObserverSize[];
+    this.contentBoxSize = Object.freeze([
+      new ResizeObserverSize(width, height),
+    ]) as ResizeObserverSize[];
+    this.devicePixelContentBoxSize = Object.freeze([
+      new ResizeObserverSize(width * dpr, height * dpr),
+    ]) as ResizeObserverSize[];
   }
   get [Symbol.toStringTag](): string {
     return 'ResizeObserverEntry';
@@ -264,16 +362,30 @@ function boxOf(target: any): { width: number; height: number } {
 }
 
 export class ResizeObserver {
-  /** @internal */ _callback: (entries: ResizeObserverEntry[], observer: ResizeObserver) => unknown;
+  /** @internal */ _callback: (
+    entries: ResizeObserverEntry[],
+    observer: ResizeObserver,
+  ) => unknown;
   /** @internal */ _observed = new Set<object>();
   /** @internal */ _pending = new Set<object>();
   /** @internal */ _scheduled = false;
-  constructor(callback: (entries: ResizeObserverEntry[], observer: ResizeObserver) => unknown) {
-    if (typeof callback !== 'function') throw new TypeError("Failed to construct 'ResizeObserver': parameter 1 is not of type 'ResizeObserverCallback'.");
+  constructor(
+    callback: (
+      entries: ResizeObserverEntry[],
+      observer: ResizeObserver,
+    ) => unknown,
+  ) {
+    if (typeof callback !== 'function')
+      throw new TypeError(
+        "Failed to construct 'ResizeObserver': parameter 1 is not of type 'ResizeObserverCallback'.",
+      );
     this._callback = callback;
   }
   observe(target: object, _options?: unknown): void {
-    if (!target || typeof target !== 'object') throw new TypeError("Failed to execute 'observe' on 'ResizeObserver': parameter 1 is not of type 'Element'.");
+    if (!target || typeof target !== 'object')
+      throw new TypeError(
+        "Failed to execute 'observe' on 'ResizeObserver': parameter 1 is not of type 'Element'.",
+      );
     if (this._observed.has(target)) return;
     this._observed.add(target);
     this._pending.add(target);
@@ -324,7 +436,8 @@ export class IntersectionObserverEntry {
   constructor(target: unknown) {
     const v = viewport();
     const { width, height } = boxOf(target);
-    this.time = typeof G.performance?.now === 'function' ? G.performance.now() : 0;
+    this.time =
+      typeof G.performance?.now === 'function' ? G.performance.now() : 0;
     this.rootBounds = new DOMRectReadOnly(0, 0, v.width, v.height);
     this.boundingClientRect = new DOMRectReadOnly(0, 0, width, height);
     this.intersectionRect = new DOMRectReadOnly(0, 0, width, height);
@@ -339,17 +452,35 @@ export class IntersectionObserver {
   readonly root: unknown;
   readonly rootMargin: string;
   readonly thresholds: readonly number[];
-  /** @internal */ _callback: (entries: IntersectionObserverEntry[], observer: IntersectionObserver) => unknown;
+  /** @internal */ _callback: (
+    entries: IntersectionObserverEntry[],
+    observer: IntersectionObserver,
+  ) => unknown;
   /** @internal */ _observed = new Set<object>();
   /** @internal */ _pending: IntersectionObserverEntry[] = [];
   /** @internal */ _scheduled = false;
-  constructor(callback: (entries: IntersectionObserverEntry[], observer: IntersectionObserver) => unknown, options: { root?: unknown; rootMargin?: string; threshold?: number | number[] } = {}) {
-    if (typeof callback !== 'function') throw new TypeError("Failed to construct 'IntersectionObserver': parameter 1 is not of type 'IntersectionObserverCallback'.");
+  constructor(
+    callback: (
+      entries: IntersectionObserverEntry[],
+      observer: IntersectionObserver,
+    ) => unknown,
+    options: {
+      root?: unknown;
+      rootMargin?: string;
+      threshold?: number | number[];
+    } = {},
+  ) {
+    if (typeof callback !== 'function')
+      throw new TypeError(
+        "Failed to construct 'IntersectionObserver': parameter 1 is not of type 'IntersectionObserverCallback'.",
+      );
     this._callback = callback;
     this.root = options.root ?? null;
     this.rootMargin = options.rootMargin ?? '0px 0px 0px 0px';
     const t = options.threshold ?? 0;
-    this.thresholds = Object.freeze((Array.isArray(t) ? t : [t]).map(Number).sort((a, b) => a - b));
+    this.thresholds = Object.freeze(
+      (Array.isArray(t) ? t : [t]).map(Number).sort((a, b) => a - b),
+    );
   }
   observe(target: object): void {
     if (this._observed.has(target)) return;

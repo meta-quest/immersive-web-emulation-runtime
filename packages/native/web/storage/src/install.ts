@@ -16,33 +16,61 @@
 // makes them durable before exit (runtime/storage, iwn_storage_flush_all).
 
 import type { StorageNatives } from './natives.ts';
-import { createLocalStorage, createStorage, runtimeItem, setRuntimeItem, Storage } from './web-storage.ts';
+import {
+  createLocalStorage,
+  createStorage,
+  runtimeItem,
+  setRuntimeItem,
+  Storage,
+} from './web-storage.ts';
 
 export interface InstallStorageOptions {
   natives?: StorageNatives | null;
   warn?: (message: string) => void;
 }
 
-export function nativesFrom(g: typeof globalThis, opts: InstallStorageOptions): StorageNatives | null {
+export function nativesFrom(
+  g: typeof globalThis,
+  opts: InstallStorageOptions,
+): StorageNatives | null {
   if (opts.natives !== undefined) return opts.natives;
   return (g as { __iwn?: { storage?: StorageNatives } }).__iwn?.storage ?? null;
 }
 
-export function define(g: object, name: string, value: unknown, getter = false): void {
-  Object.defineProperty(g, name, getter ? { get: () => value, configurable: true, enumerable: true } : { value, writable: true, configurable: true, enumerable: false });
+export function define(
+  g: object,
+  name: string,
+  value: unknown,
+  getter = false,
+): void {
+  Object.defineProperty(
+    g,
+    name,
+    getter
+      ? { get: () => value, configurable: true, enumerable: true }
+      : { value, writable: true, configurable: true, enumerable: false },
+  );
 }
 
 /**
  * Adds methods to navigator.storage: on the glue's StorageManager prototype when there is one (replacing
  * its placeholders), else on a plain object.
  */
-export function installStorageManagerMethods(nav: Record<string, unknown>, methods: Record<string, () => Promise<unknown>>): void {
+export function installStorageManagerMethods(
+  nav: Record<string, unknown>,
+  methods: Record<string, () => Promise<unknown>>,
+): void {
   const existing = nav.storage as Record<string, unknown> | undefined;
   if (existing && typeof existing === 'object') {
     const proto = Object.getPrototypeOf(existing) as Record<string, unknown>;
     const target = proto && proto !== Object.prototype ? proto : existing;
     for (const [k, fn] of Object.entries(methods)) {
-      Object.defineProperty(target, k, { value: fn, writable: true, configurable: true, enumerable: true });
+      Object.defineProperty(target, k, {
+        value: fn,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
     }
   } else {
     define(nav, 'storage', { ...methods }, true);
@@ -50,9 +78,13 @@ export function installStorageManagerMethods(nav: Record<string, unknown>, metho
 }
 
 /** Window globals only (workers have no Web Storage). */
-export function installStorage(g: typeof globalThis, opts: InstallStorageOptions = {}): string[] {
+export function installStorage(
+  g: typeof globalThis,
+  opts: InstallStorageOptions = {},
+): string[] {
   const natives = nativesFrom(g, opts);
-  const warn = opts.warn ?? ((m: string) => (g as { console?: Console }).console?.warn(m));
+  const warn =
+    opts.warn ?? ((m: string) => (g as { console?: Console }).console?.warn(m));
   const installed: string[] = [];
   let local: Storage | null = null;
   let session: Storage | null = null;
@@ -72,14 +104,18 @@ export function installStorage(g: typeof globalThis, opts: InstallStorageOptions
   // Other preludes keep runtime state the page must not clear in localStorage's runtime entries (web/xr: the app's
   // persistent anchors, as Quest Browser keeps them per origin).
   define(g, '__iwnRuntimeStorage', {
-    getItem: (key: string) => runtimeItem((local ??= createLocalStorage(natives, warn)), key),
-    setItem: (key: string, value: string | null) => setRuntimeItem((local ??= createLocalStorage(natives, warn)), key, value),
+    getItem: (key: string) =>
+      runtimeItem((local ??= createLocalStorage(natives, warn)), key),
+    setItem: (key: string, value: string | null) =>
+      setRuntimeItem((local ??= createLocalStorage(natives, warn)), key, value),
   });
 
-  const nav = (g as unknown as { navigator?: Record<string, unknown> }).navigator;
+  const nav = (g as unknown as { navigator?: Record<string, unknown> })
+    .navigator;
   if (nav) {
     const estimate = (): Promise<{ usage: number; quota: number }> => {
-      if (!natives) return Promise.resolve({ usage: 0, quota: 5 * 1024 * 1024 });
+      if (!natives)
+        return Promise.resolve({ usage: 0, quota: 5 * 1024 * 1024 });
       try {
         const e = natives.estimate();
         return Promise.resolve({ usage: e.usage, quota: e.quota });
@@ -94,10 +130,10 @@ export function installStorage(g: typeof globalThis, opts: InstallStorageOptions
   // Flush (non-blocking) when the page goes to the background.
   const doc = (g as { document?: EventTarget }).document;
   const flush = () => natives?.kvFlush();
-  if (doc && typeof doc.addEventListener === 'function') doc.addEventListener('visibilitychange', flush);
+  if (doc && typeof doc.addEventListener === 'function')
+    doc.addEventListener('visibilitychange', flush);
   if (typeof (g as unknown as EventTarget).addEventListener === 'function') {
     (g as unknown as EventTarget).addEventListener('pagehide', flush);
   }
   return installed;
 }
-

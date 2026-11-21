@@ -46,7 +46,12 @@ function done(tx: IDBTransaction): Promise<void> {
 const db = await open();
 if (mode === 'write' || mode === 'crash') {
   const tx = db.transaction('saves', 'readwrite');
-  tx.objectStore('saves').put({ id: 'slot1', level: 3, data: new Uint8Array([1, 2, 3]), at: new Date(0) });
+  tx.objectStore('saves').put({
+    id: 'slot1',
+    level: 3,
+    data: new Uint8Array([1, 2, 3]),
+    at: new Date(0),
+  });
   tx.objectStore('saves').put({ id: 'slot2', level: 7, data: 'text' });
   await done(tx);
   if (mode === 'crash') {
@@ -61,13 +66,18 @@ if (mode === 'write' || mode === 'crash') {
 } else {
   const tx = db.transaction('saves', 'readonly');
   const all = await req(tx.objectStore('saves').getAll());
-  const byLevel = await req(tx.objectStore('saves').index('byLevel').getAll(IDBKeyRange.lowerBound(5)));
+  const byLevel = await req(
+    tx.objectStore('saves').index('byLevel').getAll(IDBKeyRange.lowerBound(5)),
+  );
   console.log(
     JSON.stringify({
       ids: (all as Array<{ id: string }>).map((r) => r.id),
       slot1: (all as Array<{ id: string; data: unknown; at: unknown }>)
         .filter((r) => r.id === 'slot1')
-        .map((r) => ({ bytes: [...(r.data as Uint8Array)], date: (r.at as Date).getTime?.() })),
+        .map((r) => ({
+          bytes: [...(r.data as Uint8Array)],
+          date: (r.at as Date).getTime?.(),
+        })),
       highLevel: (byLevel as Array<{ id: string }>).map((r) => r.id),
     }),
   );

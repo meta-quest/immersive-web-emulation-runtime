@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Minimal JSON (RFC 8259) for the runtime config, CDP message routing and the debug endpoint. Not for page code.
 #pragma once
 

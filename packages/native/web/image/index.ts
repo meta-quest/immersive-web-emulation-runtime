@@ -9,8 +9,17 @@
 // Spec IDs: IMG-1..IMG-7, NET-12 (data: images), NET-14/15 (blob: images), GL-16/GL-17 (source protocol), WRK-5
 // (ImageBitmap/ImageData clone + transfer hooks).
 
-export { installImage, IMAGE_REGISTRY_KEY, type ImageRegistry, type InstallImageOptions } from './install.ts';
-export { createImageEnv, type ImageEnv, type ImageEnvOverrides } from './env.ts';
+export {
+  installImage,
+  IMAGE_REGISTRY_KEY,
+  type ImageRegistry,
+  type InstallImageOptions,
+} from './install.ts';
+export {
+  createImageEnv,
+  type ImageEnv,
+  type ImageEnvOverrides,
+} from './env.ts';
 export { ImageData, cloneImageData } from './image-data.ts';
 export {
   ImageBitmap,
@@ -22,7 +31,11 @@ export {
   exportBitmap,
   importBitmap,
 } from './image-bitmap.ts';
-export { defineImageElement, imageElementHandle, isImageElement } from './html-image-element.ts';
+export {
+  defineImageElement,
+  imageElementHandle,
+  isImageElement,
+} from './html-image-element.ts';
 export { makeCreateImageBitmap } from './create-image-bitmap.ts';
 export { loadImageBytes, parseDataURL, forgivingBase64 } from './load.ts';
 export {
@@ -35,4 +48,9 @@ export {
   type ImageSourceOrigin,
 } from './source.ts';
 export { getImageSource } from './tex-source.ts';
-export type { ImageNatives, NativeImageHandle, NativeProcessOptions, NativeImageErrorCode } from './natives.ts';
+export type {
+  ImageNatives,
+  NativeImageHandle,
+  NativeProcessOptions,
+  NativeImageErrorCode,
+} from './natives.ts';

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The loading screen's policy, placement, layout and images (see iwn/xr/loading.h). Sources: OpenXR 1.1 §12
 // (composition layers: quad layer pose and size, premultiplied alpha, XR_KHR_composition_layer_color_scale_bias),
 // XR_FB_passthrough (passthrough layers) and XR_META_passthrough_preferences (the system's passthrough

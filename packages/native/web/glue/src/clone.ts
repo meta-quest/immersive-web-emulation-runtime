@@ -59,28 +59,42 @@ export const cloneRegistry = {
 };
 
 function dataCloneError(what: string): DOMException {
-  return domException(`Failed to execute 'structuredClone' on 'Window': ${what} could not be cloned.`, 'DataCloneError');
+  return domException(
+    `Failed to execute 'structuredClone' on 'Window': ${what} could not be cloned.`,
+    'DataCloneError',
+  );
 }
 
 // Brand checks: each one calls an intrinsic that throws on the wrong receiver. Throwing is slow
 // (~4 µs), so serialize() first narrows the candidate with Object.prototype.toString / ArrayBuffer.isView
 // and only calls the matching check, which then succeeds and is cheap.
-const brand = (fn: (v: unknown) => unknown): ((v: unknown) => boolean) => (v) => {
-  try {
-    fn(v);
-    return true;
-  } catch {
-    return false;
-  }
-};
-const getter = (proto: object, name: string | symbol): ((this: unknown) => unknown) =>
-  Object.getOwnPropertyDescriptor(proto, name)!.get! as (this: unknown) => unknown;
+const brand =
+  (fn: (v: unknown) => unknown): ((v: unknown) => boolean) =>
+  (v) => {
+    try {
+      fn(v);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+const getter = (
+  proto: object,
+  name: string | symbol,
+): ((this: unknown) => unknown) =>
+  Object.getOwnPropertyDescriptor(proto, name)!.get! as (
+    this: unknown,
+  ) => unknown;
 
 const abByteLength = getter(ArrayBuffer.prototype, 'byteLength');
 const isArrayBuffer = brand((v) => abByteLength.call(v));
 const sabByteLength =
-  typeof SharedArrayBuffer === 'function' ? getter(SharedArrayBuffer.prototype, 'byteLength') : null;
-const isSharedArrayBuffer = sabByteLength ? brand((v) => sabByteLength.call(v)) : () => false;
+  typeof SharedArrayBuffer === 'function'
+    ? getter(SharedArrayBuffer.prototype, 'byteLength')
+    : null;
+const isSharedArrayBuffer = sabByteLength
+  ? brand((v) => sabByteLength.call(v))
+  : () => false;
 const isBoolean = brand((v) => Boolean.prototype.valueOf.call(v));
 const isNumber = brand((v) => Number.prototype.valueOf.call(v));
 const isString = brand((v) => String.prototype.valueOf.call(v));
@@ -89,23 +103,39 @@ const isSymbolObject = brand((v) => Symbol.prototype.valueOf.call(v));
 const isDate = brand((v) => Date.prototype.getTime.call(v));
 const regexpFlags = getter(RegExp.prototype, 'flags');
 const regexpSource = getter(RegExp.prototype, 'source');
-const isRegExp = (v: object): boolean => v !== RegExp.prototype && brand((x) => regexpSource.call(x))(v);
+const isRegExp = (v: object): boolean =>
+  v !== RegExp.prototype && brand((x) => regexpSource.call(x))(v);
 const mapSize = getter(Map.prototype, 'size');
 const isMap = brand((v) => mapSize.call(v));
 const setSize = getter(Set.prototype, 'size');
 const isSet = brand((v) => setSize.call(v));
 // Returns the typed array's name, or undefined (no throw) for anything else, including DataView.
-const typedArrayTag = getter(Object.getPrototypeOf(Uint8Array.prototype) as object, Symbol.toStringTag);
-const isErrorIntrinsic = (Error as { isError?: (v: unknown) => boolean }).isError;
-const wasmModuleExports = (globalThis as { WebAssembly?: { Module?: { exports(m: unknown): unknown } } }).WebAssembly
-  ?.Module?.exports;
-const isWasmModule = (v: object): boolean => !!wasmModuleExports && brand((x) => wasmModuleExports(x))(v);
+const typedArrayTag = getter(
+  Object.getPrototypeOf(Uint8Array.prototype) as object,
+  Symbol.toStringTag,
+);
+const isErrorIntrinsic = (Error as { isError?: (v: unknown) => boolean })
+  .isError;
+const wasmModuleExports = (
+  globalThis as { WebAssembly?: { Module?: { exports(m: unknown): unknown } } }
+).WebAssembly?.Module?.exports;
+const isWasmModule = (v: object): boolean =>
+  !!wasmModuleExports && brand((x) => wasmModuleExports(x))(v);
 const objectToString = Object.prototype.toString;
-const objectTag = (v: object): string => (objectToString.call(v) as string).slice(8, -1);
+const objectTag = (v: object): string =>
+  (objectToString.call(v) as string).slice(8, -1);
 const getProto = Object.getPrototypeOf;
 const OBJECT_PROTO = Object.prototype;
 const ARRAY_PROTO = Array.prototype;
-const ERROR_NAMES = new Set(['Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError']);
+const ERROR_NAMES = new Set([
+  'Error',
+  'EvalError',
+  'RangeError',
+  'ReferenceError',
+  'SyntaxError',
+  'TypeError',
+  'URIError',
+]);
 // Objects with internal slots V8's serializer refuses (it throws DataCloneError for them, as browsers do).
 const NO_SLOTS_TAGS = new Set([
   'Promise',
@@ -127,10 +157,15 @@ const NO_SLOTS_TAGS = new Set([
   'WebAssembly.Exception',
 ]);
 // Tag-gated forms that do not throw for the common non-matching case.
-const isAB = (v: object): boolean => objectTag(v) === 'ArrayBuffer' && isArrayBuffer(v);
-const isSAB = (v: object): boolean => objectTag(v) === 'SharedArrayBuffer' && isSharedArrayBuffer(v);
+const isAB = (v: object): boolean =>
+  objectTag(v) === 'ArrayBuffer' && isArrayBuffer(v);
+const isSAB = (v: object): boolean =>
+  objectTag(v) === 'SharedArrayBuffer' && isSharedArrayBuffer(v);
 const isCandidateTag = (t: string): boolean =>
-  NO_SLOTS_TAGS.has(t) || t.startsWith('Intl.') || t.endsWith(' Iterator') || t.startsWith('Temporal.');
+  NO_SLOTS_TAGS.has(t) ||
+  t.startsWith('Intl.') ||
+  t.endsWith(' Iterator') ||
+  t.startsWith('Temporal.');
 
 // The built-in prototypes that own those tags. A tag only means "V8 refuses this object" when it comes
 // from one of them: a plain object with its own `Symbol.toStringTag` (a Rollup namespace object, a
@@ -140,10 +175,17 @@ const TAG_OWNERS = new Map<object, ((v: object) => boolean) | null>();
 const TAGLESS = new Map<object, (v: object) => boolean>();
 {
   const G = globalThis as unknown as Record<string, unknown>;
-  const owner = (proto: unknown, check: ((v: object) => boolean) | null = null): void => {
-    if (proto !== null && typeof proto === 'object') TAG_OWNERS.set(proto, check);
+  const owner = (
+    proto: unknown,
+    check: ((v: object) => boolean) | null = null,
+  ): void => {
+    if (proto !== null && typeof proto === 'object')
+      TAG_OWNERS.set(proto, check);
   };
-  const protoOf = (C: unknown): unknown => (typeof C === 'function' ? (C as { prototype: unknown }).prototype : undefined);
+  const protoOf = (C: unknown): unknown =>
+    typeof C === 'function'
+      ? (C as { prototype: unknown }).prototype
+      : undefined;
   const tryGet = (f: () => unknown): unknown => {
     try {
       return f();
@@ -152,44 +194,105 @@ const TAGLESS = new Map<object, (v: object) => boolean>();
     }
   };
   owner(Promise.prototype);
-  owner(WeakMap.prototype, brand((v) => WeakMap.prototype.has.call(v as WeakMap<object, unknown>, OBJECT_PROTO)));
-  owner(WeakSet.prototype, brand((v) => WeakSet.prototype.has.call(v as WeakSet<object>, OBJECT_PROTO)));
+  owner(
+    WeakMap.prototype,
+    brand((v) =>
+      WeakMap.prototype.has.call(v as WeakMap<object, unknown>, OBJECT_PROTO),
+    ),
+  );
+  owner(
+    WeakSet.prototype,
+    brand((v) =>
+      WeakSet.prototype.has.call(v as WeakSet<object>, OBJECT_PROTO),
+    ),
+  );
   const WR = G.WeakRef as { prototype: { deref(): unknown } } | undefined;
-  if (WR) owner(WR.prototype, brand((v) => WR.prototype.deref.call(v)));
-  const FR = G.FinalizationRegistry as { prototype: { unregister(t: object): boolean } } | undefined;
-  if (FR) owner(FR.prototype, brand((v) => FR.prototype.unregister.call(v, {})));
+  if (WR)
+    owner(
+      WR.prototype,
+      brand((v) => WR.prototype.deref.call(v)),
+    );
+  const FR = G.FinalizationRegistry as
+    | { prototype: { unregister(t: object): boolean } }
+    | undefined;
+  if (FR)
+    owner(
+      FR.prototype,
+      brand((v) => FR.prototype.unregister.call(v, {})),
+    );
   // %GeneratorFunction.prototype%.prototype is %GeneratorPrototype% (owns the 'Generator' tag).
-  owner(tryGet(() => (getProto(function* () {}) as { prototype: unknown }).prototype));
-  owner(tryGet(() => (getProto(async function* () {}) as { prototype: unknown }).prototype));
+  owner(
+    tryGet(
+      () => (getProto(function* () {}) as { prototype: unknown }).prototype,
+    ),
+  );
+  owner(
+    tryGet(
+      () =>
+        (getProto(async function* () {}) as { prototype: unknown }).prototype,
+    ),
+  );
   owner(getProto([][Symbol.iterator]()));
   owner(getProto(new Map().entries()));
   owner(getProto(new Set().values()));
   owner(getProto(''[Symbol.iterator]()));
   owner(tryGet(() => getProto(/a/g[Symbol.matchAll]('a'))));
-  const It = G.Iterator as { prototype?: { map?: (this: unknown, f: (x: unknown) => unknown) => unknown } } | undefined;
-  if (typeof It?.prototype?.map === 'function') owner(tryGet(() => getProto(It.prototype!.map!.call([][Symbol.iterator](), (x) => x))));
+  const It = G.Iterator as
+    | {
+        prototype?: {
+          map?: (this: unknown, f: (x: unknown) => unknown) => unknown;
+        };
+      }
+    | undefined;
+  if (typeof It?.prototype?.map === 'function')
+    owner(
+      tryGet(() =>
+        getProto(It.prototype!.map!.call([][Symbol.iterator](), (x) => x)),
+      ),
+    );
   const Intl = G.Intl as Record<string, unknown> | undefined;
   if (Intl) {
     for (const k of Object.getOwnPropertyNames(Intl)) {
-      const P = protoOf(Intl[k]) as { resolvedOptions?: (this: unknown) => unknown } | undefined;
+      const P = protoOf(Intl[k]) as
+        | { resolvedOptions?: (this: unknown) => unknown }
+        | undefined;
       if (P && typeof P.resolvedOptions === 'function') {
         const ro = P.resolvedOptions;
-        owner(P, brand((v) => ro.call(v)));
+        owner(
+          P,
+          brand((v) => ro.call(v)),
+        );
       }
     }
-    const Seg = Intl.Segmenter as (new () => { segment(s: string): Iterable<unknown> }) | undefined;
+    const Seg = Intl.Segmenter as
+      | (new () => { segment(s: string): Iterable<unknown> })
+      | undefined;
     if (typeof Seg === 'function') {
       owner(tryGet(() => getProto(new Seg().segment('')[Symbol.iterator]())));
       // %IntlSegmentsPrototype% has no @@toStringTag (its objects read as "Object"): TAGLESS below.
-      const SP = tryGet(() => getProto(new Seg().segment(''))) as { containing?: (this: unknown, i: number) => unknown } | undefined;
+      const SP = tryGet(() => getProto(new Seg().segment(''))) as
+        | { containing?: (this: unknown, i: number) => unknown }
+        | undefined;
       if (SP && typeof SP.containing === 'function') {
         const containing = SP.containing;
-        TAGLESS.set(SP, brand((v) => containing.call(v, 0)));
+        TAGLESS.set(
+          SP,
+          brand((v) => containing.call(v, 0)),
+        );
       }
     }
   }
   const WA = G.WebAssembly as Record<string, unknown> | undefined;
-  if (WA) for (const k of ['Instance', 'Memory', 'Table', 'Global', 'Tag', 'Exception']) owner(protoOf(WA[k]));
+  if (WA)
+    for (const k of [
+      'Instance',
+      'Memory',
+      'Table',
+      'Global',
+      'Tag',
+      'Exception',
+    ])
+      owner(protoOf(WA[k]));
   const T = G.Temporal as Record<string, unknown> | undefined;
   if (T) for (const k of Object.getOwnPropertyNames(T)) owner(protoOf(T[k]));
 }
@@ -257,22 +360,45 @@ type Rec =
   | { t: 're'; id: number; source: string; flags: string }
   | { t: 'ab'; id: number; bytes: ArrayBuffer }
   | { t: 'abx'; id: number; index: number }
-  | { t: 'view'; id: number; kind: string; buffer: Rec; offset: number; length: number | null }
+  | {
+      t: 'view';
+      id: number;
+      kind: string;
+      buffer: Rec;
+      offset: number;
+      length: number | null;
+    }
   | { t: 'map'; id: number; entries: [Rec, Rec][] }
   | { t: 'set'; id: number; values: Rec[] }
-  | { t: 'err'; id: number; name: string; message?: string; cause?: Rec; hasCause: boolean; stack?: string }
+  | {
+      t: 'err';
+      id: number;
+      name: string;
+      message?: string;
+      cause?: Rec;
+      hasCause: boolean;
+      stack?: string;
+    }
   | { t: 'arr'; id: number; length: number; props: [string, Rec][] }
   | { t: 'obj'; id: number; props: [string, Rec][] }
   | { t: 'host'; id: number; type: CloneableType; value: object }
   | { t: 'hostx'; id: number; index: number }
   | { t: 'same'; id: number; value: object };
 
-function serialize(value: unknown, memory: Map<object, number>, transferIndex: Map<object, number>): Rec {
-  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
+function serialize(
+  value: unknown,
+  memory: Map<object, number>,
+  transferIndex: Map<object, number>,
+): Rec {
+  if (
+    value === null ||
+    (typeof value !== 'object' && typeof value !== 'function')
+  ) {
     if (typeof value === 'symbol') throw dataCloneError(String(value));
     return { t: 'prim', v: value };
   }
-  if (typeof value === 'function') throw dataCloneError(`${String(value).slice(0, 60)}`);
+  if (typeof value === 'function')
+    throw dataCloneError(`${String(value).slice(0, 60)}`);
   const obj = value as object;
   const seen = memory.get(obj);
   if (seen !== undefined) return { t: 'ref', id: seen };
@@ -280,7 +406,9 @@ function serialize(value: unknown, memory: Map<object, number>, transferIndex: M
   memory.set(obj, id);
   const ti = transferIndex.get(obj);
   if (ti !== undefined) {
-    return isAB(obj) ? { t: 'abx', id, index: ti } : { t: 'hostx', id, index: ti };
+    return isAB(obj)
+      ? { t: 'abx', id, index: ti }
+      : { t: 'hostx', id, index: ti };
   }
 
   // Fast paths: plain objects and arrays (the bulk of cloned data) skip the registry and brand checks.
@@ -292,9 +420,11 @@ function serialize(value: unknown, memory: Map<object, number>, transferIndex: M
     // every Proxy with DataCloneError.
     throw dataCloneError('A Proxy');
   }
-  if (proto === ARRAY_PROTO && Array.isArray(obj)) return serializeArray(obj as unknown[], id, memory, transferIndex);
+  if (proto === ARRAY_PROTO && Array.isArray(obj))
+    return serializeArray(obj as unknown[], id, memory, transferIndex);
   const tagName = objectTag(obj);
-  if ((proto === OBJECT_PROTO || proto === null) && tagName === 'Object') return serializeObject(obj, id, memory, transferIndex);
+  if ((proto === OBJECT_PROTO || proto === null) && tagName === 'Object')
+    return serializeObject(obj, id, memory, transferIndex);
 
   // Typed arrays and DataViews (exact, non-throwing check) are never platform objects.
   if (ArrayBuffer.isView(obj)) {
@@ -302,36 +432,49 @@ function serialize(value: unknown, memory: Map<object, number>, transferIndex: M
     const kind = (typedArrayTag.call(obj) as string | undefined) ?? 'DataView';
     if (isSAB(view.buffer)) throw dataCloneError('SharedArrayBuffer');
     const buffer = serialize(view.buffer, memory, transferIndex);
-    const length = kind === 'DataView' ? view.byteLength : (view as Uint8Array).length;
+    const length =
+      kind === 'DataView' ? view.byteLength : (view as Uint8Array).length;
     return { t: 'view', id, kind, buffer, offset: view.byteOffset, length };
   }
   if (tagName !== 'ArrayBuffer' || !isArrayBuffer(obj)) {
-    for (const c of cloneables) if (c.is(obj)) return { t: 'host', id, type: c, value: obj };
-    for (const test of nonSerializable) if (test(obj)) throw dataCloneError(`#<${tagName}>`);
+    for (const c of cloneables)
+      if (c.is(obj)) return { t: 'host', id, type: c, value: obj };
+    for (const test of nonSerializable)
+      if (test(obj)) throw dataCloneError(`#<${tagName}>`);
   }
 
   switch (tagName) {
     case 'Boolean':
-      if (isBoolean(obj)) return { t: 'box', id, v: Boolean.prototype.valueOf.call(obj) };
+      if (isBoolean(obj))
+        return { t: 'box', id, v: Boolean.prototype.valueOf.call(obj) };
       break;
     case 'Number':
-      if (isNumber(obj)) return { t: 'box', id, v: Number.prototype.valueOf.call(obj) };
+      if (isNumber(obj))
+        return { t: 'box', id, v: Number.prototype.valueOf.call(obj) };
       break;
     case 'BigInt':
-      if (isBigInt(obj)) return { t: 'box', id, v: BigInt.prototype.valueOf.call(obj) };
+      if (isBigInt(obj))
+        return { t: 'box', id, v: BigInt.prototype.valueOf.call(obj) };
       break;
     case 'String':
-      if (isString(obj)) return { t: 'box', id, v: String.prototype.valueOf.call(obj) };
+      if (isString(obj))
+        return { t: 'box', id, v: String.prototype.valueOf.call(obj) };
       break;
     case 'Symbol':
       if (isSymbolObject(obj)) throw dataCloneError('Symbol object');
       break;
     case 'Date':
-      if (isDate(obj)) return { t: 'date', id, v: Date.prototype.getTime.call(obj) };
+      if (isDate(obj))
+        return { t: 'date', id, v: Date.prototype.getTime.call(obj) };
       break;
     case 'RegExp':
       if (isRegExp(obj)) {
-        return { t: 're', id, source: regexpSource.call(obj) as string, flags: regexpFlags.call(obj) as string };
+        return {
+          t: 're',
+          id,
+          source: regexpSource.call(obj) as string,
+          flags: regexpFlags.call(obj) as string,
+        };
       }
       break;
     case 'SharedArrayBuffer':
@@ -344,7 +487,9 @@ function serialize(value: unknown, memory: Map<object, number>, transferIndex: M
         if (ab.detached) throw dataCloneError('A detached ArrayBuffer');
         let copy: ArrayBuffer;
         if (ab.resizable) {
-          copy = new ArrayBuffer(ab.byteLength, { maxByteLength: ab.maxByteLength });
+          copy = new ArrayBuffer(ab.byteLength, {
+            maxByteLength: ab.maxByteLength,
+          });
           new Uint8Array(copy).set(new Uint8Array(ab));
         } else {
           copy = ab.slice(0);
@@ -354,23 +499,33 @@ function serialize(value: unknown, memory: Map<object, number>, transferIndex: M
       break;
     case 'Map':
       if (isMap(obj)) {
-        const copied = Array.from(Map.prototype.entries.call(obj as Map<unknown, unknown>));
+        const copied = Array.from(
+          Map.prototype.entries.call(obj as Map<unknown, unknown>),
+        );
         const entries: [Rec, Rec][] = [];
-        for (const [k, v] of copied) entries.push([serialize(k, memory, transferIndex), serialize(v, memory, transferIndex)]);
+        for (const [k, v] of copied)
+          entries.push([
+            serialize(k, memory, transferIndex),
+            serialize(v, memory, transferIndex),
+          ]);
         return { t: 'map', id, entries };
       }
       break;
     case 'Set':
       if (isSet(obj)) {
-        const copied = Array.from(Set.prototype.values.call(obj as Set<unknown>));
+        const copied = Array.from(
+          Set.prototype.values.call(obj as Set<unknown>),
+        );
         const values: Rec[] = [];
-        for (const v of copied) values.push(serialize(v, memory, transferIndex));
+        for (const v of copied)
+          values.push(serialize(v, memory, transferIndex));
         return { t: 'set', id, values };
       }
       break;
     case 'Error':
       // [[ErrorData]] objects only (Object.create(Error.prototype) has tag "Object" and clones as one).
-      if (!isErrorIntrinsic || isErrorIntrinsic(obj)) return serializeError(obj, id, memory, transferIndex);
+      if (!isErrorIntrinsic || isErrorIntrinsic(obj))
+        return serializeError(obj, id, memory, transferIndex);
       break;
     case 'WebAssembly.Module':
       // Known gap: browsers and V8 give a new Module sharing the compiled code; JS cannot make one
@@ -379,10 +534,12 @@ function serialize(value: unknown, memory: Map<object, number>, transferIndex: M
       break;
     default:
       // An Error with its own Symbol.toStringTag is still an Error to V8 (Error.isError checks the slot).
-      if (isErrorIntrinsic?.(obj)) return serializeError(obj, id, memory, transferIndex);
+      if (isErrorIntrinsic?.(obj))
+        return serializeError(obj, id, memory, transferIndex);
       if (isUnserializable(obj, tagName)) throw dataCloneError(`#<${tagName}>`);
   }
-  if (Array.isArray(obj)) return serializeArray(obj as unknown[], id, memory, transferIndex);
+  if (Array.isArray(obj))
+    return serializeArray(obj as unknown[], id, memory, transferIndex);
   return serializeObject(obj, id, memory, transferIndex);
 }
 
@@ -404,38 +561,77 @@ function hasOwn(obj: object, k: string): boolean {
   }
 }
 
-function serializeError(obj: object, id: number, memory: Map<object, number>, transferIndex: Map<object, number>): Rec {
+function serializeError(
+  obj: object,
+  id: number,
+  memory: Map<object, number>,
+  transferIndex: Map<object, number>,
+): Rec {
   const nameProp = (obj as Error).name;
-  const name = typeof nameProp === 'string' && ERROR_NAMES.has(nameProp) ? nameProp : 'Error';
+  const name =
+    typeof nameProp === 'string' && ERROR_NAMES.has(nameProp)
+      ? nameProp
+      : 'Error';
   const msgDesc = Object.getOwnPropertyDescriptor(obj, 'message');
   const causeDesc = Object.getOwnPropertyDescriptor(obj, 'cause');
-  const rec: Rec = { t: 'err', id, name, hasCause: !!causeDesc && 'value' in causeDesc };
+  const rec: Rec = {
+    t: 'err',
+    id,
+    name,
+    hasCause: !!causeDesc && 'value' in causeDesc,
+  };
   if (msgDesc && 'value' in msgDesc) rec.message = String(msgDesc.value);
-  if (rec.hasCause) rec.cause = serialize(causeDesc!.value, memory, transferIndex);
+  if (rec.hasCause)
+    rec.cause = serialize(causeDesc!.value, memory, transferIndex);
   const stack = (obj as Error).stack;
   if (typeof stack === 'string') rec.stack = stack;
   return rec;
 }
 
-function serializeArray(arr: unknown[], id: number, memory: Map<object, number>, transferIndex: Map<object, number>): Rec {
+function serializeArray(
+  arr: unknown[],
+  id: number,
+  memory: Map<object, number>,
+  transferIndex: Map<object, number>,
+): Rec {
   const length = arr.length;
   const props: [string, Rec][] = [];
   for (const k of ownKeys(arr)) {
-    if (hasOwn(arr, k)) props.push([k, serialize((arr as unknown as Record<string, unknown>)[k], memory, transferIndex)]);
+    if (hasOwn(arr, k))
+      props.push([
+        k,
+        serialize(
+          (arr as unknown as Record<string, unknown>)[k],
+          memory,
+          transferIndex,
+        ),
+      ]);
   }
   return { t: 'arr', id, length, props };
 }
 
-function serializeObject(obj: object, id: number, memory: Map<object, number>, transferIndex: Map<object, number>): Rec {
+function serializeObject(
+  obj: object,
+  id: number,
+  memory: Map<object, number>,
+  transferIndex: Map<object, number>,
+): Rec {
   const props: [string, Rec][] = [];
   // HTML: EnumerableOwnProperties, then skip keys an earlier getter deleted (HasOwnProperty).
   for (const k of ownKeys(obj)) {
-    if (hasOwn(obj, k)) props.push([k, serialize((obj as Record<string, unknown>)[k], memory, transferIndex)]);
+    if (hasOwn(obj, k))
+      props.push([
+        k,
+        serialize((obj as Record<string, unknown>)[k], memory, transferIndex),
+      ]);
   }
   return { t: 'obj', id, props };
 }
 
-const VIEW_CTORS: Record<string, new (b: ArrayBuffer, o: number, l?: number) => ArrayBufferView> = {
+const VIEW_CTORS: Record<
+  string,
+  new (b: ArrayBuffer, o: number, l?: number) => ArrayBufferView
+> = {
   Int8Array,
   Uint8Array,
   Uint8ClampedArray,
@@ -449,11 +645,19 @@ const VIEW_CTORS: Record<string, new (b: ArrayBuffer, o: number, l?: number) => 
   BigUint64Array,
   DataView,
 };
-if (typeof (globalThis as { Float16Array?: unknown }).Float16Array === 'function') {
-  VIEW_CTORS.Float16Array = (globalThis as unknown as { Float16Array: (typeof VIEW_CTORS)[string] }).Float16Array;
+if (
+  typeof (globalThis as { Float16Array?: unknown }).Float16Array === 'function'
+) {
+  VIEW_CTORS.Float16Array = (
+    globalThis as unknown as { Float16Array: (typeof VIEW_CTORS)[string] }
+  ).Float16Array;
 }
 
-function deserialize(rec: Rec, memory: Map<number, unknown>, transferred: unknown[]): unknown {
+function deserialize(
+  rec: Rec,
+  memory: Map<number, unknown>,
+  transferred: unknown[],
+): unknown {
   switch (rec.t) {
     case 'prim':
       return rec.v;
@@ -484,7 +688,11 @@ function deserialize(rec: Rec, memory: Map<number, unknown>, transferred: unknow
       return v;
     }
     case 'view': {
-      const buffer = deserialize(rec.buffer, memory, transferred) as ArrayBuffer;
+      const buffer = deserialize(
+        rec.buffer,
+        memory,
+        transferred,
+      ) as ArrayBuffer;
       const C = VIEW_CTORS[rec.kind];
       if (!C) throw dataCloneError(rec.kind);
       const v = new C(buffer, rec.offset, rec.length ?? undefined);
@@ -494,7 +702,11 @@ function deserialize(rec: Rec, memory: Map<number, unknown>, transferred: unknow
     case 'map': {
       const v = new Map();
       memory.set(rec.id, v);
-      for (const [k, val] of rec.entries) v.set(deserialize(k, memory, transferred), deserialize(val, memory, transferred));
+      for (const [k, val] of rec.entries)
+        v.set(
+          deserialize(k, memory, transferred),
+          deserialize(val, memory, transferred),
+        );
       return v;
     }
     case 'set': {
@@ -504,30 +716,49 @@ function deserialize(rec: Rec, memory: Map<number, unknown>, transferred: unknow
       return v;
     }
     case 'err': {
-      const Ctor = (globalThis as unknown as Record<string, ErrorConstructor>)[rec.name] ?? Error;
+      const Ctor =
+        (globalThis as unknown as Record<string, ErrorConstructor>)[rec.name] ??
+        Error;
       const v = new Ctor();
       memory.set(rec.id, v);
       if (rec.message !== undefined) {
-        Object.defineProperty(v, 'message', { value: rec.message, writable: true, configurable: true, enumerable: false });
+        Object.defineProperty(v, 'message', {
+          value: rec.message,
+          writable: true,
+          configurable: true,
+          enumerable: false,
+        });
       }
       if (rec.stack !== undefined) {
-        Object.defineProperty(v, 'stack', { value: rec.stack, writable: true, configurable: true, enumerable: false });
+        Object.defineProperty(v, 'stack', {
+          value: rec.stack,
+          writable: true,
+          configurable: true,
+          enumerable: false,
+        });
       }
       if (rec.hasCause) {
-        Object.defineProperty(v, 'cause', { value: deserialize(rec.cause!, memory, transferred), writable: true, configurable: true, enumerable: false });
+        Object.defineProperty(v, 'cause', {
+          value: deserialize(rec.cause!, memory, transferred),
+          writable: true,
+          configurable: true,
+          enumerable: false,
+        });
       }
       return v;
     }
     case 'arr': {
       const v: unknown[] = new Array(rec.length);
       memory.set(rec.id, v);
-      for (const [k, r] of rec.props) createDataProperty(v, k, deserialize(r, memory, transferred));
+      for (const [k, r] of rec.props)
+        createDataProperty(v, k, deserialize(r, memory, transferred));
       return v;
     }
     case 'obj': {
       const v: Record<string, unknown> = {};
       memory.set(rec.id, v);
-      for (const [k, r] of rec.props) createDataProperty(v, k, deserialize(r, memory, transferred));
+      for (const [k, r] of rec.props)
+        createDataProperty(v, k, deserialize(r, memory, transferred));
       return v;
     }
     case 'host': {
@@ -547,7 +778,12 @@ function deserialize(rec: Rec, memory: Map<number, unknown>, transferred: unknow
  */
 function createDataProperty(target: object, key: string, value: unknown): void {
   if (key === '__proto__') {
-    Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+    Object.defineProperty(target, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   } else {
     (target as Record<string, unknown>)[key] = value;
   }
@@ -559,20 +795,29 @@ function structuredCloneInner(value: unknown): unknown {
 }
 
 function checkOptions(options: unknown): void {
-  if (options != null && typeof options !== 'object' && typeof options !== 'function') {
-    throw new TypeError("Failed to execute 'structuredClone' on 'Window': The provided value is not of type 'StructuredSerializeOptions'.");
+  if (
+    options != null &&
+    typeof options !== 'object' &&
+    typeof options !== 'function'
+  ) {
+    throw new TypeError(
+      "Failed to execute 'structuredClone' on 'Window': The provided value is not of type 'StructuredSerializeOptions'.",
+    );
   }
 }
 
 /** StructuredSerializeOptions.transfer: `sequence<object>` (default []); null and non-iterables are a TypeError. */
-function transferListOf(options: { transfer?: Iterable<unknown> } | null | undefined): unknown[] {
+function transferListOf(
+  options: { transfer?: Iterable<unknown> } | null | undefined,
+): unknown[] {
   if (options == null) return [];
   const t = options.transfer as unknown;
   if (t === undefined) return [];
   if (
     t === null ||
     (typeof t !== 'object' && typeof t !== 'function') ||
-    typeof (t as { [Symbol.iterator]?: unknown })[Symbol.iterator] !== 'function'
+    typeof (t as { [Symbol.iterator]?: unknown })[Symbol.iterator] !==
+      'function'
   ) {
     throw new TypeError(
       "Failed to execute 'structuredClone' on 'Window': Failed to read the 'transfer' property from 'StructuredSerializeOptions': The provided value cannot be converted to a sequence.",
@@ -582,9 +827,14 @@ function transferListOf(options: { transfer?: Iterable<unknown> } | null | undef
 }
 
 /** The glue's own structuredClone (no native hook). */
-export function structuredClone(value: unknown, options?: { transfer?: Iterable<unknown> } | null): unknown {
+export function structuredClone(
+  value: unknown,
+  options?: { transfer?: Iterable<unknown> } | null,
+): unknown {
   if (arguments.length === 0) {
-    throw new TypeError("Failed to execute 'structuredClone' on 'Window': 1 argument required, but only 0 present.");
+    throw new TypeError(
+      "Failed to execute 'structuredClone' on 'Window': 1 argument required, but only 0 present.",
+    );
   }
   checkOptions(options);
   return cloneWithTransfer(value, transferListOf(options));
@@ -599,17 +849,27 @@ function cloneWithTransfer(value: unknown, list: unknown[]): unknown {
         "Failed to execute 'structuredClone' on 'Window': Failed to read the 'transfer' property from 'StructuredSerializeOptions': Failed to convert value to 'object'.",
       );
     }
-    if (transferIndex.has(t)) throw domException(`Failed to execute 'structuredClone' on 'Window': ArrayBuffer at index ${i} is a duplicate of an earlier ArrayBuffer.`, 'DataCloneError');
+    if (transferIndex.has(t))
+      throw domException(
+        `Failed to execute 'structuredClone' on 'Window': ArrayBuffer at index ${i} is a duplicate of an earlier ArrayBuffer.`,
+        'DataCloneError',
+      );
     if (isSAB(t)) throw dataCloneError('SharedArrayBuffer');
     if (isAB(t)) {
       if ((t as ArrayBuffer).detached) {
-        throw domException(`Failed to execute 'structuredClone' on 'Window': ArrayBuffer at index ${i} is already detached.`, 'DataCloneError');
+        throw domException(
+          `Failed to execute 'structuredClone' on 'Window': ArrayBuffer at index ${i} is already detached.`,
+          'DataCloneError',
+        );
       }
       kinds.push('ab');
     } else {
       const k = transferables.find((x) => x.is(t));
       if (!k) {
-        throw domException(`Failed to execute 'structuredClone' on 'Window': Value at index ${i} does not have a transferable type.`, 'DataCloneError');
+        throw domException(
+          `Failed to execute 'structuredClone' on 'Window': Value at index ${i} does not have a transferable type.`,
+          'DataCloneError',
+        );
       }
       kinds.push(k);
     }
@@ -622,10 +882,15 @@ function cloneWithTransfer(value: unknown, list: unknown[]): unknown {
   const transferred = list.map((t, i) => {
     const k = kinds[i]!;
     try {
-      return k === 'ab' ? (t as ArrayBuffer).transfer() : k.transfer(t as object);
+      return k === 'ab'
+        ? (t as ArrayBuffer).transfer()
+        : k.transfer(t as object);
     } catch (e) {
       if (e instanceof TypeError) {
-        throw domException(`Failed to execute 'structuredClone' on 'Window': Value at index ${i} could not be transferred.`, 'DataCloneError');
+        throw domException(
+          `Failed to execute 'structuredClone' on 'Window': Value at index ${i} could not be transferred.`,
+          'DataCloneError',
+        );
       }
       throw e;
     }
@@ -637,7 +902,10 @@ function cloneWithTransfer(value: unknown, list: unknown[]): unknown {
 // Native fast path
 
 /** `__iwn.clone.structuredClone`: a v8::ValueSerializer round trip (no host-object delegate). */
-export type NativeClone = (value: unknown, transfer: readonly unknown[]) => unknown;
+export type NativeClone = (
+  value: unknown,
+  transfer: readonly unknown[],
+) => unknown;
 
 /**
  * Whether a clone must take the JS path because V8's serializer would get it wrong: the graph holds a
@@ -656,7 +924,20 @@ export type NativeClone = (value: unknown, transfer: readonly unknown[]) => unkn
  * NAMED_SCAN elements. Known limit: on a longer, densely walked array they are not (finding them means
  * Object.keys over every element), so a platform object stored as `bigArray.name` takes the native path.
  */
-const KNOWN_SCAN_TAGS = new Set(['SharedArrayBuffer', 'Map', 'Set', 'Error', 'Boolean', 'Number', 'BigInt', 'String', 'Date', 'RegExp', 'ArrayBuffer', 'WebAssembly.Module']);
+const KNOWN_SCAN_TAGS = new Set([
+  'SharedArrayBuffer',
+  'Map',
+  'Set',
+  'Error',
+  'Boolean',
+  'Number',
+  'BigInt',
+  'String',
+  'Date',
+  'RegExp',
+  'ArrayBuffer',
+  'WebAssembly.Module',
+]);
 const HOLE_BUDGET = 4096;
 const NAMED_SCAN = 4096;
 function needsGluePath(value: unknown, transfer: readonly unknown[]): boolean {
@@ -676,7 +957,10 @@ function needsGluePath(value: unknown, transfer: readonly unknown[]): boolean {
     const proto = getProto(v);
     const isArr = Array.isArray(v);
     const tagName = isArr && proto === ARRAY_PROTO ? 'Array' : objectTag(v);
-    if (!(isArr && proto === ARRAY_PROTO) && !((proto === OBJECT_PROTO || proto === null) && tagName === 'Object')) {
+    if (
+      !(isArr && proto === ARRAY_PROTO) &&
+      !((proto === OBJECT_PROTO || proto === null) && tagName === 'Object')
+    ) {
       for (const c of cloneables) if (c.is(v)) return true;
       for (const test of nonSerializable) if (test(v)) return true;
       if (ArrayBuffer.isView(v)) {
@@ -685,17 +969,23 @@ function needsGluePath(value: unknown, transfer: readonly unknown[]): boolean {
       }
       let leaf = false;
       // An Error with its own Symbol.toStringTag is an Error to V8 too: scan it as one.
-      const caseTag = isErrorIntrinsic && !KNOWN_SCAN_TAGS.has(tagName) && isErrorIntrinsic(v) ? 'Error' : tagName;
+      const caseTag =
+        isErrorIntrinsic && !KNOWN_SCAN_TAGS.has(tagName) && isErrorIntrinsic(v)
+          ? 'Error'
+          : tagName;
       switch (caseTag) {
         case 'SharedArrayBuffer':
           if (isSharedArrayBuffer(v)) return true;
           break;
         case 'Map':
           if (isMap(v)) {
-            Map.prototype.forEach.call(v as Map<unknown, unknown>, (val, key) => {
-              if (key !== null && typeof key === 'object') stack.push(key);
-              if (val !== null && typeof val === 'object') stack.push(val);
-            });
+            Map.prototype.forEach.call(
+              v as Map<unknown, unknown>,
+              (val, key) => {
+                if (key !== null && typeof key === 'object') stack.push(key);
+                if (val !== null && typeof val === 'object') stack.push(val);
+              },
+            );
             continue;
           }
           break;
@@ -711,7 +1001,8 @@ function needsGluePath(value: unknown, transfer: readonly unknown[]): boolean {
           if (!isErrorIntrinsic || isErrorIntrinsic(v)) {
             d = gopd(v, 'cause');
             if (d && (d.get || d.set)) return true;
-            if (d && d.value !== null && typeof d.value === 'object') stack.push(d.value);
+            if (d && d.value !== null && typeof d.value === 'object')
+              stack.push(d.value);
             // Without Error.isError the brand is unknown: scan the own properties as well.
             if (isErrorIntrinsic) continue;
           }
@@ -796,11 +1087,18 @@ function needsGluePath(value: unknown, transfer: readonly unknown[]): boolean {
  * The global `structuredClone`: the native ValueSerializer path when the host has one and the value
  * holds nothing it would mishandle (see needsGluePath), the JS implementation otherwise.
  */
-export function createStructuredClone(native?: NativeClone): typeof structuredClone {
+export function createStructuredClone(
+  native?: NativeClone,
+): typeof structuredClone {
   if (!native) return structuredClone;
-  return function structuredClone(value: unknown, options?: { transfer?: Iterable<unknown> } | null): unknown {
+  return function structuredClone(
+    value: unknown,
+    options?: { transfer?: Iterable<unknown> } | null,
+  ): unknown {
     if (arguments.length === 0) {
-      throw new TypeError("Failed to execute 'structuredClone' on 'Window': 1 argument required, but only 0 present.");
+      throw new TypeError(
+        "Failed to execute 'structuredClone' on 'Window': 1 argument required, but only 0 present.",
+      );
     }
     checkOptions(options);
     const list = transferListOf(options);

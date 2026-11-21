@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // PROC-6/7 event mapping: pause/resume -> visibilitychange, focus loss -> blur, destroy -> pagehide.
 #include "iwn/core/lifecycle.h"
 #include "iwn_test.h"

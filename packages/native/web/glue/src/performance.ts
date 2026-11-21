@@ -11,7 +11,13 @@
 import { domException } from './dom-exception.ts';
 import { EventTarget } from './events.ts';
 import type { GlueNatives } from './natives.ts';
-import { enumerable, illegalConstructor, INTERNAL, setLength, tag } from './util.ts';
+import {
+  enumerable,
+  illegalConstructor,
+  INTERNAL,
+  setLength,
+  tag,
+} from './util.ts';
 
 export interface Clock {
   now(): number;
@@ -47,16 +53,28 @@ export function setDetailCloner(fn: (v: unknown) => unknown): void {
 /** PerformanceMeasureOptions.duration is a DOMHighResTimeStamp (WebIDL `double`): a string is a number, not a mark name. */
 function toDuration(v: unknown): number {
   if (typeof v === 'symbol' || typeof v === 'bigint') {
-    throw new TypeError("Failed to execute 'measure' on 'Performance': Cannot convert a " + typeof v + ' value to a number');
+    throw new TypeError(
+      "Failed to execute 'measure' on 'Performance': Cannot convert a " +
+        typeof v +
+        ' value to a number',
+    );
   }
   const n = Number(v);
   if (!Number.isFinite(n)) {
-    throw new TypeError("Failed to execute 'measure' on 'Performance': Failed to read the 'duration' property from 'PerformanceMeasureOptions': The provided double value is non-finite.");
+    throw new TypeError(
+      "Failed to execute 'measure' on 'Performance': Failed to read the 'duration' property from 'PerformanceMeasureOptions': The provided double value is non-finite.",
+    );
   }
   return n;
 }
 
-let entryInit!: (e: PerformanceEntry, name: string, type: string, start: number, duration: number) => void;
+let entryInit!: (
+  e: PerformanceEntry,
+  name: string,
+  type: string,
+  start: number,
+  duration: number,
+) => void;
 
 export class PerformanceEntry {
   #name = '';
@@ -96,7 +114,13 @@ export class PerformanceEntry {
   }
 }
 tag(PerformanceEntry, 'PerformanceEntry');
-enumerable(PerformanceEntry, ['name', 'entryType', 'startTime', 'duration', 'toJSON']);
+enumerable(PerformanceEntry, [
+  'name',
+  'entryType',
+  'startTime',
+  'duration',
+  'toJSON',
+]);
 
 let currentClock: Clock = createClock(undefined);
 
@@ -118,15 +142,22 @@ export class PerformanceMark extends PerformanceEntry {
     if (markOptions?.startTime !== undefined) {
       start = Number(markOptions.startTime);
       if (!Number.isFinite(start)) {
-        throw new TypeError("Failed to construct 'PerformanceMark': The provided double value is non-finite.");
+        throw new TypeError(
+          "Failed to construct 'PerformanceMark': The provided double value is non-finite.",
+        );
       }
       if (start < 0) {
-        throw new TypeError("Failed to construct 'PerformanceMark': 'startTime' cannot be negative.");
+        throw new TypeError(
+          "Failed to construct 'PerformanceMark': 'startTime' cannot be negative.",
+        );
       }
     } else {
       start = currentClock.now();
     }
-    this.#detail = markOptions?.detail === undefined ? null : cloneDetail(markOptions.detail);
+    this.#detail =
+      markOptions?.detail === undefined
+        ? null
+        : cloneDetail(markOptions.detail);
     entryInit(this, String(markName), 'mark', start, 0);
   }
   get detail(): unknown {
@@ -190,7 +221,10 @@ export class Performance extends EventTarget {
     return { timeOrigin: this.#clock.timeOrigin };
   }
 
-  mark(markName: string, markOptions?: PerformanceMarkOptions | null): PerformanceMark {
+  mark(
+    markName: string,
+    markOptions?: PerformanceMarkOptions | null,
+  ): PerformanceMark {
     if (arguments.length === 0) {
       throw new TypeError(
         "Failed to execute 'mark' on 'Performance': 1 argument required, but only 0 present.",
@@ -233,7 +267,11 @@ export class Performance extends EventTarget {
           "Failed to execute 'measure' on 'Performance': If a non-empty PerformanceMeasureOptions object was passed, at least one of its 'start' or 'end' properties must be present.",
         );
       }
-      if (opts!.start !== undefined && opts!.duration !== undefined && opts!.end !== undefined) {
+      if (
+        opts!.start !== undefined &&
+        opts!.duration !== undefined &&
+        opts!.end !== undefined
+      ) {
         throw new TypeError(
           "Failed to execute 'measure' on 'Performance': If a non-empty PerformanceMeasureOptions object was passed, it must not have all of its 'start', 'duration', and 'end' properties defined",
         );
@@ -241,20 +279,38 @@ export class Performance extends EventTarget {
     }
     let end: number;
     if (endMark !== undefined) end = this.#toTimestamp(endMark);
-    else if (nonEmpty && opts!.end !== undefined) end = this.#toTimestamp(opts!.end);
-    else if (nonEmpty && opts!.start !== undefined && opts!.duration !== undefined) {
-      end = this.#toTimestamp(opts!.start) + this.#toTimestamp(toDuration(opts!.duration));
+    else if (nonEmpty && opts!.end !== undefined)
+      end = this.#toTimestamp(opts!.end);
+    else if (
+      nonEmpty &&
+      opts!.start !== undefined &&
+      opts!.duration !== undefined
+    ) {
+      end =
+        this.#toTimestamp(opts!.start) +
+        this.#toTimestamp(toDuration(opts!.duration));
     } else end = this.#clock.now();
     let start: number;
-    if (nonEmpty && opts!.start !== undefined) start = this.#toTimestamp(opts!.start);
-    else if (nonEmpty && opts!.duration !== undefined && opts!.end !== undefined) {
+    if (nonEmpty && opts!.start !== undefined)
+      start = this.#toTimestamp(opts!.start);
+    else if (
+      nonEmpty &&
+      opts!.duration !== undefined &&
+      opts!.end !== undefined
+    ) {
       start = end - this.#toTimestamp(toDuration(opts!.duration));
-    } else if (typeof startOrMeasureOptions === 'string' || (startOrMeasureOptions != null && opts === null)) {
+    } else if (
+      typeof startOrMeasureOptions === 'string' ||
+      (startOrMeasureOptions != null && opts === null)
+    ) {
       start = this.#toTimestamp(String(startOrMeasureOptions));
     } else start = 0;
     const m = new PerformanceMeasure(INTERNAL);
     entryInit(m, String(measureName), 'measure', start, end - start);
-    measureDetail(m, nonEmpty && opts!.detail !== undefined ? cloneDetail(opts!.detail) : null);
+    measureDetail(
+      m,
+      nonEmpty && opts!.detail !== undefined ? cloneDetail(opts!.detail) : null,
+    );
     this.#entries.push(m);
     return m;
   }
@@ -262,7 +318,9 @@ export class Performance extends EventTarget {
   #toTimestamp(mark: string | number): number {
     if (typeof mark === 'number') {
       if (mark < 0) {
-        throw new TypeError("Failed to execute 'measure' on 'Performance': A negative time stamp is not allowed.");
+        throw new TypeError(
+          "Failed to execute 'measure' on 'Performance': A negative time stamp is not allowed.",
+        );
       }
       return mark;
     }
@@ -288,7 +346,9 @@ export class Performance extends EventTarget {
     const n = String(name);
     const t = type === undefined ? undefined : String(type);
     return sortByStart(
-      this.#entries.filter((e) => e.name === n && (t === undefined || e.entryType === t)),
+      this.#entries.filter(
+        (e) => e.name === n && (t === undefined || e.entryType === t),
+      ),
     );
   }
   clearMarks(markName?: string): void {

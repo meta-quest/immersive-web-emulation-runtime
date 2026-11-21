@@ -72,43 +72,123 @@ export class Canvas2DMatrix {
     this.e = v[4]!;
     this.f = v[5]!;
   }
-  get m11(): number { return this.a; }
-  get m12(): number { return this.b; }
-  get m21(): number { return this.c; }
-  get m22(): number { return this.d; }
-  get m41(): number { return this.e; }
-  get m42(): number { return this.f; }
-  get m13(): number { return 0; }
-  get m14(): number { return 0; }
-  get m23(): number { return 0; }
-  get m24(): number { return 0; }
-  get m31(): number { return 0; }
-  get m32(): number { return 0; }
-  get m33(): number { return 1; }
-  get m34(): number { return 0; }
-  get m43(): number { return 0; }
-  get m44(): number { return 1; }
-  get is2D(): boolean { return true; }
-  get isIdentity(): boolean {
-    return this.a === 1 && this.b === 0 && this.c === 0 && this.d === 1 && this.e === 0 && this.f === 0;
+  get m11(): number {
+    return this.a;
   }
-  multiply(o: { a: number; b: number; c: number; d: number; e: number; f: number }): Canvas2DMatrix {
+  get m12(): number {
+    return this.b;
+  }
+  get m21(): number {
+    return this.c;
+  }
+  get m22(): number {
+    return this.d;
+  }
+  get m41(): number {
+    return this.e;
+  }
+  get m42(): number {
+    return this.f;
+  }
+  get m13(): number {
+    return 0;
+  }
+  get m14(): number {
+    return 0;
+  }
+  get m23(): number {
+    return 0;
+  }
+  get m24(): number {
+    return 0;
+  }
+  get m31(): number {
+    return 0;
+  }
+  get m32(): number {
+    return 0;
+  }
+  get m33(): number {
+    return 1;
+  }
+  get m34(): number {
+    return 0;
+  }
+  get m43(): number {
+    return 0;
+  }
+  get m44(): number {
+    return 1;
+  }
+  get is2D(): boolean {
+    return true;
+  }
+  get isIdentity(): boolean {
+    return (
+      this.a === 1 &&
+      this.b === 0 &&
+      this.c === 0 &&
+      this.d === 1 &&
+      this.e === 0 &&
+      this.f === 0
+    );
+  }
+  multiply(o: {
+    a: number;
+    b: number;
+    c: number;
+    d: number;
+    e: number;
+    f: number;
+  }): Canvas2DMatrix {
     const out = [0, 0, 0, 0, 0, 0];
-    multiply(out, [this.a, this.b, this.c, this.d, this.e, this.f], [o.a, o.b, o.c, o.d, o.e, o.f]);
+    multiply(
+      out,
+      [this.a, this.b, this.c, this.d, this.e, this.f],
+      [o.a, o.b, o.c, o.d, o.e, o.f],
+    );
     return new Canvas2DMatrix(out);
   }
   inverse(): Canvas2DMatrix {
     const out = [0, 0, 0, 0, 0, 0];
-    if (!invert(out, [this.a, this.b, this.c, this.d, this.e, this.f])) return new Canvas2DMatrix([NaN, NaN, NaN, NaN, NaN, NaN]);
+    if (!invert(out, [this.a, this.b, this.c, this.d, this.e, this.f]))
+      return new Canvas2DMatrix([NaN, NaN, NaN, NaN, NaN, NaN]);
     return new Canvas2DMatrix(out);
   }
-  transformPoint(p: { x?: number; y?: number } = {}): { x: number; y: number; z: number; w: number } {
+  transformPoint(p: { x?: number; y?: number } = {}): {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+  } {
     const x = p.x ?? 0;
     const y = p.y ?? 0;
-    return { x: this.a * x + this.c * y + this.e, y: this.b * x + this.d * y + this.f, z: 0, w: 1 };
+    return {
+      x: this.a * x + this.c * y + this.e,
+      y: this.b * x + this.d * y + this.f,
+      z: 0,
+      w: 1,
+    };
   }
   toFloat64Array(): Float64Array {
-    return new Float64Array([this.a, this.b, 0, 0, this.c, this.d, 0, 0, 0, 0, 1, 0, this.e, this.f, 0, 1]);
+    return new Float64Array([
+      this.a,
+      this.b,
+      0,
+      0,
+      this.c,
+      this.d,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      this.e,
+      this.f,
+      0,
+      1,
+    ]);
   }
   toString(): string {
     return `matrix(${this.a}, ${this.b}, ${this.c}, ${this.d}, ${this.e}, ${this.f})`;
@@ -135,19 +215,31 @@ export function makeDOMMatrix(m: Mat): object {
  */
 export function from2DInit(init: unknown): number[] | null {
   if (init === undefined || init === null) return [1, 0, 0, 1, 0, 0];
-  if (typeof init !== 'object') throw new TypeError('Failed to convert value to DOMMatrix2DInit.');
+  if (typeof init !== 'object')
+    throw new TypeError('Failed to convert value to DOMMatrix2DInit.');
   const o = init as Record<string, unknown>;
   const pick = (k1: string, k2: string, def: number): number => {
     const v1 = o[k1];
     const v2 = o[k2];
     const n1 = v1 === undefined ? undefined : Number(v1);
     const n2 = v2 === undefined ? undefined : Number(v2);
-    if (n1 !== undefined && n2 !== undefined && !(n1 === n2 || (Number.isNaN(n1) && Number.isNaN(n2)))) {
+    if (
+      n1 !== undefined &&
+      n2 !== undefined &&
+      !(n1 === n2 || (Number.isNaN(n1) && Number.isNaN(n2)))
+    ) {
       throw new TypeError(`DOMMatrix2DInit: '${k1}' and '${k2}' disagree.`);
     }
     return n1 ?? n2 ?? def;
   };
-  const v = [pick('a', 'm11', 1), pick('b', 'm12', 0), pick('c', 'm21', 0), pick('d', 'm22', 1), pick('e', 'm41', 0), pick('f', 'm42', 0)];
+  const v = [
+    pick('a', 'm11', 1),
+    pick('b', 'm12', 0),
+    pick('c', 'm21', 0),
+    pick('d', 'm22', 1),
+    pick('e', 'm41', 0),
+    pick('f', 'm42', 0),
+  ];
   if (o.is2D === false) throw new TypeError('DOMMatrix2DInit: is2D is false.');
   return v.every(Number.isFinite) ? v : null;
 }

@@ -22,7 +22,11 @@ import {
   oculusTouchV2,
   oculusTouchV3,
 } from 'iwer/host';
-import type { XRControllerConfig, XRDeviceConfig, XRHostInput } from 'iwer/host';
+import type {
+  XRControllerConfig,
+  XRDeviceConfig,
+  XRHostInput,
+} from 'iwer/host';
 
 import { NativeHostBackend } from './backend.ts';
 import { DEPTH_SUPPORT, DEPTH_VERSION, DepthRecordView } from './depth.ts';
@@ -32,7 +36,13 @@ import { GraphicsBridge } from './graphics.ts';
 import { LayerBuffer } from './layers.ts';
 import { LAYOUT_VERSION } from './layout.gen.ts';
 import { FRAME_TICK, FRAME_XR } from './natives.ts';
-import type { GLContext, WebGLHooks, XrInfo, XrNativeEvent, XrNatives } from './natives.ts';
+import type {
+  GLContext,
+  WebGLHooks,
+  XrInfo,
+  XrNativeEvent,
+  XrNatives,
+} from './natives.ts';
 import { RuntimePermissions, USE_SCENE } from './permissions.ts';
 import { FrameRecordView } from './record.ts';
 import { NativeScene } from './scene.ts';
@@ -67,7 +77,9 @@ export interface NativeXR {
    * holds it. A permission the manifest does not declare is never asked for (false). For runtime code that needs
    * one outside a session request (getUserMedia: CAMERA and HEADSET_CAMERA).
    */
-  requestPermissions(names: readonly string[]): Promise<Record<string, boolean>>;
+  requestPermissions(
+    names: readonly string[],
+  ): Promise<Record<string, boolean>>;
   /** The room (diagnostics): the runtime's scene status and what the adapter lists this frame. */
   scene(): Record<string, unknown>;
   /** Spatial anchor counters of the native side (diagnostics, XR-ANCHOR-1); null without anchor natives. */
@@ -134,7 +146,8 @@ const IMMERSIVE_ONLY = new Set([
 /** A sequence<DOMString> member of XRSessionInit as an array (absent or not iterable: empty). */
 function featureList(value: unknown): string[] {
   if (value == null || typeof value === 'string') return [];
-  if (typeof (value as Iterable<unknown>)[Symbol.iterator] !== 'function') return [];
+  if (typeof (value as Iterable<unknown>)[Symbol.iterator] !== 'function')
+    return [];
   return Array.from(value as Iterable<unknown>, String);
 }
 
@@ -145,7 +158,12 @@ function featureList(value: unknown): string[] {
  */
 const touchPlus: XRControllerConfig = {
   ...metaQuestTouchPlus,
-  fallbackProfileIds: ['oculus-touch-v3', 'oculus-touch-v2', 'oculus-touch', 'generic-trigger-squeeze-thumbstick'],
+  fallbackProfileIds: [
+    'oculus-touch-v3',
+    'oculus-touch-v2',
+    'oculus-touch',
+    'generic-trigger-squeeze-thumbstick',
+  ],
 };
 
 /** The controller profiles of the headset's own controllers (IN-2). */
@@ -167,7 +185,11 @@ function controllerFor(model: string | undefined): XRControllerConfig {
  */
 function installGetGamepads(g: Global): void {
   const nav = g.navigator as object | undefined;
-  if (!nav || typeof (nav as { getGamepads?: unknown }).getGamepads === 'function') return;
+  if (
+    !nav ||
+    typeof (nav as { getGamepads?: unknown }).getGamepads === 'function'
+  )
+    return;
   const proto = Object.getPrototypeOf(nav) as object | null;
   const target = proto && proto !== Object.prototype ? proto : nav;
   Object.defineProperty(target, 'getGamepads', {
@@ -180,11 +202,17 @@ function installGetGamepads(g: Global): void {
   });
 }
 
-export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks | null): NativeXR | null {
+export function installNativeXR(
+  g: Global,
+  natives: XrNatives,
+  hooks: WebGLHooks | null,
+): NativeXR | null {
   installGeometry(g);
   installGetGamepads(g);
   const record = new FrameRecordView(natives.record());
-  const versionsMatch = natives.layoutVersion === LAYOUT_VERSION && record.version === LAYOUT_VERSION;
+  const versionsMatch =
+    natives.layoutVersion === LAYOUT_VERSION &&
+    record.version === LAYOUT_VERSION;
   if (!versionsMatch) {
     // XRF-4: never run a session against a record laid out differently.
     console.error(
@@ -211,15 +239,27 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       layerBuffer = candidate;
       gfx.setLayerBuffer(candidate);
     } else {
-      console.error('@iwer/native: composition layer buffer of another layout; quad and cylinder layers are off');
+      console.error(
+        '@iwer/native: composition layer buffer of another layout; quad and cylinder layers are off',
+      );
     }
   }
-  const backend = new NativeHostBackend(natives, gfx, hooks, report, schedule, layerBuffer);
+  const backend = new NativeHostBackend(
+    natives,
+    gfx,
+    hooks,
+    report,
+    schedule,
+    layerBuffer,
+  );
   // the room for planes, meshes and hit test, read once per XR frame (frames: the counter below)
   const scene = new NativeScene(natives, () => frames);
   if (scene.supported) backend.scene = scene;
   // XR-DEPTH-2: the depth record, read only with the layout this adapter knows
-  if (typeof natives.depthRecord === 'function' && natives.depthRecordVersion === DEPTH_VERSION) {
+  if (
+    typeof natives.depthRecord === 'function' &&
+    natives.depthRecordVersion === DEPTH_VERSION
+  ) {
     backend.depthRecord = new DepthRecordView(natives.depthRecord());
   }
 
@@ -228,23 +268,40 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   const config: XRDeviceConfig = {
     name: 'Meta Quest (iwer-native)',
     controllerConfig: touchPlus,
-    supportedSessionModes: versionsMatch ? ['inline', 'immersive-vr'] : ['inline'],
+    supportedSessionModes: versionsMatch
+      ? ['inline', 'immersive-vr']
+      : ['inline'],
     supportedFeatures: BASE_FEATURES.slice(),
     supportedFrameRates: [72, 80, 90, 120],
     isSystemKeyboardSupported: false,
     internalNominalFrameRate: 72,
-    environmentBlendModes: { 'immersive-vr': 'opaque', 'immersive-ar': 'alpha-blend' },
+    environmentBlendModes: {
+      'immersive-vr': 'opaque',
+      'immersive-ar': 'alpha-blend',
+    },
     interactionMode: 'world-space',
-    userAgent: String((g.navigator as { userAgent?: string } | undefined)?.userAgent ?? ''),
+    userAgent: String(
+      (g.navigator as { userAgent?: string } | undefined)?.userAgent ?? '',
+    ),
   };
   const device = new XRDevice(config, { host: backend });
   device.installRuntime({ globalObject: g });
 
-  let input: XRHostInput = device.enableHostInput({ leftMenuButton: true, onHaptic: haptic });
-  function haptic(hand: 'left' | 'right', intensity: number, durationMs: number, frequencyHz: number) {
+  let input: XRHostInput = device.enableHostInput({
+    leftMenuButton: true,
+    onHaptic: haptic,
+  });
+  function haptic(
+    hand: 'left' | 'right',
+    intensity: number,
+    durationMs: number,
+    frequencyHz: number,
+  ) {
     natives.haptic(hand === 'left' ? 0 : 1, intensity, durationMs, frequencyHz);
     // IN-7: pulse() resolves true once the pulse has played.
-    return new Promise<boolean>((resolve) => setTimeout(() => resolve(true), Math.max(0, durationMs)));
+    return new Promise<boolean>((resolve) =>
+      setTimeout(() => resolve(true), Math.max(0, durationMs)),
+    );
   }
 
   let caps: XrInfo | null = null;
@@ -260,16 +317,19 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       if (caps.immersiveAr === true) modes.push('immersive-ar');
     }
     const features = config.supportedFeatures;
-    if (caps.handTracking && !features.includes('hand-tracking')) features.push('hand-tracking');
+    if (caps.handTracking && !features.includes('hand-tracking'))
+      features.push('hand-tracking');
     for (const [feature, flag] of Object.entries(NATIVE_FEATURES)) {
-      if (SCENE_FEATURES.includes(feature) && !scene.supported) continue;  // an older runtime without the scene natives
-      if (feature === 'depth-sensing' && !backend.depthRecord) continue;  // no depth record this adapter can read
-      if (caps[flag] === true && !features.includes(feature)) features.push(feature);
+      if (SCENE_FEATURES.includes(feature) && !scene.supported) continue; // an older runtime without the scene natives
+      if (feature === 'depth-sensing' && !backend.depthRecord) continue; // no depth record this adapter can read
+      if (caps[flag] === true && !features.includes(feature))
+        features.push(feature);
     }
     const bounded = features.indexOf('bounded-floor');
     if (caps.hasStage !== true && bounded >= 0) features.splice(bounded, 1);
     // XR-DEPTH-2: 'depth-sensing' (gpu-optimized) when the system has environment depth and the record is readable
-    if (features.includes('depth-sensing')) backend.depthSensing = DEPTH_SUPPORT;
+    if (features.includes('depth-sensing'))
+      backend.depthSensing = DEPTH_SUPPORT;
     if (caps.refreshRates && caps.refreshRates.length > 0) {
       config.supportedFrameRates.length = 0;
       for (const r of caps.refreshRates) config.supportedFrameRates.push(r);
@@ -278,7 +338,11 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     const controller = controllerFor(caps.model);
     if (controller !== touchPlus && !device.activeSession) {
       device.disableHostInput();
-      input = device.enableHostInput({ leftMenuButton: true, onHaptic: haptic, controllerConfig: controller });
+      input = device.enableHostInput({
+        leftMenuButton: true,
+        onHaptic: haptic,
+        controllerConfig: controller,
+      });
     }
     return caps;
   }
@@ -289,7 +353,8 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   function onSession(session: object, mode: string): void {
     if (sessions.has(session)) return;
     sessions.add(session);
-    const features = ((session as { enabledFeatures?: string[] }).enabledFeatures ?? []) as string[];
+    const features = ((session as { enabledFeatures?: string[] })
+      .enabledFeatures ?? []) as string[];
     natives.sessionStarted(
       mode === 'immersive-ar',
       features.includes('hand-tracking'),
@@ -300,9 +365,15 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     if (SCENE_FEATURES.some((f) => features.includes(f))) scene.start();
     // XR-DEPTH-2: environment depth from now until the session ends (the frame-start clears begin with the first depth
     // handed out: graphics.ts). Hand removal stays off, as in Quest Browser: real hands occlude virtual content
-    if (features.includes('depth-sensing') && backend.depthSensing) natives.startDepth?.(false);
-    if (lastVisibility) device.dispatchHostEvent({ type: 'visibilitychange', ...lastVisibility });
-    (session as EventTarget).addEventListener?.('end', () => gfx.onSessionEnd(), { once: true });
+    if (features.includes('depth-sensing') && backend.depthSensing)
+      natives.startDepth?.(false);
+    if (lastVisibility)
+      device.dispatchHostEvent({ type: 'visibilitychange', ...lastVisibility });
+    (session as EventTarget).addEventListener?.(
+      'end',
+      () => gfx.onSessionEnd(),
+      { once: true },
+    );
   }
   // XR-LIFE-7: a pending offerSession()/requestSession() counts as offered. When the last pending one is rejected
   // (a required feature this runtime does not grant, immersive-ar without the opt-in, ...) and no session exists,
@@ -317,7 +388,8 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       },
       () => {
         pendingRequests--;
-        if (pendingRequests === 0 && !device.activeSession) natives.offerRejected?.();
+        if (pendingRequests === 0 && !device.activeSession)
+          natives.offerRejected?.();
       },
     );
   }
@@ -325,14 +397,25 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   // rejects a required one. The init itself when nothing changes.
   function forMode(mode: string, init: object | undefined): object | undefined {
     if (mode === 'immersive-vr' || mode === 'immersive-ar') return init;
-    const o = (init ?? {}) as { requiredFeatures?: unknown; optionalFeatures?: unknown };
-    const refused = featureList(o.requiredFeatures).find((f) => IMMERSIVE_ONLY.has(f));
+    const o = (init ?? {}) as {
+      requiredFeatures?: unknown;
+      optionalFeatures?: unknown;
+    };
+    const refused = featureList(o.requiredFeatures).find((f) =>
+      IMMERSIVE_ONLY.has(f),
+    );
     if (refused) {
-      throw new DOMException(`The feature '${refused}' is not supported for mode: ${mode}.`, 'NotSupportedError');
+      throw new DOMException(
+        `The feature '${refused}' is not supported for mode: ${mode}.`,
+        'NotSupportedError',
+      );
     }
     const optional = featureList(o.optionalFeatures);
     if (!optional.some((f) => IMMERSIVE_ONLY.has(f))) return init;
-    return { ...o, optionalFeatures: optional.filter((f) => !IMMERSIVE_ONLY.has(f)) };
+    return {
+      ...o,
+      optionalFeatures: optional.filter((f) => !IMMERSIVE_ONLY.has(f)),
+    };
   }
   // XR-PERM-1: before a session gets features that need a runtime permission, ask for it (once: the system dialog).
   // Granted: the request goes on unchanged. Denied: a required feature rejects the request with NotSupportedError
@@ -340,9 +423,19 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   // which is never asked for. No dialog for a request that fails anyway (an unsupported mode or required feature, an
   // active session) or for features the runtime cannot grant.
   const permissions = new RuntimePermissions(natives, report);
-  function withPermissions(mode: string, init: object | undefined): Promise<object | undefined> | null {
-    if (device.activeSession || !config.supportedSessionModes.includes(mode as never)) return null;
-    const o = (init ?? {}) as { requiredFeatures?: unknown; optionalFeatures?: unknown };
+  function withPermissions(
+    mode: string,
+    init: object | undefined,
+  ): Promise<object | undefined> | null {
+    if (
+      device.activeSession ||
+      !config.supportedSessionModes.includes(mode as never)
+    )
+      return null;
+    const o = (init ?? {}) as {
+      requiredFeatures?: unknown;
+      optionalFeatures?: unknown;
+    };
     const required = featureList(o.requiredFeatures);
     const optional = featureList(o.optionalFeatures);
     const supported = config.supportedFeatures as string[];
@@ -350,23 +443,33 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     const servable = (f: string) =>
       f !== 'depth-sensing' ||
       !backend.depthSensing ||
-      negotiateHostDepth((init as { depthSensing?: never } | undefined)?.depthSensing, backend.depthSensing) !== null;
-    if (!required.every((f) => supported.includes(f) && servable(f))) return null;
+      negotiateHostDepth(
+        (init as { depthSensing?: never } | undefined)?.depthSensing,
+        backend.depthSensing,
+      ) !== null;
+    if (!required.every((f) => supported.includes(f) && servable(f)))
+      return null;
     const needed = new Set<string>();
     for (const f of [...required, ...optional]) {
       const permission = FEATURE_PERMISSIONS[f];
-      if (permission && supported.includes(f) && servable(f)) needed.add(permission);
+      if (permission && supported.includes(f) && servable(f))
+        needed.add(permission);
     }
     if (needed.size === 0) return null;
     return permissions.request([...needed]).then((held) => {
-      const denied = (f: string) => FEATURE_PERMISSIONS[f] !== undefined && held[FEATURE_PERMISSIONS[f]] !== true;
+      const denied = (f: string) =>
+        FEATURE_PERMISSIONS[f] !== undefined &&
+        held[FEATURE_PERMISSIONS[f]] !== true;
       const refused = required.find(denied);
       if (refused) {
         const permission = FEATURE_PERMISSIONS[refused];
         const why = permissions.declared(permission)
           ? 'which the user did not grant'
           : "which the app's manifest does not declare (declare the feature in native.features)";
-        throw new DOMException(`The required feature '${refused}' needs ${permission}, ${why}.`, 'NotSupportedError');
+        throw new DOMException(
+          `The required feature '${refused}' needs ${permission}, ${why}.`,
+          'NotSupportedError',
+        );
       }
       if (!optional.some(denied)) return init;
       return { ...o, optionalFeatures: optional.filter((f) => !denied(f)) };
@@ -399,7 +502,9 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     void gate.then(() => {
       if (waiting === gate) waiting = null;
     });
-    const ready = before ? before.then(() => withPermissions(mode, valid) ?? valid) : asking!;
+    const ready = before
+      ? before.then(() => withPermissions(mode, valid) ?? valid)
+      : asking!;
     return ready.then(
       (i) => {
         reached();
@@ -413,9 +518,20 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   }
 
   const proto = XRSystem.prototype as unknown as Record<string, unknown>;
-  const requestSession = proto.requestSession as (this: XRSystem, mode: string, init?: object) => Promise<object>;
-  const offerSession = proto.offerSession as (this: XRSystem, mode: string, init?: object) => Promise<object>;
-  const isSessionSupported = proto.isSessionSupported as (this: XRSystem, mode: string) => Promise<boolean>;
+  const requestSession = proto.requestSession as (
+    this: XRSystem,
+    mode: string,
+    init?: object,
+  ) => Promise<object>;
+  const offerSession = proto.offerSession as (
+    this: XRSystem,
+    mode: string,
+    init?: object,
+  ) => Promise<object>;
+  const isSessionSupported = proto.isSessionSupported as (
+    this: XRSystem,
+    mode: string,
+  ) => Promise<boolean>;
   Object.defineProperty(proto, 'isSessionSupported', {
     configurable: true,
     writable: true,
@@ -427,20 +543,35 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   Object.defineProperty(proto, 'requestSession', {
     configurable: true,
     writable: true,
-    value: function requestSessionNative(this: XRSystem, mode: string, init?: object) {
+    value: function requestSessionNative(
+      this: XRSystem,
+      mode: string,
+      init?: object,
+    ) {
       capabilities();
-      const p = inOrder(String(mode), init, (i) => requestSession.call(this, mode, i));
+      const p = inOrder(String(mode), init, (i) =>
+        requestSession.call(this, mode, i),
+      );
       trackRequest(p);
-      p.then((s) => onSession(s, String(mode)), () => {});
+      p.then(
+        (s) => onSession(s, String(mode)),
+        () => {},
+      );
       return p;
     },
   });
   Object.defineProperty(proto, 'offerSession', {
     configurable: true,
     writable: true,
-    value: function offerSessionNative(this: XRSystem, mode: string, init?: object) {
+    value: function offerSessionNative(
+      this: XRSystem,
+      mode: string,
+      init?: object,
+    ) {
       capabilities();
-      const p = inOrder(String(mode), init, (i) => offerSession.call(this, mode, i));
+      const p = inOrder(String(mode), init, (i) =>
+        offerSession.call(this, mode, i),
+      );
       trackRequest(p);
       return p;
     },
@@ -451,14 +582,23 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     const Base = g[name] as Ctor | undefined;
     if (typeof Base !== 'function') return;
     const Wrapped = {
-      [name]: class extends (Base as new (session: object, context: GLContext, init?: object) => object) {
+      [name]: class extends (Base as new (
+        session: object,
+        context: GLContext,
+        init?: object,
+      ) => object) {
         constructor(session: object, context: GLContext, init?: object) {
           if (context && typeof context === 'object') gfx.noteContext(context);
           super(session, context, init);
         }
       },
     }[name];
-    Object.defineProperty(g, name, { value: Wrapped, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(g, name, {
+      value: Wrapped,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
   };
   wrapLayerClass('XRWebGLBinding');
   wrapLayerClass('XRWebGLLayer');
@@ -467,9 +607,13 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   // headset has no spatial anchors, or the page did not ask) IWER rejects the calls with NotSupportedError.
 
   // window `load`: the entry module has been evaluated (XR-LIFE-7's clock starts).
-  const addEventListener = g.addEventListener as ((t: string, l: () => void, o?: object) => void) | undefined;
+  const addEventListener = g.addEventListener as
+    | ((t: string, l: () => void, o?: object) => void)
+    | undefined;
   if (typeof addEventListener === 'function') {
-    addEventListener.call(g, 'load', () => natives.entryEvaluated(), { once: true });
+    addEventListener.call(g, 'load', () => natives.entryEvaluated(), {
+      once: true,
+    });
   }
 
   // --- frames -------------------------------------------------------------------------------------------------
@@ -482,7 +626,11 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       events++;
       if (e.type === 'visibilitychange') {
         lastVisibility = { visible: e.visible, focused: e.focused };
-        device.dispatchHostEvent({ type: 'visibilitychange', visible: e.visible, focused: e.focused });
+        device.dispatchHostEvent({
+          type: 'visibilitychange',
+          visible: e.visible,
+          focused: e.focused,
+        });
       } else if (e.type === 'frameratechange') {
         device.dispatchHostEvent({ type: 'frameratechange', rate: e.rate });
       } else if (e.type === 'referencespacereset') {
@@ -499,7 +647,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   }
   function onFrame(kind: number, list?: XrNativeEvent[]): void {
     if (list) dispatch(list);
-    backend.anchors.poll();  // anchor requests the XR thread finished (their promises settle in IWER's next frame)
+    backend.anchors.poll(); // anchor requests the XR thread finished (their promises settle in IWER's next frame)
     if (kind === FRAME_XR) {
       frames++;
       const frame = record.refresh();
@@ -507,9 +655,9 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       layerBuffer?.beginFrame();
       gfx.beginFrame(frame.colorTexture);
       if (device.activeSession) {
-        device.runHostFrame(frame);  // session callbacks, then window rAF (backend.runWindowFrame)
+        device.runHostFrame(frame); // session callbacks, then window rAF (backend.runWindowFrame)
       } else {
-        windowFrame();  // the session ended in JS before the native side heard of it
+        windowFrame(); // the session ended in JS before the native side heard of it
       }
       // a frame that drew only layers is fenced too
       gfx.endFrame(frame.colorTexture !== 0 || gfx.layerCount > 0);
@@ -548,6 +696,11 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     anchorStats: () => natives.anchorStats?.() ?? null,
     depth: () => backend.depthRecord?.state() ?? null,
   };
-  Object.defineProperty(g, '__iwnXR', { value: api, configurable: true, enumerable: false, writable: false });
+  Object.defineProperty(g, '__iwnXR', {
+    value: api,
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
   return api;
 }

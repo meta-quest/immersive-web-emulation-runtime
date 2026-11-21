@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Internal declarations of the workers module's V8 layer (Android). See runtime/workers/README.md for the design.
 //
 //   WorkerEnv        process-wide snapshot of what every worker needs from the page runtime (assets, origin,

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # Downloads the Khronos WebGL conformance tests (sdk/tests) at a pinned commit from Chromium's mirror of
 # KhronosGroup/WebGL into ~/.cache/iwn-webgl-cts/sdk-tests (outside the checkout; test-only, not shipped).
 # Uses the usual https_proxy environment behind a proxy.

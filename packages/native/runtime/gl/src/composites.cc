@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // V8-independent composite natives. Sources: OpenGL ES 3.2 spec (program interface queries, §7.3-7.6;
 // framebuffer clears §15.2; sync objects §4.1), KHR_parallel_shader_compile, WebGL 2.0 §5 (zero-init,
 // multi-draw semantics from WEBGL_multi_draw). Written for this runtime; no third-party code.

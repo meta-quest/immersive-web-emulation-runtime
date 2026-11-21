@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // A fake OpenXR runtime for the host tests of the XR thread's spatial-entity code (src/android/xr_scene.cc,
 // xr_anchors.cc), which makes OpenXR calls only. It behaves as Meta's mobile runtime does where that code depends on it:
 //   - a LOAD query returns the SAME XrSpace for an entity already loaded in the session (XrRuntimeSystem_Client

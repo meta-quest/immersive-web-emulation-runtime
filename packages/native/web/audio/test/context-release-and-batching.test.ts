@@ -29,19 +29,34 @@ setFlagsFromString('--expose-gc');
 const gc = runInNewContext('gc') as () => void;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const addonPath = process.env.IWN_AUDIO_ADDON ?? path.join(tmpdir(), 'iwn-audio-host', 'iwn_audio_node.node');
+const addonPath =
+  process.env.IWN_AUDIO_ADDON ??
+  path.join(tmpdir(), 'iwn-audio-host', 'iwn_audio_node.node');
 const have = existsSync(addonPath);
 let api: WebAudioApi;
 let natives: AudioNatives;
 if (have) {
-  natives = (createRequire(import.meta.url)(addonPath) as { audio: AudioNatives }).audio;
-  api = createWebAudio(natives, { experimental: true, log: () => {}, urlOf: () => undefined });
+  natives = (
+    createRequire(import.meta.url)(addonPath) as { audio: AudioNatives }
+  ).audio;
+  api = createWebAudio(natives, {
+    experimental: true,
+    log: () => {},
+    urlOf: () => undefined,
+  });
 }
 
-const settleAll = async (ps: Array<Promise<unknown>>, ms: number): Promise<{ settled: number; rejected: number }> => {
+const settleAll = async (
+  ps: Array<Promise<unknown>>,
+  ms: number,
+): Promise<{ settled: number; rejected: number }> => {
   let settled = 0;
   let rejected = 0;
-  for (const p of ps) p.then(() => settled++, () => (settled++, rejected++));
+  for (const p of ps)
+    p.then(
+      () => settled++,
+      () => (settled++, rejected++),
+    );
   const t0 = Date.now();
   while (settled < ps.length && Date.now() - t0 < ms) await sleep(10);
   return { settled, rejected };
@@ -84,8 +99,18 @@ describe('JS layer (fake natives)', () => {
     const a = createWebAudio(n, { experimental: true });
     const ctx = new a.OfflineAudioContext(1, 4800, 48000);
     const g = new a.GainNode(ctx);
-    assert.throws(() => g.gain.setValueCurveAtTime(new Float32Array(10_000_001), 0, 1), (e: Error) => e.name === 'NotSupportedError');
-    assert.throws(() => ctx.createPeriodicWave(new Float32Array(1_000_001), new Float32Array(1_000_001)), (e: Error) => e.name === 'NotSupportedError');
+    assert.throws(
+      () => g.gain.setValueCurveAtTime(new Float32Array(10_000_001), 0, 1),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
+    assert.throws(
+      () =>
+        ctx.createPeriodicWave(
+          new Float32Array(1_000_001),
+          new Float32Array(1_000_001),
+        ),
+      (e: Error) => e.name === 'NotSupportedError',
+    );
     g.gain.setValueCurveAtTime(new Float32Array(1000), 0, 1); // fine
   });
 
@@ -103,83 +128,111 @@ describe('JS layer (fake natives)', () => {
     const r = await settleAll([...ps, closing], 500);
     assert.deepEqual(r, { settled: 5, rejected: 0 });
     assert.equal(ctx.state, 'closed');
-    assert.equal(n.ctx(1).released, true, 'native context released once closed');
+    assert.equal(
+      n.ctx(1).released,
+      true,
+      'native context released once closed',
+    );
   });
 });
 
-describe('real engine (host addon)', { skip: !have && `addon not built: ${addonPath}` }, () => {
-  test('closed AudioContexts are released at once; dropped OfflineAudioContexts at collection', async () => {
-    const base = natives.stats();
-    const rss0 = process.memoryUsage().rss;
-    // In helpers, so no context stays reachable from this async frame.
-    const renderOnce = async (): Promise<void> => {
-      const off = new api.OfflineAudioContext(2, 4800, 48000);
+describe(
+  'real engine (host addon)',
+  { skip: !have && `addon not built: ${addonPath}` },
+  () => {
+    test('closed AudioContexts are released at once; dropped OfflineAudioContexts at collection', async () => {
+      const base = natives.stats();
+      const rss0 = process.memoryUsage().rss;
+      // In helpers, so no context stays reachable from this async frame.
+      const renderOnce = async (): Promise<void> => {
+        const off = new api.OfflineAudioContext(2, 4800, 48000);
+        const osc = off.createOscillator();
+        osc.connect(off.destination);
+        osc.start();
+        await off.startRendering();
+      };
+      const openAndClose = async (): Promise<void> => {
+        const ctx = new api.AudioContext();
+        await sleep(5);
+        await ctx.close();
+      };
+      for (let i = 0; i < 40; i++) await renderOnce();
+      for (let i = 0; i < 10; i++) await openAndClose();
+      assert.equal(
+        natives.stats().realtimeContexts,
+        base.realtimeContexts,
+        'closed contexts released without GC',
+      );
+      // A never-started offline context, dropped.
+      void new api.OfflineAudioContext(1, 128, 48000);
+      for (
+        let i = 0;
+        i < 6 && natives.stats().offlineContexts > base.offlineContexts;
+        i++
+      ) {
+        gc();
+        await sleep(20);
+      }
+      const s = natives.stats();
+      const rss1 = process.memoryUsage().rss;
+      console.log(
+        `    offline ${s.offlineContexts - base.offlineContexts}, realtime ${s.realtimeContexts - base.realtimeContexts}, rss ${(rss0 / 1048576).toFixed(0)} -> ${(rss1 / 1048576).toFixed(0)} MB`,
+      );
+      assert.equal(s.offlineContexts, base.offlineContexts);
+    });
+
+    test('a finished OfflineAudioContext that is still referenced keeps its analyser readable', async () => {
+      const off = new api.OfflineAudioContext(1, 4096, 48000);
       const osc = off.createOscillator();
-      osc.connect(off.destination);
+      const an = off.createAnalyser();
+      osc.connect(an).connect(off.destination);
       osc.start();
       await off.startRendering();
-    };
-    const openAndClose = async (): Promise<void> => {
-      const ctx = new api.AudioContext();
-      await sleep(5);
-      await ctx.close();
-    };
-    for (let i = 0; i < 40; i++) await renderOnce();
-    for (let i = 0; i < 10; i++) await openAndClose();
-    assert.equal(natives.stats().realtimeContexts, base.realtimeContexts, 'closed contexts released without GC');
-    // A never-started offline context, dropped.
-    void new api.OfflineAudioContext(1, 128, 48000);
-    for (let i = 0; i < 6 && natives.stats().offlineContexts > base.offlineContexts; i++) {
       gc();
+      await sleep(10);
+      const d = new Float32Array(an.fftSize);
+      an.getFloatTimeDomainData(d);
+      assert.ok(d.some((v) => Math.abs(v) > 0.5));
+    });
+
+    test('more than 16 resume()/suspend() calls in one task all settle', async () => {
+      const ctx = new api.AudioContext();
       await sleep(20);
-    }
-    const s = natives.stats();
-    const rss1 = process.memoryUsage().rss;
-    console.log(`    offline ${s.offlineContexts - base.offlineContexts}, realtime ${s.realtimeContexts - base.realtimeContexts}, rss ${(rss0 / 1048576).toFixed(0)} -> ${(rss1 / 1048576).toFixed(0)} MB`);
-    assert.equal(s.offlineContexts, base.offlineContexts);
-  });
+      const r17 = await settleAll(
+        Array.from({ length: 17 }, () => ctx.resume()),
+        1500,
+      );
+      assert.deepEqual(r17, { settled: 17, rejected: 0 });
+      const r40 = await settleAll(
+        Array.from({ length: 40 }, () => ctx.resume()),
+        1500,
+      );
+      assert.deepEqual(r40, { settled: 40, rejected: 0 });
+      const alt = await settleAll(
+        Array.from({ length: 20 }, (_, i) =>
+          i % 2 ? ctx.resume() : ctx.suspend(),
+        ),
+        1500,
+      );
+      assert.deepEqual(alt, { settled: 20, rejected: 0 });
+      assert.equal(ctx.state, 'running');
+      // Requests queued before a close resolve; the close settles too.
+      const before = Array.from({ length: 30 }, () => ctx.suspend());
+      const closing = ctx.close();
+      const r = await settleAll([...before, closing], 1500);
+      assert.deepEqual(r, { settled: 31, rejected: 0 });
+      assert.equal(ctx.state, 'closed');
+    });
 
-  test('a finished OfflineAudioContext that is still referenced keeps its analyser readable', async () => {
-    const off = new api.OfflineAudioContext(1, 4096, 48000);
-    const osc = off.createOscillator();
-    const an = off.createAnalyser();
-    osc.connect(an).connect(off.destination);
-    osc.start();
-    await off.startRendering();
-    gc();
-    await sleep(10);
-    const d = new Float32Array(an.fftSize);
-    an.getFloatTimeDomainData(d);
-    assert.ok(d.some((v) => Math.abs(v) > 0.5));
-  });
-
-  test('more than 16 resume()/suspend() calls in one task all settle', async () => {
-    const ctx = new api.AudioContext();
-    await sleep(20);
-    const r17 = await settleAll(Array.from({ length: 17 }, () => ctx.resume()), 1500);
-    assert.deepEqual(r17, { settled: 17, rejected: 0 });
-    const r40 = await settleAll(Array.from({ length: 40 }, () => ctx.resume()), 1500);
-    assert.deepEqual(r40, { settled: 40, rejected: 0 });
-    const alt = await settleAll(Array.from({ length: 20 }, (_, i) => (i % 2 ? ctx.resume() : ctx.suspend())), 1500);
-    assert.deepEqual(alt, { settled: 20, rejected: 0 });
-    assert.equal(ctx.state, 'running');
-    // Requests queued before a close resolve; the close settles too.
-    const before = Array.from({ length: 30 }, () => ctx.suspend());
-    const closing = ctx.close();
-    const r = await settleAll([...before, closing], 1500);
-    assert.deepEqual(r, { settled: 31, rejected: 0 });
-    assert.equal(ctx.state, 'closed');
-  });
-
-  test('polling mode: a promise wait started behind an unref-ed timer keeps Node alive', () => {
-    // A source is started (an ended-event wait: the poll timer is unref-ed), then startRendering()
-    // is awaited in the same task. Node must not exit before the render settles.
-    const dir = mkdtempSync(path.join(tmpdir(), 'iwn-audio-poll-'));
-    const script = path.join(dir, 'poll.ts');
-    const index = fileURLToPath(new URL('../src/index.ts', import.meta.url));
-    writeFileSync(
-      script,
-      `import { createRequire } from 'node:module';
+    test('polling mode: a promise wait started behind an unref-ed timer keeps Node alive', () => {
+      // A source is started (an ended-event wait: the poll timer is unref-ed), then startRendering()
+      // is awaited in the same task. Node must not exit before the render settles.
+      const dir = mkdtempSync(path.join(tmpdir(), 'iwn-audio-poll-'));
+      const script = path.join(dir, 'poll.ts');
+      const index = fileURLToPath(new URL('../src/index.ts', import.meta.url));
+      writeFileSync(
+        script,
+        `import { createRequire } from 'node:module';
 import { createWebAudio } from ${JSON.stringify(index)};
 const natives = createRequire(import.meta.url)(${JSON.stringify(addonPath)}).audio;
 const api = createWebAudio(natives, { experimental: true, log: () => {} });
@@ -192,8 +245,12 @@ await new Promise((r) => setTimeout(r, 0));
 const b = await ctx.startRendering();
 console.log('rendered ' + b.length);
 `,
-    );
-    const out = execFileSync(process.execPath, [script], { encoding: 'utf8', timeout: 30000 });
-    assert.match(out, /rendered 192000/);
-  });
-});
+      );
+      const out = execFileSync(process.execPath, [script], {
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+      assert.match(out, /rendered 192000/);
+    });
+  },
+);

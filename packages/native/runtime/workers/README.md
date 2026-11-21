@@ -15,18 +15,18 @@ messaging, §10 workers, §2.7 structured data), ECMA-262 module semantics, WebI
 
 ## Layout
 
-| path | what |
-|---|---|
+| path                                                     | what                                                                                                                                                                                |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `include/iwn/workers/port_hub.h`, `src/core/port_hub.cc` | V8-free port table: entangled pairs, queued-until-started delivery, one delivery task per message, transfer (detach/adopt keeps the queue), close/disentangle, message log (WRK-10) |
-| `include/iwn/workers/policy.h`, `src/core/policy.cc` | V8-free policy: the `workers` config section, the live-worker limit (WRK-9), worker URL checks (WRK-1), script fetch (same-origin assets, `data:`), thread names (PROC-4) |
-| `src/v8/binding.cc` | `__iwn.workers` natives, per-isolate bindings and owners, process-wide registry |
-| `src/v8/register.cc` | `iwn_register_workers` (page and worker), shutdown hook, `workerStats` stats section, `workers` debug method |
-| `src/v8/worker_runtime.cc` | the worker thread: isolate, loop hooks, worker core natives, bootstrap, preludes, script, errors, teardown |
-| `src/v8/worker_modules.cc` | module workers, static/dynamic import, `import.meta` |
-| `src/v8/serializer.cc` | cross-isolate serialize/deserialize (transfer, SAB, wasm modules, host objects) |
-| `src/v8/script_cache.cc` | in-process code cache shared by worker isolates (CC-5) |
-| `test/host/` | host unit tests (`iwn_workers_core_tests`, 18 tests) |
-| `test/device/` | device test app (`app/`), runner (`run.mjs`), wasm feature probe (`wasm-features.mjs`) |
+| `include/iwn/workers/policy.h`, `src/core/policy.cc`     | V8-free policy: the `workers` config section, the live-worker limit (WRK-9), worker URL checks (WRK-1), script fetch (same-origin assets, `data:`), thread names (PROC-4)           |
+| `src/v8/binding.cc`                                      | `__iwn.workers` natives, per-isolate bindings and owners, process-wide registry                                                                                                     |
+| `src/v8/register.cc`                                     | `iwn_register_workers` (page and worker), shutdown hook, `workerStats` stats section, `workers` debug method                                                                        |
+| `src/v8/worker_runtime.cc`                               | the worker thread: isolate, loop hooks, worker core natives, bootstrap, preludes, script, errors, teardown                                                                          |
+| `src/v8/worker_modules.cc`                               | module workers, static/dynamic import, `import.meta`                                                                                                                                |
+| `src/v8/serializer.cc`                                   | cross-isolate serialize/deserialize (transfer, SAB, wasm modules, host objects)                                                                                                     |
+| `src/v8/script_cache.cc`                                 | in-process code cache shared by worker isolates (CC-5)                                                                                                                              |
+| `test/host/`                                             | host unit tests (`iwn_workers_core_tests`, 18 tests)                                                                                                                                |
+| `test/device/`                                           | device test app (`app/`), runner (`run.mjs`), wasm feature probe (`wasm-features.mjs`)                                                                                              |
 
 ## How it works
 
@@ -119,24 +119,24 @@ whichever way.
 
 ## Status by requirement (device: Quest 3S, 2026-10-20)
 
-| ID | status | evidence |
-|---|---|---|
-| WRK-1 | done | same-origin, `data:`, `blob:` (classic + module), relative to the creator's base; cross-origin → `SecurityError` |
-| WRK-2 | done in this stream; one gap in web/net | the worker `typeof` list (43 present, 7 absent incl. `requestIdleCallback`) passes; relative `importScripts` in `blob:`/`data:` workers throws `SyntaxError`; relative `fetch` there does **not** reject (web/net's `baseURL()` falls back to the app origin for non-http locations; device test WRK-2-fetch fails until net changes) |
-| WRK-3 | done | module worker static + dynamic import, `import.meta.url`/`resolve`; `import()` in classic workers |
-| WRK-4 | done | same-origin, `data:`, worker-made `blob:`, in order; `NetworkError`, `SyntaxError`; `TypeError` in module workers |
-| WRK-5 | done (SAB per the decision above) | round trip of every listed type incl. Blob/File/ImageData/ImageBitmap; sync `DataCloneError`; 64 MB transfer: postMessage 0.19-0.42 ms, sender detached, same memory back |
-| WRK-6 | done | cross-thread port transfer, 100-message RPC in order incl. messages queued before start; comlink 4.4.2 `wrap`/`expose`/`transfer`/`proxy` round trip |
-| WRK-7 | done | `ErrorEvent` at the Worker with `filename`/`lineno`/`colno` (3:3), `preventDefault()` suppresses the log, load failure is a plain `Event` |
-| WRK-8 | done | terminate in `for(;;){}` and in a wasm `loop br 0`: thread torn down and slot released 4.3-4.6 ms after `terminate()`; 300 random-point terminations while 64 KB buffers fly both ways (≈47k bounces): no crash; 500 create/message/terminate cycles: RSS -24 MB, threads 37 → 37 |
-| WRK-9 | done | `NotSupportedError` past `maxWorkers`; a worker past its 256 MB heap is terminated (`error` "Worker terminated: out of memory") and the app keeps running |
-| WRK-10 | done (SHOULD) via the debug endpoint | `workers` debug method: live workers, message totals and the last N messages (direction, worker label, bytes, time); `workerStats` in `stats`. DevTools worker targets (CDP-6) are not done |
-| WRK-11 | done | `ps -T`: workers NI 10 (PRI 9), page JS thread NI -10; no affinity is used |
-| WRK-12 | done | `navigator.hardwareConcurrency` = min(cores, 4) in the page and workers |
-| JS-2, REG-8 | done | transferred memory freed by the last owner (shared allocator), workers terminated with buffers in flight |
-| CC-5 | done (SHOULD), in-process | see Code cache |
-| PROC-4, PROC-6, PROC-7 | done for workers | thread names; workers run through pause/resume (ticks continued, state kept); exit joins them |
-| SIMD + threads | verified with real libraries | Rapier SIMD build in a worker == on the page (bit-identical); Havok (IWSDK's engine) in a worker; wasm-vips pthreads: 6 `em-pthread` module workers, 1 thread 1084 ms vs 4 threads 342 ms (3.2x) |
+| ID                     | status                                  | evidence                                                                                                                                                                                                                                                                                                                              |
+| ---------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WRK-1                  | done                                    | same-origin, `data:`, `blob:` (classic + module), relative to the creator's base; cross-origin → `SecurityError`                                                                                                                                                                                                                      |
+| WRK-2                  | done in this stream; one gap in web/net | the worker `typeof` list (43 present, 7 absent incl. `requestIdleCallback`) passes; relative `importScripts` in `blob:`/`data:` workers throws `SyntaxError`; relative `fetch` there does **not** reject (web/net's `baseURL()` falls back to the app origin for non-http locations; device test WRK-2-fetch fails until net changes) |
+| WRK-3                  | done                                    | module worker static + dynamic import, `import.meta.url`/`resolve`; `import()` in classic workers                                                                                                                                                                                                                                     |
+| WRK-4                  | done                                    | same-origin, `data:`, worker-made `blob:`, in order; `NetworkError`, `SyntaxError`; `TypeError` in module workers                                                                                                                                                                                                                     |
+| WRK-5                  | done (SAB per the decision above)       | round trip of every listed type incl. Blob/File/ImageData/ImageBitmap; sync `DataCloneError`; 64 MB transfer: postMessage 0.19-0.42 ms, sender detached, same memory back                                                                                                                                                             |
+| WRK-6                  | done                                    | cross-thread port transfer, 100-message RPC in order incl. messages queued before start; comlink 4.4.2 `wrap`/`expose`/`transfer`/`proxy` round trip                                                                                                                                                                                  |
+| WRK-7                  | done                                    | `ErrorEvent` at the Worker with `filename`/`lineno`/`colno` (3:3), `preventDefault()` suppresses the log, load failure is a plain `Event`                                                                                                                                                                                             |
+| WRK-8                  | done                                    | terminate in `for(;;){}` and in a wasm `loop br 0`: thread torn down and slot released 4.3-4.6 ms after `terminate()`; 300 random-point terminations while 64 KB buffers fly both ways (≈47k bounces): no crash; 500 create/message/terminate cycles: RSS -24 MB, threads 37 → 37                                                     |
+| WRK-9                  | done                                    | `NotSupportedError` past `maxWorkers`; a worker past its 256 MB heap is terminated (`error` "Worker terminated: out of memory") and the app keeps running                                                                                                                                                                             |
+| WRK-10                 | done (SHOULD) via the debug endpoint    | `workers` debug method: live workers, message totals and the last N messages (direction, worker label, bytes, time); `workerStats` in `stats`. DevTools worker targets (CDP-6) are not done                                                                                                                                           |
+| WRK-11                 | done                                    | `ps -T`: workers NI 10 (PRI 9), page JS thread NI -10; no affinity is used                                                                                                                                                                                                                                                            |
+| WRK-12                 | done                                    | `navigator.hardwareConcurrency` = min(cores, 4) in the page and workers                                                                                                                                                                                                                                                               |
+| JS-2, REG-8            | done                                    | transferred memory freed by the last owner (shared allocator), workers terminated with buffers in flight                                                                                                                                                                                                                              |
+| CC-5                   | done (SHOULD), in-process               | see Code cache                                                                                                                                                                                                                                                                                                                        |
+| PROC-4, PROC-6, PROC-7 | done for workers                        | thread names; workers run through pause/resume (ticks continued, state kept); exit joins them                                                                                                                                                                                                                                         |
+| SIMD + threads         | verified with real libraries            | Rapier SIMD build in a worker == on the page (bit-identical); Havok (IWSDK's engine) in a worker; wasm-vips pthreads: 6 `em-pthread` module workers, 1 thread 1084 ms vs 4 threads 342 ms (3.2x)                                                                                                                                      |
 
 Not done: CDP-6 (worker targets in DevTools), BroadcastChannel (optional), `SharedWorker`, persistent on-disk
 code cache for workers, `OffscreenCanvas` transfer (no transferable OffscreenCanvas in web/canvas2d yet: posting one

@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # Native module registry (NATIVE MODULE CONTRACT).
 #
 # Collects the modules added with add_subdirectory() and generates iwn_module_registry.cc, a table of

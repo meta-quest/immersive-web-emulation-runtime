@@ -31,25 +31,111 @@ import {
   warn,
 } from './env.ts';
 import { DOMMatrix, DOMRect } from './geometry.ts';
-import { ALREADY_STARTED, DOMTokenList, DocumentFragment, Element, canvasConnected, type Node } from './nodes.ts';
+import {
+  ALREADY_STARTED,
+  DOMTokenList,
+  DocumentFragment,
+  Element,
+  canvasConnected,
+  type Node,
+} from './nodes.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** Event handler IDL attributes on HTMLElement, Document and Window (GlobalEventHandlers, the common ones). */
 export const GLOBAL_HANDLERS = [
-  'abort', 'auxclick', 'beforeinput', 'blur', 'cancel', 'change', 'click', 'close', 'contextmenu', 'copy', 'cut',
-  'dblclick', 'drag', 'dragend', 'dragenter', 'dragleave', 'dragover', 'dragstart', 'drop', 'error', 'focus',
-  'focusin', 'focusout', 'input', 'invalid', 'keydown', 'keypress', 'keyup', 'load', 'loadeddata', 'loadedmetadata',
-  'loadstart', 'mousedown', 'mouseenter', 'mouseleave', 'mousemove', 'mouseout', 'mouseover', 'mouseup', 'paste',
-  'pause', 'play', 'playing', 'pointercancel', 'pointerdown', 'pointerenter', 'pointerleave', 'pointermove',
-  'pointerout', 'pointerover', 'pointerup', 'gotpointercapture', 'lostpointercapture', 'progress', 'reset', 'resize',
-  'scroll', 'scrollend', 'select', 'selectionchange', 'submit', 'toggle', 'touchcancel', 'touchend', 'touchmove',
-  'touchstart', 'wheel', 'animationstart', 'animationend', 'animationiteration', 'transitionend', 'transitionstart',
-  'canplay', 'canplaythrough', 'durationchange', 'emptied', 'ended', 'ratechange', 'seeked', 'seeking', 'stalled',
-  'suspend', 'timeupdate', 'volumechange', 'waiting',
+  'abort',
+  'auxclick',
+  'beforeinput',
+  'blur',
+  'cancel',
+  'change',
+  'click',
+  'close',
+  'contextmenu',
+  'copy',
+  'cut',
+  'dblclick',
+  'drag',
+  'dragend',
+  'dragenter',
+  'dragleave',
+  'dragover',
+  'dragstart',
+  'drop',
+  'error',
+  'focus',
+  'focusin',
+  'focusout',
+  'input',
+  'invalid',
+  'keydown',
+  'keypress',
+  'keyup',
+  'load',
+  'loadeddata',
+  'loadedmetadata',
+  'loadstart',
+  'mousedown',
+  'mouseenter',
+  'mouseleave',
+  'mousemove',
+  'mouseout',
+  'mouseover',
+  'mouseup',
+  'paste',
+  'pause',
+  'play',
+  'playing',
+  'pointercancel',
+  'pointerdown',
+  'pointerenter',
+  'pointerleave',
+  'pointermove',
+  'pointerout',
+  'pointerover',
+  'pointerup',
+  'gotpointercapture',
+  'lostpointercapture',
+  'progress',
+  'reset',
+  'resize',
+  'scroll',
+  'scrollend',
+  'select',
+  'selectionchange',
+  'submit',
+  'toggle',
+  'touchcancel',
+  'touchend',
+  'touchmove',
+  'touchstart',
+  'wheel',
+  'animationstart',
+  'animationend',
+  'animationiteration',
+  'transitionend',
+  'transitionstart',
+  'canplay',
+  'canplaythrough',
+  'durationchange',
+  'emptied',
+  'ended',
+  'ratechange',
+  'seeked',
+  'seeking',
+  'stalled',
+  'suspend',
+  'timeupdate',
+  'volumechange',
+  'waiting',
 ];
 
-function fire(target: any, type: string, init: Record<string, unknown> = {}): boolean {
+function fire(
+  target: any,
+  type: string,
+  init: Record<string, unknown> = {},
+): boolean {
   const E = BaseEvent;
   return target.dispatchEvent(new E(type, init));
 }
@@ -63,7 +149,17 @@ function resolveURL(value: string): string {
 }
 
 /** Defines reflected string / boolean / number / URL properties for attributes (HTML §2.6.1). */
-function reflect(proto: object, props: Array<[prop: string, kind: 's' | 'b' | 'n' | 'u' | 'l', attr?: string, def?: unknown]>): void {
+function reflect(
+  proto: object,
+  props: Array<
+    [
+      prop: string,
+      kind: 's' | 'b' | 'n' | 'u' | 'l',
+      attr?: string,
+      def?: unknown,
+    ]
+  >,
+): void {
   for (const [prop, kind, attrName, def] of props) {
     const attr = attrName ?? lower(prop);
     Object.defineProperty(proto, prop, {
@@ -74,21 +170,22 @@ function reflect(proto: object, props: Array<[prop: string, kind: 's' | 'b' | 'n
             return v !== null;
           case 'n': {
             const n = v === null ? NaN : parseInt(v, 10);
-            return Number.isFinite(n) ? n : (def as number) ?? 0;
+            return Number.isFinite(n) ? n : ((def as number) ?? 0);
           }
           case 'u':
             return v === null ? '' : resolveURL(v);
           case 'l':
             return v === null ? ((def as string) ?? '') : lower(v);
           default:
-            return v ?? ((def as string) ?? '');
+            return v ?? (def as string) ?? '';
         }
       },
       set(this: Element, v: unknown) {
         if (kind === 'b') {
           if (v) this.setAttribute(attr, '');
           else this.removeAttribute(attr);
-        } else if (kind === 'n') this.setAttribute(attr, String(Math.trunc(Number(v)) || 0));
+        } else if (kind === 'n')
+          this.setAttribute(attr, String(Math.trunc(Number(v)) || 0));
         else this.setAttribute(attr, str(v));
       },
       configurable: true,
@@ -108,7 +205,9 @@ export class HTMLElement extends Element {
     const v = this.getAttribute('tabindex');
     const n = v === null ? NaN : parseInt(v, 10);
     if (Number.isFinite(n)) return n;
-    return /^(a|button|input|select|textarea|iframe|area)$/.test(this.localName) ? 0 : -1;
+    return /^(a|button|input|select|textarea|iframe|area)$/.test(this.localName)
+      ? 0
+      : -1;
   }
   set tabIndex(v: number) {
     this.setAttribute('tabindex', String(Math.trunc(Number(v)) || 0));
@@ -136,7 +235,12 @@ export class HTMLElement extends Element {
     return 0;
   }
   get offsetParent(): Element | null {
-    if (!this.isConnected || this.localName === 'body' || this.localName === 'html') return null;
+    if (
+      !this.isConnected ||
+      this.localName === 'body' ||
+      this.localName === 'html'
+    )
+      return null;
     return this._doc?.body ?? null;
   }
   focus(_options?: unknown): void {
@@ -147,10 +251,14 @@ export class HTMLElement extends Element {
     const FE = G.FocusEvent ?? BaseEvent;
     if (prev && prev !== this) {
       prev.dispatchEvent(new FE('blur', { relatedTarget: this }));
-      prev.dispatchEvent(new FE('focusout', { bubbles: true, relatedTarget: this }));
+      prev.dispatchEvent(
+        new FE('focusout', { bubbles: true, relatedTarget: this }),
+      );
     }
     this.dispatchEvent(new FE('focus', { relatedTarget: prev }));
-    this.dispatchEvent(new FE('focusin', { bubbles: true, relatedTarget: prev }));
+    this.dispatchEvent(
+      new FE('focusin', { bubbles: true, relatedTarget: prev }),
+    );
   }
   blur(): void {
     const doc = this._doc;
@@ -163,7 +271,14 @@ export class HTMLElement extends Element {
   click(): void {
     if (this.hasAttribute('disabled')) return;
     const ME = G.MouseEvent ?? BaseEvent;
-    this.dispatchEvent(new ME('click', { bubbles: true, cancelable: true, composed: true, detail: 1 }));
+    this.dispatchEvent(
+      new ME('click', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        detail: 1,
+      }),
+    );
   }
   showPopover(): void {}
   hidePopover(): void {}
@@ -171,18 +286,34 @@ export class HTMLElement extends Element {
     return false;
   }
   attachInternals(): never {
-    throw domException('ElementInternals is not supported.', 'NotSupportedError');
+    throw domException(
+      'ElementInternals is not supported.',
+      'NotSupportedError',
+    );
   }
   override get [Symbol.toStringTag](): string {
     return 'HTMLElement';
   }
 }
 reflect(HTMLElement.prototype, [
-  ['title', 's'], ['lang', 's'], ['dir', 's'], ['hidden', 'b'], ['accessKey', 's', 'accesskey'], ['autofocus', 'b'],
-  ['inert', 'b'], ['nonce', 's'], ['inputMode', 's', 'inputmode'], ['enterKeyHint', 's', 'enterkeyhint'],
-  ['autocapitalize', 's'], ['popover', 's'],
+  ['title', 's'],
+  ['lang', 's'],
+  ['dir', 's'],
+  ['hidden', 'b'],
+  ['accessKey', 's', 'accesskey'],
+  ['autofocus', 'b'],
+  ['inert', 'b'],
+  ['nonce', 's'],
+  ['inputMode', 's', 'inputmode'],
+  ['enterKeyHint', 's', 'enterkeyhint'],
+  ['autocapitalize', 's'],
+  ['popover', 's'],
 ]);
-for (const [prop, attr, def] of [['draggable', 'draggable', false], ['spellcheck', 'spellcheck', true], ['translate', 'translate', true]] as const) {
+for (const [prop, attr, def] of [
+  ['draggable', 'draggable', false],
+  ['spellcheck', 'spellcheck', true],
+  ['translate', 'translate', true],
+] as const) {
   Object.defineProperty(HTMLElement.prototype, prop, {
     get(this: Element) {
       const v = this.getAttribute(attr);
@@ -197,41 +328,92 @@ for (const [prop, attr, def] of [['draggable', 'draggable', false], ['spellcheck
 }
 for (const t of GLOBAL_HANDLERS) defineHandler(HTMLElement.prototype, t);
 
-function simple(name: string, props?: Parameters<typeof reflect>[1]): typeof HTMLElement {
+function simple(
+  name: string,
+  props?: Parameters<typeof reflect>[1],
+): typeof HTMLElement {
   const C = { [name]: class extends HTMLElement {} }[name]!;
-  Object.defineProperty(C.prototype, Symbol.toStringTag, { value: name, configurable: true });
+  Object.defineProperty(C.prototype, Symbol.toStringTag, {
+    value: name,
+    configurable: true,
+  });
   if (props) reflect(C.prototype, props);
   return C;
 }
 
 export const HTMLHtmlElement = simple('HTMLHtmlElement', [['version', 's']]);
 export const HTMLHeadElement = simple('HTMLHeadElement');
-export const HTMLBodyElement = simple('HTMLBodyElement', [['text', 's'], ['link', 's'], ['vLink', 's', 'vlink'], ['aLink', 's', 'alink'], ['bgColor', 's', 'bgcolor'], ['background', 's']]);
+export const HTMLBodyElement = simple('HTMLBodyElement', [
+  ['text', 's'],
+  ['link', 's'],
+  ['vLink', 's', 'vlink'],
+  ['aLink', 's', 'alink'],
+  ['bgColor', 's', 'bgcolor'],
+  ['background', 's'],
+]);
 export const HTMLDivElement = simple('HTMLDivElement', [['align', 's']]);
 export const HTMLSpanElement = simple('HTMLSpanElement');
-export const HTMLParagraphElement = simple('HTMLParagraphElement', [['align', 's']]);
-export const HTMLHeadingElement = simple('HTMLHeadingElement', [['align', 's']]);
+export const HTMLParagraphElement = simple('HTMLParagraphElement', [
+  ['align', 's'],
+]);
+export const HTMLHeadingElement = simple('HTMLHeadingElement', [
+  ['align', 's'],
+]);
 export const HTMLPreElement = simple('HTMLPreElement');
 export const HTMLBRElement = simple('HTMLBRElement');
 export const HTMLHRElement = simple('HTMLHRElement');
 export const HTMLUListElement = simple('HTMLUListElement');
-export const HTMLOListElement = simple('HTMLOListElement', [['reversed', 'b'], ['start', 'n', 'start', 1], ['type', 's']]);
+export const HTMLOListElement = simple('HTMLOListElement', [
+  ['reversed', 'b'],
+  ['start', 'n', 'start', 1],
+  ['type', 's'],
+]);
 export const HTMLLIElement = simple('HTMLLIElement', [['value', 'n']]);
-export const HTMLLabelElement = simple('HTMLLabelElement', [['htmlFor', 's', 'for']]);
-export const HTMLMetaElement = simple('HTMLMetaElement', [['name', 's'], ['content', 's'], ['httpEquiv', 's', 'http-equiv'], ['media', 's']]);
-export const HTMLBaseElement = simple('HTMLBaseElement', [['href', 'u'], ['target', 's']]);
+export const HTMLLabelElement = simple('HTMLLabelElement', [
+  ['htmlFor', 's', 'for'],
+]);
+export const HTMLMetaElement = simple('HTMLMetaElement', [
+  ['name', 's'],
+  ['content', 's'],
+  ['httpEquiv', 's', 'http-equiv'],
+  ['media', 's'],
+]);
+export const HTMLBaseElement = simple('HTMLBaseElement', [
+  ['href', 'u'],
+  ['target', 's'],
+]);
 export const HTMLTableElement = simple('HTMLTableElement');
 export const HTMLTableRowElement = simple('HTMLTableRowElement');
-export const HTMLTableCellElement = simple('HTMLTableCellElement', [['colSpan', 'n', 'colspan', 1], ['rowSpan', 'n', 'rowspan', 1]]);
+export const HTMLTableCellElement = simple('HTMLTableCellElement', [
+  ['colSpan', 'n', 'colspan', 1],
+  ['rowSpan', 'n', 'rowspan', 1],
+]);
 export const HTMLTableSectionElement = simple('HTMLTableSectionElement');
-export const HTMLFieldSetElement = simple('HTMLFieldSetElement', [['disabled', 'b'], ['name', 's']]);
+export const HTMLFieldSetElement = simple('HTMLFieldSetElement', [
+  ['disabled', 'b'],
+  ['name', 's'],
+]);
 export const HTMLLegendElement = simple('HTMLLegendElement');
-export const HTMLSourceElement = simple('HTMLSourceElement', [['src', 'u'], ['type', 's'], ['srcset', 's'], ['sizes', 's'], ['media', 's']]);
-export const HTMLTrackElement = simple('HTMLTrackElement', [['src', 'u'], ['kind', 's'], ['srclang', 's'], ['label', 's'], ['default', 'b']]);
+export const HTMLSourceElement = simple('HTMLSourceElement', [
+  ['src', 'u'],
+  ['type', 's'],
+  ['srcset', 's'],
+  ['sizes', 's'],
+  ['media', 's'],
+]);
+export const HTMLTrackElement = simple('HTMLTrackElement', [
+  ['src', 'u'],
+  ['kind', 's'],
+  ['srclang', 's'],
+  ['label', 's'],
+  ['default', 'b'],
+]);
 export const HTMLPictureElement = simple('HTMLPictureElement');
 export const HTMLSlotElement = simple('HTMLSlotElement', [['name', 's']]);
 export const HTMLDataElement = simple('HTMLDataElement', [['value', 's']]);
-export const HTMLTimeElement = simple('HTMLTimeElement', [['dateTime', 's', 'datetime']]);
+export const HTMLTimeElement = simple('HTMLTimeElement', [
+  ['dateTime', 's', 'datetime'],
+]);
 export const HTMLProgressElement = simple('HTMLProgressElement');
 export const HTMLUnknownElement = simple('HTMLUnknownElement');
 
@@ -249,7 +431,11 @@ export class HTMLTitleElement extends HTMLElement {
 
 export class HTMLAnchorElement extends HTMLElement {
   get relList(): DOMTokenList {
-    return ((this as any)._relList ??= new DOMTokenList(this, 'rel', ['noreferrer', 'noopener', 'opener']));
+    return ((this as any)._relList ??= new DOMTokenList(this, 'rel', [
+      'noreferrer',
+      'noopener',
+      'opener',
+    ]));
   }
   get text(): string {
     return this.textContent ?? '';
@@ -273,8 +459,28 @@ export class HTMLAnchorElement extends HTMLElement {
     return 'HTMLAnchorElement';
   }
 }
-reflect(HTMLAnchorElement.prototype, [['href', 'u'], ['target', 's'], ['download', 's'], ['rel', 's'], ['hreflang', 's'], ['type', 's'], ['referrerPolicy', 's', 'referrerpolicy'], ['ping', 's']]);
-for (const part of ['protocol', 'host', 'hostname', 'port', 'pathname', 'search', 'hash', 'username', 'password', 'origin'] as const) {
+reflect(HTMLAnchorElement.prototype, [
+  ['href', 'u'],
+  ['target', 's'],
+  ['download', 's'],
+  ['rel', 's'],
+  ['hreflang', 's'],
+  ['type', 's'],
+  ['referrerPolicy', 's', 'referrerpolicy'],
+  ['ping', 's'],
+]);
+for (const part of [
+  'protocol',
+  'host',
+  'hostname',
+  'port',
+  'pathname',
+  'search',
+  'hash',
+  'username',
+  'password',
+  'origin',
+] as const) {
   Object.defineProperty(HTMLAnchorElement.prototype, part, {
     get(this: HTMLAnchorElement) {
       const u = this._url();
@@ -315,18 +521,35 @@ export class HTMLCanvasElement extends HTMLElement {
   getContext(type: string, attributes?: unknown): object | null {
     const t = str(type);
     const have = this[CANVAS_CTX];
-    if (have) return have.type === t || (have.type === 'webgl' && t === 'experimental-webgl') ? have.ctx : null;
-    if (t !== 'webgl' && t !== 'webgl2' && t !== 'experimental-webgl') return null;
+    if (have)
+      return have.type === t ||
+        (have.type === 'webgl' && t === 'experimental-webgl')
+        ? have.ctx
+        : null;
+    if (t !== 'webgl' && t !== 'webgl2' && t !== 'experimental-webgl')
+      return null;
     const gl = G.__iwnWebGL;
     if (!gl || typeof gl.createContext !== 'function') return null;
-    const ctx = gl.createContext(this, t === 'webgl2' ? 'webgl2' : 'webgl', attributes);
-    if (ctx) this[CANVAS_CTX] = { type: t === 'experimental-webgl' ? 'webgl' : t, ctx };
+    const ctx = gl.createContext(
+      this,
+      t === 'webgl2' ? 'webgl2' : 'webgl',
+      attributes,
+    );
+    if (ctx)
+      this[CANVAS_CTX] = {
+        type: t === 'experimental-webgl' ? 'webgl' : t,
+        ctx,
+      };
     return ctx ?? null;
   }
   toDataURL(_type?: string, _quality?: number): string {
     return 'data:,';
   }
-  toBlob(callback: (b: unknown) => void, _type?: string, _quality?: number): void {
+  toBlob(
+    callback: (b: unknown) => void,
+    _type?: string,
+    _quality?: number,
+  ): void {
     queueTask(() => callback(null));
   }
   override _connectedChanged(connected: boolean): void {
@@ -351,10 +574,16 @@ class TimeRanges {
     return 0;
   }
   start(_i: number): number {
-    throw domException('The index provided is greater than or equal to the number of ranges.', 'IndexSizeError');
+    throw domException(
+      'The index provided is greater than or equal to the number of ranges.',
+      'IndexSizeError',
+    );
   }
   end(_i: number): number {
-    throw domException('The index provided is greater than or equal to the number of ranges.', 'IndexSizeError');
+    throw domException(
+      'The index provided is greater than or equal to the number of ranges.',
+      'IndexSizeError',
+    );
   }
   get [Symbol.toStringTag](): string {
     return 'TimeRanges';
@@ -390,7 +619,9 @@ export interface MediaFeed {
 function feedOf(value: unknown): MediaFeed | null {
   if (value === null || typeof value !== 'object') return null;
   const f = (value as { [MEDIA_FEED]?: unknown })[MEDIA_FEED];
-  return typeof f === 'function' ? ((f as () => MediaFeed | null).call(value) ?? null) : null;
+  return typeof f === 'function'
+    ? ((f as () => MediaFeed | null).call(value) ?? null)
+    : null;
 }
 
 const MEDIA = Symbol('iwn.dom.media');
@@ -419,7 +650,8 @@ interface MediaState {
   nextCallback: number;
 }
 
-const now = (): number => (typeof G.performance?.now === 'function' ? G.performance.now() : Date.now());
+const now = (): number =>
+  typeof G.performance?.now === 'function' ? G.performance.now() : Date.now();
 
 export class HTMLMediaElement extends HTMLElement {
   static readonly NETWORK_EMPTY = 0;
@@ -433,9 +665,26 @@ export class HTMLMediaElement extends HTMLElement {
   static readonly HAVE_ENOUGH_DATA = 4;
   /** @internal */ get _m(): MediaState {
     return ((this as any)[MEDIA] ??= {
-      volume: 1, muted: false, playbackRate: 1, defaultPlaybackRate: 1, error: null, srcObject: null, generation: 0,
-      feed: null, unlisten: null, held: null, ready: 0, network: 0, paused: true, ended: false, presented: 0, width: 0,
-      height: 0, plays: [], callbacks: new Map(), nextCallback: 0,
+      volume: 1,
+      muted: false,
+      playbackRate: 1,
+      defaultPlaybackRate: 1,
+      error: null,
+      srcObject: null,
+      generation: 0,
+      feed: null,
+      unlisten: null,
+      held: null,
+      ready: 0,
+      network: 0,
+      paused: true,
+      ended: false,
+      presented: 0,
+      width: 0,
+      height: 0,
+      plays: [],
+      callbacks: new Map(),
+      nextCallback: 0,
     });
   }
   get currentSrc(): string {
@@ -475,7 +724,11 @@ export class HTMLMediaElement extends HTMLElement {
   }
   set volume(v: number) {
     const n = Number(v);
-    if (!(n >= 0 && n <= 1)) throw domException(`The volume provided (${v}) is outside the range [0, 1].`, 'IndexSizeError');
+    if (!(n >= 0 && n <= 1))
+      throw domException(
+        `The volume provided (${v}) is outside the range [0, 1].`,
+        'IndexSizeError',
+      );
     this._m.volume = n;
   }
   get muted(): boolean {
@@ -528,7 +781,10 @@ export class HTMLMediaElement extends HTMLElement {
     const m = this._m;
     if (!m.feed) {
       return Promise.reject(
-        domException(`${this[Symbol.toStringTag] === 'HTMLVideoElement' ? 'HTMLVideoElement' : 'HTMLMediaElement'}.play(): media playback is not supported by @iwer/native in this alpha (a camera MediaStream as srcObject plays)`, 'NotSupportedError'),
+        domException(
+          `${this[Symbol.toStringTag] === 'HTMLVideoElement' ? 'HTMLVideoElement' : 'HTMLMediaElement'}.play(): media playback is not supported by @iwer/native in this alpha (a camera MediaStream as srcObject plays)`,
+          'NotSupportedError',
+        ),
       );
     }
     return new Promise<void>((resolve, reject) => {
@@ -553,7 +809,12 @@ export class HTMLMediaElement extends HTMLElement {
     m.paused = true;
     if (m.ready >= 2) this._hold(true);
     const gen = m.generation;
-    this._settlePlays(domException('The play() request was interrupted by a call to pause().', 'AbortError'));
+    this._settlePlays(
+      domException(
+        'The play() request was interrupted by a call to pause().',
+        'AbortError',
+      ),
+    );
     queueTask(() => {
       if (m.generation === gen) fire(this, 'pause');
     });
@@ -568,10 +829,18 @@ export class HTMLMediaElement extends HTMLElement {
   }
   fastSeek(_t: number): void {}
   addTextTrack(): never {
-    throw domException('HTMLMediaElement.addTextTrack(): text tracks are not supported by @iwer/native in this alpha', 'NotSupportedError');
+    throw domException(
+      'HTMLMediaElement.addTextTrack(): text tracks are not supported by @iwer/native in this alpha',
+      'NotSupportedError',
+    );
   }
   setSinkId(): Promise<void> {
-    return Promise.reject(domException('HTMLMediaElement.setSinkId() is not supported by @iwer/native', 'NotSupportedError'));
+    return Promise.reject(
+      domException(
+        'HTMLMediaElement.setSinkId() is not supported by @iwer/native',
+        'NotSupportedError',
+      ),
+    );
   }
   /** @internal: a source was given: report MEDIA_ERR_SRC_NOT_SUPPORTED (4) at a task, as for an unplayable source. */
   _unsupported(): void {
@@ -579,7 +848,11 @@ export class HTMLMediaElement extends HTMLElement {
     const gen = ++m.generation;
     queueTask(() => {
       if (m.generation !== gen) return;
-      m.error = { code: 4, message: 'Media playback is not supported by @iwer/native in this alpha' };
+      m.error = {
+        code: 4,
+        message:
+          'Media playback is not supported by @iwer/native in this alpha',
+      };
       fire(this, 'error');
     });
   }
@@ -613,7 +886,12 @@ export class HTMLMediaElement extends HTMLElement {
     m.width = m.height = 0;
     // Pending requestVideoFrameCallback callbacks stay for the next presented frame, whatever its source (as in
     // Chromium): three's VideoTexture registers one and re-registers it only from inside it.
-    this._settlePlays(domException('The play() request was interrupted by a new load request.', 'AbortError'));
+    this._settlePlays(
+      domException(
+        'The play() request was interrupted by a new load request.',
+        'AbortError',
+      ),
+    );
     m.paused = true;
     if (hadData) {
       queueTask(() => {
@@ -681,8 +959,13 @@ export class HTMLMediaElement extends HTMLElement {
     m.callbacks.clear();
     const t = now();
     const metadata = {
-      presentationTime: t, expectedDisplayTime: t, width: f.width, height: f.height, mediaTime: f.mediaTime,
-      presentedFrames: f.frames, processingDuration: 0,
+      presentationTime: t,
+      expectedDisplayTime: t,
+      width: f.width,
+      height: f.height,
+      mediaTime: f.mediaTime,
+      presentedFrames: f.frames,
+      processingDuration: 0,
     };
     for (const cb of list) {
       try {
@@ -702,7 +985,12 @@ export class HTMLMediaElement extends HTMLElement {
       else p.resolve();
     }
   }
-  override _reflect(local: string, ns: string | null, _old: string | null, value: string | null): void {
+  override _reflect(
+    local: string,
+    ns: string | null,
+    _old: string | null,
+    value: string | null,
+  ): void {
     // srcObject wins over src (HTML resource selection)
     if (local === 'src' && ns === null && !this._m.feed) {
       if (value) this._unsupported();
@@ -717,14 +1005,39 @@ export class HTMLMediaElement extends HTMLElement {
   }
 }
 reflect(HTMLMediaElement.prototype, [
-  ['src', 'u'], ['crossOrigin', 's', 'crossorigin'], ['preload', 's', 'preload', 'auto'], ['autoplay', 'b'],
-  ['loop', 'b'], ['controls', 'b'], ['defaultMuted', 'b', 'muted'],
+  ['src', 'u'],
+  ['crossOrigin', 's', 'crossorigin'],
+  ['preload', 's', 'preload', 'auto'],
+  ['autoplay', 'b'],
+  ['loop', 'b'],
+  ['controls', 'b'],
+  ['defaultMuted', 'b', 'muted'],
 ]);
-for (const [k, v] of Object.entries({ NETWORK_EMPTY: 0, NETWORK_IDLE: 1, NETWORK_LOADING: 2, NETWORK_NO_SOURCE: 3, HAVE_NOTHING: 0, HAVE_METADATA: 1, HAVE_CURRENT_DATA: 2, HAVE_FUTURE_DATA: 3, HAVE_ENOUGH_DATA: 4 })) {
-  Object.defineProperty(HTMLMediaElement.prototype, k, { value: v, enumerable: true });
+for (const [k, v] of Object.entries({
+  NETWORK_EMPTY: 0,
+  NETWORK_IDLE: 1,
+  NETWORK_LOADING: 2,
+  NETWORK_NO_SOURCE: 3,
+  HAVE_NOTHING: 0,
+  HAVE_METADATA: 1,
+  HAVE_CURRENT_DATA: 2,
+  HAVE_FUTURE_DATA: 3,
+  HAVE_ENOUGH_DATA: 4,
+})) {
+  Object.defineProperty(HTMLMediaElement.prototype, k, {
+    value: v,
+    enumerable: true,
+  });
 }
 
-const NO_FRAME = { kind: 'pixels', origin: 'video', width: 0, height: 0, premultiplied: false, data: new Uint8Array(0) };
+const NO_FRAME = {
+  kind: 'pixels',
+  origin: 'video',
+  width: 0,
+  height: 0,
+  premultiplied: false,
+  data: new Uint8Array(0),
+};
 
 export class HTMLVideoElement extends HTMLMediaElement {
   get videoWidth(): number {
@@ -736,12 +1049,21 @@ export class HTMLVideoElement extends HTMLMediaElement {
     return m.ready > 0 ? m.height : 0;
   }
   getVideoPlaybackQuality(): Record<string, number> {
-    return { creationTime: now(), droppedVideoFrames: 0, totalVideoFrames: this._m.presented, corruptedVideoFrames: 0 };
+    return {
+      creationTime: now(),
+      droppedVideoFrames: 0,
+      totalVideoFrames: this._m.presented,
+      corruptedVideoFrames: 0,
+    };
   }
   /** Calls `callback(now, metadata)` once, when the next frame is presented (Video Frame Callback draft). */
-  requestVideoFrameCallback(callback: (now: number, metadata: object) => void): number {
+  requestVideoFrameCallback(
+    callback: (now: number, metadata: object) => void,
+  ): number {
     if (typeof callback !== 'function') {
-      throw new TypeError("Failed to execute 'requestVideoFrameCallback' on 'HTMLVideoElement': parameter 1 is not of type 'Function'.");
+      throw new TypeError(
+        "Failed to execute 'requestVideoFrameCallback' on 'HTMLVideoElement': parameter 1 is not of type 'Function'.",
+      );
     }
     const m = this._m;
     const id = ++m.nextCallback;
@@ -757,7 +1079,10 @@ export class HTMLVideoElement extends HTMLMediaElement {
    */
   [IMAGE_SOURCE](): object {
     const m = this._m;
-    if (!m.feed) throw new TypeError('video sources are not supported by this runtime (only a camera MediaStream plays in a <video>)');
+    if (!m.feed)
+      throw new TypeError(
+        'video sources are not supported by this runtime (only a camera MediaStream plays in a <video>)',
+      );
     if (m.ready < 2) return NO_FRAME;
     return (m.paused && m.held ? m.held.frame : m.feed.frame()) ?? NO_FRAME;
   }
@@ -765,7 +1090,12 @@ export class HTMLVideoElement extends HTMLMediaElement {
     return 'HTMLVideoElement';
   }
 }
-reflect(HTMLVideoElement.prototype, [['width', 'n'], ['height', 'n'], ['poster', 'u'], ['playsInline', 'b', 'playsinline']]);
+reflect(HTMLVideoElement.prototype, [
+  ['width', 'n'],
+  ['height', 'n'],
+  ['poster', 'u'],
+  ['playsInline', 'b', 'playsinline'],
+]);
 
 export class HTMLAudioElement extends HTMLMediaElement {
   override get [Symbol.toStringTag](): string {
@@ -776,8 +1106,28 @@ export class HTMLAudioElement extends HTMLMediaElement {
 // --- forms -----------------------------------------------------------------------------------------------------------
 
 const INPUT_TYPES = new Set([
-  'hidden', 'text', 'search', 'tel', 'url', 'email', 'password', 'date', 'month', 'week', 'time', 'datetime-local',
-  'number', 'range', 'color', 'checkbox', 'radio', 'file', 'submit', 'image', 'reset', 'button',
+  'hidden',
+  'text',
+  'search',
+  'tel',
+  'url',
+  'email',
+  'password',
+  'date',
+  'month',
+  'week',
+  'time',
+  'datetime-local',
+  'number',
+  'range',
+  'color',
+  'checkbox',
+  'radio',
+  'file',
+  'submit',
+  'image',
+  'reset',
+  'button',
 ]);
 const VALUE = Symbol('iwn.dom.value');
 const CHECKED = Symbol('iwn.dom.checked');
@@ -790,7 +1140,19 @@ class FormControl extends HTMLElement {
     return [];
   }
   get validity(): Record<string, boolean> {
-    return { valid: true, valueMissing: false, typeMismatch: false, patternMismatch: false, tooLong: false, tooShort: false, rangeUnderflow: false, rangeOverflow: false, stepMismatch: false, badInput: false, customError: false };
+    return {
+      valid: true,
+      valueMissing: false,
+      typeMismatch: false,
+      patternMismatch: false,
+      tooLong: false,
+      tooShort: false,
+      rangeUnderflow: false,
+      rangeOverflow: false,
+      stepMismatch: false,
+      badInput: false,
+      customError: false,
+    };
   }
   get validationMessage(): string {
     return '';
@@ -806,7 +1168,11 @@ class FormControl extends HTMLElement {
   }
   setCustomValidity(_m: string): void {}
 }
-reflect(FormControl.prototype, [['name', 's'], ['disabled', 'b'], ['autofocus', 'b']]);
+reflect(FormControl.prototype, [
+  ['name', 's'],
+  ['disabled', 'b'],
+  ['autofocus', 'b'],
+]);
 
 export class HTMLInputElement extends FormControl {
   declare [VALUE]: string | undefined;
@@ -822,7 +1188,11 @@ export class HTMLInputElement extends FormControl {
     this.setAttribute('type', str(v));
   }
   get value(): string {
-    return this[VALUE] ?? this.getAttribute('value') ?? (this.type === 'checkbox' || this.type === 'radio' ? 'on' : '');
+    return (
+      this[VALUE] ??
+      this.getAttribute('value') ??
+      (this.type === 'checkbox' || this.type === 'radio' ? 'on' : '')
+    );
   }
   set value(v: string) {
     this[VALUE] = v === null ? '' : str(v);
@@ -868,7 +1238,10 @@ export class HTMLInputElement extends FormControl {
     this.value = str(text);
   }
   showPicker(): void {
-    throw domException('HTMLInputElement.showPicker(): pickers are not supported by @iwer/native in this alpha', 'NotSupportedError');
+    throw domException(
+      'HTMLInputElement.showPicker(): pickers are not supported by @iwer/native in this alpha',
+      'NotSupportedError',
+    );
   }
   stepUp(): void {}
   stepDown(): void {}
@@ -877,9 +1250,22 @@ export class HTMLInputElement extends FormControl {
   }
 }
 reflect(HTMLInputElement.prototype, [
-  ['placeholder', 's'], ['readOnly', 'b', 'readonly'], ['required', 'b'], ['min', 's'], ['max', 's'], ['step', 's'],
-  ['maxLength', 'n', 'maxlength', -1], ['minLength', 'n', 'minlength', -1], ['pattern', 's'], ['multiple', 'b'],
-  ['accept', 's'], ['autocomplete', 's'], ['size', 'n', 'size', 20], ['src', 'u'], ['alt', 's'], ['list', 's'],
+  ['placeholder', 's'],
+  ['readOnly', 'b', 'readonly'],
+  ['required', 'b'],
+  ['min', 's'],
+  ['max', 's'],
+  ['step', 's'],
+  ['maxLength', 'n', 'maxlength', -1],
+  ['minLength', 'n', 'minlength', -1],
+  ['pattern', 's'],
+  ['multiple', 'b'],
+  ['accept', 's'],
+  ['autocomplete', 's'],
+  ['size', 'n', 'size', 20],
+  ['src', 'u'],
+  ['alt', 's'],
+  ['list', 's'],
 ]);
 
 export class HTMLTextAreaElement extends FormControl {
@@ -918,7 +1304,15 @@ export class HTMLTextAreaElement extends FormControl {
     return 'HTMLTextAreaElement';
   }
 }
-reflect(HTMLTextAreaElement.prototype, [['placeholder', 's'], ['readOnly', 'b', 'readonly'], ['required', 'b'], ['rows', 'n', 'rows', 2], ['cols', 'n', 'cols', 20], ['maxLength', 'n', 'maxlength', -1], ['wrap', 's']]);
+reflect(HTMLTextAreaElement.prototype, [
+  ['placeholder', 's'],
+  ['readOnly', 'b', 'readonly'],
+  ['required', 'b'],
+  ['rows', 'n', 'rows', 2],
+  ['cols', 'n', 'cols', 20],
+  ['maxLength', 'n', 'maxlength', -1],
+  ['wrap', 's'],
+]);
 
 export class HTMLButtonElement extends FormControl {
   get type(): string {
@@ -955,7 +1349,12 @@ export class HTMLOptionElement extends HTMLElement {
     return 'HTMLOptionElement';
   }
 }
-reflect(HTMLOptionElement.prototype, [['selected', 'b'], ['disabled', 'b'], ['label', 's'], ['defaultSelected', 'b', 'selected']]);
+reflect(HTMLOptionElement.prototype, [
+  ['selected', 'b'],
+  ['disabled', 'b'],
+  ['label', 's'],
+  ['defaultSelected', 'b', 'selected'],
+]);
 
 export class HTMLSelectElement extends FormControl {
   get options(): HTMLOptionElement[] {
@@ -991,20 +1390,31 @@ export class HTMLSelectElement extends FormControl {
     return 'HTMLSelectElement';
   }
 }
-reflect(HTMLSelectElement.prototype, [['multiple', 'b'], ['required', 'b'], ['size', 'n']]);
+reflect(HTMLSelectElement.prototype, [
+  ['multiple', 'b'],
+  ['required', 'b'],
+  ['size', 'n'],
+]);
 
 export class HTMLFormElement extends HTMLElement {
   get elements(): Element[] {
-    return [...this.querySelectorAll('input,select,textarea,button,fieldset,output,object')] as Element[];
+    return [
+      ...this.querySelectorAll(
+        'input,select,textarea,button,fieldset,output,object',
+      ),
+    ] as Element[];
   }
   get length(): number {
     return this.elements.length;
   }
   submit(): void {
-    warn('HTMLFormElement.submit() ignored: a packaged app has no form navigation');
+    warn(
+      'HTMLFormElement.submit() ignored: a packaged app has no form navigation',
+    );
   }
   requestSubmit(): void {
-    if (fire(this, 'submit', { bubbles: true, cancelable: true })) warn('form submission ignored: a packaged app has no form navigation');
+    if (fire(this, 'submit', { bubbles: true, cancelable: true }))
+      warn('form submission ignored: a packaged app has no form navigation');
   }
   reset(): void {
     fire(this, 'reset', { bubbles: true, cancelable: true });
@@ -1019,7 +1429,15 @@ export class HTMLFormElement extends HTMLElement {
     return 'HTMLFormElement';
   }
 }
-reflect(HTMLFormElement.prototype, [['action', 'u'], ['method', 'l', 'method', 'get'], ['target', 's'], ['name', 's'], ['enctype', 's'], ['noValidate', 'b', 'novalidate'], ['autocomplete', 's']]);
+reflect(HTMLFormElement.prototype, [
+  ['action', 'u'],
+  ['method', 'l', 'method', 'get'],
+  ['target', 's'],
+  ['name', 's'],
+  ['enctype', 's'],
+  ['noValidate', 'b', 'novalidate'],
+  ['autocomplete', 's'],
+]);
 
 // --- iframe / template ------------------------------------------------------------------------------------------------
 
@@ -1034,7 +1452,16 @@ export class HTMLIFrameElement extends HTMLElement {
     return 'HTMLIFrameElement';
   }
 }
-reflect(HTMLIFrameElement.prototype, [['src', 'u'], ['srcdoc', 's'], ['name', 's'], ['allow', 's'], ['allowFullscreen', 'b', 'allowfullscreen'], ['width', 's'], ['height', 's'], ['loading', 's']]);
+reflect(HTMLIFrameElement.prototype, [
+  ['src', 'u'],
+  ['srcdoc', 's'],
+  ['name', 's'],
+  ['allow', 's'],
+  ['allowFullscreen', 'b', 'allowfullscreen'],
+  ['width', 's'],
+  ['height', 's'],
+  ['loading', 's'],
+]);
 
 export class HTMLTemplateElement extends HTMLElement {
   /** @internal */ _content: DocumentFragment | null = null;
@@ -1049,7 +1476,9 @@ export class HTMLTemplateElement extends HTMLElement {
   /** HTML template cloning steps: a deep clone copies the template contents too (document.importNode does the same). */
   override cloneNode(deep = false): Node {
     const c = super.cloneNode(deep) as HTMLTemplateElement;
-    if (deep && this._content) for (const k of this._content.childNodes) c.content.appendChild(k.cloneNode(true));
+    if (deep && this._content)
+      for (const k of this._content.childNodes)
+        c.content.appendChild(k.cloneNode(true));
     return c;
   }
   override get [Symbol.toStringTag](): string {
@@ -1059,7 +1488,8 @@ export class HTMLTemplateElement extends HTMLElement {
 
 // --- script / link / style (DOM-9) ------------------------------------------------------------------------------------
 
-const JS_TYPES = /^(|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript|application\/x-javascript|text\/x-javascript|text\/jscript|text\/livescript|module)$/;
+const JS_TYPES =
+  /^(|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript|application\/x-javascript|text\/x-javascript|text\/jscript|text\/livescript|module)$/;
 const SCRIPT_STARTED = ALREADY_STARTED;
 
 /** Runs classic script text in the global scope (indirect eval: `this` is the window, top-level declarations global). */
@@ -1096,8 +1526,14 @@ export class HTMLScriptElement extends HTMLElement {
   override _connectedChanged(connected: boolean): void {
     if (connected) this._prepare();
   }
-  override _reflect(local: string, ns: string | null, _old: string | null, value: string | null): void {
-    if (local === 'src' && ns === null && value !== null && this.isConnected) this._prepare();
+  override _reflect(
+    local: string,
+    ns: string | null,
+    _old: string | null,
+    value: string | null,
+  ): void {
+    if (local === 'src' && ns === null && value !== null && this.isConnected)
+      this._prepare();
   }
   /** @internal: HTML "prepare the script element", simplified. */
   _prepare(): void {
@@ -1111,7 +1547,9 @@ export class HTMLScriptElement extends HTMLElement {
     const src = this.getAttribute('src');
     const text = this.textContent ?? '';
     if (src === null && text === '') return;
-    const type = lower((this.getAttribute('type') ?? this.getAttribute('language') ?? '').trim());
+    const type = lower(
+      (this.getAttribute('type') ?? this.getAttribute('language') ?? '').trim(),
+    );
     if (!JS_TYPES.test(type)) return; // data blocks (JSON, templates) never run
     const isModule = type === 'module';
     if (!isModule && this.hasAttribute('nomodule')) return;
@@ -1158,7 +1596,9 @@ export class HTMLScriptElement extends HTMLElement {
             fire(this, 'load');
           },
           (e: unknown) => {
-            warn(`script ${url} failed to load: ${e instanceof Error ? e.message : String(e)}`);
+            warn(
+              `script ${url} failed to load: ${e instanceof Error ? e.message : String(e)}`,
+            );
             fire(this, 'error');
           },
         );
@@ -1166,7 +1606,9 @@ export class HTMLScriptElement extends HTMLElement {
     }
     // Inline script inserted by the app: runs now (classic) or as a data: module.
     if (isModule) {
-      import(/* @vite-ignore */ `data:text/javascript;charset=utf-8,${encodeURIComponent(text)}`).catch((e) => reportException(e));
+      import(
+        /* @vite-ignore */ `data:text/javascript;charset=utf-8,${encodeURIComponent(text)}`
+      ).catch((e) => reportException(e));
       return;
     }
     const prev = doc?._currentScript ?? null;
@@ -1184,20 +1626,46 @@ export class HTMLScriptElement extends HTMLElement {
   }
 }
 reflect(HTMLScriptElement.prototype, [
-  ['src', 'u'], ['type', 's'], ['defer', 'b'], ['crossOrigin', 's', 'crossorigin'], ['integrity', 's'],
-  ['noModule', 'b', 'nomodule'], ['charset', 's'], ['referrerPolicy', 's', 'referrerpolicy'], ['event', 's'],
-  ['htmlFor', 's', 'for'], ['fetchPriority', 's', 'fetchpriority'],
+  ['src', 'u'],
+  ['type', 's'],
+  ['defer', 'b'],
+  ['crossOrigin', 's', 'crossorigin'],
+  ['integrity', 's'],
+  ['noModule', 'b', 'nomodule'],
+  ['charset', 's'],
+  ['referrerPolicy', 's', 'referrerpolicy'],
+  ['event', 's'],
+  ['htmlFor', 's', 'for'],
+  ['fetchPriority', 's', 'fetchpriority'],
 ]);
 
 const LINK_LOADED = Symbol('iwn.dom.linkLoaded');
-const LOAD_RELS = new Set(['stylesheet', 'preload', 'modulepreload', 'prefetch', 'icon', 'manifest', 'apple-touch-icon']);
+const LOAD_RELS = new Set([
+  'stylesheet',
+  'preload',
+  'modulepreload',
+  'prefetch',
+  'icon',
+  'manifest',
+  'apple-touch-icon',
+]);
 
 export class HTMLLinkElement extends HTMLElement {
   declare [LINK_LOADED]: string | undefined;
   get relList(): DOMTokenList {
     return ((this as any)._relList ??= new DOMTokenList(this, 'rel', [
-      'alternate', 'dns-prefetch', 'expect', 'icon', 'manifest', 'modulepreload', 'next', 'preconnect', 'prefetch',
-      'preload', 'prerender', 'stylesheet',
+      'alternate',
+      'dns-prefetch',
+      'expect',
+      'icon',
+      'manifest',
+      'modulepreload',
+      'next',
+      'preconnect',
+      'prefetch',
+      'preload',
+      'prerender',
+      'stylesheet',
     ]));
   }
   get sheet(): null {
@@ -1207,7 +1675,12 @@ export class HTMLLinkElement extends HTMLElement {
     if (connected) this._maybeLoad();
   }
   override _reflect(local: string, ns: string | null): void {
-    if ((local === 'href' || local === 'rel') && ns === null && this.isConnected) this._maybeLoad();
+    if (
+      (local === 'href' || local === 'rel') &&
+      ns === null &&
+      this.isConnected
+    )
+      this._maybeLoad();
   }
   /** @internal: `load` for the resource kinds browsers fetch, at a task (DOM-9: accepted, nothing is applied). */
   _maybeLoad(): void {
@@ -1228,9 +1701,20 @@ export class HTMLLinkElement extends HTMLElement {
   }
 }
 reflect(HTMLLinkElement.prototype, [
-  ['href', 'u'], ['rel', 's'], ['as', 's'], ['crossOrigin', 's', 'crossorigin'], ['type', 's'], ['media', 's'],
-  ['sizes', 's'], ['integrity', 's'], ['hreflang', 's'], ['disabled', 'b'], ['referrerPolicy', 's', 'referrerpolicy'],
-  ['fetchPriority', 's', 'fetchpriority'], ['imageSrcset', 's', 'imagesrcset'], ['imageSizes', 's', 'imagesizes'],
+  ['href', 'u'],
+  ['rel', 's'],
+  ['as', 's'],
+  ['crossOrigin', 's', 'crossorigin'],
+  ['type', 's'],
+  ['media', 's'],
+  ['sizes', 's'],
+  ['integrity', 's'],
+  ['hreflang', 's'],
+  ['disabled', 'b'],
+  ['referrerPolicy', 's', 'referrerpolicy'],
+  ['fetchPriority', 's', 'fetchpriority'],
+  ['imageSrcset', 's', 'imagesrcset'],
+  ['imageSizes', 's', 'imagesizes'],
 ]);
 
 export class HTMLStyleElement extends HTMLElement {
@@ -1239,13 +1723,24 @@ export class HTMLStyleElement extends HTMLElement {
   }
   override _connectedChanged(connected: boolean): void {
     const owner = this._doc;
-    if (connected && !(this as any)[ALREADY_STARTED] && owner && !owner._inert && !owner._parsing) queueTask(() => fire(this, 'load'));
+    if (
+      connected &&
+      !(this as any)[ALREADY_STARTED] &&
+      owner &&
+      !owner._inert &&
+      !owner._parsing
+    )
+      queueTask(() => fire(this, 'load'));
   }
   override get [Symbol.toStringTag](): string {
     return 'HTMLStyleElement';
   }
 }
-reflect(HTMLStyleElement.prototype, [['media', 's'], ['type', 's'], ['disabled', 'b']]);
+reflect(HTMLStyleElement.prototype, [
+  ['media', 's'],
+  ['type', 's'],
+  ['disabled', 'b'],
+]);
 
 // --- SVG ------------------------------------------------------------------------------------------------------------
 
@@ -1255,7 +1750,8 @@ export class SVGElement extends Element {
     if (doc) this._doc = doc;
   }
   get ownerSVGElement(): Element | null {
-    for (let p = this.parentElement; p; p = p.parentElement) if (p.localName === 'svg' && p.namespaceURI === SVG_NS) return p;
+    for (let p = this.parentElement; p; p = p.parentElement)
+      if (p.localName === 'svg' && p.namespaceURI === SVG_NS) return p;
     return null;
   }
   get viewportElement(): Element | null {
@@ -1290,37 +1786,160 @@ export class SVGSVGElement extends SVGElement {
 }
 
 /** Tag -> interface for HTML elements (`img` is the image prelude's, through the registry). */
-export const HTML_TAGS: Record<string, new (localName?: string, doc?: unknown) => HTMLElement> = {
-  html: HTMLHtmlElement, head: HTMLHeadElement, body: HTMLBodyElement, title: HTMLTitleElement, meta: HTMLMetaElement,
-  base: HTMLBaseElement, link: HTMLLinkElement, style: HTMLStyleElement, script: HTMLScriptElement,
-  div: HTMLDivElement, span: HTMLSpanElement, p: HTMLParagraphElement, pre: HTMLPreElement, br: HTMLBRElement,
-  hr: HTMLHRElement, ul: HTMLUListElement, ol: HTMLOListElement, li: HTMLLIElement, a: HTMLAnchorElement,
-  label: HTMLLabelElement, canvas: HTMLCanvasElement, video: HTMLVideoElement, audio: HTMLAudioElement,
-  source: HTMLSourceElement, track: HTMLTrackElement, picture: HTMLPictureElement, input: HTMLInputElement,
-  textarea: HTMLTextAreaElement, button: HTMLButtonElement, select: HTMLSelectElement, option: HTMLOptionElement,
-  form: HTMLFormElement, fieldset: HTMLFieldSetElement, legend: HTMLLegendElement, iframe: HTMLIFrameElement,
-  template: HTMLTemplateElement, table: HTMLTableElement, tr: HTMLTableRowElement, td: HTMLTableCellElement,
-  th: HTMLTableCellElement, thead: HTMLTableSectionElement, tbody: HTMLTableSectionElement,
-  tfoot: HTMLTableSectionElement, slot: HTMLSlotElement, data: HTMLDataElement, time: HTMLTimeElement,
-  progress: HTMLProgressElement, h1: HTMLHeadingElement, h2: HTMLHeadingElement, h3: HTMLHeadingElement,
-  h4: HTMLHeadingElement, h5: HTMLHeadingElement, h6: HTMLHeadingElement,
+export const HTML_TAGS: Record<
+  string,
+  new (localName?: string, doc?: unknown) => HTMLElement
+> = {
+  html: HTMLHtmlElement,
+  head: HTMLHeadElement,
+  body: HTMLBodyElement,
+  title: HTMLTitleElement,
+  meta: HTMLMetaElement,
+  base: HTMLBaseElement,
+  link: HTMLLinkElement,
+  style: HTMLStyleElement,
+  script: HTMLScriptElement,
+  div: HTMLDivElement,
+  span: HTMLSpanElement,
+  p: HTMLParagraphElement,
+  pre: HTMLPreElement,
+  br: HTMLBRElement,
+  hr: HTMLHRElement,
+  ul: HTMLUListElement,
+  ol: HTMLOListElement,
+  li: HTMLLIElement,
+  a: HTMLAnchorElement,
+  label: HTMLLabelElement,
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement,
+  audio: HTMLAudioElement,
+  source: HTMLSourceElement,
+  track: HTMLTrackElement,
+  picture: HTMLPictureElement,
+  input: HTMLInputElement,
+  textarea: HTMLTextAreaElement,
+  button: HTMLButtonElement,
+  select: HTMLSelectElement,
+  option: HTMLOptionElement,
+  form: HTMLFormElement,
+  fieldset: HTMLFieldSetElement,
+  legend: HTMLLegendElement,
+  iframe: HTMLIFrameElement,
+  template: HTMLTemplateElement,
+  table: HTMLTableElement,
+  tr: HTMLTableRowElement,
+  td: HTMLTableCellElement,
+  th: HTMLTableCellElement,
+  thead: HTMLTableSectionElement,
+  tbody: HTMLTableSectionElement,
+  tfoot: HTMLTableSectionElement,
+  slot: HTMLSlotElement,
+  data: HTMLDataElement,
+  time: HTMLTimeElement,
+  progress: HTMLProgressElement,
+  h1: HTMLHeadingElement,
+  h2: HTMLHeadingElement,
+  h3: HTMLHeadingElement,
+  h4: HTMLHeadingElement,
+  h5: HTMLHeadingElement,
+  h6: HTMLHeadingElement,
 };
 /** Tags that are HTMLElement itself (HTML §3.2.5 "HTMLElement" elements), not HTMLUnknownElement. */
 export const PLAIN_HTML_ELEMENT_TAGS = new Set([
-  'abbr', 'address', 'article', 'aside', 'b', 'bdi', 'bdo', 'cite', 'code', 'dd', 'dfn', 'dt', 'em', 'figcaption',
-  'figure', 'footer', 'header', 'hgroup', 'i', 'kbd', 'main', 'mark', 'nav', 'noscript', 'rp', 'rt', 'ruby', 's',
-  'samp', 'search', 'section', 'small', 'strong', 'sub', 'summary', 'sup', 'u', 'var', 'wbr', 'center', 'nobr',
+  'abbr',
+  'address',
+  'article',
+  'aside',
+  'b',
+  'bdi',
+  'bdo',
+  'cite',
+  'code',
+  'dd',
+  'dfn',
+  'dt',
+  'em',
+  'figcaption',
+  'figure',
+  'footer',
+  'header',
+  'hgroup',
+  'i',
+  'kbd',
+  'main',
+  'mark',
+  'nav',
+  'noscript',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'search',
+  'section',
+  'small',
+  'strong',
+  'sub',
+  'summary',
+  'sup',
+  'u',
+  'var',
+  'wbr',
+  'center',
+  'nobr',
 ]);
 
 /** All HTML element interfaces this module defines (for the global install). */
 export const HTML_INTERFACES: Record<string, unknown> = {
-  HTMLElement, HTMLHtmlElement, HTMLHeadElement, HTMLBodyElement, HTMLTitleElement, HTMLMetaElement, HTMLBaseElement,
-  HTMLLinkElement, HTMLStyleElement, HTMLScriptElement, HTMLDivElement, HTMLSpanElement, HTMLParagraphElement,
-  HTMLHeadingElement, HTMLPreElement, HTMLBRElement, HTMLHRElement, HTMLUListElement, HTMLOListElement, HTMLLIElement,
-  HTMLAnchorElement, HTMLLabelElement, HTMLCanvasElement, HTMLMediaElement, HTMLVideoElement, HTMLAudioElement,
-  HTMLSourceElement, HTMLTrackElement, HTMLPictureElement, HTMLInputElement, HTMLTextAreaElement, HTMLButtonElement,
-  HTMLSelectElement, HTMLOptionElement, HTMLFormElement, HTMLFieldSetElement, HTMLLegendElement, HTMLIFrameElement,
-  HTMLTemplateElement, HTMLTableElement, HTMLTableRowElement, HTMLTableCellElement, HTMLTableSectionElement,
-  HTMLSlotElement, HTMLDataElement, HTMLTimeElement, HTMLProgressElement, HTMLUnknownElement, SVGElement,
-  SVGSVGElement, TimeRanges,
+  HTMLElement,
+  HTMLHtmlElement,
+  HTMLHeadElement,
+  HTMLBodyElement,
+  HTMLTitleElement,
+  HTMLMetaElement,
+  HTMLBaseElement,
+  HTMLLinkElement,
+  HTMLStyleElement,
+  HTMLScriptElement,
+  HTMLDivElement,
+  HTMLSpanElement,
+  HTMLParagraphElement,
+  HTMLHeadingElement,
+  HTMLPreElement,
+  HTMLBRElement,
+  HTMLHRElement,
+  HTMLUListElement,
+  HTMLOListElement,
+  HTMLLIElement,
+  HTMLAnchorElement,
+  HTMLLabelElement,
+  HTMLCanvasElement,
+  HTMLMediaElement,
+  HTMLVideoElement,
+  HTMLAudioElement,
+  HTMLSourceElement,
+  HTMLTrackElement,
+  HTMLPictureElement,
+  HTMLInputElement,
+  HTMLTextAreaElement,
+  HTMLButtonElement,
+  HTMLSelectElement,
+  HTMLOptionElement,
+  HTMLFormElement,
+  HTMLFieldSetElement,
+  HTMLLegendElement,
+  HTMLIFrameElement,
+  HTMLTemplateElement,
+  HTMLTableElement,
+  HTMLTableRowElement,
+  HTMLTableCellElement,
+  HTMLTableSectionElement,
+  HTMLSlotElement,
+  HTMLDataElement,
+  HTMLTimeElement,
+  HTMLProgressElement,
+  HTMLUnknownElement,
+  SVGElement,
+  SVGSVGElement,
+  TimeRanges,
 };

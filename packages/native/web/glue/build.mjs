@@ -27,10 +27,16 @@ const shims = {
   setup(b) {
     const shim = (f) => ({ path: join(here, 'src/shims', f) });
     b.onResolve({ filter: /^tr46$/ }, () => shim('tr46.ts'));
-    b.onResolve({ filter: /^@exodus\/bytes\/whatwg\.js$/ }, () => shim('exodus-whatwg.ts'));
-    b.onResolve({ filter: /^@exodus\/bytes\/encoding\.js$/ }, () => shim('empty.ts'));
+    b.onResolve({ filter: /^@exodus\/bytes\/whatwg\.js$/ }, () =>
+      shim('exodus-whatwg.ts'),
+    );
+    b.onResolve({ filter: /^@exodus\/bytes\/encoding\.js$/ }, () =>
+      shim('empty.ts'),
+    );
     b.onResolve({ filter: /^\.\/encoding$/ }, (args) =>
-      args.importer.includes(`whatwg-url${'/'}lib`) ? shim('whatwg-url-encoding.ts') : undefined,
+      args.importer.includes(`whatwg-url${'/'}lib`)
+        ? shim('whatwg-url-encoding.ts')
+        : undefined,
     );
   },
 };
@@ -61,7 +67,10 @@ export const BUNDLED = {
 };
 
 /** The subtle prelude's build options (same settings, other entry). */
-export const subtleBuildOptions = { ...buildOptions, entryPoints: [join(here, 'src/subtle-entry.ts')] };
+export const subtleBuildOptions = {
+  ...buildOptions,
+  entryPoints: [join(here, 'src/subtle-entry.ts')],
+};
 
 /** The bundled packages (from the esbuild metafile), checked against BUNDLED. */
 export function bundledPackages(...metafiles) {
@@ -76,9 +85,17 @@ export function bundledPackages(...metafiles) {
   const problems = [];
   const found = [];
   for (const name of [...names].sort()) {
-    const pkg = JSON.parse(readFileSync(join(here, 'node_modules', name, 'package.json'), 'utf8'));
-    if (!(name in BUNDLED)) problems.push(`${name}@${pkg.version} is bundled but not listed in BUNDLED / THIRD_PARTY.md`);
-    else if (BUNDLED[name] !== pkg.version) problems.push(`${name} is ${pkg.version}, THIRD_PARTY.md records ${BUNDLED[name]}`);
+    const pkg = JSON.parse(
+      readFileSync(join(here, 'node_modules', name, 'package.json'), 'utf8'),
+    );
+    if (!(name in BUNDLED))
+      problems.push(
+        `${name}@${pkg.version} is bundled but not listed in BUNDLED / THIRD_PARTY.md`,
+      );
+    else if (BUNDLED[name] !== pkg.version)
+      problems.push(
+        `${name} is ${pkg.version}, THIRD_PARTY.md records ${BUNDLED[name]}`,
+      );
     found.push({ name, version: pkg.version, license: pkg.license });
   }
   return { found, problems };
@@ -98,15 +115,29 @@ export function writeNotices(found) {
     const dir = join(here, 'node_modules', name);
     const file = readdirSync(dir).find((f) => /^licen[cs]e/i.test(f));
     if (!file) throw new Error(`no license file in ${dir}`);
-    parts.push('='.repeat(78), `${name} ${version} (${license})`, '='.repeat(78), '', readFileSync(join(dir, file), 'utf8').trim(), '');
+    parts.push(
+      '='.repeat(78),
+      `${name} ${version} (${license})`,
+      '='.repeat(78),
+      '',
+      readFileSync(join(dir, file), 'utf8').trim(),
+      '',
+    );
   }
   const out = join(here, 'dist', 'glue.NOTICES.txt');
   writeFileSync(out, parts.join('\n'));
   return out;
 }
 
-export async function buildGlue({ minify = true, write = true, subtle = false } = {}) {
-  const outfile = join(out, subtle ? 'glue-subtle.min.js' : minify ? 'glue.min.js' : 'glue.js');
+export async function buildGlue({
+  minify = true,
+  write = true,
+  subtle = false,
+} = {}) {
+  const outfile = join(
+    out,
+    subtle ? 'glue-subtle.min.js' : minify ? 'glue.min.js' : 'glue.js',
+  );
   const result = await build({
     ...(subtle ? subtleBuildOptions : buildOptions),
     minify,
@@ -122,28 +153,43 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { outfile, result } = await buildGlue({ minify: true });
   const subtle = await buildGlue({ minify: true, subtle: true });
   writeFileSync(join(out, 'meta.json'), JSON.stringify(result.metafile));
-  const { found, problems } = bundledPackages(result.metafile, subtle.result.metafile);
+  const { found, problems } = bundledPackages(
+    result.metafile,
+    subtle.result.metafile,
+  );
   if (problems.length > 0) {
     console.error(`third-party check failed:\n  ${problems.join('\n  ')}`);
     process.exit(1);
   }
   const notices = writeNotices(found);
-  console.log(`notices: ${notices.slice(here.length + 1)} (${found.map((p) => `${p.name}@${p.version}`).join(', ')})`);
+  console.log(
+    `notices: ${notices.slice(here.length + 1)} (${found.map((p) => `${p.name}@${p.version}`).join(', ')})`,
+  );
   const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
   for (const f of [outfile, subtle.outfile]) {
     const code = readFileSync(f);
     const gz = gzipSync(code, { level: 9 }).length;
-    console.log(`${f.slice(out.length + 1)}: ${kb(code.length)} minified, ${kb(gz)} min+gzip`);
+    console.log(
+      `${f.slice(out.length + 1)}: ${kb(code.length)} minified, ${kb(gz)} min+gzip`,
+    );
   }
   if (process.argv.includes('--breakdown')) {
-    const inputs = Object.entries(result.metafile.outputs[Object.keys(result.metafile.outputs)[0]].inputs)
+    const inputs = Object.entries(
+      result.metafile.outputs[Object.keys(result.metafile.outputs)[0]].inputs,
+    )
       .map(([k, v]) => [k, v.bytesInOutput])
       .sort((a, b) => b[1] - a[1]);
     const groups = {};
     for (const [k, n] of inputs) {
-      const key = k.startsWith('node_modules/') ? k.split('/').slice(1, k.includes('/@') ? 3 : 2).join('/') : k;
+      const key = k.startsWith('node_modules/')
+        ? k
+            .split('/')
+            .slice(1, k.includes('/@') ? 3 : 2)
+            .join('/')
+        : k;
       groups[key] = (groups[key] ?? 0) + n;
     }
-    for (const [k, n] of Object.entries(groups).sort((a, b) => b[1] - a[1])) console.log(`  ${kb(n).padStart(9)}  ${k}`);
+    for (const [k, n] of Object.entries(groups).sort((a, b) => b[1] - a[1]))
+      console.log(`  ${kb(n).padStart(9)}  ${k}`);
   }
 }

@@ -10,7 +10,15 @@
 // dialogs (logged, default answers), getSelection, a minimal CSS namespace and `Window` for instanceof checks.
 
 import { createStyle, type CSSStyleDeclaration } from './css.ts';
-import { BaseEventTarget, G, defineHandler, domException, str, viewport, warn } from './env.ts';
+import {
+  BaseEventTarget,
+  G,
+  defineHandler,
+  domException,
+  str,
+  viewport,
+  warn,
+} from './env.ts';
 import { getPageSelection } from './document.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -24,7 +32,12 @@ export class ScreenOrientation extends BaseEventTarget {
     return 0;
   }
   lock(_orientation: string): Promise<void> {
-    return Promise.reject(domException('ScreenOrientation.lock() is not supported by @iwer/native', 'NotSupportedError'));
+    return Promise.reject(
+      domException(
+        'ScreenOrientation.lock() is not supported by @iwer/native',
+        'NotSupportedError',
+      ),
+    );
   }
   unlock(): void {}
   get [Symbol.toStringTag](): string {
@@ -97,7 +110,8 @@ export class VisualViewport extends BaseEventTarget {
     return 'VisualViewport';
   }
 }
-for (const t of ['resize', 'scroll', 'scrollend']) defineHandler(VisualViewport.prototype, t);
+for (const t of ['resize', 'scroll', 'scrollend'])
+  defineHandler(VisualViewport.prototype, t);
 
 /** `instanceof Window` is true for the page global only. */
 export class Window {
@@ -114,27 +128,47 @@ export const CSS = Object.freeze({
     return false;
   },
   escape(ident: string): string {
-    return str(ident).replace(/([\0-\x1f\x7f]|^-?\d)|^-$|[^\x80-\uffff\w-]/g, (m, ctrl: string | undefined) => {
-      if (m === '\0') return '\ufffd';
-      if (ctrl) return `\\${m.charCodeAt(0).toString(16)} `;
-      return `\\${m}`;
-    });
+    return str(ident).replace(
+      /([\0-\x1f\x7f]|^-?\d)|^-$|[^\x80-\uffff\w-]/g,
+      (m, ctrl: string | undefined) => {
+        if (m === '\0') return '\ufffd';
+        if (ctrl) return `\\${m.charCodeAt(0).toString(16)} `;
+        return `\\${m}`;
+      },
+    );
   },
   registerProperty(): void {},
 });
 
 /** getComputedStyle: a read-only copy of the element's inline declarations (there is no cascade or layout). */
-export function getComputedStyle(el: unknown, _pseudo?: string | null): CSSStyleDeclaration {
-  if (!el || typeof el !== 'object' || typeof (el as { nodeType?: unknown }).nodeType !== 'number') {
-    throw new TypeError("Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.");
+export function getComputedStyle(
+  el: unknown,
+  _pseudo?: string | null,
+): CSSStyleDeclaration {
+  if (
+    !el ||
+    typeof el !== 'object' ||
+    typeof (el as { nodeType?: unknown }).nodeType !== 'number'
+  ) {
+    throw new TypeError(
+      "Failed to execute 'getComputedStyle' on 'Window': parameter 1 is not of type 'Element'.",
+    );
   }
-  const inline = (el as { _style?: CSSStyleDeclaration | null; getAttribute?: (n: string) => string | null });
-  const text = inline._style ? inline._style.cssText : (inline.getAttribute?.('style') ?? '');
+  const inline = el as {
+    _style?: CSSStyleDeclaration | null;
+    getAttribute?: (n: string) => string | null;
+  };
+  const text = inline._style
+    ? inline._style.cssText
+    : (inline.getAttribute?.('style') ?? '');
   return createStyle(text, null, true);
 }
 
 /** Defines the DOM-3 window members on the page global (missing ones only unless mode is 'all'). */
-export function installWindowMembers(g: any, mode: 'missing' | 'all'): string[] {
+export function installWindowMembers(
+  g: any,
+  mode: 'missing' | 'all',
+): string[] {
   const installed: string[] = [];
   const defGet = (name: string, get: () => unknown, replaceable = true) => {
     if (mode === 'missing' && name in g) return;
@@ -142,7 +176,12 @@ export function installWindowMembers(g: any, mode: 'missing' | 'all'): string[] 
       get,
       set: replaceable
         ? function (this: unknown, v: unknown) {
-            Object.defineProperty(g, name, { value: v, writable: true, configurable: true, enumerable: true });
+            Object.defineProperty(g, name, {
+              value: v,
+              writable: true,
+              configurable: true,
+              enumerable: true,
+            });
           }
         : undefined,
       configurable: true,
@@ -152,14 +191,29 @@ export function installWindowMembers(g: any, mode: 'missing' | 'all'): string[] 
   };
   const defFn = (name: string, fn: (...a: any[]) => unknown) => {
     if (mode === 'missing' && typeof g[name] === 'function') return;
-    Object.defineProperty(g, name, { value: fn, writable: true, configurable: true, enumerable: true });
+    Object.defineProperty(g, name, {
+      value: fn,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
     installed.push(name);
   };
   defGet('innerWidth', () => viewport().width);
   defGet('innerHeight', () => viewport().height);
   defGet('outerWidth', () => viewport().width);
   defGet('outerHeight', () => viewport().height);
-  for (const k of ['screenX', 'screenY', 'screenLeft', 'screenTop', 'scrollX', 'scrollY', 'pageXOffset', 'pageYOffset']) defGet(k, () => 0);
+  for (const k of [
+    'screenX',
+    'screenY',
+    'screenLeft',
+    'screenTop',
+    'scrollX',
+    'scrollY',
+    'pageXOffset',
+    'pageYOffset',
+  ])
+    defGet(k, () => 0);
   const screen = new Screen();
   defGet('screen', () => screen);
   const vv = new VisualViewport();
@@ -183,20 +237,30 @@ export function installWindowMembers(g: any, mode: 'missing' | 'all'): string[] 
   defFn('focus', () => {});
   defFn('blur', () => {});
   defFn('stop', () => {});
-  defFn('print', () => warn('window.print() ignored: a packaged app cannot print'));
+  defFn('print', () =>
+    warn('window.print() ignored: a packaged app cannot print'),
+  );
   defFn('alert', (message?: unknown) => {
-    warn(`alert(): ${message === undefined ? '' : String(message)} (there is no dialog in a packaged app)`);
+    warn(
+      `alert(): ${message === undefined ? '' : String(message)} (there is no dialog in a packaged app)`,
+    );
   });
   defFn('confirm', (message?: unknown) => {
-    warn(`confirm(): ${message === undefined ? '' : String(message)} -> false (there is no dialog in a packaged app)`);
+    warn(
+      `confirm(): ${message === undefined ? '' : String(message)} -> false (there is no dialog in a packaged app)`,
+    );
     return false;
   });
   defFn('prompt', (message?: unknown) => {
-    warn(`prompt(): ${message === undefined ? '' : String(message)} -> null (there is no dialog in a packaged app)`);
+    warn(
+      `prompt(): ${message === undefined ? '' : String(message)} -> null (there is no dialog in a packaged app)`,
+    );
     return null;
   });
   defFn('open', (url?: unknown) => {
-    warn(`window.open(${url === undefined ? '' : String(url)}) ignored: a packaged app has a single document`);
+    warn(
+      `window.open(${url === undefined ? '' : String(url)}) ignored: a packaged app has a single document`,
+    );
     return null;
   });
   defFn('getComputedStyle', getComputedStyle);

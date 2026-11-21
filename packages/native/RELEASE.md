@@ -5,15 +5,15 @@ section 6. Every command runs from `immersive-web-emulation-runtime/packages/nat
 
 ## 1. Release design and open decisions
 
-| item | design | open |
-|---|---|---|
-| Template APK delivery | **Bundled in the npm package** (`prebuilt/iwer-native-template.apk`, SHA-256 pinned in `packager/templates.json` as `"bundled"`, checked on every pack). | Deviates from PKG-2 (on-demand download); confirm for the alpha. |
-| `"private": true` | Stays in the tree (PKG-15). Only the staged copy (`release/out/package/`) drops it; publish only that copy (section 9). | |
-| Package name | `@iwer/native` (working name). | Confirm the final name. |
-| Issue tracker / repository URLs | `meta-quest/immersive-web-emulation-runtime` (issues titled `[native]`). The source is in that repository under `packages/native/`; package.json has `repository` (with `"directory": "packages/native"`), `homepage` and `bugs`. | |
-| Android API level of the native build | `android-29` (= template `minSdkVersion`). The release build compiles at android-29 (runtime/audio calls `syscall(__NR_memfd_create)`). | |
-| IWSDK release with native-target support | `@iwsdk/core`, `@iwsdk/vite-plugin-dev` and `@iwsdk/create` must ship the `native` key, the `metavr` build mode and `--metavr-native` (section 8). They ship in **IWSDK 1.2.0** (their changesets bump the minor version; 1.1.0 and earlier reject the `native` key), and the README names 1.2.0 as the minimum. | Publish IWSDK 1.2.0 right after this package (section 8). |
-| Unscoped bin name `iwer-native` | The bin differs from the package name, so a bare `npx iwer-native` without a local install looks up the unregistered unscoped `iwer-native` on npm. The README documents `npx -p @iwer/native@alpha iwer-native ...`. | Optionally reserve the unscoped name with a placeholder package that points at `@iwer/native`. |
+| item                                     | design                                                                                                                                                                                                                                                                                                           | open                                                                                           |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Template APK delivery                    | **Bundled in the npm package** (`prebuilt/iwer-native-template.apk`, SHA-256 pinned in `packager/templates.json` as `"bundled"`, checked on every pack).                                                                                                                                                         | Deviates from PKG-2 (on-demand download); confirm for the alpha.                               |
+| `"private": true`                        | Stays in the tree (PKG-15). Only the staged copy (`release/out/package/`) drops it; publish only that copy (section 9).                                                                                                                                                                                          |                                                                                                |
+| Package name                             | `@iwer/native` (working name).                                                                                                                                                                                                                                                                                   | Confirm the final name.                                                                        |
+| Issue tracker / repository URLs          | `meta-quest/immersive-web-emulation-runtime` (issues titled `[native]`). The source is in that repository under `packages/native/`; package.json has `repository` (with `"directory": "packages/native"`), `homepage` and `bugs`.                                                                                |                                                                                                |
+| Android API level of the native build    | `android-29` (= template `minSdkVersion`). The release build compiles at android-29 (runtime/audio calls `syscall(__NR_memfd_create)`).                                                                                                                                                                          |                                                                                                |
+| IWSDK release with native-target support | `@iwsdk/core`, `@iwsdk/vite-plugin-dev` and `@iwsdk/create` must ship the `native` key, the `metavr` build mode and `--metavr-native` (section 8). They ship in **IWSDK 1.2.0** (their changesets bump the minor version; 1.1.0 and earlier reject the `native` key), and the README names 1.2.0 as the minimum. | Publish IWSDK 1.2.0 right after this package (section 8).                                      |
+| Unscoped bin name `iwer-native`          | The bin differs from the package name, so a bare `npx iwer-native` without a local install looks up the unregistered unscoped `iwer-native` on npm. The README documents `npx -p @iwer/native@alpha iwer-native ...`.                                                                                            | Optionally reserve the unscoped name with a placeholder package that points at `@iwer/native`. |
 
 **Why bundle the template for the alpha.** PKG-2 asks for an on-demand download with a pinned checksum, which keeps
 `npm install` under 5 MB. For the alpha that cannot work yet:
@@ -26,7 +26,7 @@ section 6. Every command runs from `immersive-web-emulation-runtime/packages/nat
 - The cost is size: the tarball is about 17.5 MiB instead of about 0.3 MB (section 4). npm takes packages this size
   (Electron binaries, esbuild/Sharp platform packages), and it is one download per version.
 - The download path stays in the code. When a public host exists, set `"bundled": null`, fill in `"template":
-  {version, url, sha256, size}`, drop `prebuilt/` from `files`, and the package is back under 1 MB (PKG-2).
+{version, url, sha256, size}`, drop `prebuilt/` from `files`, and the package is back under 1 MB (PKG-2).
 
 **Checksum verification.** `release/stage-package.mjs --template <apk>` writes
 `{file, version, sha256, size}` into the staged `packager/templates.json`. On every `pack`,
@@ -85,7 +85,7 @@ What it does (see the header of `release/build-release.sh`):
    `packager/template/build-template.mjs --native-lib … --lib-name iwernative --native-build release` builds the
    APK: unsigned, `template.json` metadata, placeholder icons, VR manifest. Then come the PKG-3 checks
    (`zipalign -c -P 16 4`, `llvm-readelf` 16 KB LOAD alignment) and `release/verify-third-party.mjs --apk <apk>
-   --build <native build dir>`: besides the CMake text scan, every source in the build's `compile_commands.json`
+--build <native build dir>`: besides the CMake text scan, every source in the build's `compile_commands.json`
    must sit in this package, in a recorded vendored `third_party/` dir or under a recorded `IWN_<X>_DIR` (generic
    roots such as `IWN_THIRD_PARTY_DIR` do not count), and every npm package named by an esbuild path comment in an
    unminified shipped bundle must have an entry.
@@ -130,15 +130,15 @@ build-machine path; the native build maps source paths with `-ffile-prefix-map` 
 
 ## 4. Size report
 
-| item | size |
-|---|---|
-| npm tarball (what `npm install` downloads) | about 17.5 MiB / 18.3 MB (budget in `stage-package.mjs`: 24 MiB) |
-| template APK, unpacked / gzip -9 | about 44.6 MiB / 17.2 MiB |
-| `lib/arm64-v8a/libv8android.so` (stored, 16 KB aligned; gzip -9 12.9 MiB) | 37.1 MiB |
-| `lib/arm64-v8a/libiwernative.so` (all modules, stripped; gzip -9 2.5 MiB) | about 5.3 MiB |
-| `lib/arm64-v8a/libc++_shared.so` (gzip -9 0.44 MiB) | 1.36 MiB |
-| JS preludes (11 files) | about 0.9 MiB |
-| fonts (Roboto Regular/Bold, Roboto Mono) | 0.39 MiB |
+| item                                                                      | size                                                             |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| npm tarball (what `npm install` downloads)                                | about 17.5 MiB / 18.3 MB (budget in `stage-package.mjs`: 24 MiB) |
+| template APK, unpacked / gzip -9                                          | about 44.6 MiB / 17.2 MiB                                        |
+| `lib/arm64-v8a/libv8android.so` (stored, 16 KB aligned; gzip -9 12.9 MiB) | 37.1 MiB                                                         |
+| `lib/arm64-v8a/libiwernative.so` (all modules, stripped; gzip -9 2.5 MiB) | about 5.3 MiB                                                    |
+| `lib/arm64-v8a/libc++_shared.so` (gzip -9 0.44 MiB)                       | 1.36 MiB                                                         |
+| JS preludes (11 files)                                                    | about 0.9 MiB                                                    |
+| fonts (Roboto Regular/Bold, Roboto Mono)                                  | 0.39 MiB                                                         |
 
 `$OUT/size-report.md` has the numbers of each build. The README states the runtime overhead as "about 47 MB
 (44.6 MiB)" in the APK (the template's unpacked size, which `pack` reports as `runtime`; the native libraries are

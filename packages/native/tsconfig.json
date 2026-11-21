@@ -21,5 +21,12 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "packager/src/**/*.ts", "packager/test/**/*.ts", "compat/src/**/*.ts", "compat/test/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "packager/src/**/*.ts",
+    "packager/test/**/*.ts",
+    "compat/src/**/*.ts",
+    "compat/test/**/*.ts"
+  ]
 }

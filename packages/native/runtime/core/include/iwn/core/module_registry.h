@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // NATIVE MODULE CONTRACT: every module in runtime/<module>/ exposes
 //   void iwn_register_<module>(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local<v8::Object> natives);
 // which installs its functions on the per-context natives object (JS: globalThis.__iwn.<module>). The table below

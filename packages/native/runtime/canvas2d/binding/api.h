@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Engine-neutral half of the canvas2d binding. The V8 binding (device) and the Node-API addon (headless tests) only
 // decode JS arguments and wrap handles; every operation lives here, so both expose identical behaviour to the JS
 // layer in web/canvas2d.

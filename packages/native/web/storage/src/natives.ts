@@ -38,13 +38,24 @@ export interface StorageNatives {
     atomic?: boolean,
   ): void;
   sqlClose(handle: number, cb: (error: string | null) => void): void;
-  sqlDelete(area: SqlArea, name: string, cb: (error: string | null) => void): void;
+  sqlDelete(
+    area: SqlArea,
+    name: string,
+    cb: (error: string | null) => void,
+  ): void;
 
   estimate(): { usage: number; quota: number };
 }
 
 export type SqlArea = 'idb' | 'cache';
-export type SqlValue = null | number | bigint | boolean | string | ArrayBuffer | ArrayBufferView;
+export type SqlValue =
+  | null
+  | number
+  | bigint
+  | boolean
+  | string
+  | ArrayBuffer
+  | ArrayBufferView;
 
 export interface SqlResult {
   error?: string;

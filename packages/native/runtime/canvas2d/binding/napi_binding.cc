@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Node-API addon exposing the same JS-facing canvas2d API as the V8 binding, so web/canvas2d runs its golden tests
 // headlessly in Node against the real raster core. Host-only (not shipped).
 

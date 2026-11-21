@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The passthrough cameras for getUserMedia (XR-CAM-1): Camera2 NDK (ACameraManager) on the cameras Horizon OS marks
 // as passthrough cameras, an AImageReader of YUV_420_888 images, each converted to RGBA8 on the reader's thread into
 // an image-module PixelStore (runtime/image INTEROP.md), which texImage2D / drawImage then use like a decoded image.

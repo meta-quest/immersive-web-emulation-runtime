@@ -34,21 +34,21 @@ template APK ──open, check contract─────────────�
  sign: APK Signing Block with v2 + v3 (+ 4096 padding) → self-verify → atomic write
 ```
 
-| source file | what |
-|---|---|
-| `src/pack.ts` | the orchestrator, signing-key choice, report (PKG-11) |
-| `src/zip.ts` | ZIP reader, deterministic aligning writer, `zipalign -c -P 16 4` equivalent |
-| `src/axml.ts`, `src/manifest.ts` | Android binary XML codec; manifest rewrite and summary (PKG-8) |
-| `src/apk-sign.ts` | APK Signature Scheme v2/v3 signer and verifier (PKG-7) |
-| `src/keystore.ts`, `src/rc2.ts`, `src/der.ts` | PKCS#12 (PBES2, PKCS#12 PBE 3DES/RC2, SHA-1/SHA-2 MAC) and JKS readers |
-| `src/signing-key.ts` | per-machine debug key, self-signed X.509 |
-| `src/dist.ts` | dist walk, compression policy, `index.html` scan (PKG-5), injection check (PKG-6) |
-| `src/runtime-config.ts` | `assets/iwn/config.json` |
-| `src/template.ts` | template resolution, pinned download + cache + checksum (PKG-2) |
-| `src/png.ts` | PNG decode/encode/resize for icons |
-| `src/splash.ts`, `src/ttf.ts` | the launch splash image (generated card or the app's PNG) and the small TrueType reader/rasterizer that draws the app name |
-| `template/` | stand-in template build (`build-template.mjs`, manifest, `src/template_main.c`) |
-| `templates.json` | the pinned template for this package version (null until CI publishes one) |
+| source file                                   | what                                                                                                                       |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `src/pack.ts`                                 | the orchestrator, signing-key choice, report (PKG-11)                                                                      |
+| `src/zip.ts`                                  | ZIP reader, deterministic aligning writer, `zipalign -c -P 16 4` equivalent                                                |
+| `src/axml.ts`, `src/manifest.ts`              | Android binary XML codec; manifest rewrite and summary (PKG-8)                                                             |
+| `src/apk-sign.ts`                             | APK Signature Scheme v2/v3 signer and verifier (PKG-7)                                                                     |
+| `src/keystore.ts`, `src/rc2.ts`, `src/der.ts` | PKCS#12 (PBES2, PKCS#12 PBE 3DES/RC2, SHA-1/SHA-2 MAC) and JKS readers                                                     |
+| `src/signing-key.ts`                          | per-machine debug key, self-signed X.509                                                                                   |
+| `src/dist.ts`                                 | dist walk, compression policy, `index.html` scan (PKG-5), injection check (PKG-6)                                          |
+| `src/runtime-config.ts`                       | `assets/iwn/config.json`                                                                                                   |
+| `src/template.ts`                             | template resolution, pinned download + cache + checksum (PKG-2)                                                            |
+| `src/png.ts`                                  | PNG decode/encode/resize for icons                                                                                         |
+| `src/splash.ts`, `src/ttf.ts`                 | the launch splash image (generated card or the app's PNG) and the small TrueType reader/rasterizer that draws the app name |
+| `template/`                                   | stand-in template build (`build-template.mjs`, manifest, `src/template_main.c`)                                            |
+| `templates.json`                              | the pinned template for this package version (null until CI publishes one)                                                 |
 
 ## Template contract (for the runtime's template build)
 
@@ -94,17 +94,18 @@ and `out/template-info.json` (sha256/size to paste into `templates.json` when CI
 - `assets/iwn/config.json` (runtime `RuntimeConfig` shape, runtime/core `config.h`, plus sections other modules
   read):
 
-  | key | value |
-  |---|---|
-  | `appRoot`, `index` | `"app"`, `"index.html"` |
-  | `app` | `packageId`, `name`, `versionName`, `versionCode`, `buildType` |
-  | `inspector.enabled`, `debug.enabled` | debug builds, or release packed with `--inspector` |
-  | `launchOverrides.allowed` | same condition (PKG-CFG-3: launch extras honoured) |
-  | `stats.logIntervalMs` | 2000 (PKG-CFG-2 default) |
-  | `network` | `{ "allow": [origins], "debug": <debug build> }` (runtime/net reads it) |
-  | `xr` | `frameRate`, `foveation {level, dynamic}`, `features {name: required/optional}`, `loading {enabled, image: "vr_splash.png", background}` (the runtime's loading screen, from `native.splash`; `background` is `"black"`, `"contextual"` (apps that declare passthrough) or `"#rrggbb"`; with `splash: false`, `{enabled: true, image: null, spinner: false, background}`: the background alone) |
-  | `page` | `title`, `entry` (from `index.html`) |
-  | `pack` | packer and template versions |
+  | key                                  | value                                                                                                                                                                                                                                                                                                                                                                                           |
+  | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `appRoot`, `index`                   | `"app"`, `"index.html"`                                                                                                                                                                                                                                                                                                                                                                         |
+  | `app`                                | `packageId`, `name`, `versionName`, `versionCode`, `buildType`                                                                                                                                                                                                                                                                                                                                  |
+  | `inspector.enabled`, `debug.enabled` | debug builds, or release packed with `--inspector`                                                                                                                                                                                                                                                                                                                                              |
+  | `launchOverrides.allowed`            | same condition (PKG-CFG-3: launch extras honoured)                                                                                                                                                                                                                                                                                                                                              |
+  | `stats.logIntervalMs`                | 2000 (PKG-CFG-2 default)                                                                                                                                                                                                                                                                                                                                                                        |
+  | `network`                            | `{ "allow": [origins], "debug": <debug build> }` (runtime/net reads it)                                                                                                                                                                                                                                                                                                                         |
+  | `xr`                                 | `frameRate`, `foveation {level, dynamic}`, `features {name: required/optional}`, `loading {enabled, image: "vr_splash.png", background}` (the runtime's loading screen, from `native.splash`; `background` is `"black"`, `"contextual"` (apps that declare passthrough) or `"#rrggbb"`; with `splash: false`, `{enabled: true, image: null, spinner: false, background}`: the background alone) |
+  | `page`                               | `title`, `entry` (from `index.html`)                                                                                                                                                                                                                                                                                                                                                            |
+  | `pack`                               | packer and template versions                                                                                                                                                                                                                                                                                                                                                                    |
+
 - `assets/vr_splash.png` (stored) unless `native.splash` is `false`: Horizon OS shows it as the system splash while
   the app starts (the application's `<meta-data android:name="com.oculus.ossplash" android:value="true"/>`, a typed
   boolean, which the packer adds or removes to match), and the runtime's loading screen shows the same file until
@@ -122,7 +123,7 @@ and `out/template-info.json` (sha256/size to paste into `templates.json` when CI
 ## Signing (PKG-7)
 
 - **Debug builds** (default) always use the per-machine debug key: RSA 2048, self-signed `CN=Android Debug,
-  O=Android, C=US`, 30 years, created on first use in the user's config dir (`$XDG_CONFIG_HOME/iwer-native/debug-key/`,
+O=Android, C=US`, 30 years, created on first use in the user's config dir (`$XDG_CONFIG_HOME/iwer-native/debug-key/`,
   `~/Library/Application Support/iwer-native/` on macOS, `%APPDATA%\iwer-native` on Windows;
   `IWER_NATIVE_CONFIG_DIR` overrides). Never in the project. Concurrent first packs are safe: the key pair is
   written to a temporary directory renamed to `debug-key/` in one step, so one key wins and every process signs
@@ -135,7 +136,7 @@ and `out/template-info.json` (sha256/size to paste into `templates.json` when CI
   key types (DSA, Ed25519, other curves) are refused before any packing work.
 - v2 + v3 (v3 signer range 28..max), block padded to 4096 bytes. Signatures are deterministic, so the same
   inputs give the same APK (PKG-9): RSA PKCS#1 v1.5 by construction, ECDSA (P-256/P-384/P-521) with RFC 6979
-  nonces (`src/ecdsa.ts`; k*G via node:crypto ECDH, every signature verified before use).
+  nonces (`src/ecdsa.ts`; k\*G via node:crypto ECDH, every signature verified before use).
 - Read: PKCS#12 from keytool 8 (3DES key, RC2-40 certs) and 17 (PBES2 AES-256, HMAC-SHA256), OpenSSL 3 default
   and legacy-3DES files, JKS (separate key password). Not read: JCEKS, PKCS#12 with PBMAC1 integrity
   (convert with keytool/openssl; the error says so). No key rotation (v3 proof-of-rotation) yet.
@@ -159,7 +160,7 @@ iwer-native run     [<pkg>] [--inspect] [--inspect-brk] [--query <qs>] [--v8-fla
 
 - `run` is `adb shell am start -S -W -n <pkg>/android.app.NativeActivity` plus extras the runtime reads
   (runtime/core `RuntimeOptions`): `--ez iwn.inspector true`, `--ez iwn.inspectBrk true`, `--es iwn.query
-  '<qs>'`, `--es iwn.v8flags '<flags>'` (string extras are quoted for the device shell; the runtime honours
+'<qs>'`, `--es iwn.v8flags '<flags>'` (string extras are quoted for the device shell; the runtime honours
   `iwn.inspectBrk` and `iwn.v8flags` in debug builds only). `--forward 9508` runs
   `adb forward tcp:9508 localabstract:<pkg>_devtools_<device port>` first. The device port is the packed APK's `inspector.port`
   (`dist-metavr/<app>.apk`); with an explicit `<pkg>` it is read from the APK installed on the device
@@ -197,7 +198,7 @@ What IWSDK needs (the IWSDK diff of this stack implements it):
       env var cannot ship a broken APK. The detector keys on config object keys present in every IWSDK release
       (`userAgentException:` and `activation:`), not on later additions such as `nativeXRControl`.
    3. `--install --run`: through metavr's device commands (`metavr app install <apk>`, `metavr app launch
-      <pkg>`, logs) when metavr is present; otherwise `iwer-native install`/`run` (adb). Debug switches map to
+<pkg>`, logs) when metavr is present; otherwise `iwer-native install`/`run` (adb). Debug switches map to
       `iwer-native run` flags.
 4. **Template download**: on first `build:metavr` the packer fetches the pinned template into the user cache
    (needs the CI publication step; until then `--template`).

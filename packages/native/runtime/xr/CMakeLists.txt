@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # runtime/xr: OpenXR session, the XR frame loop and IWER host mode's frame record.
 # Spec: docs/spec/08 (XR-*), 09 (XRF-*), 10 (IN-*), DBG-SHOT, GL-PERF-5.
 #

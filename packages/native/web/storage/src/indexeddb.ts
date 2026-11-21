@@ -40,32 +40,47 @@ export interface InstallIndexedDBOptions {
   delay?: (fn: () => void) => void;
 }
 
-export function installIndexedDB(g: typeof globalThis, natives: StorageNatives, options: InstallIndexedDBOptions = {}): string[] {
+export function installIndexedDB(
+  g: typeof globalThis,
+  natives: StorageNatives,
+  options: InstallIndexedDBOptions = {},
+): string[] {
   const delay = options.delay ?? ((fn: () => void) => setTimeout(fn, 0));
   const openDatabase = makeOpenDatabase(natives, 'idb', delay);
   // The shim installs into a private namespace object (its `indexedDB` getter insists on being read
   // from the object it was installed on); the globals are then defined on `g` from there.
   const target: Record<string, unknown> = {};
-  const shimmed = setGlobalVars(target as never, {
-    win: { openDatabase } as never,
-    // Database files live in the area directory; names are relative and escaped by the shim.
-    databaseBasePath: '',
-    sysDatabaseBasePath: '',
-    addSQLiteExtension: true,
-    deleteDatabaseFiles: true,
-    checkOrigin: false,
-    cacheDatabaseInstances: true,
-    useSQLiteIndexes: true,
-    escapeNFDForDatabaseNames: false,
-    fs: {
-      unlink(path: string, cb: (err: Error | null) => void) {
-        natives.sqlDelete('idb', path.replace(/^.*[\\/]/, ''), (e) => cb(e ? new Error(e) : null));
-      },
+  const shimmed = setGlobalVars(
+    target as never,
+    {
+      win: { openDatabase } as never,
+      // Database files live in the area directory; names are relative and escaped by the shim.
+      databaseBasePath: '',
+      sysDatabaseBasePath: '',
+      addSQLiteExtension: true,
+      deleteDatabaseFiles: true,
+      checkOrigin: false,
+      cacheDatabaseInstances: true,
+      useSQLiteIndexes: true,
+      escapeNFDForDatabaseNames: false,
+      fs: {
+        unlink(path: string, cb: (err: Error | null) => void) {
+          natives.sqlDelete('idb', path.replace(/^.*[\\/]/, ''), (e) =>
+            cb(e ? new Error(e) : null),
+          );
+        },
+      } as never,
     } as never,
-  } as never) as { shimIndexedDB?: { __useShim(): void; __setConnectionQueueOrigin(origin?: string): void } };
+  ) as {
+    shimIndexedDB?: {
+      __useShim(): void;
+      __setConnectionQueueOrigin(origin?: string): void;
+    };
+  };
   shimmed.shimIndexedDB?.__useShim();
   patchAbortBeforeStart(target);
-  if (options.origin) shimmed.shimIndexedDB?.__setConnectionQueueOrigin(options.origin);
+  if (options.origin)
+    shimmed.shimIndexedDB?.__setConnectionQueueOrigin(options.origin);
   const installed: string[] = [];
   for (const name of IDB_GLOBALS) {
     const value = target[name];
@@ -89,9 +104,13 @@ export function installIndexedDB(g: typeof globalThis, natives: StorageNatives, 
  * it must not start a WebSQL transaction at all.
  */
 function patchAbortBeforeStart(target: Record<string, unknown>): void {
-  const T = (target.IDBTransaction as { prototype?: Record<string, unknown> } | undefined)?.prototype;
+  const T = (
+    target.IDBTransaction as { prototype?: Record<string, unknown> } | undefined
+  )?.prototype;
   if (!T || typeof T.__executeRequests !== 'function' || T.__iwnPatched) return;
-  const original = T.__executeRequests as (this: Record<string, unknown>) => void;
+  const original = T.__executeRequests as (
+    this: Record<string, unknown>,
+  ) => void;
   T.__executeRequests = function (this: Record<string, unknown>) {
     if (this.__errored) {
       this.__running = true;

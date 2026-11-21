@@ -69,9 +69,15 @@ export const OUT_UINT = 3;
 
 function outputKind(type: number): number {
   switch (type) {
-    case 0x1404: case 0x8b53: case 0x8b54: case 0x8b55: // INT, INT_VEC2..4
+    case 0x1404:
+    case 0x8b53:
+    case 0x8b54:
+    case 0x8b55: // INT, INT_VEC2..4
       return OUT_INT;
-    case 0x1405: case 0x8dc6: case 0x8dc7: case 0x8dc8: // UNSIGNED_INT, UNSIGNED_INT_VEC2..4
+    case 0x1405:
+    case 0x8dc6:
+    case 0x8dc7:
+    case 0x8dc8: // UNSIGNED_INT, UNSIGNED_INT_VEC2..4
       return OUT_UINT;
     default:
       return OUT_FLOAT;
@@ -81,7 +87,16 @@ function outputKind(type: number): number {
 const INTERNAL_PREFIX = 'webgl_';
 
 export function decodeProgramRecord(raw: unknown): ProgramRecord {
-  const r = raw as [boolean, string, unknown[], unknown[], unknown[], unknown[], number, unknown[] | null | undefined];
+  const r = raw as [
+    boolean,
+    string,
+    unknown[],
+    unknown[],
+    unknown[],
+    unknown[],
+    number,
+    unknown[] | null | undefined,
+  ];
   const rec: ProgramRecord = {
     linked: !!r?.[0],
     infoLog: (r?.[1] as string) ?? '',
@@ -102,7 +117,12 @@ export function decodeProgramRecord(raw: unknown): ProgramRecord {
   for (let i = 0; i + 3 < a.length; i += 4) {
     const name = a[i] as string;
     if (name.startsWith(INTERNAL_PREFIX) || name.startsWith('gl_')) continue;
-    const ar: AttribRecord = { name, type: a[i + 1] as number, size: a[i + 2] as number, location: a[i + 3] as number };
+    const ar: AttribRecord = {
+      name,
+      type: a[i + 1] as number,
+      size: a[i + 2] as number,
+      location: a[i + 3] as number,
+    };
     rec.attribs.push(ar);
     rec.attribByName.set(name, ar);
   }
@@ -149,7 +169,9 @@ export function decodeProgramRecord(raw: unknown): ProgramRecord {
       name: b[i] as string,
       binding: b[i + 1] as number,
       dataSize: b[i + 2] as number,
-      indices: (b[i + 3] as number[]).map((g) => glToJs[g] ?? -1).filter((j) => j >= 0),
+      indices: (b[i + 3] as number[])
+        .map((g) => glToJs[g] ?? -1)
+        .filter((j) => j >= 0),
       refVS: !!b[i + 4],
       refFS: !!b[i + 5],
     };
@@ -159,7 +181,11 @@ export function decodeProgramRecord(raw: unknown): ProgramRecord {
   }
   const t = r[5];
   for (let i = 0; i + 2 < t.length; i += 3) {
-    rec.varyings.push({ name: t[i] as string, type: t[i + 1] as number, size: t[i + 2] as number });
+    rec.varyings.push({
+      name: t[i] as string,
+      type: t[i + 1] as number,
+      size: t[i + 2] as number,
+    });
   }
   const o = r[7];
   if (Array.isArray(o)) {
@@ -193,7 +219,10 @@ export function decodeProgramRecord(raw: unknown): ProgramRecord {
  * element 0 of an array; "a[i]" names element i (i < size); struct members are matched by their full name.
  * Returns null for unknown names, block members and out-of-range elements.
  */
-export function lookupUniform(rec: ProgramRecord, name: string): readonly [number, number] | null {
+export function lookupUniform(
+  rec: ProgramRecord,
+  name: string,
+): readonly [number, number] | null {
   const hit = rec.uniformByName.get(name);
   if (hit) return hit;
   // "base[i]" with i > 0
@@ -208,7 +237,11 @@ export function lookupUniform(rec: ProgramRecord, name: string): readonly [numbe
   return [base[0], elem];
 }
 
-export function uniformLocationOf(rec: ProgramRecord, index: number, element: number): number {
+export function uniformLocationOf(
+  rec: ProgramRecord,
+  index: number,
+  element: number,
+): number {
   const u = rec.uniforms[index];
   if (element === 0) return u.location;
   return u.locations ? (u.locations[element] ?? -1) : -1;

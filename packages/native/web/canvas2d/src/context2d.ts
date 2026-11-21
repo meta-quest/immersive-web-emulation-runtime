@@ -81,32 +81,63 @@ export class ImageData {
   readonly data: Uint8ClampedArray;
   readonly colorSpace: 'srgb' | 'display-p3' = 'srgb';
 
-  constructor(sw: number | Uint8ClampedArray, sh?: number | object, settingsOrSh?: unknown, settings?: unknown) {
+  constructor(
+    sw: number | Uint8ClampedArray,
+    sh?: number | object,
+    settingsOrSh?: unknown,
+    settings?: unknown,
+  ) {
     if (sw instanceof Uint8ClampedArray) {
       const data = sw;
       if (data.length === 0 || data.length % 4 !== 0) {
-        throw domException('The input data has zero elements or is not a multiple of 4.', 'InvalidStateError');
+        throw domException(
+          'The input data has zero elements or is not a multiple of 4.',
+          'InvalidStateError',
+        );
       }
       const w = toUnsignedLong(sh, 'ImageData', 'sw');
-      if (w === 0) throw domException('The source width is zero or not a number.', 'IndexSizeError');
+      if (w === 0)
+        throw domException(
+          'The source width is zero or not a number.',
+          'IndexSizeError',
+        );
       const pixels = data.length / 4;
-      if (pixels % w !== 0) throw domException('The input data length is not a multiple of (4 * width).', 'IndexSizeError');
+      if (pixels % w !== 0)
+        throw domException(
+          'The input data length is not a multiple of (4 * width).',
+          'IndexSizeError',
+        );
       const h = pixels / w;
       if (settingsOrSh !== undefined && typeof settingsOrSh !== 'object') {
         const given = toUnsignedLong(settingsOrSh, 'ImageData', 'sh');
-        if (given !== h) throw domException('The input data length is not equal to (4 * width * height).', 'IndexSizeError');
+        if (given !== h)
+          throw domException(
+            'The input data length is not equal to (4 * width * height).',
+            'IndexSizeError',
+          );
       }
       this.width = w;
       this.height = h;
       this.data = data;
-      readColorSpace(this, typeof settingsOrSh === 'object' ? settingsOrSh : settings);
+      readColorSpace(
+        this,
+        typeof settingsOrSh === 'object' ? settingsOrSh : settings,
+      );
       return;
     }
-    if (arguments.length < 2) throw new TypeError("Failed to construct 'ImageData': 2 arguments required.");
+    if (arguments.length < 2)
+      throw new TypeError(
+        "Failed to construct 'ImageData': 2 arguments required.",
+      );
     const w = toUnsignedLong(sw, 'ImageData', 'sw');
     const h = toUnsignedLong(sh, 'ImageData', 'sh');
-    if (w === 0 || h === 0) throw domException('The source width or height is zero.', 'IndexSizeError');
-    if (w * h * 4 > 2 ** 31 - 1) throw new RangeError('Out of memory at ImageData creation.');
+    if (w === 0 || h === 0)
+      throw domException(
+        'The source width or height is zero.',
+        'IndexSizeError',
+      );
+    if (w * h * 4 > 2 ** 31 - 1)
+      throw new RangeError('Out of memory at ImageData creation.');
     this.width = w;
     this.height = h;
     this.data = new Uint8ClampedArray(w * h * 4);
@@ -117,7 +148,10 @@ export class ImageData {
 function readColorSpace(img: ImageData, settings: unknown): void {
   if (settings && typeof settings === 'object' && 'colorSpace' in settings) {
     const cs = String((settings as { colorSpace: unknown }).colorSpace);
-    if (cs !== 'srgb' && cs !== 'display-p3') throw new TypeError(`The provided value '${cs}' is not a valid enum value of type PredefinedColorSpace.`);
+    if (cs !== 'srgb' && cs !== 'display-p3')
+      throw new TypeError(
+        `The provided value '${cs}' is not a valid enum value of type PredefinedColorSpace.`,
+      );
     (img as { colorSpace: string }).colorSpace = cs;
   }
 }
@@ -147,7 +181,10 @@ function finite4(a: number, b: number, c: number, d: number): boolean {
 
 function requireFinite(method: string, ...v: number[]): void {
   for (const x of v) {
-    if (!Number.isFinite(x)) throw new TypeError(`Failed to execute '${method}' on 'CanvasRenderingContext2D': The provided double value is non-finite.`);
+    if (!Number.isFinite(x))
+      throw new TypeError(
+        `Failed to execute '${method}' on 'CanvasRenderingContext2D': The provided double value is non-finite.`,
+      );
   }
 }
 
@@ -164,13 +201,34 @@ export class CanvasGradient {
     if (token !== INTERNAL) throw new TypeError('Illegal constructor');
   }
   addColorStop(offset: number, color: string): void {
-    if (arguments.length < 2) throw new TypeError("Failed to execute 'addColorStop' on 'CanvasGradient': 2 arguments required.");
+    if (arguments.length < 2)
+      throw new TypeError(
+        "Failed to execute 'addColorStop' on 'CanvasGradient': 2 arguments required.",
+      );
     const o = Number(offset);
-    if (!Number.isFinite(o)) throw new TypeError("Failed to execute 'addColorStop' on 'CanvasGradient': The provided double value is non-finite.");
-    if (o < 0 || o > 1) throw domException(`The provided value (${o}) is outside the range (0.0, 1.0).`, 'IndexSizeError');
+    if (!Number.isFinite(o))
+      throw new TypeError(
+        "Failed to execute 'addColorStop' on 'CanvasGradient': The provided double value is non-finite.",
+      );
+    if (o < 0 || o > 1)
+      throw domException(
+        `The provided value (${o}) is outside the range (0.0, 1.0).`,
+        'IndexSizeError',
+      );
     const c = parseColor(String(color));
-    if (!c) throw domException(`The value provided ('${String(color)}') could not be parsed as a color.`, 'SyntaxError');
-    this._n.addColorStop(this._native, o, c.r / 255, c.g / 255, c.b / 255, c.a / 255);
+    if (!c)
+      throw domException(
+        `The value provided ('${String(color)}') could not be parsed as a color.`,
+        'SyntaxError',
+      );
+    this._n.addColorStop(
+      this._native,
+      o,
+      c.r / 255,
+      c.g / 255,
+      c.b / 255,
+      c.a / 255,
+    );
   }
 }
 
@@ -187,7 +245,15 @@ export class CanvasPattern {
   setTransform(transform?: unknown): void {
     const m = from2DInit(transform);
     if (!m) return;
-    this._n.setPatternTransform(this._native, m[0]!, m[1]!, m[2]!, m[3]!, m[4]!, m[5]!);
+    this._n.setPatternTransform(
+      this._native,
+      m[0]!,
+      m[1]!,
+      m[2]!,
+      m[3]!,
+      m[4]!,
+      m[5]!,
+    );
   }
 }
 
@@ -240,10 +306,19 @@ export class Path2D {
     }
   }
   addPath(path: Path2D, transform?: unknown): void {
-    if (!(path instanceof Path2D)) throw new TypeError("Failed to execute 'addPath' on 'Path2D': parameter 1 is not of type 'Path2D'.");
+    if (!(path instanceof Path2D))
+      throw new TypeError(
+        "Failed to execute 'addPath' on 'Path2D': parameter 1 is not of type 'Path2D'.",
+      );
     const m = from2DInit(transform);
     if (!m) return;
-    const identity = m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
+    const identity =
+      m[0] === 1 &&
+      m[1] === 0 &&
+      m[2] === 0 &&
+      m[3] === 1 &&
+      m[4] === 0 &&
+      m[5] === 0;
     appendTransformed(this._p, path._p, identity ? null : m);
   }
   closePath(): void {
@@ -258,7 +333,14 @@ export class Path2D {
   quadraticCurveTo(cx: number, cy: number, x: number, y: number): void {
     this._p.quadraticCurveTo(+cx, +cy, +x, +y);
   }
-  bezierCurveTo(a: number, b: number, c: number, d: number, x: number, y: number): void {
+  bezierCurveTo(
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    x: number,
+    y: number,
+  ): void {
     this._p.bezierCurveTo(+a, +b, +c, +d, +x, +y);
   }
   arcTo(x1: number, y1: number, x2: number, y2: number, r: number): void {
@@ -270,10 +352,26 @@ export class Path2D {
   roundRect(x: number, y: number, w: number, h: number, radii?: unknown): void {
     this._p.roundRect(+x, +y, +w, +h, radii);
   }
-  arc(x: number, y: number, r: number, s: number, e: number, ccw = false): void {
+  arc(
+    x: number,
+    y: number,
+    r: number,
+    s: number,
+    e: number,
+    ccw = false,
+  ): void {
     this._p.arc(+x, +y, +r, +s, +e, !!ccw);
   }
-  ellipse(x: number, y: number, rx: number, ry: number, rot: number, s: number, e: number, ccw = false): void {
+  ellipse(
+    x: number,
+    y: number,
+    rx: number,
+    ry: number,
+    rot: number,
+    s: number,
+    e: number,
+    ccw = false,
+  ): void {
     this._p.ellipse(+x, +y, +rx, +ry, +rot, +s, +e, !!ccw);
   }
 }
@@ -318,8 +416,21 @@ const TRANSPARENT: RGBA = { r: 0, g: 0, b: 0, a: 0 };
 const BLACK_STYLE: Style = { color: BLACK, gradient: null, pattern: null };
 const SMOOTHING_QUALITIES: readonly string[] = ['low', 'medium', 'high'];
 const REPETITIONS = new Set(['repeat', 'repeat-x', 'repeat-y', 'no-repeat']);
-const VARIANT_CAPS = new Set(['normal', 'small-caps', 'all-small-caps', 'petite-caps', 'all-petite-caps', 'unicase', 'titling-caps']);
-const TEXT_RENDERINGS = new Set(['auto', 'optimizeSpeed', 'optimizeLegibility', 'geometricPrecision']);
+const VARIANT_CAPS = new Set([
+  'normal',
+  'small-caps',
+  'all-small-caps',
+  'petite-caps',
+  'all-petite-caps',
+  'unicase',
+  'titling-caps',
+]);
+const TEXT_RENDERINGS = new Set([
+  'auto',
+  'optimizeSpeed',
+  'optimizeLegibility',
+  'geometricPrecision',
+]);
 
 // Parsed colour and font strings, shared by every context of the realm: assigning the same string again (a label
 // redrawn every frame) is a map lookup, not a parse plus allocations (C2D-12). Bounded; cleared when full.
@@ -451,7 +562,9 @@ function fillRuleOf(v: unknown, method: string): number {
   const s = String(v);
   if (s === 'nonzero') return 0;
   if (s === 'evenodd') return 1;
-  throw new TypeError(`Failed to execute '${method}' on 'CanvasRenderingContext2D': The provided value '${s}' is not a valid enum value of type CanvasFillRule.`);
+  throw new TypeError(
+    `Failed to execute '${method}' on 'CanvasRenderingContext2D': The provided value '${s}' is not a valid enum value of type CanvasFillRule.`,
+  );
 }
 
 export interface ContextAttributes {
@@ -464,11 +577,19 @@ export interface ContextAttributes {
   willReadFrequently: boolean;
 }
 
-function enumAttr<T extends string>(v: unknown, allowed: readonly T[], def: T, what: string, type: string): T {
+function enumAttr<T extends string>(
+  v: unknown,
+  allowed: readonly T[],
+  def: T,
+  what: string,
+  type: string,
+): T {
   if (v === undefined) return def;
   const s = String(v);
   if ((allowed as readonly string[]).includes(s)) return s as T;
-  throw new TypeError(`Failed to execute 'getContext': Failed to read the '${what}' property: The provided value '${s}' is not a valid enum value of type ${type}.`);
+  throw new TypeError(
+    `Failed to execute 'getContext': Failed to read the '${what}' property: The provided value '${s}' is not a valid enum value of type ${type}.`,
+  );
 }
 
 /** What a context needs from the canvas that owns it. */
@@ -495,7 +616,12 @@ export class Canvas2DContextBase {
   #width = 0;
   #height = 0;
 
-  constructor(token: unknown, n: Canvas2DNatives, canvas: Canvas2DOwner, attrs: Partial<ContextAttributes> = {}) {
+  constructor(
+    token: unknown,
+    n: Canvas2DNatives,
+    canvas: Canvas2DOwner,
+    attrs: Partial<ContextAttributes> = {},
+  ) {
     if (token !== INTERNAL) throw new TypeError('Illegal constructor');
     this._n = n;
     this._canvas = canvas;
@@ -503,10 +629,22 @@ export class Canvas2DContextBase {
     this.#attrs = {
       alpha: attrs.alpha === undefined ? true : !!attrs.alpha,
       colorSpace: attrs.colorSpace === 'display-p3' ? 'display-p3' : 'srgb',
-      colorType: enumAttr(attrs.colorType, ['unorm8', 'float16'] as const, 'unorm8', 'colorType', 'CanvasPixelFormat'),
+      colorType: enumAttr(
+        attrs.colorType,
+        ['unorm8', 'float16'] as const,
+        'unorm8',
+        'colorType',
+        'CanvasPixelFormat',
+      ),
       desynchronized: !!attrs.desynchronized,
       toneMapping: {
-        mode: enumAttr(tm && typeof tm === 'object' ? tm.mode : undefined, ['standard', 'extended'] as const, 'standard', 'mode', 'CanvasToneMappingMode'),
+        mode: enumAttr(
+          tm && typeof tm === 'object' ? tm.mode : undefined,
+          ['standard', 'extended'] as const,
+          'standard',
+          'mode',
+          'CanvasToneMappingMode',
+        ),
       },
       willReadFrequently: !!attrs.willReadFrequently,
     };
@@ -555,7 +693,14 @@ export class Canvas2DContextBase {
     this.#scratch.m = null;
     this.#scratch.clear();
     this.#scratch.rect(0, 0, this.#width, this.#height);
-    this._n.fill(this._surface, st, this.#scratch.buf, this.#scratch.len, null, null);
+    this._n.fill(
+      this._surface,
+      st,
+      this.#scratch.buf,
+      this.#scratch.len,
+      null,
+      null,
+    );
     st.set(saved);
   }
 
@@ -623,7 +768,14 @@ export class Canvas2DContextBase {
     st[5] = st[1]! * x + st[3]! * y + st[5]!;
   }
 
-  transform(a: number, b: number, c: number, d: number, e: number, f: number): void {
+  transform(
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+  ): void {
     a = +a;
     b = +b;
     c = +c;
@@ -649,7 +801,14 @@ export class Canvas2DContextBase {
     st[5] = m1 * e + m3 * f + st[5]!;
   }
 
-  setTransform(a?: unknown, b?: number, c?: number, d?: number, e?: number, f?: number): void {
+  setTransform(
+    a?: unknown,
+    b?: number,
+    c?: number,
+    d?: number,
+    e?: number,
+    f?: number,
+  ): void {
     const st = this.#s.st;
     if (arguments.length >= 6) {
       const na = Number(a);
@@ -667,7 +826,10 @@ export class Canvas2DContextBase {
       st[5] = nf;
       return;
     }
-    if (arguments.length > 1) throw new TypeError("Failed to execute 'setTransform': 0, 1 or 6 arguments required.");
+    if (arguments.length > 1)
+      throw new TypeError(
+        "Failed to execute 'setTransform': 0, 1 or 6 arguments required.",
+      );
     const m = from2DInit(a);
     if (!m) return;
     st.set(m, 0);
@@ -728,7 +890,11 @@ export class Canvas2DContextBase {
   set filter(v: string) {
     const s = String(v).trim();
     this.#s.filter = s;
-    if (s !== 'none' && s !== '') warnOnce('filter', `ctx.filter = '${s}' is not implemented yet; drawing unfiltered (C2D-4).`);
+    if (s !== 'none' && s !== '')
+      warnOnce(
+        'filter',
+        `ctx.filter = '${s}' is not implemented yet; drawing unfiltered (C2D-4).`,
+      );
   }
 
   // --- styles ---
@@ -740,11 +906,19 @@ export class Canvas2DContextBase {
     // Style objects are immutable and shared (state copies keep references), so repeated assignments of the same
     // colour string, gradient or pattern reuse one object instead of allocating (C2D-12).
     if (v instanceof CanvasGradient) {
-      this.#s[target] = v._style ??= { color: BLACK, gradient: v, pattern: null };
+      this.#s[target] = v._style ??= {
+        color: BLACK,
+        gradient: v,
+        pattern: null,
+      };
       return;
     }
     if (v instanceof CanvasPattern) {
-      this.#s[target] = v._style ??= { color: BLACK, gradient: null, pattern: v };
+      this.#s[target] = v._style ??= {
+        color: BLACK,
+        gradient: null,
+        pattern: v,
+      };
       return;
     }
     const st = styleForColor(typeof v === 'string' ? v : String(v));
@@ -763,43 +937,100 @@ export class Canvas2DContextBase {
     this.#setStyle('stroke', v);
   }
 
-  createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradient {
-    if (arguments.length < 4) throw new TypeError("Failed to execute 'createLinearGradient': 4 arguments required.");
+  createLinearGradient(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): CanvasGradient {
+    if (arguments.length < 4)
+      throw new TypeError(
+        "Failed to execute 'createLinearGradient': 4 arguments required.",
+      );
     requireFinite('createLinearGradient', +x0, +y0, +x1, +y1);
     return this.#gradient(0, +x0, +y0, +x1, +y1, 0, 0);
   }
-  createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient {
-    if (arguments.length < 6) throw new TypeError("Failed to execute 'createRadialGradient': 6 arguments required.");
+  createRadialGradient(
+    x0: number,
+    y0: number,
+    r0: number,
+    x1: number,
+    y1: number,
+    r1: number,
+  ): CanvasGradient {
+    if (arguments.length < 6)
+      throw new TypeError(
+        "Failed to execute 'createRadialGradient': 6 arguments required.",
+      );
     requireFinite('createRadialGradient', +x0, +y0, +r0, +x1, +y1, +r1);
-    if (+r0 < 0 || +r1 < 0) throw domException(`The ${+r0 < 0 ? 'r0' : 'r1'} provided is less than 0.`, 'IndexSizeError');
+    if (+r0 < 0 || +r1 < 0)
+      throw domException(
+        `The ${+r0 < 0 ? 'r0' : 'r1'} provided is less than 0.`,
+        'IndexSizeError',
+      );
     return this.#gradient(1, +x0, +y0, +r0, +x1, +y1, +r1);
   }
-  createConicGradient(startAngle: number, x: number, y: number): CanvasGradient {
-    if (arguments.length < 3) throw new TypeError("Failed to execute 'createConicGradient': 3 arguments required.");
+  createConicGradient(
+    startAngle: number,
+    x: number,
+    y: number,
+  ): CanvasGradient {
+    if (arguments.length < 3)
+      throw new TypeError(
+        "Failed to execute 'createConicGradient': 3 arguments required.",
+      );
     requireFinite('createConicGradient', +startAngle, +x, +y);
     return this.#gradient(2, +startAngle, +x, +y, 0, 0, 0);
   }
-  #gradient(kind: number, a: number, b: number, c: number, d: number, e: number, f: number): CanvasGradient {
+  #gradient(
+    kind: number,
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+  ): CanvasGradient {
     const g = new CanvasGradient(INTERNAL);
     g._n = this._n;
     g._native = this._n.createGradient(kind, a, b, c, d, e, f);
     return g;
   }
 
-  createPattern(image: unknown, repetition: string | null): CanvasPattern | null {
-    if (arguments.length < 2) throw new TypeError("Failed to execute 'createPattern': 2 arguments required.");
-    const rep = repetition === null || repetition === '' ? 'repeat' : String(repetition);
+  createPattern(
+    image: unknown,
+    repetition: string | null,
+  ): CanvasPattern | null {
+    if (arguments.length < 2)
+      throw new TypeError(
+        "Failed to execute 'createPattern': 2 arguments required.",
+      );
+    const rep =
+      repetition === null || repetition === '' ? 'repeat' : String(repetition);
     if (!REPETITIONS.has(rep)) {
-      throw domException(`The provided type ('${rep}') is not one of 'repeat', 'no-repeat', 'repeat-x', or 'repeat-y'.`, 'SyntaxError');
+      throw domException(
+        `The provided type ('${rep}') is not one of 'repeat', 'no-repeat', 'repeat-x', or 'repeat-y'.`,
+        'SyntaxError',
+      );
     }
     const src = resolveImageSource(image, this._n, 'createPattern');
     if (!src) return null;
     const rx = rep === 'repeat' || rep === 'repeat-x';
     const ry = rep === 'repeat' || rep === 'repeat-y';
     let native: NativePattern | null = null;
-    if (src.surface) native = this._n.createPatternFromSurface(src.surface, rx, ry);
-    else if (src.data) native = this._n.createPatternFromPixels(src.data, src.width, src.height, !!src.premultiplied, rx, ry);
-    else if (src.external && this._n.createPatternFromExternal) native = this._n.createPatternFromExternal(src.external, rx, ry);
+    if (src.surface)
+      native = this._n.createPatternFromSurface(src.surface, rx, ry);
+    else if (src.data)
+      native = this._n.createPatternFromPixels(
+        src.data,
+        src.width,
+        src.height,
+        !!src.premultiplied,
+        rx,
+        ry,
+      );
+    else if (src.external && this._n.createPatternFromExternal)
+      native = this._n.createPatternFromExternal(src.external, rx, ry);
     if (!native) return null;
     const p = new CanvasPattern(INTERNAL);
     p._n = this._n;
@@ -883,17 +1114,30 @@ export class Canvas2DContextBase {
     if (Number.isFinite(v)) this.#s.st[ST_DASH_OFFSET] = v;
   }
   setLineDash(segments: Iterable<number>): void {
-    if (segments === null || typeof segments !== 'object' || typeof (segments as { [Symbol.iterator]?: unknown })[Symbol.iterator] !== 'function') {
-      throw new TypeError("Failed to execute 'setLineDash': The provided value cannot be converted to a sequence.");
+    if (
+      segments === null ||
+      typeof segments !== 'object' ||
+      typeof (segments as { [Symbol.iterator]?: unknown })[Symbol.iterator] !==
+        'function'
+    ) {
+      throw new TypeError(
+        "Failed to execute 'setLineDash': The provided value cannot be converted to a sequence.",
+      );
     }
     // A plain array with the values already in effect (labels re-apply their dash pattern every frame): nothing to do
     // and nothing to allocate (C2D-12). Only when iterating the array is not observable (intrinsic iterator).
-    if (Array.isArray(segments) && segments[Symbol.iterator] === ARRAY_ITERATOR && this.#sameDash(segments)) return;
+    if (
+      Array.isArray(segments) &&
+      segments[Symbol.iterator] === ARRAY_ITERATOR &&
+      this.#sameDash(segments)
+    )
+      return;
     const list = Array.from(segments, Number);
     for (const v of list) if (!Number.isFinite(v) || v < 0) return;
     const full = list.length % 2 ? [...list, ...list] : list;
     this.#s.dash = full;
-    this.#s.dashF32 = full.length && full.some((v) => v > 0) ? new Float32Array(full) : null;
+    this.#s.dashF32 =
+      full.length && full.some((v) => v > 0) ? new Float32Array(full) : null;
   }
   #sameDash(seg: readonly unknown[]): boolean {
     const n = seg.length;
@@ -920,7 +1164,12 @@ export class Canvas2DContextBase {
     const s = this.#s;
     const caps = f.parsed.smallCaps ? 'small-caps' : 'normal';
     // Re-assigning the font a label already uses (common per frame) keeps the resolved native font.
-    if (s.font === f.parsed && s.fontStretch === f.parsed.stretch && s.fontVariantCaps === caps) return;
+    if (
+      s.font === f.parsed &&
+      s.fontStretch === f.parsed.stretch &&
+      s.fontVariantCaps === caps
+    )
+      return;
     s.font = f.parsed;
     s.fontString = f.serialized;
     s.fontStretch = f.parsed.stretch;
@@ -977,7 +1226,10 @@ export class Canvas2DContextBase {
   }
   set fontKerning(v: string) {
     const s = String(v);
-    if ((s === 'auto' || s === 'normal' || s === 'none') && s !== this.#s.fontKerning) {
+    if (
+      (s === 'auto' || s === 'normal' || s === 'none') &&
+      s !== this.#s.fontKerning
+    ) {
       this.#s.fontKerning = s;
       this.#s.nativeFont = null;
     }
@@ -1027,7 +1279,14 @@ export class Canvas2DContextBase {
   quadraticCurveTo(cx: number, cy: number, x: number, y: number): void {
     this.#path.quadraticCurveTo(+cx, +cy, +x, +y);
   }
-  bezierCurveTo(a: number, b: number, c: number, d: number, x: number, y: number): void {
+  bezierCurveTo(
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    x: number,
+    y: number,
+  ): void {
     this.#path.bezierCurveTo(+a, +b, +c, +d, +x, +y);
   }
   arcTo(x1: number, y1: number, x2: number, y2: number, r: number): void {
@@ -1041,10 +1300,26 @@ export class Canvas2DContextBase {
   roundRect(x: number, y: number, w: number, h: number, radii?: unknown): void {
     this.#path.roundRect(+x, +y, +w, +h, radii);
   }
-  arc(x: number, y: number, r: number, s: number, e: number, ccw = false): void {
+  arc(
+    x: number,
+    y: number,
+    r: number,
+    s: number,
+    e: number,
+    ccw = false,
+  ): void {
     this.#path.arc(+x, +y, +r, +s, +e, !!ccw);
   }
-  ellipse(x: number, y: number, rx: number, ry: number, rot: number, s: number, e: number, ccw = false): void {
+  ellipse(
+    x: number,
+    y: number,
+    rx: number,
+    ry: number,
+    rot: number,
+    s: number,
+    e: number,
+    ccw = false,
+  ): void {
     this.#path.ellipse(+x, +y, +rx, +ry, +rot, +s, +e, !!ccw);
   }
 
@@ -1089,12 +1364,23 @@ export class Canvas2DContextBase {
     let p = this.#path;
     st[ST_PATH_SPACE] = 1;
     if (path !== undefined) {
-      if (!(path instanceof Path2D)) throw new TypeError("Failed to execute 'stroke': parameter 1 is not of type 'Path2D'.");
+      if (!(path instanceof Path2D))
+        throw new TypeError(
+          "Failed to execute 'stroke': parameter 1 is not of type 'Path2D'.",
+        );
       p = path._p;
       st[ST_PATH_SPACE] = 0;
     }
     const paint = this.#paint(this.#s.stroke);
-    this._n.stroke(this._surface, st, p.buf, p.len, paint, this.#s.clip, this.#s.dashF32);
+    this._n.stroke(
+      this._surface,
+      st,
+      p.buf,
+      p.len,
+      paint,
+      this.#s.clip,
+      this.#s.dashF32,
+    );
   }
 
   clip(a?: unknown, b?: unknown): void {
@@ -1114,10 +1400,18 @@ export class Canvas2DContextBase {
     // is not the inherited one is unreachable and its handle can take the next clip's mask.
     const prev = this.#s.clip;
     const reuse = this.#clipPool.pop() ?? null;
-    const next = this._n.clip(this._surface, st, path.buf, path.len, prev, reuse);
+    const next = this._n.clip(
+      this._surface,
+      st,
+      path.buf,
+      path.len,
+      prev,
+      reuse,
+    );
     this.#s.clip = next;
     if (reuse !== null && next !== reuse) this.#releaseClip(reuse);
-    if (prev !== null && prev !== this.#inheritedClip()) this.#releaseClip(prev);
+    if (prev !== null && prev !== this.#inheritedClip())
+      this.#releaseClip(prev);
   }
 
   #inheritedClip(): NativeClip | null {
@@ -1167,7 +1461,15 @@ export class Canvas2DContextBase {
       y = Number(b);
     }
     if (!finite2(x, y)) return false;
-    return this._n.isPointInStroke(this._surface, st, path.buf, path.len, x, y, this.#s.dashF32);
+    return this._n.isPointInStroke(
+      this._surface,
+      st,
+      path.buf,
+      path.len,
+      x,
+      y,
+      this.#s.dashF32,
+    );
   }
 
   #rectPath(x: number, y: number, w: number, h: number): PathBuilder {
@@ -1208,7 +1510,15 @@ export class Canvas2DContextBase {
     const st = this.#s.st;
     st[ST_PATH_SPACE] = 0;
     const paint = this.#paint(this.#s.stroke);
-    this._n.stroke(this._surface, st, p.buf, p.len, paint, this.#s.clip, this.#s.dashF32);
+    this._n.stroke(
+      this._surface,
+      st,
+      p.buf,
+      p.len,
+      paint,
+      this.#s.clip,
+      this.#s.dashF32,
+    );
   }
 
   clearRect(x: number, y: number, w: number, h: number): void {
@@ -1243,14 +1553,19 @@ export class Canvas2DContextBase {
   /** The native font for the current text state; cached on the state until a text attribute or the font set changes. */
   #font(): NativeFont {
     const rt = getFontRuntime();
-    if (!rt) throw new TypeError('Canvas 2D text needs the font runtime (installCanvas2D was not called).');
+    if (!rt)
+      throw new TypeError(
+        'Canvas 2D text needs the font runtime (installCanvas2D was not called).',
+      );
     const s = this.#s;
     const version = rt.manager.version;
-    if (s.nativeFont !== null && s.nativeFontVersion === version) return s.nativeFont;
+    if (s.nativeFont !== null && s.nativeFontVersion === version)
+      return s.nativeFont;
     const f = rt.manager.resolveFast(
       s.font,
       s.fontKerning !== 'none',
-      s.fontVariantCaps === 'small-caps' || s.fontVariantCaps === 'all-small-caps',
+      s.fontVariantCaps === 'small-caps' ||
+        s.fontVariantCaps === 'all-small-caps',
       s.letterSpacingV ? spacingPx(s.letterSpacingV, s.font.sizePx) : 0,
       s.wordSpacingV ? spacingPx(s.wordSpacingV, s.font.sizePx) : 0,
       FONT_STRETCH[s.fontStretch] ?? 100,
@@ -1268,8 +1583,18 @@ export class Canvas2DContextBase {
     this.#text(true, text, x, y, maxWidth, arguments.length);
   }
 
-  #text(stroke: boolean, text: unknown, x: number, y: number, maxWidth: number | undefined, argc: number): void {
-    if (argc < 3) throw new TypeError(`Failed to execute '${stroke ? 'strokeText' : 'fillText'}': 3 arguments required.`);
+  #text(
+    stroke: boolean,
+    text: unknown,
+    x: number,
+    y: number,
+    maxWidth: number | undefined,
+    argc: number,
+  ): void {
+    if (argc < 3)
+      throw new TypeError(
+        `Failed to execute '${stroke ? 'strokeText' : 'fillText'}': 3 arguments required.`,
+      );
     x = +x;
     y = +y;
     if (!finite2(x, y)) return;
@@ -1282,27 +1607,70 @@ export class Canvas2DContextBase {
     const st = this.#s.st;
     if (stroke) {
       const paint = this.#paint(this.#s.stroke);
-      this._n.strokeText(this._surface, st, font, typeof text === 'string' ? text : String(text), x, y, mw, paint, this.#s.clip, this.#s.dashF32);
+      this._n.strokeText(
+        this._surface,
+        st,
+        font,
+        typeof text === 'string' ? text : String(text),
+        x,
+        y,
+        mw,
+        paint,
+        this.#s.clip,
+        this.#s.dashF32,
+      );
     } else {
       const paint = this.#paint(this.#s.fill);
-      this._n.fillText(this._surface, st, font, typeof text === 'string' ? text : String(text), x, y, mw, paint, this.#s.clip);
+      this._n.fillText(
+        this._surface,
+        st,
+        font,
+        typeof text === 'string' ? text : String(text),
+        x,
+        y,
+        mw,
+        paint,
+        this.#s.clip,
+      );
     }
   }
 
   measureText(text: string): TextMetrics {
-    if (arguments.length < 1) throw new TypeError("Failed to execute 'measureText': 1 argument required.");
+    if (arguments.length < 1)
+      throw new TypeError(
+        "Failed to execute 'measureText': 1 argument required.",
+      );
     const font = this.#font();
     const st = this.#s.st;
-    this._n.measureText(font, String(text), st[ST_TEXT_ALIGN]!, st[ST_TEXT_BASELINE]!, this.#s.direction === 'rtl' ? 1 : 0, this.#tm);
+    this._n.measureText(
+      font,
+      String(text),
+      st[ST_TEXT_ALIGN]!,
+      st[ST_TEXT_BASELINE]!,
+      this.#s.direction === 'rtl' ? 1 : 0,
+      this.#tm,
+    );
     return new TextMetrics(INTERNAL, this.#tm);
   }
 
   // --- images ---
 
-  drawImage(image: unknown, a1?: number, a2?: number, a3?: number, a4?: number, a5?: number, a6?: number, a7?: number, a8?: number): void {
+  drawImage(
+    image: unknown,
+    a1?: number,
+    a2?: number,
+    a3?: number,
+    a4?: number,
+    a5?: number,
+    a6?: number,
+    a7?: number,
+    a8?: number,
+  ): void {
     const argc = arguments.length - 1;
     if (argc !== 2 && argc !== 4 && argc < 8) {
-      throw new TypeError(`Failed to execute 'drawImage': Valid arities are: [3, 5, 9], but ${argc + 1} arguments provided.`);
+      throw new TypeError(
+        `Failed to execute 'drawImage': Valid arities are: [3, 5, 9], but ${argc + 1} arguments provided.`,
+      );
     }
     // WebIDL: all numbers are converted before the source is examined.
     const v1 = Number(a1);
@@ -1318,7 +1686,17 @@ export class Canvas2DContextBase {
     if (!finite4(v1, v2, v3, v4) || !finite4(v5, v6, v7, v8)) return;
     if (argc === 2) {
       if (src.width === 0 || src.height === 0) return;
-      this.#drawResolved(src, 0, 0, src.width, src.height, v1, v2, src.width, src.height);
+      this.#drawResolved(
+        src,
+        0,
+        0,
+        src.width,
+        src.height,
+        v1,
+        v2,
+        src.width,
+        src.height,
+      );
     } else if (argc === 4) {
       if (src.width === 0 || src.height === 0) return;
       this.#drawResolved(src, 0, 0, src.width, src.height, v1, v2, v3, v4);
@@ -1328,37 +1706,119 @@ export class Canvas2DContextBase {
     }
   }
 
-  #drawResolved(src: ResolvedImage, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void {
+  #drawResolved(
+    src: ResolvedImage,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void {
     const st = this.#s.st;
     const clip = this.#s.clip;
     if (src.surface) {
-      this._n.drawSurface(this._surface, st, src.surface, sx, sy, sw, sh, dx, dy, dw, dh, clip);
+      this._n.drawSurface(
+        this._surface,
+        st,
+        src.surface,
+        sx,
+        sy,
+        sw,
+        sh,
+        dx,
+        dy,
+        dw,
+        dh,
+        clip,
+      );
     } else if (src.data) {
-      this._n.drawPixels(this._surface, st, src.data, src.width, src.height, !!src.premultiplied, sx, sy, sw, sh, dx, dy, dw, dh, clip);
+      this._n.drawPixels(
+        this._surface,
+        st,
+        src.data,
+        src.width,
+        src.height,
+        !!src.premultiplied,
+        sx,
+        sy,
+        sw,
+        sh,
+        dx,
+        dy,
+        dw,
+        dh,
+        clip,
+      );
     } else if (src.external && this._n.drawExternal) {
-      this._n.drawExternal(this._surface, st, src.external, sx, sy, sw, sh, dx, dy, dw, dh, clip);
+      this._n.drawExternal(
+        this._surface,
+        st,
+        src.external,
+        sx,
+        sy,
+        sw,
+        sh,
+        dx,
+        dy,
+        dw,
+        dh,
+        clip,
+      );
     }
   }
 
-  createImageData(a: number | ImageData, b?: number, settings?: unknown): ImageData {
+  createImageData(
+    a: number | ImageData,
+    b?: number,
+    settings?: unknown,
+  ): ImageData {
     if (a !== null && typeof a === 'object' && 'width' in a && 'height' in a) {
       return new ImageData((a as ImageData).width, (a as ImageData).height);
     }
-    if (arguments.length < 2) throw new TypeError("Failed to execute 'createImageData': 2 arguments required.");
+    if (arguments.length < 2)
+      throw new TypeError(
+        "Failed to execute 'createImageData': 2 arguments required.",
+      );
     const w = Math.abs(toLong(a));
     const h = Math.abs(toLong(b));
-    if (w === 0 || h === 0) throw domException(`The source ${w === 0 ? 'width' : 'height'} is 0.`, 'IndexSizeError');
-    const G = (globalThis as { ImageData?: new (w: number, h: number, s?: unknown) => ImageData }).ImageData;
-    return typeof G === 'function' ? new G(w, h, settings) : new ImageData(w, h, settings);
+    if (w === 0 || h === 0)
+      throw domException(
+        `The source ${w === 0 ? 'width' : 'height'} is 0.`,
+        'IndexSizeError',
+      );
+    const G = (
+      globalThis as {
+        ImageData?: new (w: number, h: number, s?: unknown) => ImageData;
+      }
+    ).ImageData;
+    return typeof G === 'function'
+      ? new G(w, h, settings)
+      : new ImageData(w, h, settings);
   }
 
-  getImageData(sx: number, sy: number, sw: number, sh: number, settings?: unknown): ImageData {
-    if (arguments.length < 4) throw new TypeError("Failed to execute 'getImageData': 4 arguments required.");
+  getImageData(
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    settings?: unknown,
+  ): ImageData {
+    if (arguments.length < 4)
+      throw new TypeError(
+        "Failed to execute 'getImageData': 4 arguments required.",
+      );
     let x = toLong(sx);
     let y = toLong(sy);
     let w = toLong(sw);
     let h = toLong(sh);
-    if (w === 0 || h === 0) throw domException(`The source ${w === 0 ? 'width' : 'height'} is 0.`, 'IndexSizeError');
+    if (w === 0 || h === 0)
+      throw domException(
+        `The source ${w === 0 ? 'width' : 'height'} is 0.`,
+        'IndexSizeError',
+      );
     if (w < 0) {
       x += w;
       w = -w;
@@ -1368,21 +1828,51 @@ export class Canvas2DContextBase {
       h = -h;
     }
     // The image module's ImageData when installed (one ImageData class per realm), else ours.
-    const G = (globalThis as { ImageData?: new (w: number, h: number, s?: unknown) => ImageData }).ImageData;
-    const img = typeof G === 'function' ? new G(w, h, settings) : new ImageData(w, h, settings);
+    const G = (
+      globalThis as {
+        ImageData?: new (w: number, h: number, s?: unknown) => ImageData;
+      }
+    ).ImageData;
+    const img =
+      typeof G === 'function'
+        ? new G(w, h, settings)
+        : new ImageData(w, h, settings);
     this._n.getImageData(this._surface, x, y, w, h, img.data);
     return img;
   }
 
-  putImageData(img: ImageData, dx: number, dy: number, dirtyX?: number, dirtyY?: number, dirtyW?: number, dirtyH?: number): void {
-    if (arguments.length < 3) throw new TypeError("Failed to execute 'putImageData': 3 arguments required.");
-    if (!img || typeof img !== 'object' || !(img.data instanceof Uint8ClampedArray)) {
-      throw new TypeError("Failed to execute 'putImageData': parameter 1 is not of type 'ImageData'.");
+  putImageData(
+    img: ImageData,
+    dx: number,
+    dy: number,
+    dirtyX?: number,
+    dirtyY?: number,
+    dirtyW?: number,
+    dirtyH?: number,
+  ): void {
+    if (arguments.length < 3)
+      throw new TypeError(
+        "Failed to execute 'putImageData': 3 arguments required.",
+      );
+    if (
+      !img ||
+      typeof img !== 'object' ||
+      !(img.data instanceof Uint8ClampedArray)
+    ) {
+      throw new TypeError(
+        "Failed to execute 'putImageData': parameter 1 is not of type 'ImageData'.",
+      );
     }
-    if (img.data.buffer.byteLength === 0) throw domException('The ImageData has been detached.', 'InvalidStateError');
+    if (img.data.buffer.byteLength === 0)
+      throw domException(
+        'The ImageData has been detached.',
+        'InvalidStateError',
+      );
     // Overloads: (imagedata, dx, dy) and (imagedata, dx, dy, dirtyX, dirtyY, dirtyWidth, dirtyHeight).
     if (arguments.length > 3 && arguments.length < 7) {
-      throw new TypeError(`Failed to execute 'putImageData': Valid arities are: [3, 7], but ${arguments.length} arguments provided.`);
+      throw new TypeError(
+        `Failed to execute 'putImageData': Valid arities are: [3, 7], but ${arguments.length} arguments provided.`,
+      );
     }
     const full = arguments.length < 7;
     if (!finite2(+dx, +dy)) return;
@@ -1390,7 +1880,18 @@ export class Canvas2DContextBase {
     const y = full ? 0 : toLong(dirtyY);
     const w = full ? img.width : toLong(dirtyW);
     const h = full ? img.height : toLong(dirtyH);
-    this._n.putImageData(this._surface, img.data, img.width, img.height, toLong(dx), toLong(dy), x, y, w, h);
+    this._n.putImageData(
+      this._surface,
+      img.data,
+      img.width,
+      img.height,
+      toLong(dx),
+      toLong(dy),
+      x,
+      y,
+      w,
+      h,
+    );
   }
 
   // --- focus / misc (no DOM focus in this runtime) ---

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // SerialWorker: the bounded background reader used for import() graphs (PROC-2): one thread, jobs in order,
 // bounded queue, a refused post leaves the job with the caller, stop() interrupts and joins.
 #include <atomic>

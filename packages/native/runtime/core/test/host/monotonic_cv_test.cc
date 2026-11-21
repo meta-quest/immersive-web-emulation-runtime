@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // MonotonicCondVar: timed waits on CLOCK_MONOTONIC (a backwards wall-clock step cannot stretch them).
 #include <atomic>
 #include <chrono>

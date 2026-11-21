@@ -7,8 +7,15 @@
 
 // Test helpers: a minimal PNG encoder (RGBA8, filter 0) and an installed image global over fake natives.
 import { deflateSync } from 'node:zlib';
-import { createFakeImageNatives, type FakeImageNatives } from '../fake-natives.ts';
-import { installImage, type ImageRegistry, type InstallImageOptions } from '../install.ts';
+import {
+  createFakeImageNatives,
+  type FakeImageNatives,
+} from '../fake-natives.ts';
+import {
+  installImage,
+  type ImageRegistry,
+  type InstallImageOptions,
+} from '../install.ts';
 
 function crc32(bytes: Uint8Array): number {
   let c = ~0;
@@ -19,7 +26,11 @@ function crc32(bytes: Uint8Array): number {
   return ~c >>> 0;
 }
 
-export function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array {
+export function encodePng(
+  width: number,
+  height: number,
+  rgba: Uint8Array,
+): Uint8Array {
   const chunk = (type: string, body: Uint8Array) => {
     const out = new Uint8Array(12 + body.length);
     const dv = new DataView(out.buffer);
@@ -36,7 +47,11 @@ export function encodePng(width: number, height: number, rgba: Uint8Array): Uint
   ihdr[8] = 8;
   ihdr[9] = 6;
   const raw = new Uint8Array((width * 4 + 1) * height);
-  for (let y = 0; y < height; y++) raw.set(rgba.subarray(y * width * 4, (y + 1) * width * 4), y * (width * 4 + 1) + 1);
+  for (let y = 0; y < height; y++)
+    raw.set(
+      rgba.subarray(y * width * 4, (y + 1) * width * 4),
+      y * (width * 4 + 1) + 1,
+    );
   const parts = [
     Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', ihdr),
@@ -64,7 +79,12 @@ export function corners(): Uint8Array {
   return d;
 }
 
-export function px(data: ArrayLike<number>, width: number, x: number, y: number): number[] {
+export function px(
+  data: ArrayLike<number>,
+  width: number,
+  x: number,
+  y: number,
+): number[] {
   const i = (y * width + x) * 4;
   return [data[i]!, data[i + 1]!, data[i + 2]!, data[i + 3]!];
 }
@@ -97,5 +117,7 @@ export function nextTask(): Promise<void> {
 }
 
 export function waitFor(target: EventTarget, type: string): Promise<Event> {
-  return new Promise((resolve) => target.addEventListener(type, resolve, { once: true }));
+  return new Promise((resolve) =>
+    target.addEventListener(type, resolve, { once: true }),
+  );
 }

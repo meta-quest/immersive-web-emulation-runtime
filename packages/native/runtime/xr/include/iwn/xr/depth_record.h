@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The depth record (XR-DEPTH-2): what the XR thread hands the JS thread about each frame's environment depth image,
 // next to the frame record but in a buffer of its own (the frame record's layout stays as it is). V8-free and
 // OpenXR-call-free, so the writer is host-tested. web/xr's depth.ts reads it with the same layout (kDepthVersion).

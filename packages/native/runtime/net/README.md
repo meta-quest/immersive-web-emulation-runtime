@@ -4,11 +4,11 @@ Native half of `fetch`/XHR/`WebSocket` and of same-origin asset reads. JS sees i
 (contract: `binding/net_binding.cc` header comment and `web/net/src/natives.ts`). Spec: NET-1..7, NET-9, NET-11
 (`docs/spec/04-fetch-assets-network-storage.md`).
 
-| target | what | where it builds |
-|---|---|---|
-| `iwn_net_core` | URL subset + origin allowlist (`url.h`), asset paths/MIME/`DirAssetSource` (`assets.h`), byte streams + `PosixConnector` (`stream.h`), HTTP/1.1 client (`http.h`), RFC 6455 client (`websocket.h`); on Android also `AndroidAssetSource` and `JniConnector` | host + Android, no V8 |
-| `iwn_net` | the V8 binding, `iwn_register_net` | when V8 headers exist (`iwn_v8` target or `IWN_V8_INCLUDE_DIR`) |
-| `iwn_net_core_test`, `iwn_net_bridge` | host tests; the natives contract over stdio for web/net's Node tests | host |
+| target                                | what                                                                                                                                                                                                                                                        | where it builds                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `iwn_net_core`                        | URL subset + origin allowlist (`url.h`), asset paths/MIME/`DirAssetSource` (`assets.h`), byte streams + `PosixConnector` (`stream.h`), HTTP/1.1 client (`http.h`), RFC 6455 client (`websocket.h`); on Android also `AndroidAssetSource` and `JniConnector` | host + Android, no V8                                           |
+| `iwn_net`                             | the V8 binding, `iwn_register_net`                                                                                                                                                                                                                          | when V8 headers exist (`iwn_v8` target or `IWN_V8_INCLUDE_DIR`) |
+| `iwn_net_core_test`, `iwn_net_bridge` | host tests; the natives contract over stdio for web/net's Node tests                                                                                                                                                                                        | host                                                            |
 
 ```bash
 cmake -S runtime/net -B /tmp/net -G Ninja && ninja -C /tmp/net -j 16 && /tmp/net/iwn_net_core_test   # 32 tests
@@ -55,7 +55,7 @@ BoringSSL built from source; our own HTTP/1.1 and WebSocket cores over a byte st
 - Responses: header names lower-cased, `Set-Cookie` dropped (no cookie jar), final URL + redirected flag.
 - WebSocket (**experimental, not in the alpha surface**: the binding installs `wsConnect/wsSend/wsClose`, and
   web/net the `WebSocket` global, only with `IwnNetOptions::experimental_websocket`, i.e. `"network":
-  {"experimentalWebSocket": true}` in `assets/iwn/config.json`): handshake checks (101, Upgrade/Connection tokens in any case, accept key, no unoffered
+{"experimentalWebSocket": true}` in `assets/iwn/config.json`): handshake checks (101, Upgrade/Connection tokens in any case, accept key, no unoffered
   extension/subprotocol), masking, fragmentation, UTF-8 validation, ping→pong, close codes, 5 s closing handshake,
   64 MB message cap, `Origin: <app origin>`, connect/handshake timeout.
 - Assets (NET-1..4): URL path → percent-decoded relative path (`..`, encoded `/`, NUL → 404); `_`/`.` names and

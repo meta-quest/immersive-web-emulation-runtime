@@ -47,7 +47,14 @@ export class AudioParam {
   #curves: Array<[number, number]> = [];
   #pruneAt = 64;
 
-  constructor(token: symbol, core: Core, slot: number, spec: ParamSpec, initial?: number, owner?: object) {
+  constructor(
+    token: symbol,
+    core: Core,
+    slot: number,
+    spec: ParamSpec,
+    initial?: number,
+    owner?: object,
+  ) {
     if (token !== INTERNAL) throw new TypeError('Illegal constructor');
     this.#core = core;
     this.#slot = slot;
@@ -93,7 +100,10 @@ export class AudioParam {
   set automationRate(v: 'a-rate' | 'k-rate') {
     if (v !== 'a-rate' && v !== 'k-rate') return;
     if (this.#spec.fixedRate && v !== this.#spec.automationRate) {
-      throw domError('InvalidStateError', 'this AudioParam has a fixed automation rate');
+      throw domError(
+        'InvalidStateError',
+        'this AudioParam has a fixed automation rate',
+      );
     }
     if (v === this.#rate) return;
     this.#rate = v;
@@ -105,12 +115,16 @@ export class AudioParam {
     // The assigned value until a render quantum has computed it: while the batch is in flight,
     // and while no quantum has rendered since (a suspended or paused context keeps currentTime,
     // and the shared slot, where they are).
-    if (this.#pendingSeq > core.appliedSeq || core.frame === this.#setFrame) return this.#lastSet;
+    if (this.#pendingSeq > core.appliedSeq || core.frame === this.#setFrame)
+      return this.#lastSet;
     return core.params[this.#slot];
   }
   set value(v: number) {
     const x = finite(v, 'AudioParam.value');
-    this.#lastSet = Math.min(this.#spec.maxValue, Math.max(this.#spec.minValue, x));
+    this.#lastSet = Math.min(
+      this.#spec.maxValue,
+      Math.max(this.#spec.minValue, x),
+    );
     this.#pendingSeq = this.#core.nextSeq;
     this.#insert(ParamKind.SetValue, this.#core.currentTime, x, 0);
     this.#setFrame = this.#core.frame;
@@ -132,42 +146,79 @@ export class AudioParam {
 
   exponentialRampToValueAtTime(value: number, endTime: number): AudioParam {
     const v = finite(value, 'value');
-    if (v === 0) throw new RangeError('exponentialRampToValueAtTime: value must not be 0');
+    if (v === 0)
+      throw new RangeError('exponentialRampToValueAtTime: value must not be 0');
     const t = this.#time(endTime, 'endTime');
     this.#insert(ParamKind.ExpRamp, t, v, 0);
     return this;
   }
 
-  setTargetAtTime(target: number, startTime: number, timeConstant: number): AudioParam {
+  setTargetAtTime(
+    target: number,
+    startTime: number,
+    timeConstant: number,
+  ): AudioParam {
     const v = finite(target, 'target');
     const t = this.#time(startTime, 'startTime');
     const tc = finite(timeConstant, 'timeConstant');
-    if (tc < 0) throw new RangeError('setTargetAtTime: timeConstant must be >= 0');
+    if (tc < 0)
+      throw new RangeError('setTargetAtTime: timeConstant must be >= 0');
     this.#insert(ParamKind.SetTarget, t, v, tc);
     return this;
   }
 
-  setValueCurveAtTime(values: ArrayLike<number> | Iterable<number>, startTime: number, duration: number): AudioParam {
-    const list = Array.from(values as ArrayLike<number>, (x) => finite(x, 'values'));
+  setValueCurveAtTime(
+    values: ArrayLike<number> | Iterable<number>,
+    startTime: number,
+    duration: number,
+  ): AudioParam {
+    const list = Array.from(values as ArrayLike<number>, (x) =>
+      finite(x, 'values'),
+    );
     const t = this.#time(startTime, 'startTime');
     const d = finite(duration, 'duration');
-    if (d <= 0) throw new RangeError('setValueCurveAtTime: duration must be > 0');
-    if (list.length < 2) throw domError('InvalidStateError', 'setValueCurveAtTime: needs at least 2 values');
+    if (d <= 0)
+      throw new RangeError('setValueCurveAtTime: duration must be > 0');
+    if (list.length < 2)
+      throw domError(
+        'InvalidStateError',
+        'setValueCurveAtTime: needs at least 2 values',
+      );
     if (list.length > MAX_CURVE_VALUES) {
-      throw domError('NotSupportedError', `setValueCurveAtTime: more than ${MAX_CURVE_VALUES} values are not supported by this runtime`);
+      throw domError(
+        'NotSupportedError',
+        `setValueCurveAtTime: more than ${MAX_CURVE_VALUES} values are not supported by this runtime`,
+      );
     }
     const end = t + d;
     // Spec: events strictly inside (T, T + D) conflict; one exactly at T is allowed.
     for (const x of this.#times) {
-      if (x > t && x < end) throw domError('NotSupportedError', 'setValueCurveAtTime overlaps another automation event');
+      if (x > t && x < end)
+        throw domError(
+          'NotSupportedError',
+          'setValueCurveAtTime overlaps another automation event',
+        );
     }
     for (const [s, e] of this.#curves) {
-      if (t < e && end > s) throw domError('NotSupportedError', 'setValueCurveAtTime overlaps another curve');
+      if (t < e && end > s)
+        throw domError(
+          'NotSupportedError',
+          'setValueCurveAtTime overlaps another curve',
+        );
     }
     this.#curves.push([t, end]);
     this.#setFrame = -1;
     this.#core.cmdWithValues(
-      [Op.ParamEvent, this.#slot, ParamKind.SetCurve, t, 0, d, this.#core.currentTime, list.length],
+      [
+        Op.ParamEvent,
+        this.#slot,
+        ParamKind.SetCurve,
+        t,
+        0,
+        d,
+        this.#core.currentTime,
+        list.length,
+      ],
       list,
     );
     return this;
@@ -204,7 +255,10 @@ export class AudioParam {
     for (let k = 0; k < curves.length; k++) {
       // Spec: no event may fall in [T, T + D) of a curve.
       if (t >= curves[k][0] && t < curves[k][1]) {
-        throw domError('NotSupportedError', 'automation event overlaps a setValueCurveAtTime curve');
+        throw domError(
+          'NotSupportedError',
+          'automation event overlaps a setValueCurveAtTime curve',
+        );
       }
     }
     this.#setFrame = -1;
@@ -216,9 +270,11 @@ export class AudioParam {
         // overlap a future curve.
         const now = this.#core.currentTime;
         let w = 0;
-        for (let r = 0; r < times.length; r++) if (times[r] >= now) times[w++] = times[r];
+        for (let r = 0; r < times.length; r++)
+          if (times[r] >= now) times[w++] = times[r];
         times.length = w;
-        if (curves.length > 0) this.#curves = curves.filter(([, e]) => e >= now);
+        if (curves.length > 0)
+          this.#curves = curves.filter(([, e]) => e >= now);
         this.#pruneAt = Math.max(64, w * 2);
       }
     }

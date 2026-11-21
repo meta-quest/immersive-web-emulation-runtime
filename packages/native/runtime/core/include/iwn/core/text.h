@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Small V8-free text and byte utilities: hashes (SHA-1 for the WebSocket accept key and SHA-256, written from
 // FIPS 180-4; a fast 128-bit hash for code-cache keys), base64 (RFC 4648; "forgiving-base64 decode" from the Infra
 // standard), data: URLs (Fetch standard, "data: URL processor"), the MIME table (NET-2) and case-insensitive

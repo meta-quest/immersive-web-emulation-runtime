@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The core's natives on globalThis.__iwn (NATIVE MODULE CONTRACT): core (console sink, timers, rAF, hooks,
 // microtasks, error reporting, lifecycle state), clock, loop, clone, crypto, app, device, config. The JS side is
 // core/js/bootstrap.js (and the web glue reads clock/loop/clone/app/device/config, web/glue/src/natives.ts).

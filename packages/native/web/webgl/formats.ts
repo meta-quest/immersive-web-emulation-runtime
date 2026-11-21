@@ -58,7 +58,8 @@ const PACKED_TYPE_BYTES: Record<number, number> = {
 /** Bytes per pixel of a (format, type) pair, 0 if the pair is unknown. */
 export function bytesPerPixel(format: number, type: number): number {
   const packed = PACKED_TYPE_BYTES[type];
-  if (packed !== undefined) return FORMAT_COMPONENTS[format] !== undefined ? packed : 0;
+  if (packed !== undefined)
+    return FORMAT_COMPONENTS[format] !== undefined ? packed : 0;
   const c = FORMAT_COMPONENTS[format];
   const b = TYPE_BYTES[type];
   if (c === undefined || b === undefined) return 0;
@@ -168,7 +169,10 @@ export function imageByteSize(
   const imageBytes = rowBytes * imageRows;
   const skipImages = is3D ? ps.skipImages : 0;
   const lastRowBytes = (ps.skipPixels + width) * bpp;
-  const total = (skipImages + depth - 1) * imageBytes + (ps.skipRows + height - 1) * rowBytes + lastRowBytes;
+  const total =
+    (skipImages + depth - 1) * imageBytes +
+    (ps.skipRows + height - 1) * rowBytes +
+    lastRowBytes;
   return Number.isSafeInteger(total) ? total : -1;
 }
 
@@ -274,7 +278,12 @@ export const COMPRESSED_FORMATS: Record<number, readonly [number, number, number
   0x93dc: [12, 10, 16, 'WEBGL_compressed_texture_astc'], 0x93dd: [12, 12, 16, 'WEBGL_compressed_texture_astc'],
 };
 
-export function compressedByteSize(format: number, width: number, height: number, depth: number): number {
+export function compressedByteSize(
+  format: number,
+  width: number,
+  height: number,
+  depth: number,
+): number {
   const f = COMPRESSED_FORMATS[format];
   if (!f) return -1;
   return Math.ceil(width / f[0]) * Math.ceil(height / f[1]) * f[2] * depth;
@@ -282,7 +291,15 @@ export function compressedByteSize(format: number, width: number, height: number
 
 /** Unsized internal formats accepted by texImage* in WebGL (format == internalformat). */
 export function isUnsizedInternalFormat(f: number): boolean {
-  return f === 0x1908 || f === 0x1907 || f === 0x1906 || f === 0x1909 || f === 0x190a || f === 0x8c40 || f === 0x8c42;
+  return (
+    f === 0x1908 ||
+    f === 0x1907 ||
+    f === 0x1906 ||
+    f === 0x1909 ||
+    f === 0x190a ||
+    f === 0x8c40 ||
+    f === 0x8c42
+  );
 }
 
 /** Element size of index types. */
@@ -313,8 +330,14 @@ const SIZED_COMBOS: Record<number, readonly [number, readonly number[]]> = {
   0x88f0: [0x84f9, [0x84fa]], 0x8cad: [0x84f9, [0x8dad]],
 };
 const NORM16: Record<number, readonly [number, readonly number[]]> = {
-  0x822a: [0x1903, [0x1403]], 0x822c: [0x8227, [0x1403]], 0x8054: [0x1907, [0x1403]], 0x805b: [0x1908, [0x1403]],
-  0x8f98: [0x1903, [0x1402]], 0x8f99: [0x8227, [0x1402]], 0x8f9a: [0x1907, [0x1402]], 0x8f9b: [0x1908, [0x1402]],
+  0x822a: [0x1903, [0x1403]],
+  0x822c: [0x8227, [0x1403]],
+  0x8054: [0x1907, [0x1403]],
+  0x805b: [0x1908, [0x1403]],
+  0x8f98: [0x1903, [0x1402]],
+  0x8f99: [0x8227, [0x1402]],
+  0x8f9a: [0x1907, [0x1402]],
+  0x8f9b: [0x1908, [0x1402]],
 };
 /** OpenGL ES 3.0 table 3.3 (unsized internal formats, format == internalformat). */
 const UNSIZED_COMBOS: Record<number, readonly number[]> = {
@@ -324,8 +347,14 @@ const UNSIZED_COMBOS: Record<number, readonly number[]> = {
   0x1909: [0x1401], // LUMINANCE
   0x1906: [0x1401], // ALPHA
 };
-const ALL_FORMATS = new Set([0x1903, 0x8d94, 0x8227, 0x8228, 0x1907, 0x8d98, 0x1908, 0x8d99, 0x1902, 0x84f9, 0x190a, 0x1909, 0x1906]);
-const ALL_TYPES = new Set([0x1401, 0x1400, 0x1403, 0x1402, 0x1405, 0x1404, 0x140b, 0x1406, 0x8363, 0x8033, 0x8034, 0x8368, 0x8c3b, 0x8c3e, 0x84fa, 0x8dad]);
+const ALL_FORMATS = new Set([
+  0x1903, 0x8d94, 0x8227, 0x8228, 0x1907, 0x8d98, 0x1908, 0x8d99, 0x1902,
+  0x84f9, 0x190a, 0x1909, 0x1906,
+]);
+const ALL_TYPES = new Set([
+  0x1401, 0x1400, 0x1403, 0x1402, 0x1405, 0x1404, 0x140b, 0x1406, 0x8363,
+  0x8033, 0x8034, 0x8368, 0x8c3b, 0x8c3e, 0x84fa, 0x8dad,
+]);
 
 /** Extensions a validation needs to know about (enabled through getExtension). */
 export interface FormatExtensions {
@@ -337,35 +366,66 @@ export interface FormatExtensions {
  * INVALID_ENUM (internal format INVALID_VALUE in WebGL 2), a valid but unsupported combination INVALID_OPERATION.
  * GLES 3.2 drivers accept more (BGRA, RGBA/FLOAT unsized, ...) than WebGL does, so this runs before the driver.
  */
-export function texFormatError(v2: boolean, ext: FormatExtensions, internalformat: number, format: number, type: number): number {
+export function texFormatError(
+  v2: boolean,
+  ext: FormatExtensions,
+  internalformat: number,
+  format: number,
+  type: number,
+): number {
   if (!v2) return texFormatErrorWebGL1(ext, internalformat, format, type);
   const fmtOk = ALL_FORMATS.has(format);
   const typeOk = ALL_TYPES.has(type);
   if (!fmtOk || !typeOk) return 0x0500; // INVALID_ENUM
-  const sized = SIZED_COMBOS[internalformat] ?? (ext.has('EXT_texture_norm16') ? NORM16[internalformat] : undefined);
+  const sized =
+    SIZED_COMBOS[internalformat] ??
+    (ext.has('EXT_texture_norm16') ? NORM16[internalformat] : undefined);
   if (sized) return sized[0] === format && sized[1].includes(type) ? 0 : 0x0502;
   const unsized = UNSIZED_COMBOS[internalformat];
-  if (unsized) return internalformat === format && unsized.includes(type) ? 0 : 0x0502;
+  if (unsized)
+    return internalformat === format && unsized.includes(type) ? 0 : 0x0502;
   return 0x0501; // INVALID_VALUE: unknown internal format
 }
 
-function texFormatErrorWebGL1(ext: FormatExtensions, internalformat: number, format: number, type: number): number {
+function texFormatErrorWebGL1(
+  ext: FormatExtensions,
+  internalformat: number,
+  format: number,
+  type: number,
+): number {
   const srgb = ext.has('EXT_sRGB');
   const formatKnown =
-    format === 0x1908 || format === 0x1907 || format === 0x190a || format === 0x1909 || format === 0x1906 ||
-    ((format === 0x1902 || format === 0x84f9) && ext.has('WEBGL_depth_texture')) ||
+    format === 0x1908 ||
+    format === 0x1907 ||
+    format === 0x190a ||
+    format === 0x1909 ||
+    format === 0x1906 ||
+    ((format === 0x1902 || format === 0x84f9) &&
+      ext.has('WEBGL_depth_texture')) ||
     ((format === 0x8c40 || format === 0x8c42) && srgb);
   if (!formatKnown) return 0x0500;
   const float = type === 0x1406 && ext.has('OES_texture_float');
   const half = type === 0x8d61 && ext.has('OES_texture_half_float');
   const typeKnown =
-    type === 0x1401 || type === 0x8363 || type === 0x8033 || type === 0x8034 || float || half ||
-    ((type === 0x1403 || type === 0x1405 || type === 0x84fa) && ext.has('WEBGL_depth_texture'));
+    type === 0x1401 ||
+    type === 0x8363 ||
+    type === 0x8033 ||
+    type === 0x8034 ||
+    float ||
+    half ||
+    ((type === 0x1403 || type === 0x1405 || type === 0x84fa) &&
+      ext.has('WEBGL_depth_texture'));
   if (!typeKnown) return 0x0500;
   if (internalformat !== format) return 0x0502;
   switch (format) {
     case 0x1908:
-      return type === 0x1401 || type === 0x8033 || type === 0x8034 || float || half ? 0 : 0x0502;
+      return type === 0x1401 ||
+        type === 0x8033 ||
+        type === 0x8034 ||
+        float ||
+        half
+        ? 0
+        : 0x0502;
     case 0x1907:
       return type === 0x1401 || type === 0x8363 || float || half ? 0 : 0x0502;
     case 0x190a:
@@ -382,7 +442,15 @@ function texFormatErrorWebGL1(ext: FormatExtensions, internalformat: number, for
 }
 
 /** Formats texSubImage* accepts (the level's internal format decides the rest; the driver checks that). */
-export function subFormatError(v2: boolean, ext: FormatExtensions, format: number, type: number): number {
-  if (!v2) return texFormatErrorWebGL1(ext, format, format, type) === 0x0500 ? 0x0500 : 0;
+export function subFormatError(
+  v2: boolean,
+  ext: FormatExtensions,
+  format: number,
+  type: number,
+): number {
+  if (!v2)
+    return texFormatErrorWebGL1(ext, format, format, type) === 0x0500
+      ? 0x0500
+      : 0;
   return ALL_FORMATS.has(format) && ALL_TYPES.has(type) ? 0 : 0x0500;
 }

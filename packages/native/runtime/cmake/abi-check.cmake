@@ -1,3 +1,8 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
 # JS-1 CI symbol check, run with cmake -P: -DNM=<llvm-nm> -DLIBS=<lib1;lib2;...>
 # Fails if a library's dynamic symbol table names Chromium's libc++ namespace (std::__Cr) or, for a library that
 # uses libc++ at all, lacks the NDK's (std::__ndk1).

@@ -59,12 +59,18 @@ export interface ImageNatives {
    * Decodes encoded bytes (PNG, JPEG, WebP, GIF first frame, BMP; more where the OS decoder has them) off the JS
    * thread and applies `options` in the same job. The caller must not modify `bytes` until the promise settles.
    */
-  decode(bytes: ArrayBuffer | ArrayBufferView, options: NativeProcessOptions): Promise<NativeImageHandle>;
+  decode(
+    bytes: ArrayBuffer | ArrayBufferView,
+    options: NativeProcessOptions,
+  ): Promise<NativeImageHandle>;
   /**
    * A data: URL's base64 payload: forgiving-base64 (WHATWG Infra) and the image decode both run off the JS thread;
    * the JS thread only copies the characters (REG-16). Invalid base64 rejects with code 'corrupt'. Version >= 2.
    */
-  decodeBase64?(text: string, options: NativeProcessOptions): Promise<NativeImageHandle>;
+  decodeBase64?(
+    text: string,
+    options: NativeProcessOptions,
+  ): Promise<NativeImageHandle>;
   /**
    * Rejects a pending promise returned by decode/decodeBase64/fromPixels/transform with code 'cancelled' and stops
    * its job (a queued job never starts). Returns false when the promise is not pending. Version >= 2.
@@ -79,11 +85,17 @@ export interface ImageNatives {
     options: NativeProcessOptions,
   ): Promise<NativeImageHandle>;
   /** A new handle from an existing one (the source stays valid). */
-  transform(handle: NativeImageHandle, options: NativeProcessOptions): Promise<NativeImageHandle>;
+  transform(
+    handle: NativeImageHandle,
+    options: NativeProcessOptions,
+  ): Promise<NativeImageHandle>;
   /** A second handle on the same pixels (closing one leaves the other). */
   share(handle: NativeImageHandle): NativeImageHandle;
   /** A tightly packed copy of the pixels in the requested alpha mode. Throws if closed. */
-  readPixels(handle: NativeImageHandle, premultiplied: boolean): Uint8ClampedArray;
+  readPixels(
+    handle: NativeImageHandle,
+    premultiplied: boolean,
+  ): Uint8ClampedArray;
   /** Frees the pixels now. Idempotent. */
   close(handle: NativeImageHandle): void;
   /** Detaches the handle and parks its pixels process-wide; another isolate takes them with importTransfer. */
@@ -106,6 +118,12 @@ export interface ImageNatives {
   };
 }
 
-export function isNativeImageError(e: unknown): e is Error & { code: NativeImageErrorCode } {
-  return typeof e === 'object' && e !== null && typeof (e as { code?: unknown }).code === 'string';
+export function isNativeImageError(
+  e: unknown,
+): e is Error & { code: NativeImageErrorCode } {
+  return (
+    typeof e === 'object' &&
+    e !== null &&
+    typeof (e as { code?: unknown }).code === 'string'
+  );
 }

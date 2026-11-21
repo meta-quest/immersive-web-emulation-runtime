@@ -22,8 +22,16 @@ function freshGlobal(natives: FakeStorageNatives | null) {
   const g = new EventTarget() as unknown as Record<string, unknown>;
   g.navigator = {};
   const warnings: string[] = [];
-  installStorage(g as unknown as typeof globalThis, { natives, warn: (m) => warnings.push(m) });
-  return { g, warnings, local: g.localStorage as Storage, session: g.sessionStorage as Storage };
+  installStorage(g as unknown as typeof globalThis, {
+    natives,
+    warn: (m) => warnings.push(m),
+  });
+  return {
+    g,
+    warnings,
+    local: g.localStorage as Storage,
+    session: g.sessionStorage as Storage,
+  };
 }
 
 test('Storage API: getItem/setItem/removeItem/clear/key/length, String conversion', () => {
@@ -40,7 +48,10 @@ test('Storage API: getItem/setItem/removeItem/clear/key/length, String conversio
   assert.equal(s.length, 1);
   s.clear();
   assert.equal(s.length, 0);
-  assert.throws(() => new (Storage as unknown as new () => Storage)(), TypeError);
+  assert.throws(
+    () => new (Storage as unknown as new () => Storage)(),
+    TypeError,
+  );
   assert.equal(Object.prototype.toString.call(s), '[object Storage]');
 });
 
@@ -66,7 +77,9 @@ test('quota: 5 Mi code units per area → QuotaExceededError, nothing stored', (
   const s = createStorage([], null);
   const big = 'x'.repeat(5 * 1024 * 1024 - 10);
   s.setItem('k', big);
-  assert.throws(() => s.setItem('k2', 'y'.repeat(20)), { name: 'QuotaExceededError' });
+  assert.throws(() => s.setItem('k2', 'y'.repeat(20)), {
+    name: 'QuotaExceededError',
+  });
   assert.equal(s.getItem('k2'), null);
   s.setItem('k', 'small');
   s.setItem('k2', 'y'.repeat(20));
@@ -84,7 +97,9 @@ test('localStorage persists through the native KV (boot counter over 3 launches)
 });
 
 test('localStorage mirrors every mutation; unchanged values are not re-sent; sessionStorage stays in memory', () => {
-  const natives = new FakeStorageNatives(mkdtempSync(join(tmpdir(), 'iwn-ls-')));
+  const natives = new FakeStorageNatives(
+    mkdtempSync(join(tmpdir(), 'iwn-ls-')),
+  );
   const { local, session } = freshGlobal(natives);
   local.setItem('a', '1');
   local.setItem('a', '1');
@@ -101,7 +116,10 @@ test("runtime entries (__iwnRuntimeStorage) are the runtime's: hidden from the p
   const dir = mkdtempSync(join(tmpdir(), 'iwn-ls-'));
   {
     const { g, local } = freshGlobal(new FakeStorageNatives(dir));
-    const runtime = g.__iwnRuntimeStorage as { getItem(k: string): string | null; setItem(k: string, v: string | null): void };
+    const runtime = g.__iwnRuntimeStorage as {
+      getItem(k: string): string | null;
+      setItem(k: string, v: string | null): void;
+    };
     local.setItem('page', '1');
     runtime.setItem('anchors', '["u1"]');
     assert.equal(runtime.getItem('anchors'), '["u1"]');
@@ -110,7 +128,10 @@ test("runtime entries (__iwnRuntimeStorage) are the runtime's: hidden from the p
     assert.equal(local.key(0), 'page');
     assert.deepEqual(Object.keys(local), ['page']);
     assert.equal(local.getItem('anchors'), null);
-    assert.ok(!Object.keys(g).includes('__iwnRuntimeStorage'), 'not enumerable');
+    assert.ok(
+      !Object.keys(g).includes('__iwnRuntimeStorage'),
+      'not enumerable',
+    );
     // a page that clears its storage does not clear the runtime's
     local.clear();
     assert.equal(local.length, 0);
@@ -118,7 +139,10 @@ test("runtime entries (__iwnRuntimeStorage) are the runtime's: hidden from the p
   }
   // the next launch reads it back (and the page's clear() stuck)
   const { g, local } = freshGlobal(new FakeStorageNatives(dir));
-  const runtime = g.__iwnRuntimeStorage as { getItem(k: string): string | null; setItem(k: string, v: string | null): void };
+  const runtime = g.__iwnRuntimeStorage as {
+    getItem(k: string): string | null;
+    setItem(k: string, v: string | null): void;
+  };
   assert.equal(runtime.getItem('anchors'), '["u1"]');
   assert.equal(local.length, 0);
   runtime.setItem('anchors', null);
@@ -128,27 +152,43 @@ test("runtime entries (__iwnRuntimeStorage) are the runtime's: hidden from the p
 test('lone surrogates survive the round trip', () => {
   const dir = mkdtempSync(join(tmpdir(), 'iwn-ls-'));
   freshGlobal(new FakeStorageNatives(dir)).local.setItem('s', 'a\uD800b');
-  assert.equal(freshGlobal(new FakeStorageNatives(dir)).local.getItem('s'), 'a\uD800b');
+  assert.equal(
+    freshGlobal(new FakeStorageNatives(dir)).local.getItem('s'),
+    'a\uD800b',
+  );
 });
 
 test('pagehide flushes the KV log without blocking', () => {
-  const natives = new FakeStorageNatives(mkdtempSync(join(tmpdir(), 'iwn-ls-')));
+  const natives = new FakeStorageNatives(
+    mkdtempSync(join(tmpdir(), 'iwn-ls-')),
+  );
   const { g } = freshGlobal(natives);
   (g as unknown as EventTarget).dispatchEvent(new Event('pagehide'));
   assert.equal(natives.kvFlushes, 1);
 });
 
 test('navigator.storage: estimate only; persist/persisted come with the opt-in idb prelude (NET-STORE-3)', async () => {
-  const natives = new FakeStorageNatives(mkdtempSync(join(tmpdir(), 'iwn-ls-')));
+  const natives = new FakeStorageNatives(
+    mkdtempSync(join(tmpdir(), 'iwn-ls-')),
+  );
   const { g } = freshGlobal(natives);
   const storage = (g.navigator as { storage: StorageManager }).storage;
-  assert.deepEqual(await storage.estimate(), { usage: 1234, quota: 512 * 1024 * 1024 });
+  assert.deepEqual(await storage.estimate(), {
+    usage: 1234,
+    quota: 512 * 1024 * 1024,
+  });
   assert.equal((storage as { persist?: unknown }).persist, undefined);
   assert.equal((storage as { persisted?: unknown }).persisted, undefined);
-  installIdbAndCaches(g as unknown as typeof globalThis, { natives, origin: 'https://app.local' });
+  installIdbAndCaches(g as unknown as typeof globalThis, {
+    natives,
+    origin: 'https://app.local',
+  });
   assert.equal(await storage.persist(), true);
   assert.equal(await storage.persisted(), true);
-  assert.deepEqual(await storage.estimate(), { usage: 1234, quota: 512 * 1024 * 1024 });
+  assert.deepEqual(await storage.estimate(), {
+    usage: 1234,
+    quota: 512 * 1024 * 1024,
+  });
 });
 
 test('without natives localStorage works in memory', () => {

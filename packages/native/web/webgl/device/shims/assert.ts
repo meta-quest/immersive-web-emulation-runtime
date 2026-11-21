@@ -13,18 +13,32 @@ function fail(msg: string): never {
 }
 function show(v: unknown): string {
   try {
-    return JSON.stringify(v, (_k, x) => (ArrayBuffer.isView(x) ? Array.from(x as unknown as ArrayLike<number>) : x));
+    return JSON.stringify(v, (_k, x) =>
+      ArrayBuffer.isView(x) ? Array.from(x as unknown as ArrayLike<number>) : x,
+    );
   } catch {
     return String(v);
   }
 }
 function deep(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
-  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (
+    typeof a !== 'object' ||
+    typeof b !== 'object' ||
+    a === null ||
+    b === null
+  )
+    return false;
   const ka = Object.keys(a as object);
   const kb = Object.keys(b as object);
-  if (ka.length !== kb.length || Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
-  return ka.every((k) => deep((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+  if (
+    ka.length !== kb.length ||
+    Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)
+  )
+    return false;
+  return ka.every((k) =>
+    deep((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+  );
 }
 const assert = {
   equal(a: unknown, b: unknown, msg?: string): void {
@@ -43,8 +57,13 @@ const assert = {
     try {
       fn();
     } catch (e) {
-      if (typeof check === 'function' && check.prototype && !(e instanceof (check as new () => unknown))) {
-        if (!(check as (e: unknown) => boolean)(e)) fail(msg ?? `throws: wrong error ${String(e)}`);
+      if (
+        typeof check === 'function' &&
+        check.prototype &&
+        !(e instanceof (check as new () => unknown))
+      ) {
+        if (!(check as (e: unknown) => boolean)(e))
+          fail(msg ?? `throws: wrong error ${String(e)}`);
       }
       return;
     }

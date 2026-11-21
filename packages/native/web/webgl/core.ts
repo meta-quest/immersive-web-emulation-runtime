@@ -89,7 +89,8 @@ const NAME_SPAN = 4294967296;
 
 /** WebGL objects have no own enumerable properties in browsers: hide the binding's bookkeeping fields. */
 export function hideInternals(o: object): void {
-  for (const k of Object.keys(o)) Object.defineProperty(o, k, { enumerable: false });
+  for (const k of Object.keys(o))
+    Object.defineProperty(o, k, { enumerable: false });
 }
 
 function deleteName(n: GlNatives, kind: number, name: number): void {
@@ -125,7 +126,8 @@ function freeNative(o: NativeOwned): void {
   if (!o.id) return;
   const n = o.n;
   if (n.contextMakeCurrent(o.id)) {
-    for (const key of o.live) deleteName(n, Math.floor(key / NAME_SPAN), key % NAME_SPAN);
+    for (const key of o.live)
+      deleteName(n, Math.floor(key / NAME_SPAN), key % NAME_SPAN);
   }
   o.live.clear();
   n.contextDestroy(o.id);
@@ -155,7 +157,9 @@ export function releaseAllContexts(): number {
   return freed;
 }
 
-const FR_ = (globalThis as { FinalizationRegistry?: typeof FinalizationRegistry }).FinalizationRegistry;
+const FR_ = (
+  globalThis as { FinalizationRegistry?: typeof FinalizationRegistry }
+).FinalizationRegistry;
 /** Contexts dropped by the page (canvas collected) release their native side. */
 const ctxRegistry = FR_ ? new FR_<NativeOwned>((o) => freeNative(o)) : null;
 /** Task epoch (GL-15): results become visible to JS only after the epoch advances. */
@@ -178,8 +182,10 @@ export function compositeAll(): void {
       liveContexts.delete(ref);
       continue;
     }
-    const offDocument = (c._canvas as { isConnected?: boolean }).isConnected === false;
-    if (c._dfbDrawn && !c._attrs.preserveDrawingBuffer && !offDocument) c._dfbNeedsClear = true;
+    const offDocument =
+      (c._canvas as { isConnected?: boolean }).isConnected === false;
+    if (c._dfbDrawn && !c._attrs.preserveDrawingBuffer && !offDocument)
+      c._dfbNeedsClear = true;
     c._dfbDrawn = false;
   }
 }
@@ -207,7 +213,9 @@ export function currentEpoch(): number {
 function scheduleEpoch(): void {
   if (epochScheduled) return;
   epochScheduled = true;
-  const st = (globalThis as { setTimeout?: (f: () => void, t: number) => unknown }).setTimeout;
+  const st = (
+    globalThis as { setTimeout?: (f: () => void, t: number) => unknown }
+  ).setTimeout;
   if (st) st(advanceEpoch, 0);
 }
 
@@ -401,7 +409,13 @@ export class Ctx {
 
   // ------------------------------------------------------------------------------------------- init
 
-  _init(n: GlNatives, v2: boolean, canvas: CanvasLike, attrs: ContextAttributes, opts: ContextOptions): boolean {
+  _init(
+    n: GlNatives,
+    v2: boolean,
+    canvas: CanvasLike,
+    attrs: ContextAttributes,
+    opts: ContextOptions,
+  ): boolean {
     this._gen = generation++;
     this._n = n;
     this._v2 = v2;
@@ -426,7 +440,11 @@ export class Ctx {
     this._f32Scratch = new Float32Array(256);
     this._i32Scratch = new Int32Array(256);
     this._u32Scratch = new Uint32Array(256);
-    void this._i32.buffer, this._u32.buffer, this._f32.buffer, this._u8.buffer, this._i64.buffer;
+    (void this._i32.buffer,
+      this._u32.buffer,
+      this._f32.buffer,
+      this._u8.buffer,
+      this._i64.buffer);
 
     const req = new Int32Array([1, opts.robustAccess ? 1 : 0, 0, 0]);
     this._id = n.contextCreate(req, 0, req.byteLength);
@@ -435,7 +453,9 @@ export class Ctx {
     for (let tries = 0; !this._id && tries < 4; tries++) {
       const victim = oldestLiveContext(this, n);
       if (!victim) break;
-      (opts.log ?? console.warn)('WebGL: too many active contexts; the oldest context was lost');
+      (opts.log ?? console.warn)(
+        'WebGL: too many active contexts; the oldest context was lost',
+      );
       victim._loseContext(false);
       this._id = n.contextCreate(req, 0, req.byteLength);
     }
@@ -454,7 +474,9 @@ export class Ctx {
     this._maxDrawBuffers = this._getInt(E.MAX_DRAW_BUFFERS);
     this._maxColorAttachments = this._getInt(E.MAX_COLOR_ATTACHMENTS);
     this._maxUboBindings = this._getInt(E.MAX_UNIFORM_BUFFER_BINDINGS);
-    this._maxTfBuffers = this._getInt(E.MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS);
+    this._maxTfBuffers = this._getInt(
+      E.MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS,
+    );
 
     this._arrayBuffer = null;
     this._copyRead = null;
@@ -465,9 +487,19 @@ export class Ctx {
     this._tfBuffer = null;
     this._uboBindings = new Array(this._maxUboBindings).fill(null);
     this._uboRanges = new Float64Array(this._maxUboBindings * 2);
-    this._defaultVao = new WebGLVertexArrayObject(INTERNAL, this, 0, this._maxAttribs);
+    this._defaultVao = new WebGLVertexArrayObject(
+      INTERNAL,
+      this,
+      0,
+      this._maxAttribs,
+    );
     this._vao = this._defaultVao;
-    this._defaultTf = new WebGLTransformFeedback(INTERNAL, this, 0, this._maxTfBuffers);
+    this._defaultTf = new WebGLTransformFeedback(
+      INTERNAL,
+      this,
+      0,
+      this._maxTfBuffers,
+    );
     this._tf = this._defaultTf;
     this._activeTfs = new Set();
     this._program = null;
@@ -507,7 +539,10 @@ export class Ctx {
     this._lineWidth = 1;
     this._polygonOffset = new Float32Array(2);
     this._polygonOffsetClamp = 0;
-    this._clipControl = new Uint32Array([E.LOWER_LEFT_EXT, E.NEGATIVE_ONE_TO_ONE_EXT]);
+    this._clipControl = new Uint32Array([
+      E.LOWER_LEFT_EXT,
+      E.NEGATIVE_ONE_TO_ONE_EXT,
+    ]);
     this._polygonMode = E.FILL_WEBGL;
     this._sampleCoverageValue = 1;
     this._sampleCoverageInvert = false;
@@ -564,12 +599,19 @@ export class Ctx {
     // WebGL 2: primitive restart with the fixed index is always on (WebGL 2.0 §5.18).
     if (v2) n.enable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
 
-    const FR = (globalThis as { FinalizationRegistry?: typeof FinalizationRegistry }).FinalizationRegistry;
+    const FR = (
+      globalThis as { FinalizationRegistry?: typeof FinalizationRegistry }
+    ).FinalizationRegistry;
     // Held values carry the incarnation: after a restore, callbacks for the lost incarnation's wrappers are
     // ignored (their names were freed with it and may be reused by the new context).
-    this._registry = FR ? new FR<readonly [number, number, number]>((held) => this._release(held[0], held[1], held[2])) : null;
+    this._registry = FR
+      ? new FR<readonly [number, number, number]>((held) =>
+          this._release(held[0], held[1], held[2]),
+        )
+      : null;
     // Internal state is not part of the WebGL surface: keep it out of property enumeration.
-    for (const k of Object.keys(this)) Object.defineProperty(this, k, { enumerable: false });
+    for (const k of Object.keys(this))
+      Object.defineProperty(this, k, { enumerable: false });
     return true;
   }
 
@@ -625,7 +667,9 @@ export class Ctx {
     if (this._opts.debugErrors && this._debugLogs < MAX_DEBUG_LOGS) {
       this._debugLogs++;
       const stack = new Error().stack?.split('\n').slice(2, 7).join('\n') ?? '';
-      (this._opts.log ?? console.warn)(`WebGL: ${errorName(code)}${what ? ` in ${what}` : ''}\n${stack}`);
+      (this._opts.log ?? console.warn)(
+        `WebGL: ${errorName(code)}${what ? ` in ${what}` : ''}\n${stack}`,
+      );
     }
   }
 
@@ -638,7 +682,8 @@ export class Ctx {
       throw new TypeError('Argument is not a WebGL object');
     }
     const cls = CLASS_OF_KIND[kind];
-    if (!(value instanceof cls)) throw new TypeError(`Argument is not a ${cls.name}`);
+    if (!(value instanceof cls))
+      throw new TypeError(`Argument is not a ${cls.name}`);
     const o = value as WebGLObject;
     if (o._ctx !== this || o._gen !== this._gen || o._deleted) {
       this._e(E.INVALID_OPERATION);
@@ -656,7 +701,8 @@ export class Ctx {
       if (nullable) return true;
       throw new TypeError(`${what}: argument is not a ${cls.name}`);
     }
-    if (!(value instanceof cls)) throw new TypeError(`${what}: argument is not a ${cls.name}`);
+    if (!(value instanceof cls))
+      throw new TypeError(`${what}: argument is not a ${cls.name}`);
     const o = value as WebGLObject;
     if (o._ctx !== this || o._gen !== this._gen) {
       this._e(E.INVALID_OPERATION, what);
@@ -665,7 +711,8 @@ export class Ctx {
     if (o._deleted && !this._inUse(o)) {
       // WebGL: a deleted program / shader argument is INVALID_VALUE; binding / attaching a deleted object is
       // INVALID_OPERATION.
-      const programOrShader = o instanceof WebGLProgram || o instanceof WebGLShader;
+      const programOrShader =
+        o instanceof WebGLProgram || o instanceof WebGLShader;
       this._e(programOrShader ? E.INVALID_VALUE : E.INVALID_OPERATION, what);
       return false;
     }
@@ -674,7 +721,8 @@ export class Ctx {
 
   /** Objects flagged for deletion stay valid while in use: the current program, attached shaders. */
   _inUse(o: WebGLObject): boolean {
-    if (o instanceof WebGLProgram) return this._program === o || this._tf._program === o;
+    if (o instanceof WebGLProgram)
+      return this._program === o || this._tf._program === o;
     if (o instanceof WebGLShader) return o._attachCount > 0;
     return false;
   }
@@ -682,8 +730,12 @@ export class Ctx {
   /** Same as _ok but deleted objects are fine (delete* / is* semantics). */
   _owned(value: unknown, cls: Function, what: string): boolean {
     if (value === null || value === undefined) return false;
-    if (!(value instanceof cls)) throw new TypeError(`${what}: argument is not a ${cls.name}`);
-    if ((value as WebGLObject)._ctx !== this || (value as WebGLObject)._gen !== this._gen) {
+    if (!(value instanceof cls))
+      throw new TypeError(`${what}: argument is not a ${cls.name}`);
+    if (
+      (value as WebGLObject)._ctx !== this ||
+      (value as WebGLObject)._gen !== this._gen
+    ) {
       this._e(E.INVALID_OPERATION, what);
       return false;
     }
@@ -694,11 +746,13 @@ export class Ctx {
     hideInternals(o);
     if (!o._name) return;
     this._liveAdd(o._kind, o._name);
-    if (this._registry) this._registry.register(o, [o._kind, o._name, this._gen] as const, o);
+    if (this._registry)
+      this._registry.register(o, [o._kind, o._name, this._gen] as const, o);
   }
   /** Explicit deleteX(): the name is no longer owned by the wrapper. */
   _untrack(o: WebGLObject): void {
-    if (o._gen === this._gen) this._native.live.delete(o._kind * NAME_SPAN + o._name);
+    if (o._gen === this._gen)
+      this._native.live.delete(o._kind * NAME_SPAN + o._name);
     if (this._registry) this._registry.unregister(o);
   }
   _liveAdd(kind: number, name: number): void {
@@ -755,40 +809,113 @@ export class Ctx {
     this._dfbNeedsClear = false; // fresh storage is cleared below
     const n = this._n;
     const a = this._attrs;
-    const msrtt = a.antialias && this._driverExt.has('GL_EXT_multisampled_render_to_texture');
-    const samples = a.antialias ? Math.min(4, this._getLimit(E.MAX_SAMPLES)) : 0;
-    if (!this._dfbColor) this._liveAdd(enumKind.renderbuffer, (this._dfbColor = n.genRenderbuffer()));
+    const msrtt =
+      a.antialias &&
+      this._driverExt.has('GL_EXT_multisampled_render_to_texture');
+    const samples = a.antialias
+      ? Math.min(4, this._getLimit(E.MAX_SAMPLES))
+      : 0;
+    if (!this._dfbColor)
+      this._liveAdd(
+        enumKind.renderbuffer,
+        (this._dfbColor = n.genRenderbuffer()),
+      );
     const colorFormat = a.alpha ? E.RGBA8 : E.RGB8;
     n.bindRenderbuffer(E.RENDERBUFFER, this._dfbColor);
-    if (samples && msrtt) n.renderbufferStorageMultisampleEXT(E.RENDERBUFFER, samples, colorFormat, w, h);
-    else if (samples) n.renderbufferStorageMultisample(E.RENDERBUFFER, samples, colorFormat, w, h);
+    if (samples && msrtt)
+      n.renderbufferStorageMultisampleEXT(
+        E.RENDERBUFFER,
+        samples,
+        colorFormat,
+        w,
+        h,
+      );
+    else if (samples)
+      n.renderbufferStorageMultisample(
+        E.RENDERBUFFER,
+        samples,
+        colorFormat,
+        w,
+        h,
+      );
     else n.renderbufferStorage(E.RENDERBUFFER, colorFormat, w, h);
-    const depthFormat = a.stencil ? E.DEPTH24_STENCIL8 : a.depth ? E.DEPTH_COMPONENT24 : 0;
+    const depthFormat = a.stencil
+      ? E.DEPTH24_STENCIL8
+      : a.depth
+        ? E.DEPTH_COMPONENT24
+        : 0;
     if (depthFormat) {
-      if (!this._dfbDepth) this._liveAdd(enumKind.renderbuffer, (this._dfbDepth = n.genRenderbuffer()));
+      if (!this._dfbDepth)
+        this._liveAdd(
+          enumKind.renderbuffer,
+          (this._dfbDepth = n.genRenderbuffer()),
+        );
       n.bindRenderbuffer(E.RENDERBUFFER, this._dfbDepth);
-      if (samples && msrtt) n.renderbufferStorageMultisampleEXT(E.RENDERBUFFER, samples, depthFormat, w, h);
-      else if (samples) n.renderbufferStorageMultisample(E.RENDERBUFFER, samples, depthFormat, w, h);
+      if (samples && msrtt)
+        n.renderbufferStorageMultisampleEXT(
+          E.RENDERBUFFER,
+          samples,
+          depthFormat,
+          w,
+          h,
+        );
+      else if (samples)
+        n.renderbufferStorageMultisample(
+          E.RENDERBUFFER,
+          samples,
+          depthFormat,
+          w,
+          h,
+        );
       else n.renderbufferStorage(E.RENDERBUFFER, depthFormat, w, h);
     }
-    n.bindRenderbuffer(E.RENDERBUFFER, this._renderbuffer ? this._renderbuffer._name : 0);
+    n.bindRenderbuffer(
+      E.RENDERBUFFER,
+      this._renderbuffer ? this._renderbuffer._name : 0,
+    );
     n.bindFramebuffer(E.FRAMEBUFFER, this._dfbName);
-    n.framebufferRenderbuffer(E.FRAMEBUFFER, E.COLOR_ATTACHMENT0, E.RENDERBUFFER, this._dfbColor);
+    n.framebufferRenderbuffer(
+      E.FRAMEBUFFER,
+      E.COLOR_ATTACHMENT0,
+      E.RENDERBUFFER,
+      this._dfbColor,
+    );
     if (depthFormat) {
       const att = a.stencil ? E.DEPTH_STENCIL_ATTACHMENT : E.DEPTH_ATTACHMENT;
-      n.framebufferRenderbuffer(E.FRAMEBUFFER, att, E.RENDERBUFFER, this._dfbDepth);
+      n.framebufferRenderbuffer(
+        E.FRAMEBUFFER,
+        att,
+        E.RENDERBUFFER,
+        this._dfbDepth,
+      );
     }
     // zero-initialise (GL-3) and give the canvas its cleared look
     n.clearRenderbuffer(this._dfbColor, colorFormat);
     if (depthFormat) n.clearRenderbuffer(this._dfbDepth, depthFormat);
     if (samples && !msrtt) {
-      if (!this._dfbResolve) this._liveAdd(enumKind.framebuffer, (this._dfbResolve = n.genFramebuffer()));
-      if (!this._dfbResolveColor) this._liveAdd(enumKind.renderbuffer, (this._dfbResolveColor = n.genRenderbuffer()));
+      if (!this._dfbResolve)
+        this._liveAdd(
+          enumKind.framebuffer,
+          (this._dfbResolve = n.genFramebuffer()),
+        );
+      if (!this._dfbResolveColor)
+        this._liveAdd(
+          enumKind.renderbuffer,
+          (this._dfbResolveColor = n.genRenderbuffer()),
+        );
       n.bindRenderbuffer(E.RENDERBUFFER, this._dfbResolveColor);
       n.renderbufferStorage(E.RENDERBUFFER, colorFormat, w, h);
-      n.bindRenderbuffer(E.RENDERBUFFER, this._renderbuffer ? this._renderbuffer._name : 0);
+      n.bindRenderbuffer(
+        E.RENDERBUFFER,
+        this._renderbuffer ? this._renderbuffer._name : 0,
+      );
       n.bindFramebuffer(E.FRAMEBUFFER, this._dfbResolve);
-      n.framebufferRenderbuffer(E.FRAMEBUFFER, E.COLOR_ATTACHMENT0, E.RENDERBUFFER, this._dfbResolveColor);
+      n.framebufferRenderbuffer(
+        E.FRAMEBUFFER,
+        E.COLOR_ATTACHMENT0,
+        E.RENDERBUFFER,
+        this._dfbResolveColor,
+      );
     }
     this._dfbSamples = samples;
     this._dfbImplicitResolve = msrtt;
@@ -833,7 +960,8 @@ export class Ctx {
       n.drawBuffers(1, this._u32, 0, 4);
     }
     const m = this._colorMask;
-    if (perBuffer) n.colorMaskiOES(0, m[0] === 1, m[1] === 1, m[2] === 1, m[3] === 1);
+    if (perBuffer)
+      n.colorMaskiOES(0, m[0] === 1, m[1] === 1, m[2] === 1, m[3] === 1);
     else n.colorMask(m[0] === 1, m[1] === 1, m[2] === 1, m[3] === 1);
     n.depthMask(this._depthMask);
     n.stencilMaskSeparate(E.FRONT, this._stencilMaskF >>> 0);
@@ -873,7 +1001,10 @@ export class Ctx {
     n.blitFramebuffer(0, 0, w, h, 0, 0, w, h, E.COLOR_BUFFER_BIT, E.NEAREST);
     if (scissor) n.enable(E.SCISSOR_TEST);
     n.bindFramebuffer(E.READ_FRAMEBUFFER, this._dfbResolve);
-    n.bindFramebuffer(E.DRAW_FRAMEBUFFER, this._drawFbo ? this._drawFbo._name : this._dfbName);
+    n.bindFramebuffer(
+      E.DRAW_FRAMEBUFFER,
+      this._drawFbo ? this._drawFbo._name : this._dfbName,
+    );
     return true;
   }
 
@@ -891,9 +1022,13 @@ export class Ctx {
     freeNative(this._native);
     const fire = (): void => {
       const ev = makeContextEvent('webglcontextlost', true);
-      const notCancelled = this._canvas.dispatchEvent ? this._canvas.dispatchEvent(ev) : true;
+      const notCancelled = this._canvas.dispatchEvent
+        ? this._canvas.dispatchEvent(ev)
+        : true;
       // The page cancels the event to say it wants a restore.
-      this._restoreAllowed = !notCancelled || (ev as { defaultPrevented?: boolean }).defaultPrevented === true;
+      this._restoreAllowed =
+        !notCancelled ||
+        (ev as { defaultPrevented?: boolean }).defaultPrevented === true;
     };
     queueTask(fire);
     void simulated;
@@ -903,9 +1038,17 @@ export class Ctx {
     if (!this._lost) return;
     queueTask(() => {
       if (!this._restoreAllowed) return;
-      const ok = this._init(this._n, this._v2, this._canvas, this._attrs, this._opts);
+      const ok = this._init(
+        this._n,
+        this._v2,
+        this._canvas,
+        this._attrs,
+        this._opts,
+      );
       if (!ok) return;
-      this._canvas.dispatchEvent?.(makeContextEvent('webglcontextrestored', false));
+      this._canvas.dispatchEvent?.(
+        makeContextEvent('webglcontextrestored', false),
+      );
     });
   }
 
@@ -915,7 +1058,9 @@ export class Ctx {
     const status = this._n.contextResetStatus(this._id);
     currentCtx = null; // the native query may make this context current: re-bind on the next call
     if (status !== 0) {
-      (this._opts.log ?? console.warn)('WebGL: GPU reset reported by the driver; context lost');
+      (this._opts.log ?? console.warn)(
+        'WebGL: GPU reset reported by the driver; context lost',
+      );
       this._loseContext(false);
     }
   }
@@ -928,10 +1073,17 @@ export interface Ctx {
   _detachFromBound(obj: WebGLObject): void;
   _readSize(): [number, number];
   _readFeedback(tex: WebGLTexture, level: number): boolean;
-  _programRecord(p: WebGLProgram): import('./reflection.ts').ProgramRecord | null;
+  _programRecord(
+    p: WebGLProgram,
+  ): import('./reflection.ts').ProgramRecord | null;
   _drawCheck(mode: number, what: string): boolean;
   _computeFeedback(): void;
-  _elementsCheck(count: number, type: number, offset: number, what: string): boolean;
+  _elementsCheck(
+    count: number,
+    type: number,
+    offset: number,
+    what: string,
+  ): boolean;
   _framebufferTextureMultiview(
     target: number,
     attachment: number,
@@ -950,7 +1102,13 @@ export interface Ctx {
     level: number,
     samples: number,
   ): void;
-  _renderbufferStorageMultisampleEXT(target: number, samples: number, internalformat: number, width: number, height: number): void;
+  _renderbufferStorageMultisampleEXT(
+    target: number,
+    samples: number,
+    internalformat: number,
+    width: number,
+    height: number,
+  ): void;
 }
 
 export function errorName(code: number): string {
@@ -973,14 +1131,18 @@ export function errorName(code: number): string {
 }
 
 function queueTask(fn: () => void): void {
-  const st = (globalThis as { setTimeout?: (f: () => void, t: number) => unknown }).setTimeout;
+  const st = (
+    globalThis as { setTimeout?: (f: () => void, t: number) => unknown }
+  ).setTimeout;
   if (st) st(fn, 0);
   else Promise.resolve().then(fn);
 }
 
 /** WebGLContextEvent (installed on the global by install.ts; falls back to a plain object). */
 export function makeContextEvent(type: string, cancelable: boolean): unknown {
-  const C = (globalThis as { WebGLContextEvent?: new (t: string, i: object) => unknown }).WebGLContextEvent;
+  const C = (
+    globalThis as { WebGLContextEvent?: new (t: string, i: object) => unknown }
+  ).WebGLContextEvent;
   if (C) {
     try {
       return new C(type, { cancelable, statusMessage: '' });
@@ -988,7 +1150,22 @@ export function makeContextEvent(type: string, cancelable: boolean): unknown {
       /* fall through */
     }
   }
-  return { type, cancelable, statusMessage: '', defaultPrevented: false, preventDefault() { (this as { defaultPrevented: boolean }).defaultPrevented = true; } };
+  return {
+    type,
+    cancelable,
+    statusMessage: '',
+    defaultPrevented: false,
+    preventDefault() {
+      (this as { defaultPrevented: boolean }).defaultPrevented = true;
+    },
+  };
 }
 
-export { WebGLBuffer, WebGLFramebuffer, WebGLProgram, WebGLRenderbuffer, WebGLShader, WebGLTexture };
+export {
+  WebGLBuffer,
+  WebGLFramebuffer,
+  WebGLProgram,
+  WebGLRenderbuffer,
+  WebGLShader,
+  WebGLTexture,
+};

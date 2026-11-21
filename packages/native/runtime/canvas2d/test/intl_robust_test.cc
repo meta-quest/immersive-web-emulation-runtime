@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Bidi levels and visual order, script itemisation of emoji sequences, variable-font weight clamping, and the
 // robustness bounds (shadow blur, dash count), plus edge accuracy of curved fills against analytic coverage.
 

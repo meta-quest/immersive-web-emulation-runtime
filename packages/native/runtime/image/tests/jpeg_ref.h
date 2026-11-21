@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Reference JPEG decodes with libjpeg-turbo (test-only), for IMG-1's "within ±1 of libjpeg-turbo" check.
 #pragma once
 

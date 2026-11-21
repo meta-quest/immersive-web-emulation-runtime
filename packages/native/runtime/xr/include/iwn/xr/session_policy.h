@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // OpenXR session state -> WebXR visibility, and the session-lifetime timers (docs/spec/08 XR-LIFE-3/4/5/7,
 // XR-IDLE-*), V8-free so they are unit-tested on the host.
 #pragma once

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // CPU/GPU performance levels (docs/spec/08 XR-PERF-1/2, docs/spec/15 PERF-LVL-1), V8-free.
 //
 // Levels are XR_EXT_performance_settings' (power savings, sustained low, sustained high, boost). The policy starts

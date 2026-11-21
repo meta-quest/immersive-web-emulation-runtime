@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Host tests for the depth record (XR-DEPTH-2, iwn/xr/depth_record.h): the layout web/xr's depth.ts reads.
 #include <cmath>
 #include <limits>

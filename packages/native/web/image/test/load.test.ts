@@ -13,11 +13,23 @@ import { forgivingBase64, parseDataURL } from '../load.ts';
 const text = (b: Uint8Array) => new TextDecoder().decode(b);
 
 test('base64 data URLs decode, whitespace and padding forgiven', () => {
-  assert.equal(text(parseDataURL('data:text/plain;base64,aGVsbG8=')!.bytes), 'hello');
+  assert.equal(
+    text(parseDataURL('data:text/plain;base64,aGVsbG8=')!.bytes),
+    'hello',
+  );
   assert.equal(text(parseDataURL('data:;base64,aGVs bG8')!.bytes), 'hello');
-  assert.equal(text(parseDataURL('DATA:image/png ; BASE64 ,aGVsbG8')!.bytes), 'hello');
-  assert.equal(parseDataURL('data:image/png;base64,aGVsbG8=')!.type, 'image/png');
-  assert.equal(text(parseDataURL('data:image/png;base64,aGVs%62G8=')!.bytes), 'hello');
+  assert.equal(
+    text(parseDataURL('DATA:image/png ; BASE64 ,aGVsbG8')!.bytes),
+    'hello',
+  );
+  assert.equal(
+    parseDataURL('data:image/png;base64,aGVsbG8=')!.type,
+    'image/png',
+  );
+  assert.equal(
+    text(parseDataURL('data:image/png;base64,aGVs%62G8=')!.bytes),
+    'hello',
+  );
 });
 
 test('percent-encoded data URLs decode', () => {
@@ -53,7 +65,15 @@ test('resolveImageURL: data: URLs skip the URL parser but serialize like it', as
     '\u0001data:text/plain,hello%20world',
     'data:,',
   ];
-  for (const c of cases) assert.equal(resolveImageURL(c, 'https://app.local/'), new URL(c).href, JSON.stringify(c));
-  assert.equal(resolveImageURL('a/b.png', 'https://app.local/x/'), 'https://app.local/x/a/b.png');
+  for (const c of cases)
+    assert.equal(
+      resolveImageURL(c, 'https://app.local/'),
+      new URL(c).href,
+      JSON.stringify(c),
+    );
+  assert.equal(
+    resolveImageURL('a/b.png', 'https://app.local/x/'),
+    'https://app.local/x/a/b.png',
+  );
   assert.throws(() => resolveImageURL('http://[', 'https://app.local/'));
 });

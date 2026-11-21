@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // libwebp backend (BSD-3-Clause, v1.5.0): lossy, lossless, alpha; the first frame of animated files through the
 // demux library's animation decoder (which composites onto the canvas as the WebP container spec says).
 #include <cstring>

@@ -31,8 +31,10 @@ export const MAX_PHASE_MS = 30 * 60_000;
 /** Why a boot/XR time option is not usable, or undefined when it is (a finite number in (0, MAX_PHASE_MS]). */
 export function phaseMsProblem(name: string, v: unknown): string | undefined {
   const n = typeof v === 'number' ? v : Number(v);
-  if (typeof v === 'string' && v.trim() === '') return `${name} wants a number of milliseconds (got "")`;
-  if (!Number.isFinite(n) || n <= 0 || n > MAX_PHASE_MS) return `${name} wants milliseconds in (0, ${MAX_PHASE_MS}] (got "${String(v)}")`;
+  if (typeof v === 'string' && v.trim() === '')
+    return `${name} wants a number of milliseconds (got "")`;
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_PHASE_MS)
+    return `${name} wants milliseconds in (0, ${MAX_PHASE_MS}] (got "${String(v)}")`;
   return undefined;
 }
 
@@ -218,16 +220,35 @@ export class PageHung extends Error {
 }
 
 /** page.evaluate with a timeout: a main thread that never yields would otherwise hang the run forever. */
-type Ev = <T>(page: any, fn: (...a: any[]) => T, arg?: unknown) => Promise<Awaited<T>>;
+type Ev = <T>(
+  page: any,
+  fn: (...a: any[]) => T,
+  arg?: unknown,
+) => Promise<Awaited<T>>;
 
 /** An evaluate helper bound to one run's timeout (per run, so concurrent runs with different timeouts do not interfere). */
 function makeEv(timeoutMs: number): Ev {
-  return <T>(page: any, fn: (...a: any[]) => T, arg?: unknown): Promise<Awaited<T>> => {
+  return <T>(
+    page: any,
+    fn: (...a: any[]) => T,
+    arg?: unknown,
+  ): Promise<Awaited<T>> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const t = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new PageHung(`the page's main thread did not answer within ${timeoutMs} ms`)), timeoutMs);
+      timer = setTimeout(
+        () =>
+          reject(
+            new PageHung(
+              `the page's main thread did not answer within ${timeoutMs} ms`,
+            ),
+          ),
+        timeoutMs,
+      );
     });
-    return Promise.race([arg === undefined ? page.evaluate(fn) : page.evaluate(fn, arg), t]).finally(() => clearTimeout(timer)) as Promise<Awaited<T>>;
+    return Promise.race([
+      arg === undefined ? page.evaluate(fn) : page.evaluate(fn, arg),
+      t,
+    ]).finally(() => clearTimeout(timer)) as Promise<Awaited<T>>;
   };
 }
 
@@ -243,7 +264,10 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
   const log = opts.log ?? (() => {});
   const workerDumps = new Map<string, TraceDump>();
   // blocked WebSockets are refused by the compat server (see TracerConfig.wsBlock)
-  const wsBlock = { url: '__WSORIGIN__' + TOOL_PREFIX + 'ws-blocked?u=', allow: opts.allow ?? [] };
+  const wsBlock = {
+    url: '__WSORIGIN__' + TOOL_PREFIX + 'ws-blocked?u=',
+    allow: opts.allow ?? [],
+  };
   const toolFiles = {
     'tracer.js': tracerScript({
       role: 'main',
@@ -289,7 +313,10 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
     },
   });
   for (const k of ['tracer.js', 'tracer-worker.js'])
-    toolFiles[k] = toolFiles[k]!.split('__WSORIGIN__').join(server.origin.replace(/^http/, 'ws')).split('__ORIGIN__').join(server.origin);
+    toolFiles[k] = toolFiles[k]!.split('__WSORIGIN__')
+      .join(server.origin.replace(/^http/, 'ws'))
+      .split('__ORIGIN__')
+      .join(server.origin);
 
   const result: TraceResult = {
     dist: opts.distDir,
@@ -313,14 +340,21 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
   const t0 = Date.now();
   const evalTimeoutMs = opts.evalTimeoutMs ?? 60_000;
   const ev = makeEv(evalTimeoutMs);
-  for (const [name, v] of [['bootTimeoutMs', opts.bootTimeoutMs], ['xrMs', opts.xrMs], ['offerTimeoutMs', opts.offerTimeoutMs], ['evalTimeoutMs', opts.evalTimeoutMs]] as const) {
+  for (const [name, v] of [
+    ['bootTimeoutMs', opts.bootTimeoutMs],
+    ['xrMs', opts.xrMs],
+    ['offerTimeoutMs', opts.offerTimeoutMs],
+    ['evalTimeoutMs', opts.evalTimeoutMs],
+  ] as const) {
     const problem = v === undefined ? undefined : phaseMsProblem(name, v);
     if (problem) {
       await server.close();
       throw new RangeError(problem);
     }
   }
-  const cap = opts.hardCapMs ?? (opts.bootTimeoutMs ?? 25_000) + (opts.xrMs ?? 6_000) + 90_000;
+  const cap =
+    opts.hardCapMs ??
+    (opts.bootTimeoutMs ?? 25_000) + (opts.xrMs ?? 6_000) + 90_000;
   // above 2^31-1 ms Node clamps a timer to 1 ms, which would end the run at once
   if (!(cap > 0 && cap <= 2 ** 31 - 1)) {
     await server.close();
@@ -330,7 +364,10 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
   let finished = false;
   let capTimer: ReturnType<typeof setTimeout> | undefined;
   const capped = new Promise<never>((_, reject) => {
-    capTimer = setTimeout(() => reject(new PageHung(`the run hit its hard cap of ${cap} ms`)), cap);
+    capTimer = setTimeout(
+      () => reject(new PageHung(`the run hit its hard cap of ${cap} ms`)),
+      cap,
+    );
   });
   let lastActivity = Date.now();
   const blocked = new Set<string>();
@@ -341,7 +378,9 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
     result.mirroredRequests = [...mirrored].sort();
     result.allowedRequests = [...allowed].sort();
     result.missingAssets = [...server.missing.keys()].sort();
-    result.unreadableAssets = [...server.unreadable].map(([p, e]) => `${p}: ${e}`).sort();
+    result.unreadableAssets = [...server.unreadable]
+      .map(([p, e]) => `${p}: ${e}`)
+      .sort();
     result.workers = [...workerDumps.values()];
   };
   try {
@@ -382,27 +421,54 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
       const u: string = route.request().url();
       let mainNav = false;
       try {
-        mainNav = !!mainPage && route.request().isNavigationRequest() && route.request().frame() === mainPage.mainFrame();
+        mainNav =
+          !!mainPage &&
+          route.request().isNavigationRequest() &&
+          route.request().frame() === mainPage.mainFrame();
       } catch {
         mainNav = false;
       }
       if (mainNav && mainLoads++ > 0) {
         // the app navigates its page away (the first main-frame navigation is the run's own goto)
         const same = u.startsWith(server.origin);
-        (result.navigations ??= []).push({ url: same ? u.slice(server.origin.length) || '/' : u.slice(0, 160), sameOrigin: same });
+        (result.navigations ??= []).push({
+          url: same ? u.slice(server.origin.length) || '/' : u.slice(0, 160),
+          sameOrigin: same,
+        });
         // a 204 answer cancels the navigation and the page stays, as the headset ignores it (DOM-5); the trace goes on
         if (!same) return route.fulfill({ status: 204, body: '' });
       }
-      if (u.startsWith(server.origin) || u.startsWith('data:') || u.startsWith('blob:'))
+      if (
+        u.startsWith(server.origin) ||
+        u.startsWith('data:') ||
+        u.startsWith('blob:')
+      )
         return route.continue();
       const m = (opts.mirrors ?? []).find((x) => u.startsWith(x.prefix));
       if (m) {
-        const rel = decodeURIComponent(new URL(u).pathname).slice(new URL(m.prefix).pathname.length);
+        const rel = decodeURIComponent(new URL(u).pathname).slice(
+          new URL(m.prefix).pathname.length,
+        );
         const file = path.join(m.dir, rel);
         mirrored.add(label(u));
-        if (isInside(m.dir, file) && existsSync(file) && statSync(file).isFile())
-          return route.fulfill({ status: 200, body: readFileSync(file), headers: { 'access-control-allow-origin': '*', 'content-type': mimeOf(file) } });
-        return route.fulfill({ status: 404, body: 'not in mirror', headers: { 'access-control-allow-origin': '*' } });
+        if (
+          isInside(m.dir, file) &&
+          existsSync(file) &&
+          statSync(file).isFile()
+        )
+          return route.fulfill({
+            status: 200,
+            body: readFileSync(file),
+            headers: {
+              'access-control-allow-origin': '*',
+              'content-type': mimeOf(file),
+            },
+          });
+        return route.fulfill({
+          status: 404,
+          body: 'not in mirror',
+          headers: { 'access-control-allow-origin': '*' },
+        });
       }
       if (originAllowed(u, opts.allow ?? [])) {
         allowed.add(label(u));
@@ -423,16 +489,28 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
     page.on('pageerror', (e: any) => {
       if (result.pageErrors.length >= 100) return;
       // a rejected DOMException can arrive with an empty stack: lead with name and message
-      const head = e?.message ? `${e?.name || 'Error'}: ${e.message}` : String(e ?? '');
+      const head = e?.message
+        ? `${e?.name || 'Error'}: ${e.message}`
+        : String(e ?? '');
       const stack = typeof e?.stack === 'string' ? e.stack : '';
-      const text = stack.includes(head) ? stack : [head, stack].filter(Boolean).join('\n');
-      result.pageErrors.push((text || `${e?.name || 'Error'} (no message)`).slice(0, 600));
+      const text = stack.includes(head)
+        ? stack
+        : [head, stack].filter(Boolean).join('\n');
+      result.pageErrors.push(
+        (text || `${e?.name || 'Error'} (no message)`).slice(0, 600),
+      );
     });
     try {
-      await page.goto(server.origin + '/', { waitUntil: 'load', timeout: evalTimeoutMs });
+      await page.goto(server.origin + '/', {
+        waitUntil: 'load',
+        timeout: evalTimeoutMs,
+      });
     } catch (error) {
       // a script that never yields before the load event: the same kind of hang as a stuck evaluate later on
-      if ((error as Error)?.name === 'TimeoutError') throw new PageHung(`the page did not finish loading within ${evalTimeoutMs} ms (a script that never yields before the load event?)`);
+      if ((error as Error)?.name === 'TimeoutError')
+        throw new PageHung(
+          `the page did not finish loading within ${evalTimeoutMs} ms (a script that never yields before the load event?)`,
+        );
       throw error;
     }
     log(`loaded ${server.origin}/`);
@@ -447,7 +525,8 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
       const s = await ev(page, () => {
         const d = (globalThis as any).__iwnCompatDevice;
         if (!d) return { state: 'no-device' };
-        if (d.activeSession) return { state: 'xr', mode: d.activeSession.__mode ?? '' };
+        if (d.activeSession)
+          return { state: 'xr', mode: d.activeSession.__mode ?? '' };
         if (d.sessionOffered) {
           d.grantOfferedSession();
           return { state: 'offered' };
@@ -457,7 +536,8 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
       lastPollMs = Date.now() - p0;
       if (s.state === 'xr') {
         result.reachedXR = true;
-        if (result.enteredVia === 'none') result.enteredVia = sawOffer ? 'offer' : 'request';
+        if (result.enteredVia === 'none')
+          result.enteredVia = sawOffer ? 'offer' : 'request';
         break;
       }
       if (s.state === 'offered') sawOffer = true;
@@ -479,7 +559,9 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
           return '';
         });
         if (text) result.enteredVia = `click:${text}`;
-        log(`no offer after ${offerTimeout} ms; clicked ${text || '(nothing)'}`);
+        log(
+          `no offer after ${offerTimeout} ms; clicked ${text || '(nothing)'}`,
+        );
       }
       await page.waitForTimeout(250);
     }
@@ -487,7 +569,10 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
     if (!result.reachedXR) {
       // still loading when the boot window closed? (requests in its last seconds, or a main thread too busy to answer)
       const idleMs = Date.now() - lastActivity;
-      result.stillLoading = idleMs < 4_000 || lastPollMs > 1_000 ? `last request ${Math.round(idleMs / 100) / 10} s before the boot timeout, last main-thread poll took ${lastPollMs} ms` : undefined;
+      result.stillLoading =
+        idleMs < 4_000 || lastPollMs > 1_000
+          ? `last request ${Math.round(idleMs / 100) / 10} s before the boot timeout, last main-thread poll took ${lastPollMs} ms`
+          : undefined;
     }
     result.webgl = await ev(page, () => {
       try {
@@ -497,7 +582,9 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
         const ext = gl.getExtension('WEBGL_debug_renderer_info');
         return {
           ok: true,
-          renderer: String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)),
+          renderer: String(
+            gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER),
+          ),
         };
       } catch {
         return { ok: false };
@@ -516,7 +603,10 @@ export async function runTrace(opts: TraceRunOptions): Promise<TraceResult> {
       await page.waitForTimeout(2_000);
     }
     await page.waitForTimeout(1_200); // last worker flush
-    result.main = await ev(page, () => (globalThis as any).__iwnCompat?.dump() ?? null);
+    result.main = await ev(
+      page,
+      () => (globalThis as any).__iwnCompat?.dump() ?? null,
+    );
     result.xrFrames = result.main?.xrFrames ?? 0;
     result.removed = result.main?.removed ?? [];
     collect();
@@ -550,7 +640,12 @@ export function originAllowed(url: string, allow: string[]): boolean {
  * notes it and re-enters XR (granting a new offer, or the "Enter XR" button) so the rest of the script
  * (hands, pinch) still runs. Returns what happened, for the trace.
  */
-async function driveInput(page: any, ms: number, log: (m: string) => void, ev: Ev): Promise<string[]> {
+async function driveInput(
+  page: any,
+  ms: number,
+  log: (m: string) => void,
+  ev: Ev,
+): Promise<string[]> {
   const ends: string[] = [];
   const steps: Array<[number, string]> = [
     [0.0, 'aim'],
@@ -569,7 +664,9 @@ async function driveInput(page: any, ms: number, log: (m: string) => void, ev: E
   for (const [at, action] of steps) {
     const wait = start + at * ms - Date.now();
     if (wait > 0) await page.waitForTimeout(wait);
-    await ev(page, (a: string) => {
+    await ev(
+      page,
+      (a: string) => {
         const d = (globalThis as any).__iwnCompatDevice;
         if (!d) return;
         const r = d.controllers?.right;
@@ -616,10 +713,14 @@ async function driveInput(page: any, ms: number, log: (m: string) => void, ev: E
         } catch (e) {
           console.warn('[iwn-compat] input step ' + a + ' failed: ' + e);
         }
-      }, action)
-      .catch(unlessHung(undefined));
+      },
+      action,
+    ).catch(unlessHung(undefined));
     await page.waitForTimeout(100);
-    const inXR = await ev(page, () => !!(globalThis as any).__iwnCompatDevice?.activeSession).catch(unlessHung(true));
+    const inXR = await ev(
+      page,
+      () => !!(globalThis as any).__iwnCompatDevice?.activeSession,
+    ).catch(unlessHung(true));
     if (!inXR) {
       const back = await reenter(page, ev);
       const note = `after "${action}" the session ended; ${back ? `re-entered via ${back}` : 'could not re-enter'}`;
@@ -635,34 +736,39 @@ async function driveInput(page: any, ms: number, log: (m: string) => void, ev: E
 async function reenter(page: any, ev: Ev): Promise<string> {
   for (let i = 0; i < 20; i++) {
     const s = await ev(page, () => {
-        const d = (globalThis as any).__iwnCompatDevice;
-        if (!d) return 'none';
-        if (d.activeSession) return 'xr';
-        if (d.sessionOffered) {
-          d.grantOfferedSession();
-          return 'offer';
-        }
-        return 'waiting';
-      })
-      .catch(unlessHung('none'));
+      const d = (globalThis as any).__iwnCompatDevice;
+      if (!d) return 'none';
+      if (d.activeSession) return 'xr';
+      if (d.sessionOffered) {
+        d.grantOfferedSession();
+        return 'offer';
+      }
+      return 'waiting';
+    }).catch(unlessHung('none'));
     if (s === 'xr') return 'offer';
     if (s === 'none') return '';
     if (i === 6) {
       const clicked = await ev(page, () => {
-          const re = /(enter|launch|start|play)\b|\b(vr|xr|ar)\b/i;
-          const els = Array.from((globalThis as any).document.querySelectorAll('button, [role="button"], a, .button')) as any[];
-          for (const el of els) {
-            if (re.test((el.innerText || el.textContent || '').trim())) {
-              el.click();
-              return true;
-            }
+        const re = /(enter|launch|start|play)\b|\b(vr|xr|ar)\b/i;
+        const els = Array.from(
+          (globalThis as any).document.querySelectorAll(
+            'button, [role="button"], a, .button',
+          ),
+        ) as any[];
+        for (const el of els) {
+          if (re.test((el.innerText || el.textContent || '').trim())) {
+            el.click();
+            return true;
           }
-          return false;
-        })
-        .catch(unlessHung(false));
+        }
+        return false;
+      }).catch(unlessHung(false));
       if (clicked) {
         await page.waitForTimeout(500);
-        const ok = await ev(page, () => !!(globalThis as any).__iwnCompatDevice?.activeSession).catch(unlessHung(false));
+        const ok = await ev(
+          page,
+          () => !!(globalThis as any).__iwnCompatDevice?.activeSession,
+        ).catch(unlessHung(false));
         if (ok) return 'button';
       }
     }
@@ -674,8 +780,18 @@ async function reenter(page: any, ev: Ev): Promise<string> {
 function mimeOf(file: string): string {
   const ext = path.extname(file).toLowerCase();
   return (
-    { '.json': 'application/json', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.ktx2': 'image/ktx2', '.bin': 'application/octet-stream' } as Record<string, string>
-  )[ext] ?? 'application/octet-stream';
+    (
+      {
+        '.json': 'application/json',
+        '.glb': 'model/gltf-binary',
+        '.gltf': 'model/gltf+json',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.ktx2': 'image/ktx2',
+        '.bin': 'application/octet-stream',
+      } as Record<string, string>
+    )[ext] ?? 'application/octet-stream'
+  );
 }
 
 /** Convenience for scripts: read IWER's build file. */

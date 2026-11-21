@@ -28,7 +28,12 @@ function room(version = 1): SceneData {
   return {
     version,
     entities: [
-      { id: 'f'.repeat(32), slot: 0, labels: 'FLOOR', polygon: new Float32Array([-2, -2, 2, -2, 2, 2, -2, 2]) },
+      {
+        id: 'f'.repeat(32),
+        slot: 0,
+        labels: 'FLOOR',
+        polygon: new Float32Array([-2, -2, 2, -2, 2, 2, -2, 2]),
+      },
       {
         id: 'a'.repeat(32),
         slot: 1,
@@ -43,20 +48,36 @@ function room(version = 1): SceneData {
         vertices: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
         indices: new Uint32Array([0, 1, 2]),
       },
-      { id: 'c'.repeat(32), slot: 3, labels: 'WALL_FACE,OTHER', polygon: new Float32Array([-2, 0, 2, 0, 2, 2.5, -2, 2.5]) },
+      {
+        id: 'c'.repeat(32),
+        slot: 3,
+        labels: 'WALL_FACE,OTHER',
+        polygon: new Float32Array([-2, 0, 2, 0, 2, 2.5, -2, 2.5]),
+      },
     ],
   };
 }
 
-function pose(h: Harness, slot: number, position: number[], orientation: number[], located = true): void {
+function pose(
+  h: Harness,
+  slot: number,
+  position: number[],
+  orientation: number[],
+  located = true,
+): void {
   h.scenePoses.set([...position, ...orientation, located ? 1 : 0], slot * 8);
 }
 
 async function start(h: Harness, init: string): Promise<void> {
   h.g.__gl = h.gl;
-  h.run(`globalThis.__session = null; ${XR}.requestSession('immersive-ar', ${init}).then((s) => { globalThis.__session = s; }, (e) => { globalThis.__error = e; });`);
+  h.run(
+    `globalThis.__session = null; ${XR}.requestSession('immersive-ar', ${init}).then((s) => { globalThis.__session = s; }, (e) => { globalThis.__error = e; });`,
+  );
   await h.settle();
-  assert.ok(h.run('globalThis.__session'), `session: ${h.run('String(globalThis.__error)')}`);
+  assert.ok(
+    h.run('globalThis.__session'),
+    `session: ${h.run('String(globalThis.__error)')}`,
+  );
   h.run(`
     globalThis.__binding = new XRWebGLBinding(__session, __gl);
     __session.updateRenderState({ layers: [__binding.createProjectionLayer({ textureType: 'texture-array' })] });
@@ -68,27 +89,48 @@ async function start(h: Harness, init: string): Promise<void> {
 
 /** One frame; `read` runs in the page's XR callback and its result is returned. */
 function frameWith<T>(h: Harness, read: string): T {
-  h.run(`globalThis.__seen = undefined; __session.requestAnimationFrame((t, frame) => { globalThis.__seen = (${read})(frame); });`);
+  h.run(
+    `globalThis.__seen = undefined; __session.requestAnimationFrame((t, frame) => { globalThis.__seen = (${read})(frame); });`,
+  );
   h.frame();
   return h.run<T>('globalThis.__seen');
 }
 
-const AR_INFO = { passthrough: true, immersiveAr: true, planeDetection: true, meshDetection: true, hitTest: true };
+const AR_INFO = {
+  passthrough: true,
+  immersiveAr: true,
+  planeDetection: true,
+  meshDetection: true,
+  hitTest: true,
+};
 /** USE_SCENE granted (XR-PERM-1 asks for it before the session gets the scene features). */
 const GRANTED = { 'com.oculus.permission.USE_SCENE': true };
 
 test('XR-AR-2: plane-detection, mesh-detection and hit-test are granted only when the runtime reads the room', async () => {
   const h = createHarness({ info: AR_INFO, scene: true, permissions: GRANTED });
-  await start(h, "{ requiredFeatures: ['plane-detection', 'mesh-detection', 'hit-test'], optionalFeatures: ['layers', 'local-floor'] }");
+  await start(
+    h,
+    "{ requiredFeatures: ['plane-detection', 'mesh-detection', 'hit-test'], optionalFeatures: ['layers', 'local-floor'] }",
+  );
   const enabled = [...h.run<string[]>('__session.enabledFeatures')];
-  for (const f of ['plane-detection', 'mesh-detection', 'hit-test']) assert.ok(enabled.includes(f), f);
+  for (const f of ['plane-detection', 'mesh-detection', 'hit-test'])
+    assert.ok(enabled.includes(f), f);
   // the query starts with the session, before the first frame
   assert.ok(h.calls.some((c) => c[0] === 'sceneData'));
 
   // the capability without the natives (an older runtime), or the natives without the capability: not granted
-  for (const opts of [{ info: AR_INFO, permissions: GRANTED }, { info: { passthrough: true, immersiveAr: true }, scene: true, permissions: GRANTED }]) {
+  for (const opts of [
+    { info: AR_INFO, permissions: GRANTED },
+    {
+      info: { passthrough: true, immersiveAr: true },
+      scene: true,
+      permissions: GRANTED,
+    },
+  ]) {
     const other = createHarness(opts);
-    other.run(`${XR}.requestSession('immersive-ar', { requiredFeatures: ['hit-test'] }).catch((e) => { globalThis.__e = e.name; })`);
+    other.run(
+      `${XR}.requestSession('immersive-ar', { requiredFeatures: ['hit-test'] }).catch((e) => { globalThis.__e = e.name; })`,
+    );
     await other.settle();
     assert.equal(other.run('__e'), 'NotSupportedError');
   }
@@ -100,8 +142,11 @@ test('XR-AR-2: entities become planes (2D boundary) and meshes (box, room mesh) 
   pose(h, 0, [0, 0, 0], UP);
   pose(h, 1, [0.4, 0.75, -1], UP);
   pose(h, 2, [0, 0, 0], IDENTITY);
-  pose(h, 3, [0, 0, -2], IDENTITY, false);  // the wall is not located yet
-  await start(h, "{ requiredFeatures: ['plane-detection', 'mesh-detection'], optionalFeatures: ['layers', 'local-floor'] }");
+  pose(h, 3, [0, 0, -2], IDENTITY, false); // the wall is not located yet
+  await start(
+    h,
+    "{ requiredFeatures: ['plane-detection', 'mesh-detection'], optionalFeatures: ['layers', 'local-floor'] }",
+  );
   const seen = frameWith<any>(
     h,
     `(frame) => ({
@@ -120,8 +165,14 @@ test('XR-AR-2: entities become planes (2D boundary) and meshes (box, room mesh) 
   // the boundary's (x, y) becomes (x, 0, -y) in plane space
   assert.deepEqual([...byLabel.floor.polygon[1]], [2, 0, 2]);
   const meshes = Object.fromEntries(seen.meshes.map((m: any) => [m.label, m]));
-  assert.deepEqual({ ...meshes.table }, { label: 'table', vertices: 24, indices: 36 });  // the box: 8 corners, 12 triangles
-  assert.deepEqual({ ...meshes['global mesh'] }, { label: 'global mesh', vertices: 9, indices: 3 });
+  assert.deepEqual(
+    { ...meshes.table },
+    { label: 'table', vertices: 24, indices: 36 },
+  ); // the box: 8 corners, 12 triangles
+  assert.deepEqual(
+    { ...meshes['global mesh'] },
+    { label: 'global mesh', vertices: 9, indices: 3 },
+  );
 
   // located now: the wall appears, vertical; the runtime's first label WebXR knows is used
   pose(h, 3, [0, 0, -2], IDENTITY, true);
@@ -140,8 +191,13 @@ test('XR-AR-2: geometry is read once per version; planes keep their identity; a 
   const h = createHarness({ info: AR_INFO, scene: true, permissions: GRANTED });
   h.sceneData = room();
   for (let slot = 0; slot < 4; slot++) pose(h, slot, [0, 0, 0], UP);
-  await start(h, "{ requiredFeatures: ['plane-detection'], optionalFeatures: ['layers', 'local-floor'] }");
-  h.run(`globalThis.__planes = () => new Map([...__lastFrame.detectedPlanes].map((p) => [p.semanticLabel, p]));`);
+  await start(
+    h,
+    "{ requiredFeatures: ['plane-detection'], optionalFeatures: ['layers', 'local-floor'] }",
+  );
+  h.run(
+    `globalThis.__planes = () => new Map([...__lastFrame.detectedPlanes].map((p) => [p.semanticLabel, p]));`,
+  );
   const read = `(frame) => { globalThis.__lastFrame = frame; const m = __planes(); return { floor: m.get('floor'), changed: m.get('floor').lastChangedTime, count: m.size }; }`;
   const first = frameWith<any>(h, read);
   const second = frameWith<any>(h, read);
@@ -152,7 +208,7 @@ test('XR-AR-2: geometry is read once per version; planes keep their identity; a 
 
   const next = room(2);
   next.entities[0].polygon = new Float32Array([-3, -3, 3, -3, 3, 3, -3, 3]);
-  next.entities.splice(1, 1);  // the table went away
+  next.entities.splice(1, 1); // the table went away
   h.sceneData = next;
   const third = frameWith<any>(h, read);
   assert.equal(third.floor, first.floor, 'same plane object');
@@ -167,7 +223,10 @@ test('XR-AR-2: hit test without plane detection hits the room: nearest first, +Y
   pose(h, 1, [0, 0.75, -1], UP);
   pose(h, 2, [5, 0, 5], IDENTITY);
   pose(h, 3, [0, 0, -3], IDENTITY);
-  await start(h, "{ requiredFeatures: ['hit-test'], optionalFeatures: ['layers', 'local-floor'] }");
+  await start(
+    h,
+    "{ requiredFeatures: ['hit-test'], optionalFeatures: ['layers', 'local-floor'] }",
+  );
   h.run(`
     const ray = () => new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x: 0, y: -1, z: -1, w: 0 });
     __session.requestHitTestSource({ space: __viewer, offsetRay: ray(), entityTypes: ['plane', 'mesh'] })
@@ -184,9 +243,15 @@ test('XR-AR-2: hit test without plane detection hits the room: nearest first, +Y
   // z -0.2, so +0.2 there); the wall is below the floor's line by then
   assert.equal(hits.length, 3, JSON.stringify(hits));
   for (const hit of hits.slice(0, 2)) {
-    assert.ok(Math.abs(hit[0] - 0.75) < 1e-4 && Math.abs(hit[1] + 0.65) < 1e-4, JSON.stringify(hits));
+    assert.ok(
+      Math.abs(hit[0] - 0.75) < 1e-4 && Math.abs(hit[1] + 0.65) < 1e-4,
+      JSON.stringify(hits),
+    );
   }
-  assert.ok(Math.abs(hits[2][0]) < 1e-4 && Math.abs(hits[2][1] + 1.4) < 1e-4, JSON.stringify(hits));
+  assert.ok(
+    Math.abs(hits[2][0]) < 1e-4 && Math.abs(hits[2][1] + 1.4) < 1e-4,
+    JSON.stringify(hits),
+  );
   for (const hit of hits) assert.ok(Math.abs(hit[2] - 1) < 1e-5);
   // without entityTypes, as Quest Browser: the global mesh alone (out of this ray's way: nothing), never the boxes
   assert.deepEqual([...frameWith<any>(h, read('__default'))], []);
@@ -196,18 +261,29 @@ test('XR-AR-2: hit test without plane detection hits the room: nearest first, +Y
   h.sceneData = next;
   const planes = frameWith<any>(h, read('__default'));
   assert.equal(planes.length, 2, JSON.stringify(planes));
-  assert.ok(Math.abs(planes[0][0] - 0.75) < 1e-4 && Math.abs(planes[1][0]) < 1e-4, JSON.stringify(planes));
+  assert.ok(
+    Math.abs(planes[0][0] - 0.75) < 1e-4 && Math.abs(planes[1][0]) < 1e-4,
+    JSON.stringify(planes),
+  );
 });
 
 test('XR-AR-2: a static room rewrites no transform: no orientation is derived again per frame', async () => {
   const h = createHarness({ info: AR_INFO, scene: true, permissions: GRANTED });
   const entities = [];
   for (let i = 0; i < 20; i++) {
-    entities.push({ id: i.toString(16).padStart(32, '0'), slot: i, labels: 'FLOOR', polygon: new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]) });
+    entities.push({
+      id: i.toString(16).padStart(32, '0'),
+      slot: i,
+      labels: 'FLOOR',
+      polygon: new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]),
+    });
     pose(h, i, [i, 0, 0], UP);
   }
   h.sceneData = { version: 1, entities };
-  await start(h, "{ requiredFeatures: ['plane-detection'], optionalFeatures: ['layers', 'local-floor'] }");
+  await start(
+    h,
+    "{ requiredFeatures: ['plane-detection'], optionalFeatures: ['layers', 'local-floor'] }",
+  );
   h.run(`
     const Base = globalThis.DOMPointReadOnly;
     globalThis.__points = 0;
@@ -218,18 +294,30 @@ test('XR-AR-2: a static room rewrites no transform: no orientation is derived ag
   h.run('globalThis.__points = 0');
   h.frame();
   h.frame();
-  assert.equal(h.run('globalThis.__points'), 0, 'no point allocated for unchanged planes');
+  assert.equal(
+    h.run('globalThis.__points'),
+    0,
+    'no point allocated for unchanged planes',
+  );
   // a plane that moves is rewritten
   pose(h, 5, [5, 0.1, 0], UP);
-  const y = frameWith<any>(h, `(frame) => [...frame.detectedPlanes].map((p) => frame.getPose(p.planeSpace, __floor).transform.matrix[13]).sort().at(-1)`);
+  const y = frameWith<any>(
+    h,
+    `(frame) => [...frame.detectedPlanes].map((p) => frame.getPose(p.planeSpace, __floor).transform.matrix[13]).sort().at(-1)`,
+  );
   assert.ok(Math.abs(y - 0.1) < 1e-5, String(y));
 });
 
 test('XR-AR-2: an empty room (no Space Setup) gives no planes, no meshes, no hits, and no errors', async () => {
   const h = createHarness({ info: AR_INFO, scene: true, permissions: GRANTED });
   h.sceneData = { version: 1, entities: [] };
-  await start(h, "{ requiredFeatures: ['plane-detection', 'mesh-detection', 'hit-test'], optionalFeatures: ['layers', 'local-floor'] }");
-  h.run(`__session.requestHitTestSource({ space: __viewer }).then((s) => { globalThis.__source = s; });`);
+  await start(
+    h,
+    "{ requiredFeatures: ['plane-detection', 'mesh-detection', 'hit-test'], optionalFeatures: ['layers', 'local-floor'] }",
+  );
+  h.run(
+    `__session.requestHitTestSource({ space: __viewer }).then((s) => { globalThis.__source = s; });`,
+  );
   await h.settle();
   const seen = frameWith<any>(
     h,

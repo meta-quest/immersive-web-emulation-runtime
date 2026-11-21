@@ -37,7 +37,11 @@ declare module 'iwer/host' {
   }
 
   export type XRHostContentLayerKind = 'quad' | 'cylinder';
-  export type XRHostLayerLayout = 'mono' | 'stereo-left-right' | 'stereo-top-bottom' | 'stereo';
+  export type XRHostLayerLayout =
+    | 'mono'
+    | 'stereo-left-right'
+    | 'stereo-top-bottom'
+    | 'stereo';
 
   export interface XRHostLayer {
     kind: 'projection' | XRHostContentLayerKind;
@@ -70,10 +74,15 @@ declare module 'iwer/host' {
   }
 
   export type XRDepthUsage = 'cpu-optimized' | 'gpu-optimized';
-  export type XRDepthDataFormat = 'luminance-alpha' | 'float32' | 'unsigned-short';
+  export type XRDepthDataFormat =
+    | 'luminance-alpha'
+    | 'float32'
+    | 'unsigned-short';
   /** WebXR Depth Sensing's choice for a session's depthSensing init, or null when the host cannot serve it. */
   export function negotiateHostDepth(
-    init: { usagePreference?: unknown[]; dataFormatPreference?: unknown[] } | undefined,
+    init:
+      | { usagePreference?: unknown[]; dataFormatPreference?: unknown[] }
+      | undefined,
     support: XRHostDepthSupport,
   ): { usage: string; dataFormat: XRDepthDataFormat } | null;
 
@@ -93,7 +102,11 @@ declare module 'iwer/host' {
     views: ArrayLike<number>;
   }
 
-  export type XRHostErrorSource = 'xr-frame-callback' | 'window-frame' | 'layer' | 'host-hook';
+  export type XRHostErrorSource =
+    | 'xr-frame-callback'
+    | 'window-frame'
+    | 'layer'
+    | 'host-hook';
 
   /** A DOMPointReadOnly (the runtime's, web/xr geometry.ts); the adapter's type check has no DOM library. */
   export interface HostPoint {
@@ -104,23 +117,38 @@ declare module 'iwer/host' {
   }
 
   export class XRRigidTransform {
-    constructor(position?: Partial<HostPoint>, orientation?: Partial<HostPoint>);
+    constructor(
+      position?: Partial<HostPoint>,
+      orientation?: Partial<HostPoint>,
+    );
     readonly matrix: Float32Array;
     readonly position: HostPoint;
     readonly orientation: HostPoint;
   }
 
-  export function overwriteTransformMatrix(transform: XRRigidTransform, source: ArrayLike<number>): void;
+  export function overwriteTransformMatrix(
+    transform: XRRigidTransform,
+    source: ArrayLike<number>,
+  ): void;
 
   export class NativePlane {
-    constructor(transform: XRRigidTransform, polygon: HostPoint[], semanticLabel: string);
+    constructor(
+      transform: XRRigidTransform,
+      polygon: HostPoint[],
+      semanticLabel: string,
+    );
     transform: XRRigidTransform;
     polygon: HostPoint[];
     semanticLabel: string;
   }
 
   export class NativeMesh {
-    constructor(transform: XRRigidTransform, vertices: Float32Array, indices: Uint32Array, semanticLabel: string);
+    constructor(
+      transform: XRRigidTransform,
+      vertices: Float32Array,
+      indices: Uint32Array,
+      semanticLabel: string,
+    );
     transform: XRRigidTransform;
     vertices: Float32Array;
     indices: Uint32Array;

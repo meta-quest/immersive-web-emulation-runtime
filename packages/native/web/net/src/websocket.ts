@@ -9,9 +9,27 @@
 // TLS through the platform). Cross-origin sockets follow the same allowlist as fetch (NET-5): a blocked
 // origin fails the connection (error + close 1006), it does not throw.
 
-import { checkOrigin, type AllowEntry, type BlockedOriginLog } from './allowlist.ts';
-import { domException, isBufferSource, makeBlob, type NetEnv, utf8Encode, blobToBytes } from './env.ts';
-import { WS_CLOSE, WS_ERROR, WS_MESSAGE, WS_OPEN, WS_SENT, wsNatives } from './natives.ts';
+import {
+  checkOrigin,
+  type AllowEntry,
+  type BlockedOriginLog,
+} from './allowlist.ts';
+import {
+  domException,
+  isBufferSource,
+  makeBlob,
+  type NetEnv,
+  utf8Encode,
+  blobToBytes,
+} from './env.ts';
+import {
+  WS_CLOSE,
+  WS_ERROR,
+  WS_MESSAGE,
+  WS_OPEN,
+  WS_SENT,
+  wsNatives,
+} from './natives.ts';
 
 export interface WebSocketContext {
   env: NetEnv;
@@ -50,7 +68,14 @@ export class CloseEvent extends Event {
   #wasClean: boolean;
   #code: number;
   #reason: string;
-  constructor(type: string, init: { wasClean?: boolean; code?: number; reason?: string } & EventInit = {}) {
+  constructor(
+    type: string,
+    init: {
+      wasClean?: boolean;
+      code?: number;
+      reason?: string;
+    } & EventInit = {},
+  ) {
     super(type, init);
     this.#wasClean = !!init.wasClean;
     this.#code = (init.code ?? 0) & 0xffff;
@@ -68,7 +93,10 @@ export class CloseEvent extends Event {
 }
 
 function getCloseEvent(): typeof CloseEvent {
-  return ((globalThis as unknown as { CloseEvent?: typeof CloseEvent }).CloseEvent ?? CloseEvent);
+  return (
+    (globalThis as unknown as { CloseEvent?: typeof CloseEvent }).CloseEvent ??
+    CloseEvent
+  );
 }
 
 export class WebSocket extends EventTarget {
@@ -89,7 +117,12 @@ export class WebSocket extends EventTarget {
   #binaryType: 'blob' | 'arraybuffer' = 'blob';
   #id = 0;
   #ctx: WebSocketContext | null;
-  #handlers: Record<string, Handler> = { open: null, message: null, error: null, close: null };
+  #handlers: Record<string, Handler> = {
+    open: null,
+    message: null,
+    error: null,
+    close: null,
+  };
   #closeFired = false;
   // Blob payloads are read asynchronously; later sends (and close) queue behind them to keep order.
   #sendChain: Promise<void> = Promise.resolve();
@@ -104,33 +137,57 @@ export class WebSocket extends EventTarget {
     try {
       parsed = base ? new URL(String(url), base) : new URL(String(url));
     } catch {
-      throw domException(`Failed to construct 'WebSocket': The URL '${String(url)}' is invalid.`, 'SyntaxError');
+      throw domException(
+        `Failed to construct 'WebSocket': The URL '${String(url)}' is invalid.`,
+        'SyntaxError',
+      );
     }
     if (parsed.protocol === 'http:') parsed.protocol = 'ws:';
     else if (parsed.protocol === 'https:') parsed.protocol = 'wss:';
     if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
-      throw domException(`Failed to construct 'WebSocket': The URL's scheme must be either 'http', 'https', 'ws', or 'wss'. '${parsed.protocol}' is not allowed.`, 'SyntaxError');
+      throw domException(
+        `Failed to construct 'WebSocket': The URL's scheme must be either 'http', 'https', 'ws', or 'wss'. '${parsed.protocol}' is not allowed.`,
+        'SyntaxError',
+      );
     }
     if (parsed.hash || String(url).includes('#')) {
-      throw domException(`Failed to construct 'WebSocket': The URL contains a fragment identifier ('${parsed.hash}'). Fragment identifiers are not allowed in WebSocket URLs.`, 'SyntaxError');
+      throw domException(
+        `Failed to construct 'WebSocket': The URL contains a fragment identifier ('${parsed.hash}'). Fragment identifiers are not allowed in WebSocket URLs.`,
+        'SyntaxError',
+      );
     }
-    const list = typeof protocols === 'string' ? [protocols] : [...protocols].map(String);
+    const list =
+      typeof protocols === 'string' ? [protocols] : [...protocols].map(String);
     const seen = new Set<string>();
     for (const p of list) {
-      if (!TOKEN.test(p)) throw domException(`Failed to construct 'WebSocket': The subprotocol '${p}' is invalid.`, 'SyntaxError');
-      if (seen.has(p.toLowerCase())) throw domException(`Failed to construct 'WebSocket': The subprotocol '${p}' is duplicated.`, 'SyntaxError');
+      if (!TOKEN.test(p))
+        throw domException(
+          `Failed to construct 'WebSocket': The subprotocol '${p}' is invalid.`,
+          'SyntaxError',
+        );
+      if (seen.has(p.toLowerCase()))
+        throw domException(
+          `Failed to construct 'WebSocket': The subprotocol '${p}' is duplicated.`,
+          'SyntaxError',
+        );
       seen.add(p.toLowerCase());
     }
     this.#url = parsed.href;
     const natives = wsNatives(ctx?.env.natives);
-    const verdict = ctx ? checkOrigin(ctx.allow, parsed, ctx.env.config.debug) : 'not-listed';
+    const verdict = ctx
+      ? checkOrigin(ctx.allow, parsed, ctx.env.config.debug)
+      : 'not-listed';
     if (!natives || verdict !== 'allowed') {
       if (ctx && verdict !== 'allowed') ctx.blocked.report(parsed, verdict);
       // Fail the connection asynchronously, as a network failure would.
       setTimeout(() => this.#fail(), 0);
       return;
     }
-    this.#id = natives.wsConnect(this.#url, list, (type: number, ...args: unknown[]) => this.#onNative(type, args));
+    this.#id = natives.wsConnect(
+      this.#url,
+      list,
+      (type: number, ...args: unknown[]) => this.#onNative(type, args),
+    );
   }
 
   get url(): string {
@@ -182,7 +239,10 @@ export class WebSocket extends EventTarget {
 
   send(data: string | ArrayBuffer | ArrayBufferView | Blob): void {
     if (this.#readyState === WebSocket.CONNECTING) {
-      throw domException("Failed to execute 'send' on 'WebSocket': Still in CONNECTING state.", 'InvalidStateError');
+      throw domException(
+        "Failed to execute 'send' on 'WebSocket': Still in CONNECTING state.",
+        'InvalidStateError',
+      );
     }
     const natives = wsNatives(this.#ctx?.env.natives);
     let size: number;
@@ -192,12 +252,16 @@ export class WebSocket extends EventTarget {
       size = bytes.byteLength;
       payload = data;
     } else if (isBufferSource(data)) {
-      const view = ArrayBuffer.isView(data) ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength) : new Uint8Array(data);
+      const view = ArrayBuffer.isView(data)
+        ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+        : new Uint8Array(data);
       size = view.byteLength;
       payload = view.slice();
     } else if (typeof Blob === 'function' && data instanceof Blob) {
       size = data.size;
-      payload = this.#ctx ? blobToBytes(this.#ctx.env, data) : data.arrayBuffer().then((b) => new Uint8Array(b));
+      payload = this.#ctx
+        ? blobToBytes(this.#ctx.env, data)
+        : data.arrayBuffer().then((b) => new Uint8Array(b));
     } else {
       const s = String(data);
       size = utf8Encode(s).byteLength;
@@ -229,17 +293,27 @@ export class WebSocket extends EventTarget {
     if (code !== undefined) {
       code = Number(code) & 0xffff;
       if (code !== 1000 && (code < 3000 || code > 4999)) {
-        throw domException(`Failed to execute 'close' on 'WebSocket': The close code must be either 1000, or between 3000 and 4999. ${code} is neither.`, 'InvalidAccessError');
+        throw domException(
+          `Failed to execute 'close' on 'WebSocket': The close code must be either 1000, or between 3000 and 4999. ${code} is neither.`,
+          'InvalidAccessError',
+        );
       }
     }
     let reasonText = '';
     if (reason !== undefined) {
       reasonText = String(reason);
       if (utf8Encode(reasonText).byteLength > 123) {
-        throw domException("Failed to execute 'close' on 'WebSocket': The close reason must not be greater than 123 UTF-8 bytes.", 'SyntaxError');
+        throw domException(
+          "Failed to execute 'close' on 'WebSocket': The close reason must not be greater than 123 UTF-8 bytes.",
+          'SyntaxError',
+        );
       }
     }
-    if (this.#readyState === WebSocket.CLOSING || this.#readyState === WebSocket.CLOSED) return;
+    if (
+      this.#readyState === WebSocket.CLOSING ||
+      this.#readyState === WebSocket.CLOSED
+    )
+      return;
     const natives = wsNatives(this.#ctx?.env.natives);
     if (this.#readyState === WebSocket.CONNECTING) {
       // "Fail the WebSocket connection": error + close(1006).
@@ -251,7 +325,10 @@ export class WebSocket extends EventTarget {
     this.#readyState = WebSocket.CLOSING;
     const id = this.#id;
     const c = code ?? (reason !== undefined ? 1000 : 0);
-    if (this.#pendingBlobs > 0) this.#sendChain = this.#sendChain.then(() => natives?.wsClose(id, c, reasonText));
+    if (this.#pendingBlobs > 0)
+      this.#sendChain = this.#sendChain.then(() =>
+        natives?.wsClose(id, c, reasonText),
+      );
     else natives?.wsClose(id, c, reasonText);
   }
 
@@ -259,7 +336,8 @@ export class WebSocket extends EventTarget {
     const old = this.#handlers[type];
     if (old) this.removeEventListener(type, old as EventListener);
     this.#handlers[type] = typeof h === 'function' ? h : null;
-    if (typeof h === 'function') this.addEventListener(type, h as EventListener);
+    if (typeof h === 'function')
+      this.addEventListener(type, h as EventListener);
   }
 
   #onNative(type: number, args: unknown[]): void {
@@ -284,18 +362,28 @@ export class WebSocket extends EventTarget {
             this.#binaryType === 'arraybuffer'
               ? payload
               : this.#ctx
-                ? makeBlob(this.#ctx.env, new Uint8Array(payload as ArrayBuffer), '')
+                ? makeBlob(
+                    this.#ctx.env,
+                    new Uint8Array(payload as ArrayBuffer),
+                    '',
+                  )
                 : new Blob([payload as ArrayBuffer]);
         }
         const ME = getMessageEvent();
-        this.dispatchEvent(new ME('message', { data, origin: new URL(this.#url).origin }));
+        this.dispatchEvent(
+          new ME('message', { data, origin: new URL(this.#url).origin }),
+        );
         return;
       }
       case WS_SENT:
-        this.#bufferedAmount = Math.max(0, this.#bufferedAmount - Number(args[0]));
+        this.#bufferedAmount = Math.max(
+          0,
+          this.#bufferedAmount - Number(args[0]),
+        );
         return;
       case WS_ERROR:
-        if (this.#readyState !== WebSocket.CLOSED) this.dispatchEvent(new Event('error'));
+        if (this.#readyState !== WebSocket.CLOSED)
+          this.dispatchEvent(new Event('error'));
         return;
       case WS_CLOSE: {
         const [code, reason, wasClean] = args as [number, string, boolean];

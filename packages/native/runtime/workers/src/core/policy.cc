@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Worker policy: see policy.h. HTML §10.2.6 (Worker constructor: URL parsing, same-origin rule, data:/blob:),
 // §10.3.4 (importScripts), Fetch "data: URL processor", MIME Sniffing "JavaScript MIME type".
 #include "iwn/workers/policy.h"

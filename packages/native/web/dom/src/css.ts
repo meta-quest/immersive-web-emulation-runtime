@@ -68,7 +68,12 @@ function parseDeclarations(text: string): Array<[string, string, boolean]> {
       important = true;
       value = value.slice(0, m.index).trim();
     }
-    if (name && value) out.push([name.startsWith('--') ? name : name.toLowerCase(), value, important]);
+    if (name && value)
+      out.push([
+        name.startsWith('--') ? name : name.toLowerCase(),
+        value,
+        important,
+      ]);
   }
   return out;
 }
@@ -82,14 +87,19 @@ export class CSSStyleDeclaration {
 
   get cssText(): string {
     const parts: string[] = [];
-    for (const [k, e] of this[STATE].map) parts.push(`${k}: ${e.value}${e.important ? ' !important' : ''};`);
+    for (const [k, e] of this[STATE].map)
+      parts.push(`${k}: ${e.value}${e.important ? ' !important' : ''};`);
     return parts.join(' ');
   }
   set cssText(v: string) {
     const s = this[STATE];
-    if (s.readOnly) throw new Error("NoModificationAllowedError: the declaration is read-only");
+    if (s.readOnly)
+      throw new Error(
+        'NoModificationAllowedError: the declaration is read-only',
+      );
     s.map.clear();
-    for (const [k, value, important] of parseDeclarations(str(v))) s.map.set(k, { value, important });
+    for (const [k, value, important] of parseDeclarations(str(v)))
+      s.map.set(k, { value, important });
     s.onchange?.(this.cssText);
   }
   get length(): number {
@@ -108,11 +118,16 @@ export class CSSStyleDeclaration {
     return this[STATE].map.get(cssName(str(property)))?.value ?? '';
   }
   getPropertyPriority(property: string): string {
-    return this[STATE].map.get(cssName(str(property)))?.important ? 'important' : '';
+    return this[STATE].map.get(cssName(str(property)))?.important
+      ? 'important'
+      : '';
   }
   setProperty(property: string, value: unknown, priority = ''): void {
     const s = this[STATE];
-    if (s.readOnly) throw new Error('NoModificationAllowedError: the declaration is read-only');
+    if (s.readOnly)
+      throw new Error(
+        'NoModificationAllowedError: the declaration is read-only',
+      );
     const name = cssName(str(property));
     const v = value === null || value === undefined ? '' : str(value).trim();
     if (v === '') {
@@ -126,7 +141,10 @@ export class CSSStyleDeclaration {
   }
   removeProperty(property: string): string {
     const s = this[STATE];
-    if (s.readOnly) throw new Error('NoModificationAllowedError: the declaration is read-only');
+    if (s.readOnly)
+      throw new Error(
+        'NoModificationAllowedError: the declaration is read-only',
+      );
     const name = cssName(str(property));
     const old = s.map.get(name)?.value ?? '';
     if (s.map.delete(name)) s.onchange?.(this.cssText);
@@ -140,31 +158,45 @@ export class CSSStyleDeclaration {
   }
 }
 
-const PROTO = CSSStyleDeclaration.prototype as unknown as Record<PropertyKey, unknown>;
+const PROTO = CSSStyleDeclaration.prototype as unknown as Record<
+  PropertyKey,
+  unknown
+>;
 
 /** A new declaration; `onchange` receives the cssText after each change (null: detached). */
-export function createStyle(initial: string, onchange: ((cssText: string) => void) | null, readOnly = false): CSSStyleDeclaration {
-  const target = Object.create(CSSStyleDeclaration.prototype) as CSSStyleDeclaration;
+export function createStyle(
+  initial: string,
+  onchange: ((cssText: string) => void) | null,
+  readOnly = false,
+): CSSStyleDeclaration {
+  const target = Object.create(
+    CSSStyleDeclaration.prototype,
+  ) as CSSStyleDeclaration;
   const state: State = { map: new Map(), onchange: null, readOnly: false };
   Object.defineProperty(target, STATE, { value: state });
-  for (const [k, value, important] of parseDeclarations(initial)) state.map.set(k, { value, important });
+  for (const [k, value, important] of parseDeclarations(initial))
+    state.map.set(k, { value, important });
   state.onchange = onchange;
   state.readOnly = readOnly;
   return new Proxy(target, {
     get(t, key, receiver) {
-      if (typeof key !== 'string' || key in PROTO || key === 'constructor') return Reflect.get(t, key, receiver);
+      if (typeof key !== 'string' || key in PROTO || key === 'constructor')
+        return Reflect.get(t, key, receiver);
       if (/^\d+$/.test(key)) return t.item(Number(key)) || undefined;
       return state.map.get(cssName(key))?.value ?? '';
     },
     set(t, key, value, receiver) {
-      if (typeof key !== 'string' || key in PROTO) return Reflect.set(t, key, value, receiver);
+      if (typeof key !== 'string' || key in PROTO)
+        return Reflect.set(t, key, value, receiver);
       if (state.readOnly) return true;
       t.setProperty(key, value);
       return true;
     },
     has(t, key) {
       if (typeof key !== 'string') return Reflect.has(t, key);
-      return key in PROTO || state.map.has(cssName(key)) || /^[a-zA-Z-]+$/.test(key);
+      return (
+        key in PROTO || state.map.has(cssName(key)) || /^[a-zA-Z-]+$/.test(key)
+      );
     },
   });
 }
@@ -173,5 +205,6 @@ export function createStyle(initial: string, onchange: ((cssText: string) => voi
 export function resetStyle(decl: CSSStyleDeclaration, cssText: string): void {
   const s = (decl as unknown as { [STATE]: State })[STATE];
   s.map.clear();
-  for (const [k, value, important] of parseDeclarations(cssText)) s.map.set(k, { value, important });
+  for (const [k, value, important] of parseDeclarations(cssText))
+    s.map.set(k, { value, important });
 }

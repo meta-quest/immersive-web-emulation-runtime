@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // TMR-1, TMR-2: ids, ordering, nesting clamp, interval re-arming, clearing inside a callback.
 #include "iwn/core/timer_queue.h"
 #include "iwn_test.h"

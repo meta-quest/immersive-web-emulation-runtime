@@ -7,12 +7,21 @@
 
 // Shared helpers for the release scripts. Plain Node, no dependencies.
 
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const PKG = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
 
 /**
  * Whether the module at `metaUrl` is the script node was started with. Compares real paths: `import.meta.url` is
@@ -22,14 +31,18 @@ export const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 export function isMain(metaUrl) {
   if (!process.argv[1]) return false;
   try {
-    return realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1]);
+    return (
+      realpathSync(fileURLToPath(metaUrl)) === realpathSync(process.argv[1])
+    );
   } catch {
     return metaUrl === pathToFileURL(process.argv[1]).href;
   }
 }
 
 export function loadComponents(root = PKG) {
-  return JSON.parse(readFileSync(path.join(root, 'release', 'components.json'), 'utf8'));
+  return JSON.parse(
+    readFileSync(path.join(root, 'release', 'components.json'), 'utf8'),
+  );
 }
 
 export function placeholders(env = process.env, root = PKG) {
@@ -55,7 +68,12 @@ export function thirdPartyNames(root = PKG) {
     const m = /^\|([^|]+)\|/.exec(line);
     if (!m) continue;
     const cell = m[1].trim();
-    if (!cell || /^-+$/.test(cell) || /^(component|dependency of whatwg-url)$/i.test(cell)) continue;
+    if (
+      !cell ||
+      /^-+$/.test(cell) ||
+      /^(component|dependency of whatwg-url)$/i.test(cell)
+    )
+      continue;
     names.push(cell.toLowerCase());
   }
   return names;

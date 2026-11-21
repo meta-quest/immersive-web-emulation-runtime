@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Uploads from runtime/image handles (ImageBitmap, HTMLImageElement): runtime/image/INTEROP.md §3. The JS side
 // (web/webgl/tex-source.ts) only calls imageUpload for RGBA/UNSIGNED_BYTE uploads of the whole image; every other
 // format reads the pixels once with imageRead and converts in JS. Built with the image module when the runtime

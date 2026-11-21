@@ -32,7 +32,11 @@ export function mitBody(root = PKG) {
 }
 
 function normalise(text) {
-  return text.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  return text
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 export function generateNotices({ root = PKG, env = process.env } = {}) {
@@ -40,7 +44,9 @@ export function generateNotices({ root = PKG, env = process.env } = {}) {
   const vars = placeholders(env, root);
   const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
   const missing = [];
-  const shipped = inv.components.filter((c) => c.ships === 'apk' || c.ships === 'prelude');
+  const shipped = inv.components.filter(
+    (c) => c.ships === 'apk' || c.ships === 'prelude',
+  );
   const byId = new Map(inv.components.map((c) => [c.id, c]));
   const out = [
     `Third-party software notices for ${pkg.name} ${pkg.version}`,
@@ -50,13 +56,18 @@ export function generateNotices({ root = PKG, env = process.env } = {}) {
     'third-party software listed below. The Node packer and CLI in lib/ contain no third-party code.',
     '',
     'Contents:',
-    ...shipped.map((c) => `  - ${c.name} ${c.version} (${c.license})${c.inside ? `, inside ${byId.get(c.inside)?.name ?? c.inside}` : ''}`),
+    ...shipped.map(
+      (c) =>
+        `  - ${c.name} ${c.version} (${c.license})${c.inside ? `, inside ${byId.get(c.inside)?.name ?? c.inside}` : ''}`,
+    ),
     '',
   ];
   for (const c of shipped) {
     out.push(RULE, `${c.name} ${c.version} (${c.license})`, RULE, '');
     out.push(`Source: ${c.source}`);
-    out.push(`Ships in: ${c.ships === 'apk' ? 'the template APK (native code / assets)' : 'a JS prelude inside the template APK'}${c.inside ? `, as part of ${byId.get(c.inside)?.name ?? c.inside}` : ''}`);
+    out.push(
+      `Ships in: ${c.ships === 'apk' ? 'the template APK (native code / assets)' : 'a JS prelude inside the template APK'}${c.inside ? `, as part of ${byId.get(c.inside)?.name ?? c.inside}` : ''}`,
+    );
     out.push('');
     const n = c.notice ?? {};
     if (n.preface) out.push(n.preface, '');
@@ -82,18 +93,25 @@ export function generateNotices({ root = PKG, env = process.env } = {}) {
 }
 
 if (isMain(import.meta.url)) {
-  const { values } = parseArgs({ options: { out: { type: 'string' }, check: { type: 'boolean' } } });
+  const { values } = parseArgs({
+    options: { out: { type: 'string' }, check: { type: 'boolean' } },
+  });
   const file = values.out ?? path.join(PKG, 'THIRD_PARTY_NOTICES.txt');
   const { text, missing } = generateNotices();
   if (missing.length) {
-    process.stderr.write(`notices: license files not found (set IWN_THIRD_PARTY_DIR / IWN_V8_SRC):\n${missing.map((m) => `  - ${m}`).join('\n')}\n`);
+    process.stderr.write(
+      `notices: license files not found (set IWN_THIRD_PARTY_DIR / IWN_V8_SRC):\n${missing.map((m) => `  - ${m}`).join('\n')}\n`,
+    );
     process.exitCode = 1;
   } else if (values.check) {
     const current = existsSync(file) ? readFileSync(file, 'utf8') : '';
     if (current !== text) {
-      process.stderr.write(`notices: ${file} is stale; run npm run release:notices\n`);
+      process.stderr.write(
+        `notices: ${file} is stale; run npm run release:notices\n`,
+      );
       process.exitCode = 1;
-    } else process.stdout.write(`notices: ${path.basename(file)} is up to date\n`);
+    } else
+      process.stdout.write(`notices: ${path.basename(file)} is up to date\n`);
   } else {
     writeFileSync(file, text);
     process.stdout.write(`notices: wrote ${file} (${text.length} bytes)\n`);

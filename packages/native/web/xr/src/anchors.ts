@@ -30,7 +30,10 @@ export interface NativeAnchor {
 }
 
 /** web/storage's runtime entries (absent without that prelude: the list then lives in memory for the page). */
-export type RuntimeStore = { getItem(k: string): string | null; setItem(k: string, v: string | null): void };
+export type RuntimeStore = {
+  getItem(k: string): string | null;
+  setItem(k: string, v: string | null): void;
+};
 
 const position = vec3.create();
 const rotation = quat.create();
@@ -39,7 +42,10 @@ export class NativeAnchors {
   private readonly natives: XrNatives;
   private readonly storage: () => RuntimeStore | null;
   private poses: Float32Array | null = null;
-  private readonly waiting = new Map<number, { resolve(r: NativeAnchorResult): void; reject(e: Error): void }>();
+  private readonly waiting = new Map<
+    number,
+    { resolve(r: NativeAnchorResult): void; reject(e: Error): void }
+  >();
   /** The UUID list when localStorage is unavailable. */
   private memory: string[] = [];
 
@@ -55,27 +61,45 @@ export class NativeAnchors {
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
       const w = this.waiting.get(r.request);
-      if (!w) continue;  // a request of a session that is gone
+      if (!w) continue; // a request of a session that is gone
       this.waiting.delete(r.request);
       if (r.ok) w.resolve(r);
       else w.reject(new Error(r.error ?? 'the anchor request failed'));
     }
   }
 
-  private request(request: number | undefined, what: string): Promise<NativeAnchorResult> {
+  private request(
+    request: number | undefined,
+    what: string,
+  ): Promise<NativeAnchorResult> {
     if (!request) {
-      return Promise.reject(new DOMException(`${what}: this headset has no spatial anchors`, 'NotSupportedError'));
+      return Promise.reject(
+        new DOMException(
+          `${what}: this headset has no spatial anchors`,
+          'NotSupportedError',
+        ),
+      );
     }
-    return new Promise((resolve, reject) => this.waiting.set(request, { resolve, reject }));
+    return new Promise((resolve, reject) =>
+      this.waiting.set(request, { resolve, reject }),
+    );
   }
 
   create(transform: Float32Array): Promise<NativeAnchor> {
     mat4.getTranslation(position, transform);
     mat4.getRotation(rotation, transform);
     const request = this.natives.anchorCreate?.(
-      position[0], position[1], position[2], rotation[0], rotation[1], rotation[2], rotation[3],
+      position[0],
+      position[1],
+      position[2],
+      rotation[0],
+      rotation[1],
+      rotation[2],
+      rotation[3],
     );
-    return this.request(request, 'XRFrame.createAnchor').then((r) => ({ id: r.anchor ?? 0 }));
+    return this.request(request, 'XRFrame.createAnchor').then((r) => ({
+      id: r.anchor ?? 0,
+    }));
   }
 
   pose(anchor: NativeAnchor, out: Float32Array): boolean {
@@ -98,7 +122,10 @@ export class NativeAnchors {
   }
 
   persist(anchor: NativeAnchor): Promise<string> {
-    return this.request(this.natives.anchorPersist?.(anchor.id), 'XRAnchor.requestPersistentHandle').then((r) => {
+    return this.request(
+      this.natives.anchorPersist?.(anchor.id),
+      'XRAnchor.requestPersistentHandle',
+    ).then((r) => {
       const uuid = r.uuid ?? '';
       const list = this.persisted();
       if (!list.includes(uuid)) this.store([...list, uuid]);
@@ -108,15 +135,19 @@ export class NativeAnchors {
 
   restore(uuid: string): Promise<NativeAnchor> {
     const id = String(uuid).toLowerCase();
-    return this.request(this.natives.anchorRestore?.(id), 'XRSession.restorePersistentAnchor').then(
-      (r) => ({ id: r.anchor ?? 0 }),
-    );
+    return this.request(
+      this.natives.anchorRestore?.(id),
+      'XRSession.restorePersistentAnchor',
+    ).then((r) => ({ id: r.anchor ?? 0 }));
   }
 
   erase(uuid: string): Promise<void> {
     const id = String(uuid).toLowerCase();
     const forget = () => this.store(this.persisted().filter((u) => u !== id));
-    return this.request(this.natives.anchorErase?.(id), 'XRSession.deletePersistentAnchor').then(
+    return this.request(
+      this.natives.anchorErase?.(id),
+      'XRSession.deletePersistentAnchor',
+    ).then(
       () => forget(),
       (error: Error) => {
         // the system has no such anchor (erased elsewhere, or the app's data was cleared): not listed any more
@@ -131,8 +162,14 @@ export class NativeAnchors {
     const storage = this.storage();
     if (!storage) return this.memory.slice();
     try {
-      const list = JSON.parse(storage.getItem(PERSISTED_KEY) ?? '[]') as unknown;
-      return Array.isArray(list) ? list.filter((u): u is string => typeof u === 'string').map((u) => u.toLowerCase()) : [];
+      const list = JSON.parse(
+        storage.getItem(PERSISTED_KEY) ?? '[]',
+      ) as unknown;
+      return Array.isArray(list)
+        ? list
+            .filter((u): u is string => typeof u === 'string')
+            .map((u) => u.toLowerCase())
+        : [];
     } catch {
       return [];
     }

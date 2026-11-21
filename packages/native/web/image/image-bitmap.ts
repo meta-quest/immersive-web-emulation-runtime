@@ -24,7 +24,9 @@ let domException: (message: string, name: string) => Error = (m, n) => {
   e.name = n;
   return e;
 };
-export function setImageBitmapErrors(make: (message: string, name: string) => Error): void {
+export function setImageBitmapErrors(
+  make: (message: string, name: string) => Error,
+): void {
   domException = make;
 }
 
@@ -59,21 +61,39 @@ export class ImageBitmap {
     const slot = slots.get(this);
     if (!slot) throw new TypeError('Illegal invocation');
     const h = slot.handle;
-    if (!h || h.width === 0) throw domException('The image source is detached (the ImageBitmap was closed).', 'InvalidStateError');
-    return { kind: 'handle', origin: 'bitmap', width: h.width, height: h.height, premultiplied: h.premultiplied, handle: h };
+    if (!h || h.width === 0)
+      throw domException(
+        'The image source is detached (the ImageBitmap was closed).',
+        'InvalidStateError',
+      );
+    return {
+      kind: 'handle',
+      origin: 'bitmap',
+      width: h.width,
+      height: h.height,
+      premultiplied: h.premultiplied,
+      handle: h,
+    };
   }
 
   static {
-    Object.defineProperty(this.prototype, Symbol.toStringTag, { value: 'ImageBitmap', configurable: true });
+    Object.defineProperty(this.prototype, Symbol.toStringTag, {
+      value: 'ImageBitmap',
+      configurable: true,
+    });
     for (const name of ['width', 'height', 'close']) {
       const d = Object.getOwnPropertyDescriptor(this.prototype, name);
-      if (d) Object.defineProperty(this.prototype, name, { ...d, enumerable: true });
+      if (d)
+        Object.defineProperty(this.prototype, name, { ...d, enumerable: true });
     }
   }
 }
 
 /** Wraps a native handle (the bitmap owns it from now on). */
-export function wrapBitmap(handle: NativeImageHandle, natives: ImageNatives): ImageBitmap {
+export function wrapBitmap(
+  handle: NativeImageHandle,
+  natives: ImageNatives,
+): ImageBitmap {
   const bitmap = new ImageBitmap(CREATE);
   slots.set(bitmap, { handle, natives });
   return bitmap;
@@ -98,7 +118,10 @@ export function isImageBitmap(value: unknown): value is ImageBitmap {
 export function cloneBitmap(value: ImageBitmap): ImageBitmap {
   const slot = slots.get(value);
   if (!slot?.handle || slot.handle.width === 0) {
-    throw domException('An ImageBitmap is detached and could not be cloned.', 'DataCloneError');
+    throw domException(
+      'An ImageBitmap is detached and could not be cloned.',
+      'DataCloneError',
+    );
   }
   return wrapBitmap(slot.natives.share(slot.handle), slot.natives);
 }
@@ -107,7 +130,10 @@ export function cloneBitmap(value: ImageBitmap): ImageBitmap {
 export function transferBitmap(value: ImageBitmap): ImageBitmap {
   const slot = slots.get(value);
   if (!slot?.handle || slot.handle.width === 0) {
-    throw domException('An ImageBitmap is detached and could not be transferred.', 'DataCloneError');
+    throw domException(
+      'An ImageBitmap is detached and could not be transferred.',
+      'DataCloneError',
+    );
   }
   const handle = slot.handle;
   slot.handle = null;
@@ -118,7 +144,10 @@ export function transferBitmap(value: ImageBitmap): ImageBitmap {
 export function exportBitmap(value: ImageBitmap): { iwnImageBitmap: number } {
   const slot = slots.get(value);
   if (!slot?.handle || slot.handle.width === 0) {
-    throw domException('An ImageBitmap is detached and could not be transferred.', 'DataCloneError');
+    throw domException(
+      'An ImageBitmap is detached and could not be transferred.',
+      'DataCloneError',
+    );
   }
   const id = slot.natives.exportTransfer(slot.handle);
   slot.handle = null;
@@ -126,8 +155,15 @@ export function exportBitmap(value: ImageBitmap): { iwnImageBitmap: number } {
 }
 
 /** Cross-isolate transfer, receiver side. */
-export function importBitmap(token: { iwnImageBitmap: number }, natives: ImageNatives): ImageBitmap {
+export function importBitmap(
+  token: { iwnImageBitmap: number },
+  natives: ImageNatives,
+): ImageBitmap {
   const handle = natives.importTransfer(token.iwnImageBitmap);
-  if (!handle) throw domException('The transferred ImageBitmap is no longer available.', 'DataCloneError');
+  if (!handle)
+    throw domException(
+      'The transferred ImageBitmap is no longer available.',
+      'DataCloneError',
+    );
   return wrapBitmap(handle, natives);
 }

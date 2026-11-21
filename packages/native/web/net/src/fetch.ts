@@ -13,7 +13,12 @@
 // No CORS checks (the app is packaged and trusted, NET-7), no cookie jar (credentials: 'include' sends
 // no cookies and Set-Cookie is dropped), no HTTP cache. See README.md.
 
-import { checkOrigin, parseAllowlist, BlockedOriginLog, type AllowEntry } from './allowlist.ts';
+import {
+  checkOrigin,
+  parseAllowlist,
+  BlockedOriginLog,
+  type AllowEntry,
+} from './allowlist.ts';
 import { type ByteSource, InnerBody } from './body.ts';
 import { abortReason, domException, type NetEnv } from './env.ts';
 import { Headers, headerList, headersFromPairs } from './headers.ts';
@@ -43,7 +48,11 @@ function networkError(message: string, cause?: unknown): TypeError {
   return e;
 }
 
-export function fetchWith(ctx: FetchContext, input: Request | string | URL, init?: RequestInitLike): Promise<Response> {
+export function fetchWith(
+  ctx: FetchContext,
+  input: Request | string | URL,
+  init?: RequestInitLike,
+): Promise<Response> {
   let request: Request;
   try {
     request = new Request(input, init);
@@ -52,12 +61,20 @@ export function fetchWith(ctx: FetchContext, input: Request | string | URL, init
   }
   const s = requestState(request);
   if (s.signal.aborted) {
-    if (s.body && !s.body.unusable()) s.body.stream().cancel(abortReason(s.signal)).catch(() => {});
+    if (s.body && !s.body.unusable())
+      s.body
+        .stream()
+        .cancel(abortReason(s.signal))
+        .catch(() => {});
     return Promise.reject(abortReason(s.signal));
   }
   const url = s.url;
   // blob: URLs report their creator's origin too, so check the scheme first.
-  if ((url.protocol === 'https:' || url.protocol === 'http:') && url.origin === ctx.appOrigin) return assetFetch(ctx, request);
+  if (
+    (url.protocol === 'https:' || url.protocol === 'http:') &&
+    url.origin === ctx.appOrigin
+  )
+    return assetFetch(ctx, request);
   switch (url.protocol) {
     case 'data:':
       return dataFetch(request);
@@ -67,9 +84,17 @@ export function fetchWith(ctx: FetchContext, input: Request | string | URL, init
     case 'https:':
       return httpFetch(ctx, request);
     case 'about:':
-      return Promise.reject(networkError(`Failed to fetch ${url.href}: about: URLs are not fetchable`));
+      return Promise.reject(
+        networkError(
+          `Failed to fetch ${url.href}: about: URLs are not fetchable`,
+        ),
+      );
     default:
-      return Promise.reject(networkError(`Failed to fetch ${url.href}: unsupported scheme ${url.protocol}`));
+      return Promise.reject(
+        networkError(
+          `Failed to fetch ${url.href}: unsupported scheme ${url.protocol}`,
+        ),
+      );
   }
 }
 
@@ -78,7 +103,10 @@ export function fetchWith(ctx: FetchContext, input: Request | string | URL, init
 function assetFetch(ctx: FetchContext, request: Request): Promise<Response> {
   const s = requestState(request);
   const natives = ctx.env.natives;
-  if (!natives) return Promise.reject(networkError('Failed to fetch: no native asset reader'));
+  if (!natives)
+    return Promise.reject(
+      networkError('Failed to fetch: no native asset reader'),
+    );
   if (s.method !== 'GET' && s.method !== 'HEAD') {
     // A static server answers other methods with 405.
     return Promise.resolve(
@@ -107,7 +135,10 @@ function assetFetch(ctx: FetchContext, request: Request): Promise<Response> {
       if (status === 200 && buffer) {
         const bytes = new Uint8Array(buffer);
         const headers = new Headers();
-        headerList(headers).push(['content-length', String(bytes.byteLength)], ['content-type', mime]);
+        headerList(headers).push(
+          ['content-length', String(bytes.byteLength)],
+          ['content-type', mime],
+        );
         resolve(
           makeResponse({
             type: 'basic',
@@ -126,7 +157,9 @@ function assetFetch(ctx: FetchContext, request: Request): Promise<Response> {
             type: 'basic',
             status: 404,
             statusText: 'Not Found',
-            headers: new Headers({ 'content-type': 'text/plain;charset=UTF-8' }),
+            headers: new Headers({
+              'content-type': 'text/plain;charset=UTF-8',
+            }),
             body: InnerBody.fromBytes(new Uint8Array(0)),
             url: s.url.href,
           }),
@@ -146,10 +179,22 @@ function percentDecodeBytes(s: string): Uint8Array {
   const raw = new TextEncoder().encode(s);
   const out = new Uint8Array(raw.length);
   let o = 0;
-  const hex = (c: number) => (c >= 48 && c <= 57 ? c - 48 : c >= 65 && c <= 70 ? c - 55 : c >= 97 && c <= 102 ? c - 87 : -1);
+  const hex = (c: number) =>
+    c >= 48 && c <= 57
+      ? c - 48
+      : c >= 65 && c <= 70
+        ? c - 55
+        : c >= 97 && c <= 102
+          ? c - 87
+          : -1;
   for (let i = 0; i < raw.length; i++) {
     const c = raw[i];
-    if (c === 0x25 && i + 2 < raw.length && hex(raw[i + 1]) >= 0 && hex(raw[i + 2]) >= 0) {
+    if (
+      c === 0x25 &&
+      i + 2 < raw.length &&
+      hex(raw[i + 1]) >= 0 &&
+      hex(raw[i + 2]) >= 0
+    ) {
       out[o++] = hex(raw[i + 1]) * 16 + hex(raw[i + 2]);
       i += 2;
     } else {
@@ -170,7 +215,16 @@ export function forgivingBase64Decode(input: string): Uint8Array | null {
     o = 0;
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
-    const v = c >= 65 && c <= 90 ? c - 65 : c >= 97 && c <= 122 ? c - 71 : c >= 48 && c <= 57 ? c + 4 : c === 43 ? 62 : 63;
+    const v =
+      c >= 65 && c <= 90
+        ? c - 65
+        : c >= 97 && c <= 122
+          ? c - 71
+          : c >= 48 && c <= 57
+            ? c + 4
+            : c === 43
+              ? 62
+              : 63;
     buf = (buf << 6) | v;
     bits += 6;
     if (bits >= 8) {
@@ -182,7 +236,9 @@ export function forgivingBase64Decode(input: string): Uint8Array | null {
 }
 
 /** Fetch §4.2 data: URL processor. */
-export function processDataURL(href: string): { mime: string; body: Uint8Array } | null {
+export function processDataURL(
+  href: string,
+): { mime: string; body: Uint8Array } | null {
   const input = href.slice(5); // after "data:"
   const hashless = input.split('#')[0];
   const comma = hashless.indexOf(',');
@@ -191,24 +247,35 @@ export function processDataURL(href: string): { mime: string; body: Uint8Array }
   let body = percentDecodeBytes(hashless.slice(comma + 1));
   const b64 = /;[\x20]*base64$/i.exec(mime);
   if (b64) {
-    const decoded = forgivingBase64Decode(new TextDecoder('latin1').decode(body));
+    const decoded = forgivingBase64Decode(
+      new TextDecoder('latin1').decode(body),
+    );
     if (!decoded) return null;
     body = decoded;
     mime = mime.slice(0, b64.index);
   }
   if (mime.startsWith(';')) mime = 'text/plain' + mime;
-  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+\/[!#$%&'*+\-.^_`|~0-9A-Za-z]+/.test(mime)) mime = 'text/plain;charset=US-ASCII';
+  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+\/[!#$%&'*+\-.^_`|~0-9A-Za-z]+/.test(mime))
+    mime = 'text/plain;charset=US-ASCII';
   return { mime: mime.toLowerCase().replace(/\s*;\s*/g, ';'), body };
 }
 
 function dataFetch(request: Request): Promise<Response> {
   const s = requestState(request);
   const parsed = processDataURL(s.url.href);
-  if (!parsed) return Promise.reject(networkError(`Failed to fetch: malformed data: URL`));
+  if (!parsed)
+    return Promise.reject(networkError(`Failed to fetch: malformed data: URL`));
   const headers = new Headers();
   headerList(headers).push(['content-type', parsed.mime]);
   return Promise.resolve(
-    makeResponse({ type: 'basic', status: 200, statusText: 'OK', headers, body: InnerBody.fromBytes(parsed.body), url: s.url.href }),
+    makeResponse({
+      type: 'basic',
+      status: 200,
+      statusText: 'OK',
+      headers,
+      body: InnerBody.fromBytes(parsed.body),
+      url: s.url.href,
+    }),
   );
 }
 
@@ -216,11 +283,25 @@ function dataFetch(request: Request): Promise<Response> {
 
 function blobFetch(ctx: FetchContext, request: Request): Promise<Response> {
   const s = requestState(request);
-  if (s.method !== 'GET') return Promise.reject(networkError(`Failed to fetch ${s.url.href}: blob: URLs support GET only`));
-  const blob = ctx.env.glue?.blobUrls?.resolve(s.url.href.split('#')[0]) ?? null; // File API: fragment ignored
-  if (!blob) return Promise.reject(networkError(`Failed to fetch ${s.url.href}: unknown or revoked blob URL`));
+  if (s.method !== 'GET')
+    return Promise.reject(
+      networkError(
+        `Failed to fetch ${s.url.href}: blob: URLs support GET only`,
+      ),
+    );
+  const blob =
+    ctx.env.glue?.blobUrls?.resolve(s.url.href.split('#')[0]) ?? null; // File API: fragment ignored
+  if (!blob)
+    return Promise.reject(
+      networkError(
+        `Failed to fetch ${s.url.href}: unknown or revoked blob URL`,
+      ),
+    );
   const headers = new Headers();
-  headerList(headers).push(['content-length', String(blob.size)], ['content-type', blob.type]);
+  headerList(headers).push(
+    ['content-length', String(blob.size)],
+    ['content-type', blob.type],
+  );
   return Promise.resolve(
     makeResponse({
       type: 'basic',
@@ -242,7 +323,10 @@ function blobFetch(ctx: FetchContext, request: Request): Promise<Response> {
  */
 class NetworkSink {
   #queue: Uint8Array[] = [];
-  #waiters: Array<{ resolve: (c: Uint8Array | null) => void; reject: (e: unknown) => void }> = [];
+  #waiters: Array<{
+    resolve: (c: Uint8Array | null) => void;
+    reject: (e: unknown) => void;
+  }> = [];
   #ended = false;
   #error: unknown = undefined;
   #onAck: (bytes: number) => void;
@@ -281,7 +365,9 @@ class NetworkSink {
     }
     if (this.#error !== undefined) return Promise.reject(this.#error);
     if (this.#ended) return Promise.resolve(null);
-    return new Promise((resolve, reject) => this.#waiters.push({ resolve, reject }));
+    return new Promise((resolve, reject) =>
+      this.#waiters.push({ resolve, reject }),
+    );
   }
   cancel(): void {
     this.#queue = [];
@@ -299,7 +385,9 @@ class NetworkSink {
  * arrayBuffer()) stays reachable through the pending promise and is never collected.
  */
 const unreadBodies: FinalizationRegistry<NetworkSink> | null =
-  typeof FinalizationRegistry === 'function' ? new FinalizationRegistry<NetworkSink>((sink) => sink.cancel()) : null;
+  typeof FinalizationRegistry === 'function'
+    ? new FinalizationRegistry<NetworkSink>((sink) => sink.cancel())
+    : null;
 
 /** What readers of a network body hold (the ByteSource of its InnerBody). */
 class NetworkBody implements ByteSource {
@@ -319,22 +407,29 @@ class NetworkBody implements ByteSource {
   }
 }
 
-async function httpFetch(ctx: FetchContext, request: Request): Promise<Response> {
+async function httpFetch(
+  ctx: FetchContext,
+  request: Request,
+): Promise<Response> {
   const s = requestState(request);
   const env = ctx.env;
   const verdict = checkOrigin(ctx.allow, s.url, env.config.debug);
   if (verdict !== 'allowed') {
     ctx.blocked.report(s.url, verdict);
-    throw networkError(`Failed to fetch ${s.url.href}: origin not allowed (native.network.allow)`);
+    throw networkError(
+      `Failed to fetch ${s.url.href}: origin not allowed (native.network.allow)`,
+    );
   }
   const natives = env.natives;
-  if (!natives) throw networkError('Failed to fetch: no native network transport');
+  if (!natives)
+    throw networkError('Failed to fetch: no native network transport');
   let body: Uint8Array | null = null;
   if (s.body) body = await s.body.consume(env);
   if (s.signal.aborted) throw abortReason(s.signal);
   const headers: string[] = [];
   for (const [n, v] of headerList(s.headers)) headers.push(n, v);
-  if (!s.headers.has('user-agent') && env.config.userAgent) headers.push('user-agent', env.config.userAgent);
+  if (!s.headers.has('user-agent') && env.config.userAgent)
+    headers.push('user-agent', env.config.userAgent);
   if (!s.headers.has('accept')) headers.push('accept', '*/*');
   const redirect = s.redirect === 'error' ? 1 : s.redirect === 'manual' ? 2 : 0;
   // Fetch keeps the fragment in request.url but never sends it.
@@ -344,7 +439,10 @@ async function httpFetch(ctx: FetchContext, request: Request): Promise<Response>
     // The native callback must not keep the Response alive (it would pin an unread body forever), so
     // nothing it captures may reach it: the settle functions are dropped once used (a settled promise
     // holds its value), and it holds the body's sink, not the body.
-    let settle: { resolve: (r: Response) => void; reject: (e: unknown) => void } | null = { resolve, reject };
+    let settle: {
+      resolve: (r: Response) => void;
+      reject: (e: unknown) => void;
+    } | null = { resolve, reject };
     const settleWith = (r: Response | null, e?: unknown) => {
       const p = settle;
       settle = null;
@@ -364,22 +462,43 @@ async function httpFetch(ctx: FetchContext, request: Request): Promise<Response>
       else sink?.fail(reason);
     };
     const id = natives.httpStart(
-      { url: wireUrl, method: s.method, headers, body: body && body.byteLength ? body : null, redirect, timeoutMs: env.config.timeoutMs },
+      {
+        url: wireUrl,
+        method: s.method,
+        headers,
+        body: body && body.byteLength ? body : null,
+        redirect,
+        timeoutMs: env.config.timeoutMs,
+      },
       (type: number, ...args: unknown[]) => {
         if (done && type !== HTTP_DATA) return;
         switch (type) {
           case HTTP_HEAD: {
             headSeen = true;
-            const [status, statusText, flat, finalUrl, flags] = args as [number, string, string[], string, number];
+            const [status, statusText, flat, finalUrl, flags] = args as [
+              number,
+              string,
+              string[],
+              string,
+              number,
+            ];
             if (flags & 2) {
               done = true;
               s.signal.removeEventListener('abort', onAbort);
               settleWith(
-                makeResponse({ type: 'opaqueredirect', status: 0, statusText: '', body: null, url: s.url.href, headersGuard: 'immutable' }),
+                makeResponse({
+                  type: 'opaqueredirect',
+                  status: 0,
+                  statusText: '',
+                  body: null,
+                  url: s.url.href,
+                  headersGuard: 'immutable',
+                }),
               );
               return;
             }
-            const nullBody = s.method === 'HEAD' || [101, 103, 204, 205, 304].includes(status);
+            const nullBody =
+              s.method === 'HEAD' || [101, 103, 204, 205, 304].includes(status);
             sink = new NetworkSink(
               (bytes) => natives.httpAck(id, bytes),
               () => {
@@ -396,7 +515,12 @@ async function httpFetch(ctx: FetchContext, request: Request): Promise<Response>
                 status,
                 statusText,
                 headers: respHeaders,
-                body: nullBody ? null : InnerBody.fromSource(new NetworkBody(sink), Number.isFinite(len) ? len : null),
+                body: nullBody
+                  ? null
+                  : InnerBody.fromSource(
+                      new NetworkBody(sink),
+                      Number.isFinite(len) ? len : null,
+                    ),
                 url: finalUrl,
                 redirected: (flags & 1) !== 0,
                 env,
@@ -405,7 +529,8 @@ async function httpFetch(ctx: FetchContext, request: Request): Promise<Response>
             return;
           }
           case HTTP_DATA:
-            if (sink && !done) sink.push(new Uint8Array(args[0] as ArrayBuffer));
+            if (sink && !done)
+              sink.push(new Uint8Array(args[0] as ArrayBuffer));
             return;
           case HTTP_END:
             done = true;
@@ -419,7 +544,10 @@ async function httpFetch(ctx: FetchContext, request: Request): Promise<Response>
             const err =
               kind === 'aborted' && s.signal.aborted
                 ? abortReason(s.signal)
-                : networkError(`Failed to fetch ${s.url.href}: ${message || kind}`, { kind, message });
+                : networkError(
+                    `Failed to fetch ${s.url.href}: ${message || kind}`,
+                    { kind, message },
+                  );
             if (kind === 'blocked') ctx.blocked.report(s.url, 'not-listed');
             if (!headSeen) settleWith(null, err);
             else sink?.fail(err);

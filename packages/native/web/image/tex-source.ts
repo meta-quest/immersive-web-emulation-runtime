@@ -9,7 +9,12 @@
 // stream's drawImage/createPattern): validates the source as WebGL 2.0 §5.14.8/GL-17 and HTML drawImage require and
 // returns the pixel descriptor. Contract: runtime/image/INTEROP.md.
 
-import { type ImageSourceDescriptor, isImageSourceProvider, isVideoLike, IMAGE_SOURCE } from './source.ts';
+import {
+  type ImageSourceDescriptor,
+  isImageSourceProvider,
+  isVideoLike,
+  IMAGE_SOURCE,
+} from './source.ts';
 
 /**
  * Returns the source's pixels or throws:
@@ -19,12 +24,19 @@ import { type ImageSourceDescriptor, isImageSourceProvider, isVideoLike, IMAGE_S
  *    broken, or a detached ImageData.
  * `api` names the calling method for error messages, e.g. "texImage2D" on "WebGL2RenderingContext".
  */
-export function getImageSource(source: unknown, api = 'texImage2D'): ImageSourceDescriptor {
+export function getImageSource(
+  source: unknown,
+  api = 'texImage2D',
+): ImageSourceDescriptor {
   if (isVideoLike(source)) {
-    throw new TypeError(`Failed to execute '${api}': video sources are not supported by this runtime.`);
+    throw new TypeError(
+      `Failed to execute '${api}': video sources are not supported by this runtime.`,
+    );
   }
   if (!isImageSourceProvider(source)) {
-    throw new TypeError(`Failed to execute '${api}': The provided value is not an image source.`);
+    throw new TypeError(
+      `Failed to execute '${api}': The provided value is not an image source.`,
+    );
   }
   return source[IMAGE_SOURCE]();
 }

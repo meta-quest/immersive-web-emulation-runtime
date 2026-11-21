@@ -10,7 +10,11 @@
 // (`subtle: 'digest'`, NET-STORE-4); otherwise it does nothing.
 import { createSubtle, SubtleCrypto } from './subtle.ts';
 
-const registry = (globalThis as unknown as Record<symbol, { installSubtle?(ctor: Function, instance: object): boolean } | undefined>)[
-  Symbol.for('iwn.glue')
-];
-if (registry?.installSubtle) registry.installSubtle(SubtleCrypto, createSubtle());
+const registry = (
+  globalThis as unknown as Record<
+    symbol,
+    { installSubtle?(ctor: Function, instance: object): boolean } | undefined
+  >
+)[Symbol.for('iwn.glue')];
+if (registry?.installSubtle)
+  registry.installSubtle(SubtleCrypto, createSubtle());

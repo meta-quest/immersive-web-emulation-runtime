@@ -11,7 +11,8 @@
 import { utf8Encode } from '../encoding.ts';
 
 const HEX: string[] = [];
-for (let i = 0; i < 256; i++) HEX.push(`%${i.toString(16).toUpperCase().padStart(2, '0')}`);
+for (let i = 0; i < 256; i++)
+  HEX.push(`%${i.toString(16).toUpperCase().padStart(2, '0')}`);
 
 export function percentEncodeAfterEncoding(
   encoding: string,
@@ -20,14 +21,21 @@ export function percentEncodeAfterEncoding(
   spaceAsPlus = false,
 ): string {
   if (String(encoding).toLowerCase() !== 'utf-8') {
-    throw new RangeError(`percentEncodeAfterEncoding: only UTF-8 is supported (got ${encoding})`);
+    throw new RangeError(
+      `percentEncodeAfterEncoding: only UTF-8 is supported (got ${encoding})`,
+    );
   }
   const bytes = utf8Encode(input);
   let out = '';
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i]!;
     if (spaceAsPlus && b === 0x20) out += '+';
-    else if (b < 0x20 || b > 0x7e || percentEncodeSet.includes(String.fromCharCode(b))) out += HEX[b];
+    else if (
+      b < 0x20 ||
+      b > 0x7e ||
+      percentEncodeSet.includes(String.fromCharCode(b))
+    )
+      out += HEX[b];
     else out += String.fromCharCode(b);
   }
   return out;

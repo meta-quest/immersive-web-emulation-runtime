@@ -75,7 +75,9 @@ export class NativeHostBackend implements XRHostBackend {
     // the app's persisted anchors live in localStorage's runtime entries, which the page cannot clear (anchors.ts)
     this.anchors = new NativeAnchors(
       natives,
-      () => (globalThis as { __iwnRuntimeStorage?: RuntimeStore }).__iwnRuntimeStorage ?? null,
+      () =>
+        (globalThis as { __iwnRuntimeStorage?: RuntimeStore })
+          .__iwnRuntimeStorage ?? null,
     );
   }
 
@@ -89,7 +91,7 @@ export class NativeHostBackend implements XRHostBackend {
       o.passthrough === true,
       o.unpremultiplied === true,
     );
-    if (!r) return null;  // IWER throws OperationError from the layer constructor
+    if (!r) return null; // IWER throws OperationError from the layer constructor
     this.gfx.onSwapchain(r.arraySize);
     const answer: XRHostSwapchain = {
       width: r.width,
@@ -106,7 +108,9 @@ export class NativeHostBackend implements XRHostBackend {
   }
 
   /** A quad or cylinder layer's own swapchain (XR-LAYER-1): sized by IWER in pixels, `id` for later calls. */
-  private beginLayerSwapchain(o: XRHostSwapchainOptions): XRHostSwapchain | null {
+  private beginLayerSwapchain(
+    o: XRHostSwapchainOptions,
+  ): XRHostSwapchain | null {
     const begin = this.natives.beginLayerSwapchain;
     if (!begin || !this.layers) return null;
     // a 'texture-array' layer is drawn through a TEXTURE_2D_ARRAY, also a mono one (an array of one layer)
@@ -122,9 +126,14 @@ export class NativeHostBackend implements XRHostBackend {
       o.mipLevels ?? 1,
       textureArray,
     );
-    if (!r) return null;  // IWER throws OperationError from createQuadLayer / createCylinderLayer
+    if (!r) return null; // IWER throws OperationError from createQuadLayer / createCylinderLayer
     this.gfx.addLayer(r.id, textureArray);
-    return { id: r.id, width: r.width, height: r.height, arraySize: r.arraySize };
+    return {
+      id: r.id,
+      width: r.width,
+      height: r.height,
+      arraySize: r.arraySize,
+    };
   }
 
   /** layer.destroy(). */
@@ -171,14 +180,22 @@ export class NativeHostBackend implements XRHostBackend {
    * clear runs here (graphics.ts).
    */
   getDepth(): XRHostDepth | null {
-    const depth = this.depthRecord ? this.depthRecord.read(this.depthTexture) : null;
+    const depth = this.depthRecord
+      ? this.depthRecord.read(this.depthTexture)
+      : null;
     this.gfx.clearSessionImage();
     return depth;
   }
 
   /** XR-DEPTH-2 matchDepthView: the frame's depth laid out in the render views (depth-reproject.ts), or null. */
   reprojectDepth(depth: XRHostDepth, matrices: Float32Array): object | null {
-    return this.gfx.reprojectDepth(depth.texture, depth.width, depth.height, depth.viewCount, matrices);
+    return this.gfx.reprojectDepth(
+      depth.texture,
+      depth.width,
+      depth.height,
+      depth.viewCount,
+      matrices,
+    );
   }
 
   getOpaqueColorTexture(): object | null {

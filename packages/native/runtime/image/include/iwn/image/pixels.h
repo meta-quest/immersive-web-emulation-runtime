@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Pixel storage shared by the image decoder, ImageBitmap/HTMLImageElement handles and the consumers that upload or
 // draw them (the WebGL binding, Canvas 2D). Plain C++ (no V8), so it builds and is tested on the x86_64 host.
 //

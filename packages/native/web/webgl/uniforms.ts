@@ -12,7 +12,11 @@
 
 import type { Ctx } from './core.ts';
 import * as E from './gen/enums.gen.ts';
-import { WebGLProgram, WebGLUniformLocation, type UniformCell } from './objects.ts';
+import {
+  WebGLProgram,
+  WebGLUniformLocation,
+  type UniformCell,
+} from './objects.ts';
 import { programExtras } from './programs.ts';
 import { f32List, i32List, u32List, viewRange, range } from './views.ts';
 
@@ -26,14 +30,31 @@ const T_MAT = 6;
 
 /** uniform type -> [family, components] */
 const TYPE_INFO = new Map<number, readonly [number, number]>([
-  [E.FLOAT, [T_FLOAT, 1]], [E.FLOAT_VEC2, [T_FLOAT, 2]], [E.FLOAT_VEC3, [T_FLOAT, 3]], [E.FLOAT_VEC4, [T_FLOAT, 4]],
-  [E.INT, [T_INT, 1]], [E.INT_VEC2, [T_INT, 2]], [E.INT_VEC3, [T_INT, 3]], [E.INT_VEC4, [T_INT, 4]],
-  [E.UNSIGNED_INT, [T_UINT, 1]], [E.UNSIGNED_INT_VEC2, [T_UINT, 2]], [E.UNSIGNED_INT_VEC3, [T_UINT, 3]],
+  [E.FLOAT, [T_FLOAT, 1]],
+  [E.FLOAT_VEC2, [T_FLOAT, 2]],
+  [E.FLOAT_VEC3, [T_FLOAT, 3]],
+  [E.FLOAT_VEC4, [T_FLOAT, 4]],
+  [E.INT, [T_INT, 1]],
+  [E.INT_VEC2, [T_INT, 2]],
+  [E.INT_VEC3, [T_INT, 3]],
+  [E.INT_VEC4, [T_INT, 4]],
+  [E.UNSIGNED_INT, [T_UINT, 1]],
+  [E.UNSIGNED_INT_VEC2, [T_UINT, 2]],
+  [E.UNSIGNED_INT_VEC3, [T_UINT, 3]],
   [E.UNSIGNED_INT_VEC4, [T_UINT, 4]],
-  [E.BOOL, [T_BOOL, 1]], [E.BOOL_VEC2, [T_BOOL, 2]], [E.BOOL_VEC3, [T_BOOL, 3]], [E.BOOL_VEC4, [T_BOOL, 4]],
-  [E.FLOAT_MAT2, [T_MAT, 4]], [E.FLOAT_MAT3, [T_MAT, 9]], [E.FLOAT_MAT4, [T_MAT, 16]],
-  [E.FLOAT_MAT2x3, [T_MAT, 6]], [E.FLOAT_MAT2x4, [T_MAT, 8]], [E.FLOAT_MAT3x2, [T_MAT, 6]],
-  [E.FLOAT_MAT3x4, [T_MAT, 12]], [E.FLOAT_MAT4x2, [T_MAT, 8]], [E.FLOAT_MAT4x3, [T_MAT, 12]],
+  [E.BOOL, [T_BOOL, 1]],
+  [E.BOOL_VEC2, [T_BOOL, 2]],
+  [E.BOOL_VEC3, [T_BOOL, 3]],
+  [E.BOOL_VEC4, [T_BOOL, 4]],
+  [E.FLOAT_MAT2, [T_MAT, 4]],
+  [E.FLOAT_MAT3, [T_MAT, 9]],
+  [E.FLOAT_MAT4, [T_MAT, 16]],
+  [E.FLOAT_MAT2x3, [T_MAT, 6]],
+  [E.FLOAT_MAT2x4, [T_MAT, 8]],
+  [E.FLOAT_MAT3x2, [T_MAT, 6]],
+  [E.FLOAT_MAT3x4, [T_MAT, 12]],
+  [E.FLOAT_MAT4x2, [T_MAT, 8]],
+  [E.FLOAT_MAT4x3, [T_MAT, 12]],
 ]);
 function typeInfo(type: number): readonly [number, number] {
   return TYPE_INFO.get(type) ?? [T_SAMPLER, 1];
@@ -46,9 +67,16 @@ const MAX_CACHED = 256;
  * Validate a location for an upload of `family` (1 f, 2 i, 3 ui, 6 matrix) with `comps` components.
  * Returns the record entry index or -1 (null location: silently -1 without error).
  */
-function check(ctx: Ctx, loc: unknown, family: number, comps: number, what: string): WebGLUniformLocation | null {
+function check(
+  ctx: Ctx,
+  loc: unknown,
+  family: number,
+  comps: number,
+  what: string,
+): WebGLUniformLocation | null {
   if (loc === null || loc === undefined) return null;
-  if (!(loc instanceof WebGLUniformLocation)) throw new TypeError(`${what}: location is not a WebGLUniformLocation`);
+  if (!(loc instanceof WebGLUniformLocation))
+    throw new TypeError(`${what}: location is not a WebGLUniformLocation`);
   const p = loc._program;
   if (ctx._program !== p || loc._linkGen !== p._linkGen || p._ctx !== ctx) {
     ctx._e(E.INVALID_OPERATION, what);
@@ -57,7 +85,12 @@ function check(ctx: Ctx, loc: unknown, family: number, comps: number, what: stri
   if (loc._family === 0) describe(loc);
   const f = loc._family;
   const c = loc._comps;
-  const ok = f === family ? c === comps : f === T_BOOL ? family !== T_MAT && c === comps : f === T_SAMPLER && family === T_INT && comps === 1;
+  const ok =
+    f === family
+      ? c === comps
+      : f === T_BOOL
+        ? family !== T_MAT && c === comps
+        : f === T_SAMPLER && family === T_INT && comps === 1;
   if (!ok) {
     ctx._e(E.INVALID_OPERATION, what);
     return null;
@@ -76,7 +109,14 @@ function describe(loc: WebGLUniformLocation): void {
   loc._remaining = u.size - loc._element;
 }
 
-function samplerValue(ctx: Ctx, loc: WebGLUniformLocation, values: ArrayLike<number>, off: number, count: number, what: string): boolean {
+function samplerValue(
+  ctx: Ctx,
+  loc: WebGLUniformLocation,
+  values: ArrayLike<number>,
+  off: number,
+  count: number,
+  what: string,
+): boolean {
   if (loc._family !== T_SAMPLER) return true;
   const p = loc._program;
   const u = p._record!.uniforms[loc._uniform];
@@ -89,8 +129,10 @@ function samplerValue(ctx: Ctx, loc: WebGLUniformLocation, values: ArrayLike<num
   }
   const units = programExtras(p).samplerUnits;
   const n = Math.min(count, u.size - loc._element);
-  for (let i = 0; i < n; i++) units.set(loc._uniform * 4096 + loc._element + i, values[off + i]);
-  if (ctx._drawFbo && ctx._drawFbo._texAttachments) ctx._feedbackDirty = true; ctx._texDirty = true;
+  for (let i = 0; i < n; i++)
+    units.set(loc._uniform * 4096 + loc._element + i, values[off + i]);
+  if (ctx._drawFbo && ctx._drawFbo._texAttachments) ctx._feedbackDirty = true;
+  ctx._texDirty = true;
   return true;
 }
 
@@ -126,11 +168,25 @@ function invalidateSiblings(cell: UniformCell): void {
 }
 
 /** Scalar-argument uploads (uniform4f & co.): cache compare on the scratch values. */
-function cachedF(loc: WebGLUniformLocation, tag: number, n: number, a: number, b: number, c: number, d: number): boolean {
+function cachedF(
+  loc: WebGLUniformLocation,
+  tag: number,
+  n: number,
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+): boolean {
   const cell = cellOf(loc);
   let cache = cell.f;
   if (cell.tag === tag && cell.len === n && cache !== null) {
-    if (cache[0] === Math.fround(a) && (n < 2 || cache[1] === Math.fround(b)) && (n < 3 || cache[2] === Math.fround(c)) && (n < 4 || cache[3] === Math.fround(d))) return true;
+    if (
+      cache[0] === Math.fround(a) &&
+      (n < 2 || cache[1] === Math.fround(b)) &&
+      (n < 3 || cache[2] === Math.fround(c)) &&
+      (n < 4 || cache[3] === Math.fround(d))
+    )
+      return true;
   }
   if (cache === null || cache.length < 4) cache = cell.f = new Float32Array(4);
   cache[0] = a;
@@ -142,11 +198,25 @@ function cachedF(loc: WebGLUniformLocation, tag: number, n: number, a: number, b
   invalidateSiblings(cell);
   return false;
 }
-function cachedI(loc: WebGLUniformLocation, tag: number, n: number, a: number, b: number, c: number, d: number): boolean {
+function cachedI(
+  loc: WebGLUniformLocation,
+  tag: number,
+  n: number,
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+): boolean {
   const cell = cellOf(loc);
   let cache = cell.i;
   if (cell.tag === tag && cell.len === n && cache !== null) {
-    if (cache[0] === (a | 0) && (n < 2 || cache[1] === (b | 0)) && (n < 3 || cache[2] === (c | 0)) && (n < 4 || cache[3] === (d | 0))) return true;
+    if (
+      cache[0] === (a | 0) &&
+      (n < 2 || cache[1] === (b | 0)) &&
+      (n < 3 || cache[2] === (c | 0)) &&
+      (n < 4 || cache[3] === (d | 0))
+    )
+      return true;
   }
   if (cache === null || cache.length < 4) cache = cell.i = new Int32Array(4);
   cache[0] = a;
@@ -160,7 +230,13 @@ function cachedI(loc: WebGLUniformLocation, tag: number, n: number, a: number, b
 }
 
 /** Array uploads: compare `len` elements at `src[off..]` with the cache; store when different. */
-function cachedArrayF(loc: WebGLUniformLocation, tag: number, src: Float32Array, off: number, len: number): boolean {
+function cachedArrayF(
+  loc: WebGLUniformLocation,
+  tag: number,
+  src: Float32Array,
+  off: number,
+  len: number,
+): boolean {
   const cell = cellOf(loc);
   if (len > MAX_CACHED) {
     cell.tag = 0;
@@ -173,14 +249,21 @@ function cachedArrayF(loc: WebGLUniformLocation, tag: number, src: Float32Array,
     for (; i < len; i++) if (cache[i] !== src[off + i]) break;
     if (i === len) return true;
   }
-  if (cache === null || cache.length < len) cache = cell.f = new Float32Array(Math.max(4, len));
+  if (cache === null || cache.length < len)
+    cache = cell.f = new Float32Array(Math.max(4, len));
   for (let i = 0; i < len; i++) cache[i] = src[off + i];
   cell.tag = tag;
   cell.len = len;
   invalidateSiblings(cell);
   return false;
 }
-function cachedArrayI(loc: WebGLUniformLocation, tag: number, src: Int32Array | Uint32Array, off: number, len: number): boolean {
+function cachedArrayI(
+  loc: WebGLUniformLocation,
+  tag: number,
+  src: Int32Array | Uint32Array,
+  off: number,
+  len: number,
+): boolean {
   const cell = cellOf(loc);
   if (len > MAX_CACHED) {
     cell.tag = 0;
@@ -193,7 +276,8 @@ function cachedArrayI(loc: WebGLUniformLocation, tag: number, src: Int32Array | 
     for (; i < len; i++) if (cache[i] !== (src[off + i] | 0)) break;
     if (i === len) return true;
   }
-  if (cache === null || cache.length < len) cache = cell.i = new Int32Array(Math.max(4, len));
+  if (cache === null || cache.length < len)
+    cache = cell.i = new Int32Array(Math.max(4, len));
   for (let i = 0; i < len; i++) cache[i] = src[off + i];
   cell.tag = tag;
   cell.len = len;
@@ -201,7 +285,16 @@ function cachedArrayI(loc: WebGLUniformLocation, tag: number, src: Int32Array | 
   return false;
 }
 
-function scalarF(ctx: Ctx, loc: unknown, n: number, a: number, b: number, c: number, d: number, what: string): void {
+function scalarF(
+  ctx: Ctx,
+  loc: unknown,
+  n: number,
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  what: string,
+): void {
   if (ctx._skip()) return;
   const l = check(ctx, loc, T_FLOAT, n, what);
   if (l === null) return;
@@ -213,7 +306,17 @@ function scalarF(ctx: Ctx, loc: unknown, n: number, a: number, b: number, c: num
   else g.uniform4f(l._loc, a, b, c, d);
 }
 
-function scalarI(ctx: Ctx, loc: unknown, unsigned: boolean, n: number, a: number, b: number, c: number, d: number, what: string): void {
+function scalarI(
+  ctx: Ctx,
+  loc: unknown,
+  unsigned: boolean,
+  n: number,
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  what: string,
+): void {
   if (ctx._skip()) return;
   const l = check(ctx, loc, unsigned ? T_UINT : T_INT, n, what);
   if (l === null) return;
@@ -251,7 +354,11 @@ function vector(
 ): void {
   if (ctx._skip()) return;
   const isF = family === T_FLOAT || family === T_MAT;
-  const list = isF ? f32List(ctx, data, what) : family === T_UINT ? u32List(ctx, data, what) : i32List(ctx, data, what);
+  const list = isF
+    ? f32List(ctx, data, what)
+    : family === T_UINT
+      ? u32List(ctx, data, what)
+      : i32List(ctx, data, what);
   const converted = list !== data;
   const total = converted ? (data as ArrayLike<unknown>).length : list.length;
   const l = check(ctx, loc, family, comps, what);
@@ -263,13 +370,15 @@ function vector(
   if (srcOffset !== undefined && ctx._v2) {
     const so = srcOffset >>> 0;
     const sl = (srcLength ?? 0) >>> 0;
-    if (so > total || (sl !== 0 && so + sl > total)) return ctx._e(E.INVALID_VALUE, what);
+    if (so > total || (sl !== 0 && so + sl > total))
+      return ctx._e(E.INVALID_VALUE, what);
     off = so;
     len = sl === 0 ? total - so : sl;
   }
   if (len === 0 || len % comps !== 0) return ctx._e(E.INVALID_VALUE, what);
   if (l === null) return;
-  if (family === T_MAT && transpose && !ctx._v2) return ctx._e(E.INVALID_VALUE, what);
+  if (family === T_MAT && transpose && !ctx._v2)
+    return ctx._e(E.INVALID_VALUE, what);
   let count = len / comps;
   if (count > 1 && !l._isArray) return ctx._e(E.INVALID_OPERATION, what);
   const remaining = l._remaining;
@@ -277,9 +386,20 @@ function vector(
     count = remaining;
     len = count * comps;
   }
-  if (family === T_INT && comps === 1 && !samplerValue(ctx, l, list as Int32Array, off, count, what)) return;
-  const tag = (family === T_MAT ? 192 + (transpose ? 128 : 0) : family * 32) + comps;
-  if (isF ? cachedArrayF(l, tag, list as Float32Array, off, len) : cachedArrayI(l, tag, list as Int32Array, off, len)) return;
+  if (
+    family === T_INT &&
+    comps === 1 &&
+    !samplerValue(ctx, l, list as Int32Array, off, count, what)
+  )
+    return;
+  const tag =
+    (family === T_MAT ? 192 + (transpose ? 128 : 0) : family * 32) + comps;
+  if (
+    isF
+      ? cachedArrayF(l, tag, list as Float32Array, off, len)
+      : cachedArrayI(l, tag, list as Int32Array, off, len)
+  )
+    return;
   const g = ctx._n;
   const bo = off * 4;
   const bytes = len * 4;
@@ -303,11 +423,31 @@ function vector(
     else if (comps === 3) g.uniform3uiv(loc_, count, v, bo, bytes);
     else g.uniform4uiv(loc_, count, v, bo, bytes);
   } else {
-    matrixCall(ctx, loc_, count, transpose, list as Float32Array, bo, bytes, comps, l._type);
+    matrixCall(
+      ctx,
+      loc_,
+      count,
+      transpose,
+      list as Float32Array,
+      bo,
+      bytes,
+      comps,
+      l._type,
+    );
   }
 }
 
-function matrixCall(ctx: Ctx, loc: number, count: number, t: boolean, f: Float32Array, bo: number, bytes: number, comps: number, type: number): void {
+function matrixCall(
+  ctx: Ctx,
+  loc: number,
+  count: number,
+  t: boolean,
+  f: Float32Array,
+  bo: number,
+  bytes: number,
+  comps: number,
+  type: number,
+): void {
   const g = ctx._n;
   switch (type) {
     case E.FLOAT_MAT2:
@@ -333,8 +473,22 @@ function matrixCall(ctx: Ctx, loc: number, count: number, t: boolean, f: Float32
 }
 
 /** Matrix uploads: the method's shape must equal the uniform's type. */
-function matrix(ctx: Ctx, loc: unknown, type: number, transpose: unknown, data: unknown, so: number | undefined, sl: number | undefined, what: string): void {
-  if (loc instanceof WebGLUniformLocation && loc._program._record && loc._program === ctx._program && loc._linkGen === loc._program._linkGen) {
+function matrix(
+  ctx: Ctx,
+  loc: unknown,
+  type: number,
+  transpose: unknown,
+  data: unknown,
+  so: number | undefined,
+  sl: number | undefined,
+  what: string,
+): void {
+  if (
+    loc instanceof WebGLUniformLocation &&
+    loc._program._record &&
+    loc._program === ctx._program &&
+    loc._linkGen === loc._program._linkGen
+  ) {
     const u = loc._program._record.uniforms[loc._uniform];
     if (u.type !== type) {
       if (ctx._skip()) return;
@@ -348,107 +502,436 @@ export const uniformMethods = {
   uniform1f(this: Ctx, loc: WebGLUniformLocation | null, x: number): void {
     scalarF(this, loc, 1, +x, 0, 0, 0, 'uniform1f');
   },
-  uniform2f(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number): void {
+  uniform2f(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+  ): void {
     scalarF(this, loc, 2, +x, +y, 0, 0, 'uniform2f');
   },
-  uniform3f(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number, z: number): void {
+  uniform3f(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+    z: number,
+  ): void {
     scalarF(this, loc, 3, +x, +y, +z, 0, 'uniform3f');
   },
-  uniform4f(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number, z: number, w: number): void {
+  uniform4f(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+  ): void {
     scalarF(this, loc, 4, +x, +y, +z, +w, 'uniform4f');
   },
   uniform1i(this: Ctx, loc: WebGLUniformLocation | null, x: number): void {
     scalarI(this, loc, false, 1, x | 0, 0, 0, 0, 'uniform1i');
   },
-  uniform2i(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number): void {
+  uniform2i(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+  ): void {
     scalarI(this, loc, false, 2, x | 0, y | 0, 0, 0, 'uniform2i');
   },
-  uniform3i(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number, z: number): void {
+  uniform3i(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+    z: number,
+  ): void {
     scalarI(this, loc, false, 3, x | 0, y | 0, z | 0, 0, 'uniform3i');
   },
-  uniform4i(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number, z: number, w: number): void {
+  uniform4i(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+  ): void {
     scalarI(this, loc, false, 4, x | 0, y | 0, z | 0, w | 0, 'uniform4i');
   },
   uniform1ui(this: Ctx, loc: WebGLUniformLocation | null, x: number): void {
     scalarI(this, loc, true, 1, x >>> 0, 0, 0, 0, 'uniform1ui');
   },
-  uniform2ui(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number): void {
+  uniform2ui(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+  ): void {
     scalarI(this, loc, true, 2, x >>> 0, y >>> 0, 0, 0, 'uniform2ui');
   },
-  uniform3ui(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number, z: number): void {
+  uniform3ui(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+    z: number,
+  ): void {
     scalarI(this, loc, true, 3, x >>> 0, y >>> 0, z >>> 0, 0, 'uniform3ui');
   },
-  uniform4ui(this: Ctx, loc: WebGLUniformLocation | null, x: number, y: number, z: number, w: number): void {
-    scalarI(this, loc, true, 4, x >>> 0, y >>> 0, z >>> 0, w >>> 0, 'uniform4ui');
+  uniform4ui(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+  ): void {
+    scalarI(
+      this,
+      loc,
+      true,
+      4,
+      x >>> 0,
+      y >>> 0,
+      z >>> 0,
+      w >>> 0,
+      'uniform4ui',
+    );
   },
-  uniform1fv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
+  uniform1fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
     vector(this, loc, T_FLOAT, 1, v, srcOffset, srcLength, false, 'uniform1fv');
   },
-  uniform2fv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
+  uniform2fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
     vector(this, loc, T_FLOAT, 2, v, srcOffset, srcLength, false, 'uniform2fv');
   },
-  uniform3fv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
+  uniform3fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
     vector(this, loc, T_FLOAT, 3, v, srcOffset, srcLength, false, 'uniform3fv');
   },
-  uniform4fv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
+  uniform4fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
     vector(this, loc, T_FLOAT, 4, v, srcOffset, srcLength, false, 'uniform4fv');
   },
-  uniform1iv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
+  uniform1iv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
     vector(this, loc, T_INT, 1, v, srcOffset, srcLength, false, 'uniform1iv');
   },
-  uniform2iv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
+  uniform2iv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
     vector(this, loc, T_INT, 2, v, srcOffset, srcLength, false, 'uniform2iv');
   },
-  uniform3iv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
+  uniform3iv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
     vector(this, loc, T_INT, 3, v, srcOffset, srcLength, false, 'uniform3iv');
   },
-  uniform4iv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
+  uniform4iv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
     vector(this, loc, T_INT, 4, v, srcOffset, srcLength, false, 'uniform4iv');
   },
-  uniform1uiv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
-    vector(this, loc, T_UINT, 1, v, srcOffset ?? 0, srcLength, false, 'uniform1uiv');
+  uniform1uiv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    vector(
+      this,
+      loc,
+      T_UINT,
+      1,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      false,
+      'uniform1uiv',
+    );
   },
-  uniform2uiv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
-    vector(this, loc, T_UINT, 2, v, srcOffset ?? 0, srcLength, false, 'uniform2uiv');
+  uniform2uiv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    vector(
+      this,
+      loc,
+      T_UINT,
+      2,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      false,
+      'uniform2uiv',
+    );
   },
-  uniform3uiv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
-    vector(this, loc, T_UINT, 3, v, srcOffset ?? 0, srcLength, false, 'uniform3uiv');
+  uniform3uiv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    vector(
+      this,
+      loc,
+      T_UINT,
+      3,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      false,
+      'uniform3uiv',
+    );
   },
-  uniform4uiv(this: Ctx, loc: WebGLUniformLocation | null, v: unknown, srcOffset?: number, srcLength?: number): void {
-    vector(this, loc, T_UINT, 4, v, srcOffset ?? 0, srcLength, false, 'uniform4uiv');
+  uniform4uiv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    vector(
+      this,
+      loc,
+      T_UINT,
+      4,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      false,
+      'uniform4uiv',
+    );
   },
-  uniformMatrix2fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT2, transpose, v, srcOffset, srcLength, 'uniformMatrix2fv');
+  uniformMatrix2fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT2,
+      transpose,
+      v,
+      srcOffset,
+      srcLength,
+      'uniformMatrix2fv',
+    );
   },
-  uniformMatrix3fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT3, transpose, v, srcOffset, srcLength, 'uniformMatrix3fv');
+  uniformMatrix3fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT3,
+      transpose,
+      v,
+      srcOffset,
+      srcLength,
+      'uniformMatrix3fv',
+    );
   },
-  uniformMatrix4fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT4, transpose, v, srcOffset, srcLength, 'uniformMatrix4fv');
+  uniformMatrix4fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT4,
+      transpose,
+      v,
+      srcOffset,
+      srcLength,
+      'uniformMatrix4fv',
+    );
   },
-  uniformMatrix2x3fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT2x3, transpose, v, srcOffset ?? 0, srcLength, 'uniformMatrix2x3fv');
+  uniformMatrix2x3fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT2x3,
+      transpose,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      'uniformMatrix2x3fv',
+    );
   },
-  uniformMatrix3x2fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT3x2, transpose, v, srcOffset ?? 0, srcLength, 'uniformMatrix3x2fv');
+  uniformMatrix3x2fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT3x2,
+      transpose,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      'uniformMatrix3x2fv',
+    );
   },
-  uniformMatrix2x4fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT2x4, transpose, v, srcOffset ?? 0, srcLength, 'uniformMatrix2x4fv');
+  uniformMatrix2x4fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT2x4,
+      transpose,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      'uniformMatrix2x4fv',
+    );
   },
-  uniformMatrix4x2fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT4x2, transpose, v, srcOffset ?? 0, srcLength, 'uniformMatrix4x2fv');
+  uniformMatrix4x2fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT4x2,
+      transpose,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      'uniformMatrix4x2fv',
+    );
   },
-  uniformMatrix3x4fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT3x4, transpose, v, srcOffset ?? 0, srcLength, 'uniformMatrix3x4fv');
+  uniformMatrix3x4fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT3x4,
+      transpose,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      'uniformMatrix3x4fv',
+    );
   },
-  uniformMatrix4x3fv(this: Ctx, loc: WebGLUniformLocation | null, transpose: boolean, v: unknown, srcOffset?: number, srcLength?: number): void {
-    matrix(this, loc, E.FLOAT_MAT4x3, transpose, v, srcOffset ?? 0, srcLength, 'uniformMatrix4x3fv');
+  uniformMatrix4x3fv(
+    this: Ctx,
+    loc: WebGLUniformLocation | null,
+    transpose: boolean,
+    v: unknown,
+    srcOffset?: number,
+    srcLength?: number,
+  ): void {
+    matrix(
+      this,
+      loc,
+      E.FLOAT_MAT4x3,
+      transpose,
+      v,
+      srcOffset ?? 0,
+      srcLength,
+      'uniformMatrix4x3fv',
+    );
   },
-  getUniform(this: Ctx, program: WebGLProgram, location: WebGLUniformLocation): unknown {
+  getUniform(
+    this: Ctx,
+    program: WebGLProgram,
+    location: WebGLUniformLocation,
+  ): unknown {
     if (this._skip()) return null;
     if (!this._ok(program, WebGLProgram, false, 'getUniform')) return null;
-    if (!(location instanceof WebGLUniformLocation)) throw new TypeError('getUniform: location is not a WebGLUniformLocation');
-    if (location._program !== program || location._linkGen !== program._linkGen || !program._record?.linked) {
+    if (!(location instanceof WebGLUniformLocation))
+      throw new TypeError('getUniform: location is not a WebGLUniformLocation');
+    if (
+      location._program !== program ||
+      location._linkGen !== program._linkGen ||
+      !program._record?.linked
+    ) {
       this._e(E.INVALID_OPERATION, 'getUniform');
       return null;
     }
@@ -470,7 +953,10 @@ export const uniformMethods = {
     const out = new Int32Array(4);
     void out.buffer;
     n.getUniformiv(program._name, location._loc, out, 0, comps * 4);
-    if (family === T_BOOL) return comps === 1 ? out[0] !== 0 : Array.from(out.slice(0, comps), (v) => v !== 0);
+    if (family === T_BOOL)
+      return comps === 1
+        ? out[0] !== 0
+        : Array.from(out.slice(0, comps), (v) => v !== 0);
     return comps === 1 ? out[0] : out.slice(0, comps);
   },
 };

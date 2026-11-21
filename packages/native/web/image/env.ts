@@ -9,7 +9,11 @@
 // glue's registry (blob URL store, trusted event dispatch, event handler attributes; web/glue/src/index.ts), fetch,
 // the base URL, DOMException and a task queue. Everything is injectable so tests run in plain Node.
 
-import type { ImageNatives, NativeImageHandle, NativeProcessOptions } from './natives.ts';
+import type {
+  ImageNatives,
+  NativeImageHandle,
+  NativeProcessOptions,
+} from './natives.ts';
 
 /** The subset of the glue registry (globalThis[Symbol.for('iwn.glue')]) used here. */
 interface GlueRegistryLike {
@@ -33,7 +37,12 @@ export interface ResponseLike {
 export interface ImageEnv {
   natives: ImageNatives;
   /** Network / asset fetch (same-origin assets, allowlisted origins; NET rules apply inside it). */
-  fetch: ((url: string, init?: { signal?: unknown; credentials?: string }) => Promise<ResponseLike>) | null;
+  fetch:
+    | ((
+        url: string,
+        init?: { signal?: unknown; credentials?: string },
+      ) => Promise<ResponseLike>)
+    | null;
   /** The document base URL relative URLs resolve against. */
   baseURL(): string;
   /** A `blob:` URL's bytes, or null when unknown or revoked (NET-14/15). */
@@ -43,7 +52,10 @@ export interface ImageEnv {
   /** A Blob's bytes (no copy when the glue provides them; do not mutate). */
   blobBytes(blob: unknown): Promise<Uint8Array>;
   EventTarget: { new (): EventTargetLike; prototype: EventTargetLike };
-  Event: new (type: string, init?: { bubbles?: boolean; cancelable?: boolean }) => object;
+  Event: new (
+    type: string,
+    init?: { bubbles?: boolean; cancelable?: boolean },
+  ) => object;
   dispatch(target: EventTargetLike, event: object): void;
   defineEventHandler(proto: object, type: string): void;
   domException(message: string, name: string): Error;
@@ -52,7 +64,10 @@ export interface ImageEnv {
   /** Wraps a native promise so polling-mode natives get poll() calls while it is pending. */
   track<T>(promise: Promise<T>): Promise<T>;
   /** Native calls, routed through track(). */
-  decode(bytes: ArrayBuffer | ArrayBufferView, options: NativeProcessOptions): Promise<NativeImageHandle>;
+  decode(
+    bytes: ArrayBuffer | ArrayBufferView,
+    options: NativeProcessOptions,
+  ): Promise<NativeImageHandle>;
   fromPixels(
     rgba: ArrayBufferView,
     width: number,
@@ -60,9 +75,17 @@ export interface ImageEnv {
     premultiplied: boolean,
     options: NativeProcessOptions,
   ): Promise<NativeImageHandle>;
-  transform(handle: NativeImageHandle, options: NativeProcessOptions): Promise<NativeImageHandle>;
+  transform(
+    handle: NativeImageHandle,
+    options: NativeProcessOptions,
+  ): Promise<NativeImageHandle>;
   /** data: URL base64 payload decoded natively, or null when the native module predates it (contract version 1). */
-  decodeBase64: ((text: string, options: NativeProcessOptions) => Promise<NativeImageHandle>) | null;
+  decodeBase64:
+    | ((
+        text: string,
+        options: NativeProcessOptions,
+      ) => Promise<NativeImageHandle>)
+    | null;
   /** Abandons a pending native job (its promise rejects with code 'cancelled'). No-op without native support. */
   cancel(promise: Promise<unknown>): void;
 }
@@ -74,7 +97,10 @@ export interface EventTargetLike {
 }
 
 export type ImageEnvOverrides = Partial<
-  Omit<ImageEnv, 'track' | 'decode' | 'fromPixels' | 'transform' | 'decodeBase64' | 'cancel'>
+  Omit<
+    ImageEnv,
+    'track' | 'decode' | 'fromPixels' | 'transform' | 'decodeBase64' | 'cancel'
+  >
 >;
 
 const GLUE_KEY = Symbol.for('iwn.glue');
@@ -82,24 +108,49 @@ const GLUE_KEY = Symbol.for('iwn.glue');
 class FallbackDOMException extends Error {
   constructor(message: string, name: string) {
     super(message);
-    Object.defineProperty(this, 'name', { value: name, configurable: true, writable: true });
+    Object.defineProperty(this, 'name', {
+      value: name,
+      configurable: true,
+      writable: true,
+    });
   }
 }
 
-export function createImageEnv(global: typeof globalThis, overrides: ImageEnvOverrides = {}): ImageEnv {
+export function createImageEnv(
+  global: typeof globalThis,
+  overrides: ImageEnvOverrides = {},
+): ImageEnv {
   const g = global as unknown as Record<string | symbol, unknown>;
   const glue = (g[GLUE_KEY] ?? null) as GlueRegistryLike | null;
-  const natives = overrides.natives ?? ((g.__iwn as { image?: ImageNatives } | undefined)?.image ?? null);
-  if (!natives) throw new Error('[iwer-native] web/image: globalThis.__iwn.image is missing (native image module)');
+  const natives =
+    overrides.natives ??
+    (g.__iwn as { image?: ImageNatives } | undefined)?.image ??
+    null;
+  if (!natives)
+    throw new Error(
+      '[iwer-native] web/image: globalThis.__iwn.image is missing (native image module)',
+    );
 
-  const EventTargetCtor = (overrides.EventTarget ?? g.EventTarget) as ImageEnv['EventTarget'];
+  const EventTargetCtor = (overrides.EventTarget ??
+    g.EventTarget) as ImageEnv['EventTarget'];
   const EventCtor = (overrides.Event ?? g.Event) as ImageEnv['Event'];
-  if (typeof EventTargetCtor !== 'function' || typeof EventCtor !== 'function') {
-    throw new Error('[iwer-native] web/image: EventTarget/Event must be installed first (web/glue)');
+  if (
+    typeof EventTargetCtor !== 'function' ||
+    typeof EventCtor !== 'function'
+  ) {
+    throw new Error(
+      '[iwer-native] web/image: EventTarget/Event must be installed first (web/glue)',
+    );
   }
-  const DOMExceptionCtor = g.DOMException as (new (message: string, name: string) => Error) | undefined;
-  const BlobCtor = g.Blob as (abstract new (...args: never[]) => object) | undefined;
-  const setTimeoutFn = g.setTimeout as ((fn: () => void, ms: number) => unknown) | undefined;
+  const DOMExceptionCtor = g.DOMException as
+    | (new (message: string, name: string) => Error)
+    | undefined;
+  const BlobCtor = g.Blob as
+    | (abstract new (...args: never[]) => object)
+    | undefined;
+  const setTimeoutFn = g.setTimeout as
+    | ((fn: () => void, ms: number) => unknown)
+    | undefined;
 
   const queueTask =
     overrides.queueTask ??
@@ -113,7 +164,8 @@ export function createImageEnv(global: typeof globalThis, overrides: ImageEnvOve
   let polling = false;
   const pollLoop = () => {
     natives.poll();
-    if (outstanding > 0 && typeof setTimeoutFn === 'function') setTimeoutFn.call(global, pollLoop, 2);
+    if (outstanding > 0 && typeof setTimeoutFn === 'function')
+      setTimeoutFn.call(global, pollLoop, 2);
     else polling = false;
   };
   const track = <T>(promise: Promise<T>): Promise<T> => {
@@ -152,11 +204,18 @@ export function createImageEnv(global: typeof globalThis, overrides: ImageEnvOve
       ((url: string) => {
         const blob = glue?.blobUrls?.resolve(url);
         if (!blob || !glue?.blobBytes) return null;
-        return { bytes: glue.blobBytes(blob), type: String((blob as { type?: string }).type ?? '') };
+        return {
+          bytes: glue.blobBytes(blob),
+          type: String((blob as { type?: string }).type ?? ''),
+        };
       }),
     isBlob:
       overrides.isBlob ??
-      ((v: unknown) => typeof BlobCtor === 'function' && typeof v === 'object' && v !== null && v instanceof BlobCtor),
+      ((v: unknown) =>
+        typeof BlobCtor === 'function' &&
+        typeof v === 'object' &&
+        v !== null &&
+        v instanceof BlobCtor),
     blobBytes:
       overrides.blobBytes ??
       (async (blob: unknown) => {
@@ -167,17 +226,23 @@ export function createImageEnv(global: typeof globalThis, overrides: ImageEnvOve
             // not a glue Blob (e.g. Node's): fall through
           }
         }
-        return new Uint8Array(await (blob as { arrayBuffer(): Promise<ArrayBuffer> }).arrayBuffer());
+        return new Uint8Array(
+          await (blob as { arrayBuffer(): Promise<ArrayBuffer> }).arrayBuffer(),
+        );
       }),
     EventTarget: EventTargetCtor,
     Event: EventCtor,
     dispatch:
       overrides.dispatch ??
       ((target, event) => {
-        if (glue?.events?.dispatchTrusted) glue.events.dispatchTrusted(target, event);
+        if (glue?.events?.dispatchTrusted)
+          glue.events.dispatchTrusted(target, event);
         else target.dispatchEvent(event);
       }),
-    defineEventHandler: overrides.defineEventHandler ?? glue?.events?.defineEventHandler ?? defineEventHandlerFallback,
+    defineEventHandler:
+      overrides.defineEventHandler ??
+      glue?.events?.defineEventHandler ??
+      defineEventHandlerFallback,
     domException:
       overrides.domException ??
       ((message, name) =>
@@ -189,12 +254,15 @@ export function createImageEnv(global: typeof globalThis, overrides: ImageEnvOve
       overrides.reportException ??
       glue?.events?.reportException ??
       ((e: unknown) => {
-        const c = g.console as { error?: (...a: unknown[]) => void } | undefined;
+        const c = g.console as
+          | { error?: (...a: unknown[]) => void }
+          | undefined;
         c?.error?.(e);
       }),
     track,
     decode: (bytes, options) => track(natives.decode(bytes, options)),
-    fromPixels: (rgba, w, h, premul, options) => track(natives.fromPixels(rgba, w, h, premul, options)),
+    fromPixels: (rgba, w, h, premul, options) =>
+      track(natives.fromPixels(rgba, w, h, premul, options)),
     transform: (handle, options) => track(natives.transform(handle, options)),
     decodeBase64:
       typeof natives.decodeBase64 === 'function'
@@ -218,17 +286,25 @@ function defineEventHandlerFallback(proto: object, type: string): void {
     set(this: EventTargetLike & object, value: unknown) {
       let map = handlerSlots.get(this);
       if (!map) handlerSlots.set(this, (map = new Map()));
-      const v = typeof value === 'function' || (typeof value === 'object' && value !== null) ? value : null;
+      const v =
+        typeof value === 'function' ||
+        (typeof value === 'object' && value !== null)
+          ? value
+          : null;
       let slot = map.get(type);
       if (!slot) {
         if (v === null) return;
         slot = { value: v };
         map.set(type, slot);
         const s = slot;
-        this.addEventListener(type, function (this: unknown, event: { preventDefault(): void }) {
-          const h = s.value;
-          if (typeof h === 'function' && h.call(this, event) === false) event.preventDefault();
-        });
+        this.addEventListener(
+          type,
+          function (this: unknown, event: { preventDefault(): void }) {
+            const h = s.value;
+            if (typeof h === 'function' && h.call(this, event) === false)
+              event.preventDefault();
+          },
+        );
       } else {
         slot.value = v;
       }

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // XR pipeline check for runtime/xr on a headset, with no DOM and no framework: WebXR Layers (XRWebGLBinding
 // projection layer, texture-array), MSAA multiview through OCULUS_multiview (one render pass for both eyes), a
 // per-eye background colour (GL-24's two-colour check: left eye green, right eye blue), a world-locked cube 1.5 m
@@ -23,7 +30,8 @@ function windowTick(t) {
   windowCount++;
   if (t - windowSecond >= 1000) {
     state.windowFramesPerSecond.push(windowCount);
-    if (state.windowFramesPerSecond.length > 30) state.windowFramesPerSecond.shift();
+    if (state.windowFramesPerSecond.length > 30)
+      state.windowFramesPerSecond.shift();
     windowCount = 0;
     windowSecond = t;
   }
@@ -33,12 +41,24 @@ requestAnimationFrame(windowTick);
 
 // In the runtime the WebGL prelude makes the context directly (no DOM); in a browser (A/B runs against Quest
 // Browser) a canvas does.
-const canvas = globalThis.__iwnWebGL ? { width: 300, height: 150 } : document.createElement('canvas');
+const canvas = globalThis.__iwnWebGL
+  ? { width: 300, height: 150 }
+  : document.createElement('canvas');
 const gl = globalThis.__iwnWebGL
-  ? globalThis.__iwnWebGL.createContext(canvas, 'webgl2', { xrCompatible: true, antialias: true })
+  ? globalThis.__iwnWebGL.createContext(canvas, 'webgl2', {
+      xrCompatible: true,
+      antialias: true,
+    })
   : canvas.getContext('webgl2', { xrCompatible: true, antialias: true });
 const mv = gl.getExtension('OCULUS_multiview');
-log('context', gl.getParameter(gl.VERSION), 'OCULUS_multiview', !!mv, 'OVR_multiview2', !!gl.getExtension('OVR_multiview2'));
+log(
+  'context',
+  gl.getParameter(gl.VERSION),
+  'OCULUS_multiview',
+  !!mv,
+  'OVR_multiview2',
+  !!gl.getExtension('OVR_multiview2'),
+);
 
 function program(vsSource, fsSource) {
   const vs = gl.createShader(gl.VERTEX_SHADER);
@@ -52,7 +72,14 @@ function program(vsSource, fsSource) {
   gl.attachShader(p, fs);
   gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-    throw new Error('link: ' + gl.getProgramInfoLog(p) + ' vs: ' + gl.getShaderInfoLog(vs) + ' fs: ' + gl.getShaderInfoLog(fs));
+    throw new Error(
+      'link: ' +
+        gl.getProgramInfoLog(p) +
+        ' vs: ' +
+        gl.getShaderInfoLog(vs) +
+        ' fs: ' +
+        gl.getShaderInfoLog(fs),
+    );
   }
   return p;
 }
@@ -132,16 +159,53 @@ void main() { color = vec4(vColor, 1.0); }`,
 
 // Cube: 6 faces, 2 triangles each, one colour per face.
 const faces = [
-  [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1], [1, 0.3, 0.3]],
-  [[-1, -1, 1], [-1, 1, 1], [-1, 1, -1], [-1, -1, -1], [0.3, 1, 0.3]],
-  [[-1, 1, -1], [-1, 1, 1], [1, 1, 1], [1, 1, -1], [0.3, 0.3, 1]],
-  [[-1, -1, 1], [-1, -1, -1], [1, -1, -1], [1, -1, 1], [1, 1, 0.3]],
-  [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1], [1, 0.3, 1]],
-  [[1, -1, -1], [-1, -1, -1], [-1, 1, -1], [1, 1, -1], [0.3, 1, 1]],
+  [
+    [1, -1, -1],
+    [1, 1, -1],
+    [1, 1, 1],
+    [1, -1, 1],
+    [1, 0.3, 0.3],
+  ],
+  [
+    [-1, -1, 1],
+    [-1, 1, 1],
+    [-1, 1, -1],
+    [-1, -1, -1],
+    [0.3, 1, 0.3],
+  ],
+  [
+    [-1, 1, -1],
+    [-1, 1, 1],
+    [1, 1, 1],
+    [1, 1, -1],
+    [0.3, 0.3, 1],
+  ],
+  [
+    [-1, -1, 1],
+    [-1, -1, -1],
+    [1, -1, -1],
+    [1, -1, 1],
+    [1, 1, 0.3],
+  ],
+  [
+    [-1, -1, 1],
+    [1, -1, 1],
+    [1, 1, 1],
+    [-1, 1, 1],
+    [1, 0.3, 1],
+  ],
+  [
+    [1, -1, -1],
+    [-1, -1, -1],
+    [-1, 1, -1],
+    [1, 1, -1],
+    [0.3, 1, 1],
+  ],
 ];
 const verts = [];
 for (const [a, b, c, d, col] of faces) {
-  for (const v of [a, b, c, a, c, d]) verts.push(v[0] * 0.15, v[1] * 0.15, v[2] * 0.15, col[0], col[1], col[2]);
+  for (const v of [a, b, c, a, c, d])
+    verts.push(v[0] * 0.15, v[1] * 0.15, v[2] * 0.15, col[0], col[1], col[2]);
 }
 const vao = gl.createVertexArray();
 gl.bindVertexArray(vao);
@@ -174,7 +238,13 @@ let xrCount = 0;
 
 // XR-LOOP-5: the callback time (the predicted display time) against performance.now() at entry, and the deltas
 // between consecutive callback times.
-state.timing = { aheadMin: Infinity, aheadMax: -Infinity, deltaMin: Infinity, deltaMax: -Infinity, samples: 0 };
+state.timing = {
+  aheadMin: Infinity,
+  aheadMax: -Infinity,
+  deltaMin: Infinity,
+  deltaMax: -Infinity,
+  samples: 0,
+};
 let lastT = 0;
 function noteTiming(t) {
   const tm = state.timing;
@@ -215,17 +285,59 @@ function onFrame(t, frame) {
     fbo = state.fbo = gl.createFramebuffer();
     depth = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, depth);
-    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.DEPTH_COMPONENT24, layer.textureWidth, layer.textureHeight, 2);
+    gl.texStorage3D(
+      gl.TEXTURE_2D_ARRAY,
+      1,
+      gl.DEPTH_COMPONENT24,
+      layer.textureWidth,
+      layer.textureHeight,
+      2,
+    );
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, fbo);
     if (state.msaa > 0) {
-      mv.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, sub.colorTexture, 0, state.msaa, 0, 2);
-      mv.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, depth, 0, state.msaa, 0, 2);
+      mv.framebufferTextureMultisampleMultiviewOVR(
+        gl.DRAW_FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        sub.colorTexture,
+        0,
+        state.msaa,
+        0,
+        2,
+      );
+      mv.framebufferTextureMultisampleMultiviewOVR(
+        gl.DRAW_FRAMEBUFFER,
+        gl.DEPTH_ATTACHMENT,
+        depth,
+        0,
+        state.msaa,
+        0,
+        2,
+      );
     } else {
       const mv2 = gl.getExtension('OVR_multiview2');
-      mv2.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, sub.colorTexture, 0, 0, 2);
-      mv2.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, depth, 0, 0, 2);
+      mv2.framebufferTextureMultiviewOVR(
+        gl.DRAW_FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        sub.colorTexture,
+        0,
+        0,
+        2,
+      );
+      mv2.framebufferTextureMultiviewOVR(
+        gl.DRAW_FRAMEBUFFER,
+        gl.DEPTH_ATTACHMENT,
+        depth,
+        0,
+        0,
+        2,
+      );
     }
-    log('framebuffer', gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER).toString(16), layer.textureWidth, layer.textureHeight);
+    log(
+      'framebuffer',
+      gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER).toString(16),
+      layer.textureWidth,
+      layer.textureHeight,
+    );
   }
   for (let i = 0; i < 2; i++) {
     proj.set(pose.views[i].projectionMatrix, i * 16);
@@ -233,7 +345,8 @@ function onFrame(t, frame) {
   }
   // cube 1.5 m ahead of the local-floor origin at 1.4 m, spinning
   const a = t / 1000;
-  const c = Math.cos(a), s = Math.sin(a);
+  const c = Math.cos(a),
+    s = Math.sin(a);
   model.set([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 1.4, -1.5, 1]);
 
   gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, fbo);
@@ -315,7 +428,8 @@ function onFlatFrame(t, frame) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, base.framebuffer);
   gl.enable(gl.DEPTH_TEST);
   const a = t / 1000;
-  const c = Math.cos(a), s = Math.sin(a);
+  const c = Math.cos(a),
+    s = Math.sin(a);
   model.set([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 1.4, -1.5, 1]);
   for (let i = 0; i < pose.views.length; i++) {
     const vp = base.getViewport(pose.views[i]);
@@ -331,7 +445,11 @@ function onFlatFrame(t, frame) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.useProgram(cubeFlatProgram);
     gl.uniformMatrix4fv(uFlatProj, false, pose.views[i].projectionMatrix);
-    gl.uniformMatrix4fv(uFlatView, false, pose.views[i].transform.inverse.matrix);
+    gl.uniformMatrix4fv(
+      uFlatView,
+      false,
+      pose.views[i].transform.inverse.matrix,
+    );
     gl.uniformMatrix4fv(uFlatModel, false, model);
     gl.bindVertexArray(flatVao);
     gl.drawArrays(gl.TRIANGLES, 0, 36);
@@ -348,23 +466,39 @@ async function start(s) {
   }
   session = s;
   state.sessionObject = s;
-  state.session = { features: s.enabledFeatures, rates: [...(s.supportedFrameRates ?? [])] };
+  state.session = {
+    features: s.enabledFeatures,
+    rates: [...(s.supportedFrameRates ?? [])],
+  };
   log('session', JSON.stringify(state.session));
   s.addEventListener('end', () => log('session end'));
-  s.addEventListener('visibilitychange', () => log('visibility', s.visibilityState));
+  s.addEventListener('visibilitychange', () =>
+    log('visibility', s.visibilityState),
+  );
   s.addEventListener('frameratechange', () => log('frame rate', s.frameRate));
   space = await s.requestReferenceSpace('local-floor');
   if (mode === 'webgllayer') {
     const base = new XRWebGLLayer(s, gl);
-    state.layer = { width: base.framebufferWidth, height: base.framebufferHeight, layers: 1 };
+    state.layer = {
+      width: base.framebufferWidth,
+      height: base.framebufferHeight,
+      layers: 1,
+    };
     state.layerObject = base;
     s.updateRenderState({ baseLayer: base });
     s.requestAnimationFrame(onFlatFrame);
     return;
   }
   binding = new XRWebGLBinding(s, gl);
-  layer = binding.createProjectionLayer({ textureType: 'texture-array', colorFormat: gl.RGBA8 });
-  state.layer = { width: layer.textureWidth, height: layer.textureHeight, layers: layer.textureArrayLength };
+  layer = binding.createProjectionLayer({
+    textureType: 'texture-array',
+    colorFormat: gl.RGBA8,
+  });
+  state.layer = {
+    width: layer.textureWidth,
+    height: layer.textureHeight,
+    layers: layer.textureArrayLength,
+  };
   state.layerObject = layer;
   s.updateRenderState({ layers: [layer] });
   s.requestAnimationFrame(onFrame);
@@ -376,19 +510,26 @@ state.start = start;
 // Test variants (mode.json next to index.html, written by the device check): 'webgllayer' (XR-SC-3, no 'layers'
 // feature), 'nooffer' (XR-LIFE-7: never offers or requests a session), 'request' (requestSession instead of
 // offerSession). Default: offerSession with layers + multiview.
-const mode = globalThis.__xrtestMode ?? await fetch('./mode.json')
-  .then((r) => (r.ok ? r.json() : {}))
-  .then((j) => j.mode ?? 'default')
-  .catch(() => 'default');
+const mode =
+  globalThis.__xrtestMode ??
+  (await fetch('./mode.json')
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((j) => j.mode ?? 'default')
+    .catch(() => 'default'));
 state.mode = mode;
 // globalThis.__xrtestInit overrides the session init (browser-ab.mjs: no hand tracking, so Quest Browser shows no
 // permission prompt).
-const init = globalThis.__xrtestInit ??
-  { requiredFeatures: ['local-floor'], optionalFeatures: mode === 'webgllayer' ? ['hand-tracking'] : ['layers', 'hand-tracking'] };
+const init = globalThis.__xrtestInit ?? {
+  requiredFeatures: ['local-floor'],
+  optionalFeatures:
+    mode === 'webgllayer' ? ['hand-tracking'] : ['layers', 'hand-tracking'],
+};
 state.init = init;
 // A slow-booting app (the device check's reload case, PROC-8 / XR-LIFE-5): localStorage 'xrtest.offerDelayMs', set
 // before a location.reload(), delays this page's offer once.
-const offerDelayMs = Number(globalThis.localStorage?.getItem('xrtest.offerDelayMs') ?? 0);
+const offerDelayMs = Number(
+  globalThis.localStorage?.getItem('xrtest.offerDelayMs') ?? 0,
+);
 if (offerDelayMs > 0) {
   globalThis.localStorage.removeItem('xrtest.offerDelayMs');
   log(`offering after ${offerDelayMs} ms`);
@@ -396,11 +537,16 @@ if (offerDelayMs > 0) {
 }
 state.offeredAt = performance.now();
 if (mode !== 'nooffer') {
-  (mode === 'request' ? navigator.xr.requestSession('immersive-vr', init) : navigator.xr.offerSession('immersive-vr', init))
+  (mode === 'request'
+    ? navigator.xr.requestSession('immersive-vr', init)
+    : navigator.xr.offerSession('immersive-vr', init)
+  )
     .then(start)
     .catch((e) => {
       state.errors.push(String(e));
       log('session failed', e);
     });
 }
-log(`booted (mode ${mode}); ${mode === 'nooffer' ? 'never offering a session' : 'waiting for the session'}`);
+log(
+  `booted (mode ${mode}); ${mode === 'nooffer' ? 'never offering a session' : 'waiting for the session'}`,
+);

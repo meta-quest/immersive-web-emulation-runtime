@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The slice of the Android NDK camera and media API that src/android/xr_camera.cc uses (NdkCameraManager.h,
 // NdkCameraDevice.h, NdkCameraCaptureSession.h, NdkCameraMetadata(Tags).h, NdkCaptureRequest.h, NdkImageReader.h,
 // NdkImage.h, sys/system_properties.h), declared with the NDK's signatures so that file compiles on the host against

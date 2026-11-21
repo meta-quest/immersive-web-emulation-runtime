@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // structuredClone over v8::ValueSerializer / ValueDeserializer (HTML "StructuredSerializeWithTransfer", TMR-3).
 // Transferred ArrayBuffers move their backing store to the clone and are detached in the source.
 #include <v8.h>

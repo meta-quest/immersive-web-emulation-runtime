@@ -12,7 +12,8 @@ export function domError(name: string, message: string): DOMException {
 /** WebIDL `float`/`double` conversion: non-finite values throw TypeError. */
 export function finite(v: unknown, what: string): number {
   const n = Number(v);
-  if (!Number.isFinite(n)) throw new TypeError(`${what} must be a finite number`);
+  if (!Number.isFinite(n))
+    throw new TypeError(`${what} must be a finite number`);
   return n;
 }
 
@@ -68,7 +69,8 @@ export class HandlerSlot {
 export function reportError(e: unknown): void {
   const g = globalThis as { reportError?: (e: unknown) => void };
   if (typeof g.reportError === 'function') g.reportError(e);
-  else queueMicrotask(() => {
-    throw e;
-  });
+  else
+    queueMicrotask(() => {
+      throw e;
+    });
 }

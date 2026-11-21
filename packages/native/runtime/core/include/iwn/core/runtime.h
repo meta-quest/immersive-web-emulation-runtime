@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // The runtime API other native modules use (Android; needs V8). One Runtime per main isolate, living on the main JS
 // thread. Get it from any V8 callback with iwn::Runtime::From(isolate).
 //

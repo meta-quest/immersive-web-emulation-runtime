@@ -191,7 +191,11 @@ describe('validateNativeTargetConfig', () => {
       { background: 'contextual' },
       { background: 'black' },
     ])
-      assert.equal(errorsOf(withKey('splash', ok)).length, 0, JSON.stringify(ok));
+      assert.equal(
+        errorsOf(withKey('splash', ok)).length,
+        0,
+        JSON.stringify(ok),
+      );
     assert.equal(only(withKey('splash', 'yes')).code, 'type');
     assert.equal(only(withKey('splash', null)).code, 'type');
     // The image: a PNG inside the project (Horizon OS reads vr_splash.png).
@@ -213,7 +217,10 @@ describe('validateNativeTargetConfig', () => {
       only(withKey('splash', { background: 'contextul' })).message,
       /\(did you mean "contextual"\?\)/,
     );
-    assert.equal(only(withKey('splash', { background: '#00000' })).code, 'format');
+    assert.equal(
+      only(withKey('splash', { background: '#00000' })).code,
+      'format',
+    );
     assert.equal(only(withKey('splash', { background: 0 })).code, 'type');
     // Unknown keys get a did-you-mean.
     const e = only(withKey('splash', { imge: 'a.png' }));
@@ -419,20 +426,34 @@ describe('validateIwsdkConfigNativeSection', () => {
     const doc = (native: Record<string, unknown>, mode?: string) => ({
       version: 'iwsdk.project.v1',
       ...(mode ? { world: { xr: { mode } } } : {}),
-      native: { packageId: 'com.a.b', splash: { background: 'contextual' }, ...native },
+      native: {
+        packageId: 'com.a.b',
+        splash: { background: 'contextual' },
+        ...native,
+      },
     });
     const vr = validateIwsdkConfigNativeSection(doc({}, 'vr'));
     assert.equal(vr.errors.length, 1, JSON.stringify(vr.errors));
     assert.equal(vr.errors[0].path, '$.native.splash.background');
     assert.equal(vr.errors[0].code, 'conflict');
-    assert.match(vr.errors[0].message, /needs passthrough: add "passthrough": "optional" to "features"/);
-    assert.equal(validateIwsdkConfigNativeSection(doc({})).errors[0]?.code, 'conflict');
+    assert.match(
+      vr.errors[0].message,
+      /needs passthrough: add "passthrough": "optional" to "features"/,
+    );
     assert.equal(
-      validateIwsdkConfigNativeSection(doc({ features: { handTracking: true } }, 'ar')).errors[0]?.code,
+      validateIwsdkConfigNativeSection(doc({})).errors[0]?.code,
+      'conflict',
+    );
+    assert.equal(
+      validateIwsdkConfigNativeSection(
+        doc({ features: { handTracking: true } }, 'ar'),
+      ).errors[0]?.code,
       'conflict', // native.features replaces world's: no passthrough declared
     );
     assert.equal(
-      validateIwsdkConfigNativeSection(doc({ features: { passthrough: false } })).errors[0]?.code,
+      validateIwsdkConfigNativeSection(
+        doc({ features: { passthrough: false } }),
+      ).errors[0]?.code,
       'conflict',
     );
     // Declared: in native.features (any requirement), or by world.xr.mode "ar" without native.features.
@@ -442,11 +463,23 @@ describe('validateIwsdkConfigNativeSection', () => {
       doc({ features: { passthrough: { required: false } } }),
       doc({}, 'ar'),
     ])
-      assert.equal(validateIwsdkConfigNativeSection(ok).valid, true, JSON.stringify(ok));
+      assert.equal(
+        validateIwsdkConfigNativeSection(ok).valid,
+        true,
+        JSON.stringify(ok),
+      );
     // The native section alone, without features: nothing to check against (the world is unknown).
-    assert.equal(errorsOf({ packageId: 'com.a.b', splash: { background: 'contextual' } }).length, 0);
     assert.equal(
-      errorsOf({ packageId: 'com.a.b', splash: { background: 'contextual' }, features: {} })[0]?.code,
+      errorsOf({ packageId: 'com.a.b', splash: { background: 'contextual' } })
+        .length,
+      0,
+    );
+    assert.equal(
+      errorsOf({
+        packageId: 'com.a.b',
+        splash: { background: 'contextual' },
+        features: {},
+      })[0]?.code,
       'conflict',
     );
   });

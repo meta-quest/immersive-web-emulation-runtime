@@ -353,11 +353,17 @@ async function pack({
         distDir,
         strict: values.strict,
         allow: loaded.target.network.allow,
-        features: { names: Object.keys(loaded.target.features), derived: !!loaded.target.featuresDerived },
+        features: {
+          names: Object.keys(loaded.target.features),
+          derived: !!loaded.target.featuresDerived,
+        },
       });
     } catch (error) {
       const message = `compat check could not run: ${(error as Error).message} (pass --skip-compat to pack anyway)`;
-      if (values.json) io.stdout(`${JSON.stringify({ ok: false, error: message }, null, 2)}\n`);
+      if (values.json)
+        io.stdout(
+          `${JSON.stringify({ ok: false, error: message }, null, 2)}\n`,
+        );
       else io.stderr(`iwer-native pack: ${message}\n`);
       return EXIT.failure;
     }
@@ -372,8 +378,13 @@ async function pack({
     };
     if (!report.ok || (values.strict && report.warnings > 0)) {
       if (values.json)
-        io.stdout(`${JSON.stringify({ ok: false, error: 'compat check failed (pass --skip-compat to pack anyway)', compat: report }, null, 2)}\n`);
-      else io.stderr('iwer-native pack: compat check failed (pass --skip-compat to pack anyway)\n');
+        io.stdout(
+          `${JSON.stringify({ ok: false, error: 'compat check failed (pass --skip-compat to pack anyway)', compat: report }, null, 2)}\n`,
+        );
+      else
+        io.stderr(
+          'iwer-native pack: compat check failed (pass --skip-compat to pack anyway)\n',
+        );
       return EXIT.failure;
     }
   }
@@ -411,7 +422,9 @@ async function pack({
     return EXIT.failure;
   }
   if (values.json) {
-    io.stdout(`${JSON.stringify({ ok: true, ...result, ...(compatSummary ? { compat: compatSummary } : {}) }, null, 2)}\n`);
+    io.stdout(
+      `${JSON.stringify({ ok: true, ...result, ...(compatSummary ? { compat: compatSummary } : {}) }, null, 2)}\n`,
+    );
   } else {
     for (const w of result.warnings) io.stderr(`warning: ${w}\n`);
     io.stdout(formatPackReport(result));
@@ -433,14 +446,18 @@ async function compat({
 }: CommandContext): Promise<number> {
   if (rest.length > 0)
     return usage(io, `compat takes no arguments (got "${rest.join(' ')}")`);
-  const bootProblem = values['boot-ms'] === undefined ? undefined : phaseMsProblem('--boot-ms', values['boot-ms']);
+  const bootProblem =
+    values['boot-ms'] === undefined
+      ? undefined
+      : phaseMsProblem('--boot-ms', values['boot-ms']);
   if (bootProblem) return usage(io, bootProblem);
   return runCompatCommand({
     projectRoot,
     distDir: values.dist,
     trace: values.trace,
     mirrors: values.mirror,
-    bootMs: values['boot-ms'] === undefined ? undefined : Number(values['boot-ms']),
+    bootMs:
+      values['boot-ms'] === undefined ? undefined : Number(values['boot-ms']),
     strict: values.strict,
     verbose: values.verbose,
     json: values.json,
@@ -585,7 +602,12 @@ async function installedInspectorPort(
 ): Promise<number | null> {
   if (values['dry-run']) return null;
   const quiet = { ...io, stdout: () => {}, stderr: () => {} };
-  const where = await adb(quiet, values, ['shell', 'pm', 'path', packageId], 30_000);
+  const where = await adb(
+    quiet,
+    values,
+    ['shell', 'pm', 'path', packageId],
+    30_000,
+  );
   const remote = /^package:(\S+?base\.apk)\s*$/m.exec(where.output)?.[1];
   if (where.code !== EXIT.ok || !remote) return null;
   const dir = mkdtempSync(path.join(tmpdir(), 'iwn-run-'));

@@ -15,7 +15,13 @@
  * is added, as HTML requires); a Path2D stores its own coordinates and is transformed when used.
  */
 
-import { VERB_CLOSE, VERB_CUBIC, VERB_LINE, VERB_MOVE, VERB_QUAD } from './natives.ts';
+import {
+  VERB_CLOSE,
+  VERB_CUBIC,
+  VERB_LINE,
+  VERB_MOVE,
+  VERB_QUAD,
+} from './natives.ts';
 import { type Mat, mapX, mapY } from './matrix.ts';
 import { domException } from './errors.ts';
 
@@ -82,7 +88,14 @@ export class PathBuilder {
     this.lastX = x;
     this.lastY = y;
   }
-  rawCubic(x1: number, y1: number, x2: number, y2: number, x: number, y: number): void {
+  rawCubic(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    x: number,
+    y: number,
+  ): void {
     this.reserve(7);
     const b = this.buf;
     b[this.len++] = VERB_CUBIC;
@@ -130,13 +143,32 @@ export class PathBuilder {
   quadraticCurveTo(cx: number, cy: number, x: number, y: number): void {
     if (!fin4(cx, cy, x, y)) return;
     this.ensure(cx, cy);
-    this.rawQuad(this.tx(cx, cy), this.ty(cx, cy), this.tx(x, y), this.ty(x, y));
+    this.rawQuad(
+      this.tx(cx, cy),
+      this.ty(cx, cy),
+      this.tx(x, y),
+      this.ty(x, y),
+    );
   }
 
-  bezierCurveTo(c1x: number, c1y: number, c2x: number, c2y: number, x: number, y: number): void {
+  bezierCurveTo(
+    c1x: number,
+    c1y: number,
+    c2x: number,
+    c2y: number,
+    x: number,
+    y: number,
+  ): void {
     if (!fin4(c1x, c1y, c2x, c2y) || !fin2(x, y)) return;
     this.ensure(c1x, c1y);
-    this.rawCubic(this.tx(c1x, c1y), this.ty(c1x, c1y), this.tx(c2x, c2y), this.ty(c2x, c2y), this.tx(x, y), this.ty(x, y));
+    this.rawCubic(
+      this.tx(c1x, c1y),
+      this.ty(c1x, c1y),
+      this.tx(c2x, c2y),
+      this.ty(c2x, c2y),
+      this.tx(x, y),
+      this.ty(x, y),
+    );
   }
 
   /** A close inside copied commands: recorded without the implicit moveTo (the source carries its own). */
@@ -166,13 +198,30 @@ export class PathBuilder {
     this.closePath();
   }
 
-  arc(x: number, y: number, r: number, start: number, end: number, ccw = false): void {
+  arc(
+    x: number,
+    y: number,
+    r: number,
+    start: number,
+    end: number,
+    ccw = false,
+  ): void {
     this.ellipse(x, y, r, r, 0, start, end, ccw);
   }
 
-  ellipse(x: number, y: number, rx: number, ry: number, rotation: number, start: number, end: number, ccw = false): void {
+  ellipse(
+    x: number,
+    y: number,
+    rx: number,
+    ry: number,
+    rotation: number,
+    start: number,
+    end: number,
+    ccw = false,
+  ): void {
     if (!fin4(x, y, rx, ry) || !fin2(rotation, start) || !fin1(end)) return;
-    if (rx < 0 || ry < 0) throw domException('The radius provided is negative.', 'IndexSizeError');
+    if (rx < 0 || ry < 0)
+      throw domException('The radius provided is negative.', 'IndexSizeError');
     // The work happens in ellipseFromScratch, which takes its numbers from a module scratch array: this wrapper is
     // small enough to be inlined into callers, so no double is boxed at a call boundary (C2D-12).
     EA[0] = x;
@@ -235,7 +284,10 @@ export class PathBuilder {
       ox = nox;
       oy = noy;
     }
-    const segs = sweep === 0 ? 0 : Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2) - 1e-9));
+    const segs =
+      sweep === 0
+        ? 0
+        : Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2) - 1e-9));
     this.reserve(3 + 7 * segs);
     const buf = this.buf;
     let len = this.len;
@@ -292,9 +344,17 @@ export class PathBuilder {
    * arcTo. `inv` maps the stored last point back to user space (the inverse CTM for the default path; null
    * when the stored space is user space).
    */
-  arcTo(x1: number, y1: number, x2: number, y2: number, r: number, inv: Mat | null): void {
+  arcTo(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    r: number,
+    inv: Mat | null,
+  ): void {
     if (!fin4(x1, y1, x2, y2) || !fin1(r)) return;
-    if (r < 0) throw domException('The radius provided is negative.', 'IndexSizeError');
+    if (r < 0)
+      throw domException('The radius provided is negative.', 'IndexSizeError');
     if (this.ensure(x1, y1)) {
       // The subpath only has (x1, y1) now; continue with the rules below from that point.
     }
@@ -369,13 +429,21 @@ export class PathBuilder {
     if (radii === undefined) {
       if (!putRadius(0, 0)) return;
       count = 1;
-    } else if (typeof radii === 'number' || (typeof radii === 'object' && radii !== null && !isIterable(radii))) {
+    } else if (
+      typeof radii === 'number' ||
+      (typeof radii === 'object' && radii !== null && !isIterable(radii))
+    ) {
       if (!putRadius(0, radii)) return;
       count = 1;
     } else if (isIterable(radii)) {
-      const list = Array.isArray(radii) ? (radii as unknown[]) : Array.from(radii as Iterable<unknown>);
+      const list = Array.isArray(radii)
+        ? (radii as unknown[])
+        : Array.from(radii as Iterable<unknown>);
       count = list.length;
-      if (count < 1 || count > 4) throw new RangeError(`roundRect: radii must have 1 to 4 elements, got ${count}`);
+      if (count < 1 || count > 4)
+        throw new RangeError(
+          `roundRect: radii must have 1 to 4 elements, got ${count}`,
+        );
       for (let i = 0; i < count; i++) if (!putRadius(i, list[i])) return;
     } else {
       if (!putRadius(0, Number(radii))) return;
@@ -409,21 +477,26 @@ export class PathBuilder {
     if (w < 0) {
       x += w;
       w = -w;
-      t = ulx, ulx = urx, urx = t;
-      t = uly, uly = ury, ury = t;
-      t = llx, llx = lrx, lrx = t;
-      t = lly, lly = lry, lry = t;
+      ((t = ulx), (ulx = urx), (urx = t));
+      ((t = uly), (uly = ury), (ury = t));
+      ((t = llx), (llx = lrx), (lrx = t));
+      ((t = lly), (lly = lry), (lry = t));
     }
     if (h < 0) {
       y += h;
       h = -h;
-      t = ulx, ulx = llx, llx = t;
-      t = uly, uly = lly, lly = t;
-      t = urx, urx = lrx, lrx = t;
-      t = ury, ury = lry, lry = t;
+      ((t = ulx), (ulx = llx), (llx = t));
+      ((t = uly), (uly = lly), (lly = t));
+      ((t = urx), (urx = lrx), (lrx = t));
+      ((t = ury), (ury = lry), (lry = t));
     }
     // Scale radii down so adjacent ones never overlap.
-    const scale = Math.min(w / (ulx + urx), h / (uly + lly), w / (llx + lrx), h / (ury + lry));
+    const scale = Math.min(
+      w / (ulx + urx),
+      h / (uly + lly),
+      w / (llx + lrx),
+      h / (ury + lry),
+    );
     if (scale < 1) {
       ulx *= scale;
       uly *= scale;
@@ -436,13 +509,44 @@ export class PathBuilder {
     }
     this.moveTo(x + ulx, y);
     this.lineTo(x + w - urx, y);
-    if (urx > 0 || ury > 0) this.ellipse(x + w - urx, y + ury, urx, ury, 0, -Math.PI / 2, 0, false);
+    if (urx > 0 || ury > 0)
+      this.ellipse(x + w - urx, y + ury, urx, ury, 0, -Math.PI / 2, 0, false);
     this.lineTo(x + w, y + h - lry);
-    if (lrx > 0 || lry > 0) this.ellipse(x + w - lrx, y + h - lry, lrx, lry, 0, 0, Math.PI / 2, false);
+    if (lrx > 0 || lry > 0)
+      this.ellipse(
+        x + w - lrx,
+        y + h - lry,
+        lrx,
+        lry,
+        0,
+        0,
+        Math.PI / 2,
+        false,
+      );
     this.lineTo(x + llx, y + h);
-    if (llx > 0 || lly > 0) this.ellipse(x + llx, y + h - lly, llx, lly, 0, Math.PI / 2, Math.PI, false);
+    if (llx > 0 || lly > 0)
+      this.ellipse(
+        x + llx,
+        y + h - lly,
+        llx,
+        lly,
+        0,
+        Math.PI / 2,
+        Math.PI,
+        false,
+      );
     this.lineTo(x, y + uly);
-    if (ulx > 0 || uly > 0) this.ellipse(x + ulx, y + uly, ulx, uly, 0, Math.PI, (3 * Math.PI) / 2, false);
+    if (ulx > 0 || uly > 0)
+      this.ellipse(
+        x + ulx,
+        y + uly,
+        ulx,
+        uly,
+        0,
+        Math.PI,
+        (3 * Math.PI) / 2,
+        false,
+      );
     this.closePath();
     this.moveTo(x, y);
   }
@@ -484,19 +588,35 @@ function putRadius(i: number, r: unknown): boolean {
 }
 
 function isIterable(v: unknown): boolean {
-  return typeof v === 'object' && v !== null && typeof (v as { [Symbol.iterator]?: unknown })[Symbol.iterator] === 'function';
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    typeof (v as { [Symbol.iterator]?: unknown })[Symbol.iterator] ===
+      'function'
+  );
 }
 
 const XS = new Float64Array(6);
 
 /** Appends `src` (user-space commands) to `dst`, mapping every point by m (null = identity). */
-export function appendTransformed(dst: PathBuilder, src: PathBuilder, m: Mat | null): void {
+export function appendTransformed(
+  dst: PathBuilder,
+  src: PathBuilder,
+  m: Mat | null,
+): void {
   const b = src.buf;
   let i = 0;
   const n = src.len;
   while (i < n) {
     const verb = b[i]!;
-    const pts = verb === VERB_MOVE || verb === VERB_LINE ? 1 : verb === VERB_QUAD ? 2 : verb === VERB_CUBIC ? 3 : 0;
+    const pts =
+      verb === VERB_MOVE || verb === VERB_LINE
+        ? 1
+        : verb === VERB_QUAD
+          ? 2
+          : verb === VERB_CUBIC
+            ? 3
+            : 0;
     if (pts === 0) {
       if (dst.hasSubpath) dst.closePathRaw();
       i++;
@@ -525,7 +645,8 @@ export function appendTransformed(dst: PathBuilder, src: PathBuilder, m: Mat | n
 export function parseSvgPath(d: string, p: PathBuilder): void {
   let i = 0;
   const n = d.length;
-  const isWs = (c: string) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f';
+  const isWs = (c: string) =>
+    c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f';
   const skipWs = () => {
     while (i < n && isWs(d[i]!)) i++;
   };
@@ -628,7 +749,14 @@ export function parseSvgPath(d: string, p: PathBuilder): void {
         const v = [num(), num(), num(), num(), num(), num()];
         if (v.some((t) => t === null)) return;
         const [x1, y1, x2, y2, x, y] = v as number[];
-        p.bezierCurveTo(ox + x1!, oy + y1!, ox + x2!, oy + y2!, ox + x!, oy + y!);
+        p.bezierCurveTo(
+          ox + x1!,
+          oy + y1!,
+          ox + x2!,
+          oy + y2!,
+          ox + x!,
+          oy + y!,
+        );
         lastCtrlX = ox + x2!;
         lastCtrlY = oy + y2!;
         cx = ox + x!;
@@ -682,8 +810,28 @@ export function parseSvgPath(d: string, p: PathBuilder): void {
         const sweep = flag();
         const x = num();
         const y = num();
-        if (rx === null || ry === null || rot === null || large === null || sweep === null || x === null || y === null) return;
-        svgArc(p, cx, cy, rx, ry, rot, large === 1, sweep === 1, ox + x, oy + y);
+        if (
+          rx === null ||
+          ry === null ||
+          rot === null ||
+          large === null ||
+          sweep === null ||
+          x === null ||
+          y === null
+        )
+          return;
+        svgArc(
+          p,
+          cx,
+          cy,
+          rx,
+          ry,
+          rot,
+          large === 1,
+          sweep === 1,
+          ox + x,
+          oy + y,
+        );
         cx = ox + x;
         cy = oy + y;
         break;
@@ -742,7 +890,12 @@ function svgArc(
     return a;
   };
   const theta1 = angle(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry);
-  let dtheta = angle((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry);
+  let dtheta = angle(
+    (x1p - cxp) / rx,
+    (y1p - cyp) / ry,
+    (-x1p - cxp) / rx,
+    (-y1p - cyp) / ry,
+  );
   if (!sweep && dtheta > 0) dtheta -= TAU;
   else if (sweep && dtheta < 0) dtheta += TAU;
   p.ellipse(cx, cy, rx, ry, phi, theta1, theta1 + dtheta, !sweep);

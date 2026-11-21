@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 // Thread handoff between the XR thread (owns OpenXR and the frame loop) and the main JS thread (owns V8 and the
 // WebGL contexts), V8-free and OpenXR-free so the protocol is tested on the host with real threads.
 //
