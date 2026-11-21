@@ -26,6 +26,7 @@ import type { XRControllerConfig, XRDeviceConfig, XRHostInput } from 'iwer/host'
 import { NativeHostBackend } from './backend.ts';
 import { installGeometry } from './geometry.ts';
 import { GraphicsBridge } from './graphics.ts';
+import { LayerBuffer } from './layers.ts';
 import { LAYOUT_VERSION } from './layout.gen.ts';
 import { FRAME_TICK, FRAME_XR } from './natives.ts';
 import type { GLContext, WebGLHooks, XrInfo, XrNativeEvent, XrNatives } from './natives.ts';
@@ -41,7 +42,17 @@ export interface NativeXR {
   readonly device: XRDevice;
   readonly record: FrameRecordView;
   capabilities(): XrInfo;
-  stats(): { frames: number; ticks: number; events: number; lastSerial: number; invalidations: number; parks: number };
+  stats(): {
+    frames: number;
+    ticks: number;
+    events: number;
+    lastSerial: number;
+    invalidations: number;
+    parks: number;
+    /** XR-LAYER-1: live quad and cylinder layer swapchains, entries of the latest layer list. */
+    layerSwapchains: number;
+    layerEntries: number;
+  };
   /** The WebGL context the session renders with (diagnostics). */
   gl(): GLContext | null;
 }
@@ -125,7 +136,19 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     setTimeout(cb, 0);
   };
   const gfx = new GraphicsBridge(natives, hooks);
-  const backend = new NativeHostBackend(natives, gfx, hooks, report, schedule);
+  // XR-LAYER-1: the buffer quad and cylinder layers share with the XR thread (absent or of another layout: no such
+  // layers, createQuadLayer / createCylinderLayer throw NotSupportedError)
+  let layerBuffer: LayerBuffer | null = null;
+  if (typeof natives.layers === 'function') {
+    const candidate = new LayerBuffer(natives.layers());
+    if (candidate.valid) {
+      layerBuffer = candidate;
+      gfx.setLayerBuffer(candidate);
+    } else {
+      console.error('@iwer/native: composition layer buffer of another layout; quad and cylinder layers are off');
+    }
+  }
+  const backend = new NativeHostBackend(natives, gfx, hooks, report, schedule, layerBuffer);
 
   // The device starts with a provisional configuration so navigator.xr exists before any page script (DBG-STAGE);
   // the capabilities fill it in on first use (they need OpenXR to be initialised, which runs in parallel with boot).
@@ -328,13 +351,15 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       frames++;
       const frame = record.refresh();
       record.copyInput(input.left, input.right);
+      layerBuffer?.beginFrame();
       gfx.beginFrame(frame.colorTexture);
       if (device.activeSession) {
         device.runHostFrame(frame);  // session callbacks, then window rAF (backend.runWindowFrame)
       } else {
         windowFrame();  // the session ended in JS before the native side heard of it
       }
-      gfx.endFrame(frame.colorTexture !== 0);
+      // a frame that drew only layers is fenced too
+      gfx.endFrame(frame.colorTexture !== 0 || gfx.layerCount > 0);
     } else if (kind === FRAME_TICK) {
       ticks++;
       windowFrame();
@@ -357,6 +382,8 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       lastSerial: record.frame.frameSerial,
       invalidations: gfx.invalidations,
       parks: gfx.parks,
+      layerSwapchains: gfx.layerCount,
+      layerEntries: layerBuffer?.lastCount ?? 0,
     }),
     gl: () => gfx.gl,
   };

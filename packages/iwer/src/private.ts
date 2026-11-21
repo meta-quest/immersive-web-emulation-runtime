@@ -35,6 +35,7 @@ export const P_DEPTH_INFO = Symbol('@iwer/xr-depth-info');
 export const P_HIT_TEST = Symbol('@iwer/xr-hit-test');
 export const P_COMPOSITION_LAYER = Symbol('@iwer/xr-composition-layer');
 export const P_PROJECTION_LAYER = Symbol('@iwer/xr-projection-layer');
+export const P_CONTENT_LAYER = Symbol('@iwer/xr-content-layer');
 export const P_WEBGL_BINDING = Symbol('@iwer/xr-webgl-binding');
 export const P_HOST_INPUT = Symbol('@iwer/xr-host-input');
 export const P_BOUNDED_REF_SPACE = Symbol('@iwer/xr-bounded-reference-space');

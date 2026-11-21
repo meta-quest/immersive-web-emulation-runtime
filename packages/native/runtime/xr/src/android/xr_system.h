@@ -23,6 +23,7 @@
 #include <thread>
 #include <vector>
 
+#include "android/xr_layers.h"
 #include "iwn/core/asset_source.h"
 #include "iwn/core/json.h"
 #include "iwn/xr/frame_record.h"
@@ -85,6 +86,13 @@ class XrSystem {
   // --- JS-thread API (xr_binding.cc) ---
   Json info();
   SwapchainAnswer begin_swapchain(const SwapchainRequest& request);
+  // Quad and cylinder layers (XR-LAYER-1, xr_layers.h): a swapchain per layer, its destruction, and an image for a
+  // layer the page draws in the frame it created it in. layer_words(): the buffer shared with the adapter
+  // (iwn/xr/layers.h), alive for the process.
+  LayerSwapchainAnswer begin_layer_swapchain(const LayerSwapchainRequest& request);
+  void destroy_layer_swapchain(uint32_t id);
+  uint32_t acquire_layer_image(uint32_t id);
+  uint32_t* layer_words() { return layer_words_; }
   void end_webxr_session();
   bool request_frame_rate(float hz);
   void set_foveation(double level);
@@ -153,6 +161,7 @@ class XrSystem {
 
   FrameRecord record_;
   FrameSlot slot_;
+  uint32_t layer_words_[layers::kWords] = {};
   CommandQueue commands_;
   std::atomic<bool> pending_frame_{false};
   std::atomic<bool> pending_tick_{false};

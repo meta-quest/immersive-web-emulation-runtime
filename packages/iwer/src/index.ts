@@ -183,9 +183,12 @@ export type {
 // Host mode: a native host drives frames and backs layers (host/types.ts)
 export type {
   XRHostBackend,
+  XRHostContentLayerKind,
   XRHostErrorSource,
   XRHostEvent,
   XRHostFrame,
+  XRHostLayer,
+  XRHostLayerLayout,
   XRHostSwapchain,
   XRHostSwapchainOptions,
 } from './host/types.js';
@@ -195,6 +198,11 @@ export {
   XRProjectionLayer,
   XRWebGLSubImage,
 } from './layers/XRProjectionLayer.js';
+export {
+  XRContentLayer,
+  XRQuadLayer,
+  XRCylinderLayer,
+} from './layers/XRContentLayer.js';
 
 // Session
 export { XRRenderState } from './session/XRRenderState.js';

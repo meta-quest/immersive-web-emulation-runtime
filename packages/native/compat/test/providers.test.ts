@@ -94,8 +94,11 @@ test('resolve: measured layers, V8, IWER, gaps and policies', () => {
   assert.equal(st('HTMLMediaElement.canPlayType()'), 'inert');
   assert.equal(st('HTMLMediaElement.play()'), 'unsupported'); // playback is what is absent
   assert.equal(st('HTMLVideoElement.requestVideoFrameCallback()'), 'unsupported');
-  assert.equal(st('XRWebGLBinding.createQuadLayer()'), 'later');
-  assert.match(resolve(parseKey('XRWebGLBinding.createQuadLayer()'), s).note!, /throws/);
+  assert.equal(st('XRWebGLBinding.createEquirectLayer()'), 'later');
+  assert.match(resolve(parseKey('XRWebGLBinding.createEquirectLayer()'), s).note!, /equirect/);
+  // XR-LAYER-1: quad and cylinder layers are IWER host mode's (provided where the measured IWER build has them)
+  assert.equal(ruleFor('XRWebGLBinding.createQuadLayer')?.policy, 'provide');
+  assert.equal(resolve(parseKey('XRWebGLBinding.createQuadLayer()'), measuredSurface({ generatedAt: '', packageRoot: '', layers: [] }, ['XRWebGLBinding.createQuadLayer'])).status, 'iwer');
   assert.equal(st('miss:Navigator.gpu'), 'absent-ok');
   assert.equal(st('fetch(cross-origin https://cdn.example.net .glb)'), 'config');
   assert.equal(st('decodeAudioData(mp3)'), 'in-source');

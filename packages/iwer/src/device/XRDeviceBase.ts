@@ -79,6 +79,7 @@ import {
   XRProjectionLayer,
   XRWebGLSubImage,
 } from '../layers/XRProjectionLayer.js';
+import { XRCylinderLayer, XRQuadLayer } from '../layers/XRContentLayer.js';
 import {
   calculateVisibilityMaskBounds,
   type XRVisibilityMask,
@@ -986,11 +987,14 @@ export class XRDeviceBase {
     setGlobal('XRReferenceSpaceEvent', XRReferenceSpaceEvent);
 
     if (this[P_DEVICE].host) {
-      // host mode has real projection layers; three.js looks for
-      // createProjectionLayer on XRWebGLBinding.prototype to use them
+      // host mode has real projection, quad and cylinder layers; three.js
+      // looks for createProjectionLayer on XRWebGLBinding.prototype to use
+      // them
       setGlobal('XRWebGLBinding', XRHostWebGLBinding);
       setGlobal('XRCompositionLayer', XRCompositionLayer);
       setGlobal('XRProjectionLayer', XRProjectionLayer);
+      setGlobal('XRQuadLayer', XRQuadLayer);
+      setGlobal('XRCylinderLayer', XRCylinderLayer);
       setGlobal('XRBoundedReferenceSpace', XRBoundedReferenceSpace);
       setGlobal('XRWebGLSubImage', XRWebGLSubImage);
       return;

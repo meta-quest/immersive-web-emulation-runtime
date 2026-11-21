@@ -119,15 +119,15 @@ test('cli: iwer-native compat (static) exit codes and json', async () => {
 test('cli: the dormant-library baseline applies to IWSDK apps only; a plain three.js app gets its warnings', async () => {
   const files = {
     'dist/index.html': '<html><head></head><body><script type="module" src="/assets/a.js"></script></body></html>',
-    'dist/assets/a.js': 'const s=await navigator.mediaDevices.getUserMedia({video:true});const q=b.createQuadLayer({});',
+    'dist/assets/a.js': 'const s=await navigator.mediaDevices.getUserMedia({video:true});const q=b.createEquirectLayer({});',
     'index.html': '<html><head><script type="module" src="/main.js"></script></head></html>',
   };
   // Vite's vanilla layout: main.js at the project root, no src/, no IWSDK
-  const plain = writeTree(tempDir(), { ...files, 'package.json': '{"dependencies":{"three":"0.181.0"}}', 'main.js': 'const s = await navigator.mediaDevices.getUserMedia({ video: true });\nconst q = binding.createQuadLayer({});' });
+  const plain = writeTree(tempDir(), { ...files, 'package.json': '{"dependencies":{"three":"0.181.0"}}', 'main.js': 'const s = await navigator.mediaDevices.getUserMedia({ video: true });\nconst q = binding.createEquirectLayer({});' });
   const a = io(plain);
   assert.equal(await runCli(['compat', '--verbose'], a), 0);
   assert.match(a.out, /\[warn\] MediaDevices\.getUserMedia\(\)/);
-  assert.match(a.out, /\[warn\] XRWebGLBinding\.createQuadLayer\(\)/);
+  assert.match(a.out, /\[warn\] XRWebGLBinding\.createEquirectLayer\(\)/);
   assert.doesNotMatch(a.out, /library code every IWSDK build carries/);
   // the same bundle without app source: still the app's (no IWSDK), so still warnings
   const bare = writeTree(tempDir(), { ...files, 'package.json': '{"dependencies":{"three":"0.181.0"}}' });

@@ -20,12 +20,19 @@
 //   may be reading. Only GL is changed: the WebGL binding's record of the attachment stays, so the page's view and
 //   IWER's own bookkeeping (it attaches an XRWebGLLayer image only when the image changes) are untouched.
 //
+// Quad and cylinder layers (XR-LAYER-1) work the same way: one WebGLTexture per layer swapchain (the colorTexture of
+// its sub-images), pointed at the image the XR thread acquired for that layer (the shared layer buffer, layers.ts)
+// when a frame begins and parked after it, because the XR thread releases the image of a layer the page drew to the
+// compositor once the frame is fenced. A layer the page draws in the frame it created it in has no image in the
+// buffer yet: one is acquired at once (natives.acquireLayerImage).
+//
 // The framebuffers that may hold the opaque texture are found by watching which framebuffers the session's context
 // binds (one JS call per bind on that context only; attaching needs the framebuffer bound, so every framebuffer that
 // can hold the session's image is seen). retargetTexture skips those without the texture attached. The list is
 // bounded: when it is full, deleted framebuffers go first, then the oldest one that holds no session image. One that
 // holds it is never dropped, or it would keep an image the compositor owns attached and miss the next re-pointing.
 
+import type { LayerBuffer } from './layers.ts';
 import type { GLContext, WebGLHooks, XrNatives } from './natives.ts';
 
 const TEXTURE_2D = 0x0de1;
@@ -40,6 +47,13 @@ interface FramebufferLike {
 /** The WebGL binding's texture object as far as parking needs it (web/webgl objects.ts: `_name` is the GL name). */
 interface TextureLike {
   _name: number;
+}
+
+/** A quad or cylinder layer's swapchain and the texture its sub-images report (made on first use). */
+interface LayerTexture {
+  id: number;
+  target: number;
+  tex: TextureLike | null;
 }
 
 export class GraphicsBridge {
@@ -63,10 +77,84 @@ export class GraphicsBridge {
   private readonly one: object[] = [];
   private readonly natives: XrNatives;
   private readonly hooks: WebGLHooks | null;
+  // quad and cylinder layers: live swapchains (oldest first), their textures, the shared buffer
+  private readonly layers: LayerTexture[] = [];
+  private readonly layerTextures = new Set<object>();
+  private layerBuffer: LayerBuffer | null = null;
+  private inFrame = false;
 
   constructor(natives: XrNatives, hooks: WebGLHooks | null) {
     this.natives = natives;
     this.hooks = hooks;
+  }
+
+  /** Live quad and cylinder layer swapchains. */
+  get layerCount(): number {
+    return this.layers.length;
+  }
+
+  setLayerBuffer(buffer: LayerBuffer): void {
+    this.layerBuffer = buffer;
+  }
+
+  /** A quad or cylinder layer's swapchain was created; `textureArray`: its images are TEXTURE_2D_ARRAYs. */
+  addLayer(id: number, textureArray: boolean): void {
+    this.layers.push({ id, target: textureArray ? TEXTURE_2D_ARRAY : TEXTURE_2D, tex: null });
+  }
+
+  /** layer.destroy(): its texture refers to no image any more (the swapchain goes). */
+  dropLayer(id: number): void {
+    const i = this.layers.findIndex((l) => l.id === id);
+    if (i < 0) return;
+    const tex = this.layers[i].tex;
+    if (tex && this.gl && this.hooks) this.hooks.retargetTexture(this.gl, tex, 0, this.framebuffers);
+    if (tex) this.layerTextures.delete(tex);
+    this.layers.splice(i, 1);
+  }
+
+  /**
+   * XRHostBackend.getLayerColorTexture: the layer's texture, pointed at the image the page draws into this frame
+   * (acquired now when the XR thread had none for it at the frame's start: a layer created in this frame).
+   */
+  layerTexture(id: number): object | null {
+    const gl = this.gl;
+    const hooks = this.hooks;
+    if (!gl || !hooks) return null;
+    let layer: LayerTexture | null = null;
+    for (let i = 0; i < this.layers.length; i++) {
+      if (this.layers[i].id === id) layer = this.layers[i];
+    }
+    if (!layer) return null;
+    let name = 0;
+    if (this.inFrame) {
+      name = this.layerBuffer?.nameOf(id) ?? 0;
+      if (name === 0) name = this.natives.acquireLayerImage?.(id) ?? 0;
+    }
+    if (!layer.tex) {
+      layer.tex = hooks.wrapTexture(gl, name, layer.target) as TextureLike;
+      this.layerTextures.add(layer.tex);
+    } else {
+      hooks.retargetTexture(gl, layer.tex, name, this.framebuffers);
+    }
+    return layer.tex;
+  }
+
+  /** Layer textures to this frame's images (begin) or to none (park). */
+  private pointLayers(begin: boolean): void {
+    const gl = this.gl;
+    const hooks = this.hooks;
+    const buffer = this.layerBuffer;
+    if (!gl || !hooks) return;
+    const layers = this.layers;
+    for (let i = 0; i < layers.length; i++) {
+      const tex = layers[i].tex;
+      if (tex === null) continue;
+      const name = begin && buffer ? buffer.nameOf(layers[i].id) : 0;
+      if (tex._name !== name) {
+        hooks.retargetTexture(gl, tex, name, this.framebuffers);
+        if (!begin) this.parks++;
+      }
+    }
   }
 
   /** The context the page handed to XRWebGLBinding / XRWebGLLayer. */
@@ -89,6 +177,11 @@ export class GraphicsBridge {
 
   onSessionEnd(): void {
     this.reset();
+    // every layer swapchain goes with the session
+    this.pointLayers(false);
+    this.layers.length = 0;
+    this.layerTextures.clear();
+    this.inFrame = false;
   }
 
   private reset(): void {
@@ -126,6 +219,8 @@ export class GraphicsBridge {
   /** Before the frame's callbacks: point the opaque texture at this frame's image, re-attach parked layer images. */
   beginFrame(name: number): void {
     this.currentName = name;
+    this.inFrame = true;
+    this.pointLayers(true);
     const gl = this.gl;
     const hooks = this.hooks;
     if (!gl || !hooks || name === 0) return;  // no image this frame: everything stays parked
@@ -171,6 +266,8 @@ export class GraphicsBridge {
 
   /** XR-SC-3: detach the frame's image (in GL only) from every framebuffer that renders into it (file comment). */
   private park(): void {
+    this.inFrame = false;
+    this.pointLayers(false);
     const gl = this.gl;
     const hooks = this.hooks;
     if (!gl || !hooks) return;
@@ -236,29 +333,44 @@ export class GraphicsBridge {
     list.push(fb);
   }
 
-  /** Whether any attachment of `fb` is the opaque texture or an XRWebGLLayer image (no allocation). */
+  /** Whether any attachment of `fb` is the opaque texture, an XRWebGLLayer image or a layer texture (no allocation). */
   private holdsSessionImage(fb: object): boolean {
     const atts = (fb as FramebufferLike)._attachments;
-    if (atts === undefined || (this.opaque === null && this.wrappers.size === 0)) return false;
+    if (atts === undefined || (this.opaque === null && this.wrappers.size === 0 && this.layerTextures.size === 0)) {
+      return false;
+    }
     holdScan.opaque = this.opaque;
     holdScan.wrappers = this.wrappers;
+    holdScan.layers = this.layerTextures;
     holdScan.found = false;
     atts.forEach(holdVisit);
     holdScan.opaque = null;
     holdScan.wrappers = null;
+    holdScan.layers = null;
     return holdScan.found;
   }
 }
 
 // Scratch state for holdsSessionImage's Map.forEach (a hoisted callback allocates nothing per call).
-const holdScan: { opaque: object | null; wrappers: Set<object> | null; found: boolean } = {
+const holdScan: {
+  opaque: object | null;
+  wrappers: Set<object> | null;
+  layers: Set<object> | null;
+  found: boolean;
+} = {
   opaque: null,
   wrappers: null,
+  layers: null,
   found: false,
 };
 function holdVisit(a: { object: unknown }): void {
   const o = a.object;
-  if (o !== null && (o === holdScan.opaque || (holdScan.wrappers !== null && holdScan.wrappers.has(o as object)))) {
+  if (
+    o !== null &&
+    (o === holdScan.opaque ||
+      (holdScan.wrappers !== null && holdScan.wrappers.has(o as object)) ||
+      (holdScan.layers !== null && holdScan.layers.has(o as object)))
+  ) {
     holdScan.found = true;
   }
 }

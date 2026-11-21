@@ -24,16 +24,17 @@ Khronos OpenXR loader 1.1.63 with its vendored jnipp and android-jni-wrappers, a
 | path | what |
 |---|---|
 | `layout/frame-record.json` | the one definition of the frame record (XRF-4); `gen/generate-layout.mjs` writes `include/iwn/xr/frame_record_layout.gen.h` (C++ byte offsets) and `web/xr/src/layout.gen.ts` (typed-array indices); `--check` fails on a stale file |
-| `include/iwn/xr/*.h`, `src/core/*.cc` | **iwn_xr_core**, V8-free and OpenXR-call-free: the record writer, input mapping (HOST-INPUT layouts), frame pacing, the performance-level policy, the session-lifetime policy, the `xr` config section and foveation parameters, the PNG writer, the XR/JS thread handoff, the loading screen's policy, placement, layout and spinner image (`loading.h`) |
+| `include/iwn/xr/*.h`, `src/core/*.cc` | **iwn_xr_core**, V8-free and OpenXR-call-free: the record writer, input mapping (HOST-INPUT layouts), frame pacing, the performance-level policy, the session-lifetime policy, the `xr` config section and foveation parameters, the PNG writer, the XR/JS thread handoff, the loading screen's policy, placement, layout and spinner image (`loading.h`), the composition-layer buffer and entry geometry (`layers.h`) |
 | `src/android/xr_system.{h,cc}` | the XR thread: instance, session, spaces, swapchain, foveation, passthrough, events, the frame loop, stats |
 | `src/android/xr_input.{h,cc}` | OpenXR actions for Touch / Touch Plus / Touch Pro controllers and the hand interaction profile (poses, microgestures), hand tracking + aim, haptics |
+| `src/android/xr_layers.{h,cc}` | quad and cylinder layers (XR-LAYER-1): a swapchain per layer (sRGB, drawn through RGBA8 texture views), its acquired image, release of redrawn images, the frame's `XrCompositionLayerQuad` / `XrCompositionLayerCylinderKHR` structs in `renderState.layers` order |
 | `src/android/xr_loading.{h,cc}` | the loading screen's swapchains (static: the splash card, the spinner, the background colour) and its composition layers; the splash PNG's decode (image module) |
 | `src/android/xr_shot.{h,cc}` | eye-buffer screenshots for the debug endpoint's `shot` (readback on the XR thread, PNG on an encoder thread) |
 | `src/android/egl_xr.{h,cc}` | the XR thread's EGL context in the WebGL share group, cross-context fences |
 | `src/android/jni_android.{h,cc}` | JavaVM and Activity lookup for the loader and `xrCreateInstance` (through `ActivityThread`, non-SDK fields, Application context as the fallback; follow-up: take the NativeActivity's object from the app module instead) |
 | `src/v8/xr_binding.cc` | `iwn_register_xr`: `globalThis.__iwn.xr`, the core FramePump, `shot`, the `xr` stats section, the shutdown hook |
 | `manifest/vr-manifest.json` | manifest entries every XR APK needs (OpenXR permissions and broker queries, VR category, head tracking, focus awareness, hand tracking, passthrough); the packager template (`packager/template/AndroidManifest.xml`) carries them, `tools/build-xr-apk.mjs` adds them to the runtime's test template |
-| `test/host/` | host unit tests (`iwn_xr_core_tests`, 69 tests, incl. the frame handoff with real threads, input mapping (hands, controllers, microgestures) and the loading screen's hand-over and placement) and `iwn_xr_record_dump` (a record written by the native writer, read by web/xr's round-trip test) |
+| `test/host/` | host unit tests (`iwn_xr_core_tests`, 73 tests, incl. the frame handoff with real threads, input mapping (hands, controllers, microgestures) and the loading screen's hand-over and placement) and `iwn_xr_record_dump` (a record written by the native writer, read by web/xr's round-trip test) |
 | `tools/` | device-check tooling: `m3-check.mjs` (the M3 device check), `xr-check.mjs` (eval/stats/shot/watch over the debug endpoint), `build-xr-test-apk.mjs` + `xr-test-app/` (the pipeline test app and its variants; the same `main.js` runs in Quest Browser through `browser-ab.mjs` for A/B checks), `build-showcase-apk.mjs` (+ `showcase-dom/dom-shim.js`, TEST-ONLY DOM scaffolding until a DOM module exists), `build-xr-apk.mjs` |
 
 ## How it works
@@ -86,6 +87,19 @@ every frame (REG-6). Between frames the image belongs to the compositor, so afte
 opaque texture points at no image and an `XRWebGLLayer` framebuffer's colour is detached, in GL only (the WebGL
 binding's record, and with it IWER's, stays), until the next frame begins. Drawing to them from a timer or task then
 reaches no image, as WebXR specifies for opaque framebuffers (XR-SC-3).
+
+**Quad and cylinder layers (XR-LAYER-1, `xr_layers.h`).** Each `createQuadLayer` / `createCylinderLayer` gets a
+swapchain of its own (`beginLayerSwapchain`), which keeps one image acquired for the page; its GL name reaches the
+page through a buffer of its own (`iwn/xr/layers.h`, `__iwn.xr.layers()`, not the frame record), and the layer's
+`WebGLTexture` follows it during frames and is parked between them, like the projection layer's. Each frame the
+adapter writes `renderState.layers` into that buffer (pose in the base or VIEW space, shape, layout, whether the page
+drew the layer); once the frame is fenced the XR thread releases the drawn layers' images and submits the list in
+order around the projection layer, one struct per eye for stereo layouts. A layer the page does not draw keeps its
+last content. Which images a frame releases and which layers it shows is `layers::collect()` in the host-tested core.
+Layers listed before the projection layer make it blend by its alpha (else they would never show); a session with
+only quad or cylinder layers ends the loading screen. Horizon OS reads RGBA8 quads as linear (unlike the RGBA8
+projection layer), so the swapchains are SRGB8_ALPHA8 and the page draws into RGBA8 texture views of their images;
+a mono `texture-array` layer draws into one-layer 2D-array views (OpenXR hands out 2D images for an array size of 1).
 
 **Foveation (XR-FOV-1).** `fixedFoveation` 0..1 maps to none/low/medium/high (round(v x 3)); the Quest Browser
 feature strings and `xr.foveation` set the start value, applied before the first frame. The level goes to OpenXR as
@@ -200,8 +214,8 @@ falls back to the default; no undefined float-to-integer conversions).
 `depth-sensing` and `anchors` are never granted (required -> `NotSupportedError`, optional -> dropped; the
 anchor calls reject with `NotSupportedError`), `bounded-floor` is withdrawn when the headset has no boundary,
 `immersive-ar` (passthrough under the projection layer, XR_FB_passthrough) exists behind `xr.immersiveAr: true`
-only and is not device-validated, quad/cylinder layers are absent (IWER host mode has neither; README open
-question 13), no dom-overlay/secondary views/camera (XR-SEC-1).
+only and is not device-validated, equirect and cube layers are absent (quad and cylinder layers exist,
+XR-LAYER-1), no dom-overlay/secondary views/camera (XR-SEC-1).
 
 ## Config (`assets/iwn/config.json`, `xr` section)
 
@@ -252,9 +266,9 @@ in the page's context without touching its GL error state).
 ```bash
 # host (V8-free core) and the JS adapter
 cmake -S runtime -B <host-build> -G Ninja -DIWN_TOOLCHAIN_DIR=<clean toolchain> -DIWN_THIRD_PARTY_DIR=<third-party trees> && ninja -C <host-build> iwn_xr_core_tests iwn_xr_record_dump
-<host-build>/xr/iwn_xr_core_tests                        # 69 tests
+<host-build>/xr/iwn_xr_core_tests                        # 73 tests
 node runtime/xr/gen/generate-layout.mjs --check
-(cd web/xr && IWN_XR_RECORD_DUMP=<host-build>/xr/iwn_xr_record_dump npm run verify)   # typecheck + 29 tests
+(cd web/xr && IWN_XR_RECORD_DUMP=<host-build>/xr/iwn_xr_record_dump npm run verify)   # typecheck + 35 tests
 
 # device: libiwernative.so (release/build-release.sh flags, or the Android build of runtime/), then
 node runtime/xr/tools/build-xr-test-apk.mjs --out apks/xr-test-default.apk --toolchain <clean toolchain>

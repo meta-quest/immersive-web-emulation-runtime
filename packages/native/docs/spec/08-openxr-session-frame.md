@@ -210,20 +210,37 @@ and cylinder layers (XR-LAYER-1) in `renderState.layers` order.
 *Check:* a fixed cube does not swim when the head moves (human check on device, once per milestone);
 `xrEndFrame` validation layer clean.
 
-**XR-LAYER-1 (MUST, decision pending).** Quad and cylinder composition layers. IWSDK core's
-`XRLayerSystem` creates native quad and cylinder layers (`XRWebGLBinding.createQuadLayer` /
-`createCylinderLayer`) for entities with `XRQuadLayer`/`XRCylinderLayer` components once the session has a
-projection layer, and calls them without checking that they exist; IWER host mode's binding today offers
-only `createProjectionLayer` and `getViewSubImage`. No IWSDK app may throw because of this. Preferred:
-implement them (an IWER host-mode change adding both methods and their swapchain options to the host
-backend; the runtime creates one swapchain per layer and submits OpenXR quad layers and
-`XR_KHR_composition_layer_cylinder` layers, honouring each layer's transform, size, space, `blendTextureSourceAlpha`
-and `needsRedraw` per WebXR Layers). Fallback until then (open question 13): an IWSDK change that feature-detects
-the two methods and keeps its mesh fallback. Equirect and cube layers are absent (IWSDK does not use them).
-*Check:* the IWSDK `layers` example runs on device with no exception in logcat; its quad and cylinder
-content is visible on the headset (human check or the compositor's mirror; eye-buffer shots, DBG-SHOT, do
-not include separate compositor layers), as native layers when implemented, as meshes under the
-fallback.
+**XR-LAYER-1 (MUST).** Quad and cylinder composition layers (WebXR Layers), as IWSDK core's `XRLayerSystem`
+uses them for entities with `XRQuadLayer`/`XRCylinderLayer` components. `XRWebGLBinding.createQuadLayer` /
+`createCylinderLayer` (IWER host mode, `layers` feature enabled) create one OpenXR swapchain per layer, sized
+`viewPixelWidth` × `viewPixelHeight` per view: layout `mono`, `stereo-left-right` (side by side), `stereo-top-bottom`
+(left eye on top) with `textureType: 'texture'` (`stereo` resolves to side by side), `mono` (a 1-layer array) or
+`stereo` (a 2-layer array) with `'texture-array'`; `isStatic` makes a static swapchain drawn in one frame (every view,
+any number of `getSubImage` calls in that frame; `needsRedraw` goes false when the frame ends); 1 mip level.
+`blendTextureSourceAlpha` defaults to true, as in Chromium and the WebXR Layers polyfill. The layer keeps its own copy
+of the `transform` it is given (init or attribute); `space` and `transform` take only an `XRSpace` and an
+`XRRigidTransform` (TypeError otherwise), and a layer whose pose cannot be worked out is left out of the frame, not the
+whole list. `getSubImage(layer, frame,
+eye)` returns the view's sub-image, whose `colorTexture` is one `WebGLTexture` per layer that refers to the image
+acquired for that layer this frame (as XR-SC-2 for projection layers), and clears it to transparent black on the first
+access of a frame unless `clearOnAccess` is false. The runtime keeps one image acquired per layer; the image of a layer
+the page drew in a frame (`getSubImage`) is released once the frame's GL work is fenced and becomes its content, and a
+layer the page does not draw keeps showing its last content. Each frame submits `renderState.layers` in order around
+the projection layer: `XrCompositionLayerQuad` (size = twice WebXR's `width`/`height`, which are half-extents as in
+Quest Browser and the WebXR Layers polyfill) and `XrCompositionLayerCylinderKHR` (`radius`, `centralAngle`,
+`aspectRatio`), one per eye (`eyeVisibility`) for stereo layouts, posed from the layer's `space` and `transform` at the
+frame's predicted display time in the base space (in the VIEW space for a layer in the viewer reference space),
+`blendTextureSourceAlpha` as `XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT` (premultiplied). When layers are
+listed before the projection layer, the projection layer blends by its alpha too (Chromium blends projection layers by
+default), so they show through its transparent pixels; otherwise it stays opaque in `immersive-vr`. A session that shows
+only quad or cylinder layers (no projection layer) ends the loading screen like a projection frame. A layer without
+content yet, an unlocated space or a shape OpenXR rejects is left out of that frame; the compositor's layer limit
+(`maxLayerCount`) cuts the end of the list. `destroy()` releases the swapchain; the session's end releases all.
+Equirect and cube layers are absent (IWSDK does not use them).
+*Check:* proto-layers (IWSDK 1.0.0 and 1.1.0) runs on device at full rate with no exception, its quad and cylinder
+layers submitted every frame (`xr.layers` in DBG-STATS, LOG-2's layer swapchain lines); a system capture (Meta's
+capture service, which unlike DBG-SHOT includes composition layers) shows them, and shows each eye its region of
+every stereo layout.
 
 **XR-COL-1 (MUST).** Colour parity: a test scene with known sRGB patches (three, `outputColorSpace =
 SRGBColorSpace`) shows the same encoded values in an XR screenshot of the runtime and of Quest Browser

@@ -324,7 +324,8 @@ describe('support matrix', () => {
   test('statuses come from the inventory', () => {
     assert.equal(classify(ROWS.find((r) => r.api.startsWith('ECMAScript'))!, snapshot).support, 'supported');
     assert.equal(classify(ROWS.find((r) => r.api === 'WebGPU')!, snapshot).support, 'out of scope');
-    assert.equal(classify(ROWS.find((r) => r.api.startsWith('Quad'))!, snapshot).support, 'not yet');
+    assert.equal(classify(ROWS.find((r) => r.api.startsWith('Quad'))!, snapshot).support, 'supported');
+    assert.equal(classify(ROWS.find((r) => r.api.startsWith('Equirect'))!, snapshot).support, 'not yet');
   });
 });
 

@@ -146,18 +146,18 @@ test('scan: an injected emulator in a minified build (class names gone) is found
 });
 
 test('check: the app\'s own config and source are not dormant library code', () => {
-  // the bundle mentions AR, video and quad layers in library code every IWSDK build carries
-  const d = dist({ 'assets/index.js': 'x.requestSession("immersive-ar");b.createQuadLayer({});document.createElement("video");' });
+  // the bundle mentions AR, video and equirect layers in library code every IWSDK build carries
+  const d = dist({ 'assets/index.js': 'x.requestSession("immersive-ar");b.createEquirectLayer({});document.createElement("video");' });
   const scan = scanDist(d);
   const surface = fakeSurface();
-  const keys = ['XRSystem.requestSession("immersive-ar")', 'XRWebGLBinding.createQuadLayer()', 'Document.createElement("video")'];
+  const keys = ['XRSystem.requestSession("immersive-ar")', 'XRWebGLBinding.createEquirectLayer()', 'Document.createElement("video")'];
   const baseline = { keys: new Set(keys), origins: new Set<string>(), counts: new Map(keys.map((k) => [k, 1])) };
   const lib = evaluateCompat({ scan, surface, baseline });
   assert.ok(lib.findings.every((f) => f.severity === 'info'), 'library mentions alone stay quiet');
   const app = [
     { key: 'XRSystem.offerSession("immersive-ar")', origin: 'config' as const, evidence: 'iwsdk.config.json world.xr.mode = "ar"' },
     { key: 'XR feature hit-test (required)', origin: 'config' as const, evidence: 'iwsdk.config.json world.xr.features.hitTest' },
-    { key: 'XRWebGLBinding.createQuadLayer()', origin: 'source' as const, evidence: 'src/index.ts:3: addComponent(XRQuadLayer' },
+    { key: 'XRWebGLBinding.createEquirectLayer()', origin: 'source' as const, evidence: 'src/index.ts:3: new EquirectLayer' },
     { key: 'Document.createElement("video")', origin: 'source' as const, evidence: 'src/film.ts:9' },
     { key: 'new VideoDecoder', origin: 'source' as const, evidence: 'src/film.ts:12' },
   ];
@@ -165,15 +165,15 @@ test('check: the app\'s own config and source are not dormant library code', () 
   const sev = (k: string) => r.findings.find((f) => f.key === k)?.severity;
   assert.equal(sev('XRSystem.offerSession("immersive-ar")'), 'warn');
   assert.equal(sev('XR feature hit-test (required)'), 'warn');
-  assert.equal(sev('XRWebGLBinding.createQuadLayer()'), 'warn');
-  assert.equal(r.findings.find((f) => f.key === 'XRWebGLBinding.createQuadLayer()')?.source, 'app');
+  assert.equal(sev('XRWebGLBinding.createEquirectLayer()'), 'warn');
+  assert.equal(r.findings.find((f) => f.key === 'XRWebGLBinding.createEquirectLayer()')?.source, 'app');
   assert.equal(sev('Document.createElement("video")'), 'warn');
   assert.equal(sev('new VideoDecoder'), 'warn');
   assert.equal(r.advice, UNSUPPORTED_ADVICE); // AR, required features and media get the advice
   assert.equal(evaluateCompat({ scan, app, surface, baseline, strict: true }).ok, false);
   // more mentions than the baseline builds carried: the app added some, so not dormant
-  const more = scanDist(dist({ 'assets/index.js': 'b.createQuadLayer({});b.createQuadLayer({});' }));
-  assert.equal(evaluateCompat({ scan: more, surface, baseline }).findings.find((f) => f.key === 'XRWebGLBinding.createQuadLayer()')?.severity, 'warn');
+  const more = scanDist(dist({ 'assets/index.js': 'b.createEquirectLayer({});b.createEquirectLayer({});' }));
+  assert.equal(evaluateCompat({ scan: more, surface, baseline }).findings.find((f) => f.key === 'XRWebGLBinding.createEquirectLayer()')?.severity, 'warn');
 });
 
 test('check: media probes are not failures; playback is', () => {
@@ -228,16 +228,16 @@ test('matrix: app config/source rows and the headset-only path', () => {
   const app = {
     layers: [
       { key: 'XRSystem.offerSession("immersive-vr")', origin: 'config' as const, evidence: 'iwsdk.config.json' },
-      { key: 'XRWebGLBinding.createQuadLayer()', origin: 'source' as const, evidence: 'src/index.ts:3' },
+      { key: 'XRWebGLBinding.createEquirectLayer()', origin: 'source' as const, evidence: 'src/index.ts:3' },
     ],
   };
   const m = buildMatrix(traces, surface, { app });
   const row = (k: string) => m.rows.find((r) => r.key === k);
-  assert.deepEqual([...row('XRWebGLBinding.createQuadLayer()')!.uses[0]!.where], ['source']);
-  assert.equal(row('XRWebGLBinding.createQuadLayer()')!.resolution.status, 'later');
+  assert.deepEqual([...row('XRWebGLBinding.createEquirectLayer()')!.uses[0]!.where], ['source']);
+  assert.equal(row('XRWebGLBinding.createEquirectLayer()')!.resolution.status, 'later');
   assert.equal(row('XRSystem.offerSession("immersive-vr")')!.uses[0]!.where.has('config'), false); // traced already
   assert.deepEqual(row('XRWebGLBinding.createProjectionLayer()')!.uses.map((u) => u.sample), ['layers']); // not the desktop sample
-  assert.match(matrixMarkdown(m), /\| `XRWebGLBinding.createQuadLayer\(\)` \| 1 \| layers \|/);
+  assert.match(matrixMarkdown(m), /\| `XRWebGLBinding.createEquirectLayer\(\)` \| 1 \| layers \|/);
 });
 
 test('check: WebGPU, the camera feature and desktop-only apps warn from the app\'s own code and print the advice', () => {

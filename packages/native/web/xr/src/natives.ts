@@ -31,8 +31,18 @@ export interface XrInfo {
   immersiveAr?: boolean;
   foveation?: boolean;
   explicitGrant?: boolean;
+  /** XR-LAYER-1: quad and cylinder layers (cylinder needs XR_KHR_composition_layer_cylinder). */
+  compositionLayers?: { quad: boolean; cylinder: boolean; maxLayers: number; bufferVersion: number };
   layoutVersion?: number;
   extensions?: string[];
+}
+
+/** A quad or cylinder layer's swapchain (beginLayerSwapchain). */
+export interface NativeLayerSwapchain {
+  id: number;
+  width: number;
+  height: number;
+  arraySize: number;
 }
 
 export interface NativeSwapchain {
@@ -84,6 +94,25 @@ export interface XrNatives {
   entryEvaluated(): void;
   runWindowFrame(): void;
   endFrameGL(): void;
+  /** Quad and cylinder layers (runtime/xr iwn/xr/layers.h): the buffer shared with the XR thread. */
+  layers?(): ArrayBuffer;
+  /**
+   * kind 2 quad, 3 cylinder; width x height pixels of one image; `textureArray`: the page draws through
+   * TEXTURE_2D_ARRAYs (also with arraySize 1). Null when the swapchain cannot be made.
+   */
+  beginLayerSwapchain?(
+    kind: number,
+    width: number,
+    height: number,
+    arraySize: number,
+    format: number,
+    isStatic: boolean,
+    mipLevels: number,
+    textureArray: boolean,
+  ): NativeLayerSwapchain | null;
+  destroyLayerSwapchain?(id: number): void;
+  /** The GL name of the image layer swapchain `id` draws into now (acquired at once), 0 when there is none. */
+  acquireLayerImage?(id: number): number;
 }
 
 /** The internal surface of a WebGL context the hooks below take (web/webgl Ctx). */

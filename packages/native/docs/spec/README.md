@@ -122,10 +122,8 @@ DBG-8) are in no row.
     passes the frame start time and keeps the prediction in `predictedDisplayTime`. Change IWER to match
     Quest Browser (needs a frame-start time in the host frame record), or keep it? Either way window
     rAF callbacks get the frame start time (TMR-5, XRF-B-2).
-13. **Quad and cylinder layers (XR-LAYER-1):** IWSDK's `XRLayerSystem` calls `createQuadLayer` /
-    `createCylinderLayer` unchecked and IWER host mode lacks both. Implement them for M3 (IWER host-mode
-    change plus OpenXR quad and cylinder layers), or first land an IWSDK change that feature-detects them
-    and keeps its mesh fallback?
+13. **Quad and cylinder layers (XR-LAYER-1):** decided: implemented (IWER host mode adds both methods and the host
+    hooks; the runtime submits OpenXR quad and cylinder layers), so IWSDK needs no feature-detection change.
 
 ## Measurements still to take (needed to finish some checks)
 

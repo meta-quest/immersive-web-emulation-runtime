@@ -14,6 +14,7 @@ import type {
   XRHostSwapchain,
 } from './types.js';
 import { invalidateHostPoses } from './frame.js';
+import { XRHostContentLayers } from './content-layers.js';
 import { XRHostFrameLoop, XRHostFrameRequest } from './frame-loop.js';
 import { XRHostFrameRate } from './frame-rate.js';
 import { XRHostLayerRequest, XRHostOutput } from './output.js';
@@ -60,6 +61,8 @@ export class XRHostSession {
   readonly rate: XRHostFrameRate;
   readonly spaces: XRHostReferenceSpaces;
   readonly scene: XRHostScene;
+  /** Quad and cylinder layers (WebXR Layers), each with its own swapchain. */
+  readonly layers: XRHostContentLayers;
   private readonly loop: XRHostFrameLoop;
 
   /** The host frame being run; null outside `runFrame`. */
@@ -90,6 +93,9 @@ export class XRHostSession {
     this.spaces = new XRHostReferenceSpaces(globalSpace, this.output);
     this.scene = new XRHostScene(globalSpace, s.trackedPlanes, s.trackedMeshes);
     this.loop = new XRHostFrameLoop(session);
+    this.layers = new XRHostContentLayers(session, backend, (error) =>
+      this.report(error, 'layer'),
+    );
   }
 
   // -- used by XRSession, XRFrame and the layer classes ------------------------
@@ -249,6 +255,18 @@ export class XRHostSession {
         }
       }
 
+      // the frame's layer list, once the page has drawn everything (window
+      // rAF included); an XRWebGLLayer session has none
+      const layers = renderState.layers;
+      if (visible && layers !== undefined && !baseLayer && !s.ended) {
+        try {
+          this.layers.submit(layers, frameId);
+        } catch (error) {
+          this.report(error, 'layer');
+        }
+      }
+      this.layers.endFrame(frameId);
+
       if (visible && baseLayer && !s.ended) {
         try {
           baseLayer.hostEndFrame();
@@ -384,6 +402,7 @@ export class XRHostSession {
       }
     }
     this.output.release();
+    this.layers.end();
     // WebXR "shut down the session": the end event comes before the
     // promises returned by end() resolve
     session.dispatchEvent(new XRSessionEvent('end', { session }));

@@ -28,6 +28,32 @@ declare module 'iwer/host' {
     unpremultiplied?: boolean;
     scene?: boolean;
     foveation?: number;
+    layer?: XRHostContentLayerKind;
+    width?: number;
+    height?: number;
+    isStatic?: boolean;
+    mipLevels?: number;
+    textureType?: 'texture' | 'texture-array';
+  }
+
+  export type XRHostContentLayerKind = 'quad' | 'cylinder';
+  export type XRHostLayerLayout = 'mono' | 'stereo-left-right' | 'stereo-top-bottom' | 'stereo';
+
+  export interface XRHostLayer {
+    kind: 'projection' | XRHostContentLayerKind;
+    id: number;
+    listed: boolean;
+    redrawn: boolean;
+    layout: XRHostLayerLayout;
+    blendTextureSourceAlpha: boolean;
+    located: boolean;
+    viewerSpace: boolean;
+    pose: Float32Array;
+    width: number;
+    height: number;
+    radius: number;
+    centralAngle: number;
+    aspectRatio: number;
   }
 
   export interface XRHostSwapchain {
@@ -40,6 +66,7 @@ declare module 'iwer/host' {
     stageWidth?: number;
     stageDepth?: number;
     foveation?: number;
+    id?: number;
   }
 
   export type XRHostErrorSource = 'xr-frame-callback' | 'window-frame' | 'layer' | 'host-hook';
@@ -52,6 +79,9 @@ declare module 'iwer/host' {
     setPassthroughVisible?(visible: boolean): void;
     getOpaqueColorTexture?(): unknown;
     wrapTexture?(name: number): unknown;
+    getLayerColorTexture?(id: number): unknown;
+    releaseSwapchain?(id: number): void;
+    submitLayers?(layers: readonly XRHostLayer[]): void;
     runWindowFrame?(time: number): void;
     postTask?(callback: () => void): void;
     autoGrantOfferedSession?: boolean;

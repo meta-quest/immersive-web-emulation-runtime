@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 import { COUNTS, F32, F64, HAND_F32, HAND_U32, HAND_U8, LAYOUT_VERSION, RECORD_BYTES, U32 } from '../src/layout.gen.ts';
+import { LAYER_BUFFER_VERSION, LAYER_BUFFER_WORDS, NAMES_AT, NO_LIST, COUNT_AT, VERSION_AT } from '../src/layers.ts';
 import type { NativeSwapchain, XrInfo, XrNativeEvent } from '../src/natives.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -39,6 +40,8 @@ export interface Harness {
   reported: unknown[];
   logs: string[];
   record: { u32: Uint32Array; f32: Float32Array; f64: Float64Array; u8: Uint8Array; buffer: ArrayBuffer };
+  /** The composition-layer buffer (layers.ts) as the XR thread sees it; names of acquired images go in here. */
+  layerWords: { u32: Uint32Array; f32: Float32Array };
   info: XrInfo;
   swapchain: NativeSwapchain | null;
   /** Runs one XR frame as the native pump does (kind 1), after writing a default frame unless told not to. */
@@ -90,7 +93,16 @@ export function writeController(
 }
 
 export function createHarness(
-  opts: { info?: Partial<XrInfo>; layoutVersion?: number; swapchain?: NativeSwapchain | null; noWebGL?: boolean } = {},
+  opts: {
+    info?: Partial<XrInfo>;
+    layoutVersion?: number;
+    swapchain?: NativeSwapchain | null;
+    noWebGL?: boolean;
+    /** Natives without the quad and cylinder layer calls (an older runtime). */
+    noLayers?: boolean;
+    /** The layer buffer's version as the native side writes it. */
+    layerBufferVersion?: number;
+  } = {},
 ): Harness {
   const buffer = new ArrayBuffer(RECORD_BYTES);
   const record = {
@@ -140,7 +152,31 @@ export function createHarness(
       ? { width: 1680, height: 1760, arraySize: 2, rates: [72, 90, 120], rate: 72, hasStage: true, stageWidth: 3, stageDepth: 2 }
       : opts.swapchain;
 
+  const layerBuffer = new ArrayBuffer(LAYER_BUFFER_WORDS * 4);
+  const layerWords = { u32: new Uint32Array(layerBuffer), f32: new Float32Array(layerBuffer) };
+  layerWords.u32[VERSION_AT] = opts.layerBufferVersion ?? LAYER_BUFFER_VERSION;
+  layerWords.u32[COUNT_AT] = NO_LIST;
+  let nextLayerId = 1;
+  let nextLayerImage = 900;
+  const layerNatives = opts.noLayers
+    ? {}
+    : {
+        layers: () => layerBuffer,
+        beginLayerSwapchain: (...args: unknown[]) => {
+          calls.push(['beginLayerSwapchain', ...args]);
+          if ((args[1] as number) > 4096) return null;  // the system's swapchain limit
+          return { id: nextLayerId++, width: args[1], height: args[2], arraySize: args[3] };
+        },
+        destroyLayerSwapchain: (id: number) => calls.push(['destroyLayerSwapchain', id]),
+        acquireLayerImage: (id: number) => {
+          calls.push(['acquireLayerImage', id]);
+          const name = nextLayerImage++;
+          layerWords.u32[NAMES_AT + id - 1] = name;
+          return name;
+        },
+      };
   const natives = {
+    ...layerNatives,
     layoutVersion: opts.layoutVersion ?? LAYOUT_VERSION,
     info: () => {
       calls.push(['info']);
@@ -288,6 +324,7 @@ export function createHarness(
     reported,
     logs,
     record,
+    layerWords,
     info,
     frame(o: Partial<FrameOptions> = {}) {
       time += 1000 / 72;

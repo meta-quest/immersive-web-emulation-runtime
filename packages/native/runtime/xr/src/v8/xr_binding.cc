@@ -13,6 +13,10 @@
 //   sessionStarted(ar, handTracking, planes, meshes)  offered()  offerRejected()  entryEvaluated()
 //   runWindowFrame()                    inside a frame/tick: window rAF callbacks with the frame's start time
 //   endFrameGL()                        inside a frame, the session's GL context current: fence + flush
+//   layers() -> ArrayBuffer             quad and cylinder layers: the buffer shared with the XR thread
+//                                       (iwn/xr/layers.h; external backing store, the same memory for the process)
+//   beginLayerSwapchain(kind 2|3, width, height, arraySize, format, isStatic, mipLevels, textureArray) -> object | null
+//   destroyLayerSwapchain(id)  acquireLayerImage(id) -> GL name | 0
 #include <v8.h>
 
 #include <cmath>
@@ -45,6 +49,7 @@ struct BindingState {
   uint64_t generation = ~0ull;
   v8::Global<v8::Function> handler;
   v8::Global<v8::ArrayBuffer> record_buffer;
+  v8::Global<v8::ArrayBuffer> layer_buffer;
   const std::function<void(double)>* window_frame = nullptr;
   double window_time = 0;
   bool fence_created = false;
@@ -237,6 +242,55 @@ void Record(const v8::FunctionCallbackInfo<v8::Value>& info) {
   info.GetReturnValue().Set(g.record_buffer.Get(iso));
 }
 
+void Layers(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  BindingState& g = G();
+  if (g.layer_buffer.IsEmpty()) {
+    std::shared_ptr<v8::BackingStore> store =
+        v8::ArrayBuffer::NewBackingStore(XrSystem::get().layer_words(), iwn::xr::layers::kWords * sizeof(uint32_t),
+                                         v8::BackingStore::EmptyDeleter, nullptr);
+    g.layer_buffer.Reset(iso, v8::ArrayBuffer::New(iso, std::move(store)));
+  }
+  info.GetReturnValue().Set(g.layer_buffer.Get(iso));
+}
+
+void BeginLayerSwapchain(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  v8::Local<v8::Context> ctx = iso->GetCurrentContext();
+  iwn::xr::LayerSwapchainRequest req;
+  req.kind = num_in(info, 0, 2, 3, 2) == 3 ? iwn::xr::layers::kCylinder : iwn::xr::layers::kQuad;
+  // sizes beyond the system's limits are refused by the XR thread (with the limits in the error)
+  req.width = static_cast<uint32_t>(num_in(info, 1, 0, 65536, 0));
+  req.height = static_cast<uint32_t>(num_in(info, 2, 0, 65536, 0));
+  req.array_size = static_cast<uint32_t>(num_in(info, 3, 1, 2, 1));
+  req.format = static_cast<uint32_t>(num_in(info, 4, 0, 0xFFFFFFFF, 0x8058));
+  req.is_static = flag(info, 5);
+  req.mip_levels = static_cast<uint32_t>(num_in(info, 6, 1, 16, 1));
+  req.texture_array = flag(info, 7);
+  iwn::xr::LayerSwapchainAnswer a = XrSystem::get().begin_layer_swapchain(req);
+  if (!a.ok) {
+    iwn::log(LogLevel::kError, "xr: beginLayerSwapchain failed: %s", a.error.c_str());
+    info.GetReturnValue().SetNull();
+    return;
+  }
+  v8::Local<v8::Object> o = v8::Object::New(iso);
+  o->Set(ctx, str(iso, "id"), v8::Integer::NewFromUnsigned(iso, a.id)).Check();
+  o->Set(ctx, str(iso, "width"), v8::Integer::NewFromUnsigned(iso, a.width)).Check();
+  o->Set(ctx, str(iso, "height"), v8::Integer::NewFromUnsigned(iso, a.height)).Check();
+  o->Set(ctx, str(iso, "arraySize"), v8::Integer::NewFromUnsigned(iso, a.array_size)).Check();
+  info.GetReturnValue().Set(o);
+}
+
+void DestroyLayerSwapchain(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  XrSystem::get().destroy_layer_swapchain(static_cast<uint32_t>(num_in(info, 0, 0, 1024, 0)));
+}
+
+void AcquireLayerImage(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  info.GetReturnValue().Set(
+      v8::Integer::NewFromUnsigned(info.GetIsolate(), XrSystem::get().acquire_layer_image(
+                                                          static_cast<uint32_t>(num_in(info, 0, 0, 1024, 0)))));
+}
+
 void SetFrameHandler(const v8::FunctionCallbackInfo<v8::Value>& info) {
   BindingState& g = G();
   if (info.Length() < 1 || !info[0]->IsFunction()) {
@@ -376,6 +430,7 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
       if (st.rt) st.rt->set_frame_pump(nullptr);
       st.handler.Reset();
       st.record_buffer.Reset();
+      st.layer_buffer.Reset();
       // The activity can be relaunched in this process (a new Runtime after onDestroy): the next registration must
       // start the XR system again.
       st.installed = false;
@@ -397,6 +452,7 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
     g.generation = rt->context_generation();
     g.handler.Reset();
     g.record_buffer.Reset();
+    g.layer_buffer.Reset();
   }
 
   v8::Local<v8::Object> o = v8::Object::New(isolate);
@@ -416,6 +472,10 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
   set_fn(isolate, ctx, o, "runWindowFrame", RunWindowFrame);
   set_fn(isolate, ctx, o, "endFrameGL", EndFrameGL);
   set_fn(isolate, ctx, o, "debugFoveation", DebugFoveation);
+  set_fn(isolate, ctx, o, "layers", Layers);
+  set_fn(isolate, ctx, o, "beginLayerSwapchain", BeginLayerSwapchain);
+  set_fn(isolate, ctx, o, "destroyLayerSwapchain", DestroyLayerSwapchain);
+  set_fn(isolate, ctx, o, "acquireLayerImage", AcquireLayerImage);
   o->Set(ctx, str(isolate, "layoutVersion"), v8::Integer::NewFromUnsigned(isolate, L::kVersion)).Check();
   natives->Set(ctx, str(isolate, "xr"), o).Check();
 }

@@ -56,9 +56,12 @@ export type {
 // host contract
 export type {
   XRHostBackend,
+  XRHostContentLayerKind,
   XRHostErrorSource,
   XRHostEvent,
   XRHostFrame,
+  XRHostLayer,
+  XRHostLayerLayout,
   XRHostSwapchain,
   XRHostSwapchainOptions,
 } from './host/types.js';
@@ -107,6 +110,11 @@ export {
   XRProjectionLayer,
   XRWebGLSubImage,
 } from './layers/XRProjectionLayer.js';
+export {
+  XRContentLayer,
+  XRQuadLayer,
+  XRCylinderLayer,
+} from './layers/XRContentLayer.js';
 export { XRHostWebGLBinding } from './host/XRHostWebGLBinding.js';
 export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';
 export { XRMesh, XRMeshSet, NativeMesh } from './meshes/XRMesh.js';

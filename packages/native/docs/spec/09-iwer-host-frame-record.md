@@ -114,6 +114,16 @@ window of XR-LOOP-1, and never re-enters it. `session.end()` inside a callback l
 (IWER flags it; the runtime completes the frame then ends).
 *Check:* covered by XR-LIFE-5.
 
+**XRF-B-5 (MUST).** Quad and cylinder layers (XR-LAYER-1): `beginSwapchain(options)` with `options.layer`
+(`quad` | `cylinder`), `width`, `height`, `arraySize`, `format`, `isStatic`, `textureType` (`texture-array`: drawn
+through a TEXTURE_2D_ARRAY, also with `arraySize` 1) creates that layer's own swapchain and
+returns its `id` with the size; `getLayerColorTexture(id)` returns the layer's single `WebGLTexture` (pointed at the
+layer's acquired image during frames, at none between them, like XR-SC-3); `releaseSwapchain(id)` (from
+`layer.destroy()`) drops it; `submitLayers(list)` hands the frame's `renderState.layers` (pose, shape, layout, whether
+the page drew each layer) to the XR thread. The per-frame data travels through a buffer of its own
+(`runtime/xr/include/iwn/xr/layers.h`, `globalThis.__iwn.xr.layers()`), not the frame record.
+*Check:* web/xr layer tests with fake natives; device test of proto-layers and a layout probe.
+
 ## IWER as shipped in the runtime
 
 **XRF-P-1 (MUST).** The runtime bundles IWER through its host entry point, which excludes the emulator-only

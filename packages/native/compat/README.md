@@ -149,8 +149,8 @@ everything but cannot tell dead code or feature detection from use. IWER runs in
 the app takes three.js's `XRWebGLLayer` path; on the headset IWER host mode offers `XRWebGLBinding.createProjectionLayer`
 and the app takes the projection-layer path instead. That path is not traced: the matrix adds it as `device` rows
 (`createProjectionLayer`, `getViewSubImage`, `updateRenderState({layers})`), and IWSDK's quad/cylinder layers
-(XR-LAYER-1: `createQuadLayer`/`createCylinderLayer`, called unguarded, absent in IWER host mode, so those apps throw
-on the headset today) come from the app's source (`XRQuadLayer`/`XRCylinderLayer` components). Likewise WebGL
+(XR-LAYER-1: `createQuadLayer`/`createCylinderLayer`, which IWER host mode provides; equirect and cube layers it does
+not) come from the app's source (`XRQuadLayer`/`XRCylinderLayer` components). Likewise WebGL
 extensions SwiftShader does not offer (`OCULUS_multiview`, `KHR_parallel_shader_compile`,
 `WEBGL_multisampled_render_to_texture`) return null headlessly, so the extension path is untraced; those rows read
 `provided` when the WebGL layer names them, else `gap` (GL-20, the M3 MSAA-multiview check).
@@ -264,7 +264,7 @@ Three static sources, one optional dynamic one:
 | the app feature-detects an absent API, and its fallback branch (taken with the API removed) threw where the control run did not | | | **error** ("the app's fallback without it threw") |
 | an absent API the app feature-detects (a check in its source, or the trimmed run saw the probe) and the trace did not hit | info | info | info |
 | unsupported API only read / probed (feature detection) | info | warn | info |
-| in the spec, not implemented yet (`gap`), or specified for later (`later`: AR, quad/cylinder layers) | warn (info if only probed) | warn | warn |
+| in the spec, not implemented yet (`gap`), or specified for later (`later`: AR, equirect/cube layers) | warn (info if only probed) | warn | warn |
 | a stub (warns "not implemented" / throws `NotSupportedError`) | info | warn | warn |
 | a stub of an API the spec wants absent (`createScriptProcessor`), called | warn (`--strict`: error) | warn | **error**, advice |
 | `<video>`/`<audio>` created (inert stand-in, DOM-6) | info | warn | info |

@@ -3,7 +3,7 @@
 // they are used (XR_KHR_opengl_es_enable, XR_KHR_android_create_instance, XR_KHR_loader_init_android,
 // XR_KHR_convert_timespec_time, XR_FB_display_refresh_rate, XR_FB_foveation(_configuration),
 // XR_FB_swapchain_update_state, XR_FB_color_space, XR_EXT_performance_settings, XR_FB_passthrough,
-// XR_META_passthrough_preferences), against
+// XR_META_passthrough_preferences, XR_KHR_composition_layer_cylinder for xr_layers.cc), against
 // docs/spec/08, 09, 10 and 14 (DBG-SHOT). See xr_system.h for the threading model.
 #include "android/xr_system.h"
 
@@ -135,6 +135,7 @@ struct XrSystem::Impl {
 
   // view configuration
   uint32_t rec_w = 0, rec_h = 0, max_w = 0, max_h = 0;
+  uint32_t max_layer_count = 16;  // XrSystemGraphicsProperties: layers per xrEndFrame
   std::vector<int64_t> formats;
   std::vector<float> rates;
   std::atomic<float> current_rate{0};
@@ -176,6 +177,7 @@ struct XrSystem::Impl {
   // OpenXR frames) is the slot's kRunning/kDone state itself (FrameSlot), never a separate flag that could drift
   // from it.
   XrCompositionLayerProjection projection{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+  XrCompositionLayerFlags projection_flags = 0;  // the frame's own (immersive-ar blending); see run_frame for layers
   XrCompositionLayerProjectionView proj_views[2];
   bool have_projection = false;
   XrView frame_views[2] = {XrView{XR_TYPE_VIEW}, XrView{XR_TYPE_VIEW}};
@@ -184,6 +186,11 @@ struct XrSystem::Impl {
   bool js_busy = false;   // the last posted frame was cancelled: JS is in a long task
   uint64_t frame_number = 0;
   uint64_t session_js_frames = 0;  // JS frames of the current WebXR session
+
+  // Quad and cylinder layers (xr_layers.h): their swapchains, the frame's layer list, the stats published from them.
+  CompositionLayers comp_layers;
+  uint64_t comp_layers_version = ~0ull;  // stats_mu: the version comp_layers_json was built from
+  Json comp_layers_json = Json::object();
 
   // WebXR session (from JS)
   bool webxr_active = false;
@@ -263,6 +270,9 @@ struct XrSystem::Impl {
     double foveation = 0;
     PerfLevel cpu = PerfLevel::kUnset, gpu = PerfLevel::kUnset;
     uint64_t raises = 0, lowers = 0, missed = 0;
+    size_t layer_swapchains = 0;
+    uint32_t layers_submitted = 0;
+    uint64_t frames_with_layers = 0;
     const char* profile[2] = {"none", "none"};
     uint32_t mode[2] = {0, 0};
   } snap;
@@ -335,6 +345,13 @@ void XrSystem::Impl::publish_locked() {
   snap.raises = perf.raises();
   snap.lowers = perf.lowers();
   snap.missed = pacing.missed();
+  snap.layer_swapchains = comp_layers.live();
+  snap.layers_submitted = comp_layers.last_submitted();
+  snap.frames_with_layers = comp_layers.frames_with_layers();
+  if (comp_layers.version() != comp_layers_version) {  // swapchains changed: rebuilt rarely, not per frame
+    comp_layers_version = comp_layers.version();
+    comp_layers_json = comp_layers.stats();
+  }
   for (int h = 0; h < 2; ++h) {
     snap.profile[h] = input_ok ? input.profile_name(h) : "none";
     snap.mode[h] = static_cast<uint32_t>(hands[h].mode);
@@ -419,6 +436,9 @@ void XrSystem::start(Runtime* rt, const XrConfig& config, bool debuggable, bool 
     });
   }
   commands_.set_slot(&slot_);
+  // The composition-layer buffer's header, before the page's prelude checks it (the XR thread fills in the rest).
+  layer_words_[layers::kVersionAt] = layers::kVersion;
+  layer_words_[layers::kCountAt] = layers::kNoList;
   thread_ = std::thread([this] { thread_main(); });
 }
 
@@ -696,6 +716,7 @@ bool XrSystem::Impl::initialize() {
     fail("the system has no stereo view configuration");
     return false;
   }
+  if (sp.graphicsProperties.maxLayerCount > 0) max_layer_count = sp.graphicsProperties.maxLayerCount;
   rec_w = vcv[0].recommendedImageRectWidth;
   rec_h = vcv[0].recommendedImageRectHeight;
   max_w = vcv[0].maxImageRectWidth;
@@ -763,6 +784,10 @@ bool XrSystem::Impl::initialize() {
   formats.resize(fc);
   xrEnumerateSwapchainFormats(session, fc, &fc, formats.data());
 
+  comp_layers.init(session, formats, owner->layer_words_,
+                   has(enabled_exts, XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME),
+                   sp.graphicsProperties.maxSwapchainImageWidth, sp.graphicsProperties.maxSwapchainImageHeight);
+
   if (ext_refresh && enumerate_rates) {
     uint32_t rc = 0;
     enumerate_rates(session, 0, &rc, nullptr);
@@ -822,6 +847,13 @@ bool XrSystem::Impl::initialize() {
     info.set("immersiveAr", cfg->immersive_ar && sys_passthrough);  // XR-AR-1 is opt-in (xr.immersiveAr)
     info.set("foveation", foveation_supported);
     info.set("explicitGrant", cfg->explicit_grant);
+    // XR-LAYER-1: quad and cylinder layers (the WebXR 'layers' feature itself is granted with projection layers)
+    Json comp = Json::object();
+    comp.set("quad", true);
+    comp.set("cylinder", has(enabled_exts, XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME));
+    comp.set("maxLayers", static_cast<int64_t>(max_layer_count));
+    comp.set("bufferVersion", static_cast<int64_t>(layers::kVersion));
+    info.set("compositionLayers", comp);
     info.set("layoutVersion", static_cast<int64_t>(L::kVersion));
     Json ext_json = Json::array();
     for (const auto& e : enabled_exts) ext_json.push(e);
@@ -1079,6 +1111,9 @@ void XrSystem::Impl::end_webxr(bool by_system) {
   session_ar = false;
   js_busy = false;
   destroy_swapchain();
+  // The layer swapchains go with the session (once a frame still in flight is collected).
+  const FrameSlot::State st = owner->slot_.state();
+  comp_layers.end_session(st == FrameSlot::kRunning || st == FrameSlot::kDone);
   life.on_session_ended(now_ms());
   if (input_ok) input.stop_haptics();
   // No WebXR content any more: the loading screen comes back, in front of the user (a reload boots the page again),
@@ -1423,6 +1458,8 @@ void XrSystem::Impl::finish_js_frame() {
   GLsync fence = static_cast<GLsync>(owner->js_fence_);
   owner->js_fence_ = nullptr;
   gl_wait_and_delete(fence);
+  // The layers the frame drew get their new image released, and the frame's layer list becomes the plan.
+  comp_layers.collect();
   const double js = owner->js_ms_;
   owner->slot_.reset();  // kDone -> kIdle: nothing is in flight any more
   {
@@ -1459,11 +1496,12 @@ void XrSystem::Impl::finish_js_frame() {
         pv.subImage.imageArrayIndex = 0;
       }
     }
-    projection.layerFlags = 0;
+    projection_flags = 0;
     if (session_ar) {
-      projection.layerFlags |= XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-      if (unpremultiplied) projection.layerFlags |= XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+      projection_flags |= XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+      if (unpremultiplied) projection_flags |= XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
     }
+    projection.layerFlags = projection_flags;
     projection.space = base;
     projection.viewCount = 2;
     projection.views = proj_views;
@@ -1553,6 +1591,7 @@ void XrSystem::Impl::run_frame() {
       }
       frame_has_image = held_image;
     }
+    comp_layers.acquire_pending();  // every quad and cylinder layer has an image to draw into
     // Tracking for the predicted display time, all in the base space.
     if (!locate_views(fs.predictedDisplayTime)) {
       // No valid pose yet (tracking not ready at startup): nothing to hand to JS. The image stays held for the
@@ -1644,10 +1683,14 @@ void XrSystem::Impl::run_frame() {
   // frame without an app frame), the projection layer with the last finished image and the poses it was rendered
   // with (XR-SC-4), and the loading screen's quads while the app has nothing to show yet or fading out over the
   // app's first frames.
-  constexpr uint32_t kMaxLayers = 6;
+  constexpr uint32_t kMaxLayers = 16;
+  const uint32_t layer_limit = std::min(kMaxLayers, max_layer_count);
   const XrCompositionLayerBaseHeader* layers[kMaxLayers];
   uint32_t layer_count = 0;
-  const bool app_frame = have_projection && swapchain != XR_NULL_HANDLE;
+  // A session that shows only quad or cylinder layers (no projection layer, XR-LAYER-1) presents too: its frames end
+  // the loading screen and need no cover.
+  const bool projection_frame = have_projection && swapchain != XR_NULL_HANDLE;
+  const bool app_frame = projection_frame || (webxr_active && comp_layers.has_list() && comp_layers.has_content());
   const bool submit_projection = webxr_active && render && app_frame;
   const LoadingPolicy::Frame lf = render ? loading_policy.frame(t_frame, submit_projection) : LoadingPolicy::Frame{};
   FrameLayerInput li;
@@ -1666,8 +1709,8 @@ void XrSystem::Impl::run_frame() {
     pt_comp.space = XR_NULL_HANDLE;
     layers[layer_count++] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&pt_comp);
   }
-  if (plan.cover) layer_count += loading.build_cover(view_space, layers + layer_count, kMaxLayers - layer_count);
-  if (plan.projection) {
+  if (plan.cover) layer_count += loading.build_cover(view_space, layers + layer_count, layer_limit - layer_count);
+  if (plan.projection && projection_frame) {
     // The app's first frames come in under the fading loading layers (AppFade): from the background colour
     // (colour * s + background * bias, the bias in linear space as the compositor blends), over passthrough
     // (immersive-ar: premultiplied colour and alpha * s), or at once over a passthrough background.
@@ -1685,7 +1728,25 @@ void XrSystem::Impl::run_frame() {
       }
       projection.next = &app_fade;
     }
-    layers[layer_count++] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&projection);
+  }
+  const auto* app_projection = plan.projection && projection_frame
+                                   ? reinterpret_cast<const XrCompositionLayerBaseHeader*>(&projection)
+                                   : nullptr;
+  if (webxr_active && render && comp_layers.has_list()) {
+    // The page's renderState.layers (XR-SC-4, XR-LAYER-1): the projection layer where the list has it, the quad and
+    // cylinder layers around it in list order; room is kept for the two loading quads. Layers listed before the
+    // projection layer show through its transparent pixels, so it blends by its alpha then (Chromium blends
+    // projection layers by default); otherwise its flags stay (opaque in VR).
+    projection.layerFlags = projection_flags;
+    if (app_projection && !session_ar && comp_layers.content_under_projection()) {
+      projection.layerFlags |= XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+      if (unpremultiplied) projection.layerFlags |= XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+    }
+    const uint32_t room = layer_limit > layer_count + 2 ? layer_limit - layer_count - 2 : 0;
+    layer_count += comp_layers.append(base, view_space, app_projection, layers + layer_count, room);
+  } else if (app_projection) {
+    projection.layerFlags = projection_flags;
+    layers[layer_count++] = app_projection;
   }
   // A session's frames without an app frame (a resume: the page's next frame is still rendering) carry the opaque
   // background instead of nothing; how many is logged when the app's frames are back.
@@ -1721,7 +1782,7 @@ void XrSystem::Impl::run_frame() {
       space = view_space;
     }
     layer_count += loading.build_quads(space, anchor, t_frame, plan.quad_alpha, ext_scale_bias, layers + layer_count,
-                                       kMaxLayers - layer_count);
+                                       layer_limit > layer_count ? layer_limit - layer_count : 0);
   }
   if (lf.first_loading || lf.handover) {
     const double t = now_ms();
@@ -1820,12 +1881,13 @@ void XrSystem::Impl::log_stats(double now) {
     log(LogLevel::kInfo,
         "xr-stats fps=%.1f rate=%.0f state=%s vis=%s webxr=%d swapchain=%ux%ux%u waitMs=%.2f jsMs=%.2f endMs=%.2f "
         "missed=%" PRIu64 " cpu=%s gpu=%s fov=%.2f ticks=%" PRIu64 " cancelled=%" PRIu64 " late=%" PRIu64
-        " resubmits=%" PRIu64 " left=%s right=%s withdrawn=%" PRIu64 " untracked=%" PRIu64,
+        " resubmits=%" PRIu64 " left=%s right=%s withdrawn=%" PRIu64 " untracked=%" PRIu64 " layers=%u/%zu",
         log_frames * 1000.0 / window, static_cast<double>(current_rate.load()),
         session_state_name(static_cast<XrSessionState>(state.load())), web_visibility(visibility), webxr_active ? 1 : 0,
         sc_w, sc_h, sc_array, log_wait.mean(), log_js.mean(), log_end.mean(), log_missed, perf_level_name(applied_cpu),
         perf_level_name(applied_gpu), foveation, ticks, cancelled, late, stale_resubmits,
-        input_ok ? input.profile_name(0) : "-", input_ok ? input.profile_name(1) : "-", withdrawn, untracked_frames);
+        input_ok ? input.profile_name(0) : "-", input_ok ? input.profile_name(1) : "-", withdrawn, untracked_frames,
+        comp_layers.last_submitted(), comp_layers.live());
   }
   last_stats_log_ms = now;
   log_frames = 0;
@@ -1850,6 +1912,7 @@ void XrSystem::Impl::teardown() {
   release_image();
   if (swapchain != XR_NULL_HANDLE) xrDestroySwapchain(swapchain);
   swapchain = XR_NULL_HANDLE;
+  comp_layers.destroy_all();
   if (loading_decode.joinable()) loading_decode.join();  // initialisation failed before it was collected
   loading.destroy();
   destroy_passthrough();
@@ -1927,6 +1990,57 @@ SwapchainAnswer XrSystem::begin_swapchain(const SwapchainRequest& request) {
   // set_foveation() compares against the level the new swapchain starts with (none when foveation is unavailable).
   if (answer->ok) fov_requested_ = static_cast<int>(foveation_level_for(answer->foveation > 0 ? answer->foveation : 0));
   return *answer;
+}
+
+LayerSwapchainAnswer XrSystem::begin_layer_swapchain(const LayerSwapchainRequest& request) {
+  auto answer = std::make_shared<LayerSwapchainAnswer>();
+  if (!impl_ || !wait_initialized(10000)) {
+    answer->error = "OpenXR is not ready";
+    return *answer;
+  }
+  Impl* x = impl_.get();
+  // A command that times out still runs later (handoff.h): whichever of it and this caller comes second decides. A
+  // swapchain made after the caller gave up has an id JS never learns, so the command destroys it (no JS frame can
+  // have drawn into it).
+  enum : int { kPending, kDone, kAbandoned };
+  auto outcome = std::make_shared<std::atomic<int>>(kPending);
+  const bool ran = commands_.call(
+      [x, request, answer, outcome] {
+        x->comp_layers.create(request, answer.get());
+        int expected = kPending;
+        if (!outcome->compare_exchange_strong(expected, kDone) && answer->ok) {
+          log(LogLevel::kWarn, "xr: layer swapchain %u was made after its caller gave up; destroyed", answer->id);
+          x->comp_layers.destroy(answer->id, false);
+        }
+      },
+      std::chrono::milliseconds(5000));
+  int expected = kPending;
+  if (!ran && outcome->compare_exchange_strong(expected, kAbandoned)) {
+    LayerSwapchainAnswer timeout;
+    timeout.error = "the XR thread did not create the layer swapchain within 5 s";
+    return timeout;
+  }
+  return *answer;
+}
+
+void XrSystem::destroy_layer_swapchain(uint32_t id) {
+  if (!impl_) return;
+  Impl* x = impl_.get();
+  commands_.push([this, x, id] {
+    const FrameSlot::State st = slot_.state();
+    x->comp_layers.destroy(id, st == FrameSlot::kRunning || st == FrameSlot::kDone);
+  });
+}
+
+uint32_t XrSystem::acquire_layer_image(uint32_t id) {
+  if (!impl_ || !wait_initialized(0)) return 0;
+  Impl* x = impl_.get();
+  auto name = std::make_shared<uint32_t>(0);
+  if (!commands_.call([x, id, name] { *name = x->comp_layers.acquire_now(id); }, std::chrono::milliseconds(1000))) {
+    log(LogLevel::kWarn, "xr: the XR thread did not acquire a layer image within 1 s");
+    return 0;
+  }
+  return *name;
 }
 
 void XrSystem::end_webxr_session() {
@@ -2250,6 +2364,12 @@ Json XrSystem::stats() {
   frames.set("covered", x.covered_frames);
   frames.set("missed", s.missed);
   j.set("frames", frames);
+  // XR-LAYER-1: quad and cylinder layers: live swapchains, layers in the latest submitted frame, frames that had any.
+  Json comp = x.comp_layers_json;
+  comp.set("live", static_cast<int64_t>(s.layer_swapchains));
+  comp.set("submitted", static_cast<int64_t>(s.layers_submitted));
+  comp.set("framesWithLayers", s.frames_with_layers);
+  j.set("layers", comp);
   Json timing = Json::object();  // means over the window since the previous stats call
   timing.set("waitMs", x.wait_ms.mean());
   timing.set("jsMs", x.js_ms.mean());

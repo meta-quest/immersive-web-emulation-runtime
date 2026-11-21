@@ -7,9 +7,16 @@
 
 // IWER host mode's XRHostBackend over the native XR module (docs/spec/09 XRF-B-1..4).
 
-import type { XRHostBackend, XRHostErrorSource, XRHostSwapchain, XRHostSwapchainOptions } from 'iwer/host';
+import type {
+  XRHostBackend,
+  XRHostErrorSource,
+  XRHostLayer,
+  XRHostSwapchain,
+  XRHostSwapchainOptions,
+} from 'iwer/host';
 
 import type { GraphicsBridge } from './graphics.ts';
+import type { LayerBuffer } from './layers.ts';
 import type { WebGLHooks, XrNatives } from './natives.ts';
 
 type ReportError = (error: unknown) => void;
@@ -24,6 +31,9 @@ export class NativeHostBackend implements XRHostBackend {
   private readonly hooks: WebGLHooks | null;
   private readonly report: ReportError;
   private readonly schedule: (cb: () => void) => void;
+  private readonly layers: LayerBuffer | null;
+  /** XR-LAYER-1 quad and cylinder layers: absent (IWER then throws NotSupportedError) without the native side. */
+  getLayerColorTexture?: (id: number) => object | null;
 
   constructor(
     natives: XrNatives,
@@ -31,15 +41,21 @@ export class NativeHostBackend implements XRHostBackend {
     hooks: WebGLHooks | null,
     report: ReportError,
     schedule: (cb: () => void) => void,
+    layers: LayerBuffer | null = null,
   ) {
     this.natives = natives;
     this.gfx = gfx;
     this.hooks = hooks;
     this.report = report;
     this.schedule = schedule;
+    this.layers = layers;
+    if (layers && typeof natives.beginLayerSwapchain === 'function') {
+      this.getLayerColorTexture = (id) => this.gfx.layerTexture(id);
+    }
   }
 
   beginSwapchain(o: XRHostSwapchainOptions): XRHostSwapchain | null {
+    if (o.layer) return this.beginLayerSwapchain(o);
     const r = this.natives.beginSwapchain(
       o.arraySize,
       o.scale,
@@ -62,6 +78,39 @@ export class NativeHostBackend implements XRHostBackend {
     };
     if (typeof r.foveation === 'number') answer.foveation = r.foveation;
     return answer;
+  }
+
+  /** A quad or cylinder layer's own swapchain (XR-LAYER-1): sized by IWER in pixels, `id` for later calls. */
+  private beginLayerSwapchain(o: XRHostSwapchainOptions): XRHostSwapchain | null {
+    const begin = this.natives.beginLayerSwapchain;
+    if (!begin || !this.layers) return null;
+    // a 'texture-array' layer is drawn through a TEXTURE_2D_ARRAY, also a mono one (an array of one layer)
+    const textureArray = o.textureType === 'texture-array' || o.arraySize >= 2;
+    const r = begin.call(
+      this.natives,
+      o.layer === 'cylinder' ? 3 : 2,
+      o.width ?? 0,
+      o.height ?? 0,
+      o.arraySize,
+      o.format,
+      o.isStatic === true,
+      o.mipLevels ?? 1,
+      textureArray,
+    );
+    if (!r) return null;  // IWER throws OperationError from createQuadLayer / createCylinderLayer
+    this.gfx.addLayer(r.id, textureArray);
+    return { id: r.id, width: r.width, height: r.height, arraySize: r.arraySize };
+  }
+
+  /** layer.destroy(). */
+  releaseSwapchain(id: number): void {
+    this.gfx.dropLayer(id);
+    this.natives.destroyLayerSwapchain?.(id);
+  }
+
+  /** The frame's layer list (renderState.layers order) for the XR thread, through the shared buffer. */
+  submitLayers(list: readonly XRHostLayer[]): void {
+    this.layers?.write(list);
   }
 
   endSession(): void {

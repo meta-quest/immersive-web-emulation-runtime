@@ -15,6 +15,7 @@
 #include "iwn/xr/frame_record.h"
 #include "iwn/xr/handoff.h"
 #include "iwn/xr/input_map.h"
+#include "iwn/xr/layers.h"
 #include "iwn/xr/loading.h"
 #include "iwn/xr/pacing.h"
 #include "iwn/xr/perf_policy.h"
@@ -1808,4 +1809,190 @@ IWN_TEST(Loading, Premultiply) {
   IWN_CHECK_EQ(int(px[3]), 128);
   IWN_CHECK_EQ(int(px[4]), 10);  // opaque: unchanged
   IWN_CHECK_EQ(int(px[7]), 255);
+}
+
+// --- composition layers (XR-LAYER-1) ------------------------------------------------------------------------------
+
+namespace {
+
+void fresh_layer_buffer(uint32_t* words) {
+  std::memset(words, 0, layers::kWords * sizeof(uint32_t));
+  words[layers::kVersionAt] = layers::kVersion;
+  words[layers::kCountAt] = layers::kNoList;
+}
+
+}  // namespace
+
+IWN_TEST(Layers, BufferLayoutFitsAndNoListMeansProjectionOnly) {
+  static_assert(layers::kEntriesAt == layers::kNamesAt + layers::kMaxSwapchains);
+  static_assert(layers::kC < layers::kEntryWords);
+  uint32_t words[layers::kWords];
+  fresh_layer_buffer(words);
+  layers::Entry out[layers::kMaxEntries];
+  IWN_CHECK_EQ(layers::read_entries(words, out), -1);  // kNoList
+  words[layers::kCountAt] = 0;
+  IWN_CHECK_EQ(layers::read_entries(words, out), 0);  // an empty list: nothing shown
+  words[layers::kVersionAt] = layers::kVersion + 1;
+  IWN_CHECK_EQ(layers::read_entries(words, out), -1);  // another version is never read
+}
+
+IWN_TEST(Layers, EntriesRoundTripInOrderAndBadOnesAreDropped) {
+  uint32_t words[layers::kWords];
+  fresh_layer_buffer(words);
+  layers::Entry proj;
+  proj.kind = layers::kProjection;
+  proj.flags = layers::kListed;
+  layers::Entry quad;
+  quad.kind = layers::kQuad;
+  quad.id = 3;
+  quad.flags = layers::kListed | layers::kRedrawn | layers::kBlendAlpha | layers::kLocated;
+  quad.layout = layers::kStereoTopBottom;
+  const float p[7] = {0.3f, 1.5f, -1.2f, 0, 0.7071068f, 0, 0.7071068f};
+  std::memcpy(quad.pose, p, sizeof p);
+  quad.a = 0.8f;
+  quad.b = 0.4f;
+  layers::Entry bad = quad;
+  bad.kind = static_cast<layers::Kind>(9);
+  layers::write_entry(words, 0, quad);
+  layers::write_entry(words, 1, bad);
+  layers::write_entry(words, 2, proj);
+  words[layers::kCountAt] = 3;
+  layers::Entry out[layers::kMaxEntries];
+  IWN_CHECK_EQ(layers::read_entries(words, out), 2);
+  IWN_CHECK_EQ(out[0].kind, layers::kQuad);
+  IWN_CHECK_EQ(out[0].id, 3u);
+  IWN_CHECK_EQ(out[0].flags, quad.flags);
+  IWN_CHECK_EQ(out[0].layout, layers::kStereoTopBottom);
+  for (int k = 0; k < 7; ++k) IWN_CHECK_EQ(out[0].pose[k], p[k]);
+  IWN_CHECK_EQ(out[0].a, 0.8f);
+  IWN_CHECK_EQ(out[1].kind, layers::kProjection);
+  // more entries than the buffer holds: the first kMaxEntries
+  words[layers::kCountAt] = 1000;
+  IWN_CHECK(layers::read_entries(words, out) <= static_cast<int>(layers::kMaxEntries));
+}
+
+IWN_TEST(Layers, ViewsPerLayoutUseGlBottomLeftRows) {
+  layers::EntryView v[2];
+  IWN_CHECK_EQ(layers::entry_views(layers::kMono, 512, 256, v), 1u);
+  IWN_CHECK_EQ(v[0].eye, 0);
+  IWN_CHECK_EQ(v[0].w, 512);
+  IWN_CHECK_EQ(layers::entry_views(layers::kStereoLeftRight, 1024, 256, v), 2u);
+  IWN_CHECK(v[0].eye == 1 && v[0].x == 0 && v[0].w == 512);
+  IWN_CHECK(v[1].eye == 2 && v[1].x == 512 && v[1].w == 512);
+  // top-bottom: the left eye is the top half, the upper rows with GL's origin (IWER's viewport y = h)
+  IWN_CHECK_EQ(layers::entry_views(layers::kStereoTopBottom, 512, 512, v), 2u);
+  IWN_CHECK(v[0].eye == 1 && v[0].y == 256 && v[0].h == 256);
+  IWN_CHECK(v[1].eye == 2 && v[1].y == 0 && v[1].h == 256);
+  IWN_CHECK_EQ(layers::entry_views(layers::kStereoArray, 512, 256, v), 2u);
+  IWN_CHECK(v[0].array_index == 0 && v[1].array_index == 1 && v[1].w == 512 && v[1].h == 256);
+  uint32_t w, h, a;
+  layers::image_size(layers::kStereoLeftRight, 300, 100, &w, &h, &a);
+  IWN_CHECK(w == 600 && h == 100 && a == 1);
+  layers::image_size(layers::kStereoArray, 300, 100, &w, &h, &a);
+  IWN_CHECK(w == 300 && h == 100 && a == 2);
+}
+
+IWN_TEST(Layers, PosesAndShapesOpenXrAccepts) {
+  const float ok[7] = {0, 1, -2, 0, 0, 0, 1};
+  IWN_CHECK(layers::valid_pose(ok));
+  const float nan[7] = {0, NAN, -2, 0, 0, 0, 1};
+  IWN_CHECK(!layers::valid_pose(nan));
+  const float zero_q[7] = {0, 1, -2, 0, 0, 0, 0};
+  IWN_CHECK(!layers::valid_pose(zero_q));
+  layers::Entry q;
+  q.kind = layers::kQuad;
+  q.a = 1;
+  q.b = 0.5f;
+  IWN_CHECK(layers::valid_shape(q));
+  q.b = 0;
+  IWN_CHECK(!layers::valid_shape(q));
+  layers::Entry c;
+  c.kind = layers::kCylinder;
+  c.a = 2;
+  c.b = 0.785f;
+  c.c = 2;
+  IWN_CHECK(layers::valid_shape(c));
+  c.b = 7;  // more than a full turn
+  IWN_CHECK(!layers::valid_shape(c));
+  c.b = 1;
+  c.c = INFINITY;
+  IWN_CHECK(!layers::valid_shape(c));
+}
+
+namespace {
+
+layers::Entry plan_entry(layers::Kind kind, uint32_t id, uint32_t flags) {
+  layers::Entry e;
+  e.kind = kind;
+  e.id = id;
+  e.flags = flags | layers::kLocated;
+  e.a = kind == layers::kCylinder ? 2.0f : 1.0f;
+  e.b = kind == layers::kCylinder ? 1.0f : 0.5f;
+  e.c = 2;
+  return e;
+}
+
+layers::SlotState slot(layers::Kind kind, bool held, bool is_static = false) {
+  layers::SlotState s;
+  s.live = true;
+  s.kind = kind;
+  s.held = held;
+  s.is_static = is_static;
+  return s;
+}
+
+}  // namespace
+
+IWN_TEST(Layers, CollectReleasesRedrawnImagesAndPlansWhatCanBeShown) {
+  layers::SlotState slots[layers::kMaxSwapchains];
+  slots[0] = slot(layers::kQuad, true);
+  slots[1] = slot(layers::kCylinder, true, true);  // static
+  slots[2] = slot(layers::kQuad, true);            // listed, never drawn: no content yet
+  slots[3] = slot(layers::kQuad, true);
+  slots[3].live = false;                           // destroyed by the page (goes at flush())
+  slots[3].released_once = true;
+  slots[4] = slot(layers::kQuad, true);            // drawn without being listed
+  const uint32_t L = layers::kListed, R = layers::kRedrawn;
+  const layers::Entry list[] = {
+      plan_entry(layers::kProjection, 0, L), plan_entry(layers::kQuad, 1, L | R),
+      plan_entry(layers::kCylinder, 2, L | R), plan_entry(layers::kQuad, 3, L),
+      plan_entry(layers::kQuad, 4, L | R),     plan_entry(layers::kQuad, 5, R),
+  };
+  layers::Entry plan[layers::kMaxEntries];
+  uint32_t release = 0;
+  int n = layers::collect(list, 6, slots, &release, plan);
+  IWN_CHECK_EQ(release, 0b10011u);  // slots 0, 1 and 4: the redrawn live layers holding an image
+  IWN_CHECK_EQ(n, 3);
+  IWN_CHECK(plan[0].kind == layers::kProjection && plan[1].id == 1u && plan[2].id == 2u);
+  IWN_CHECK(!slots[0].held && slots[0].released_once && !slots[0].static_done);
+  IWN_CHECK(slots[1].static_done);
+  IWN_CHECK(slots[2].held && !slots[2].released_once);
+  IWN_CHECK(slots[4].released_once);  // its content becomes current although it is not shown
+
+  // The next frame: layer 1 has no image yet (a redraw cannot release one); a kind that does not match the slot
+  // (layer 2 is a cylinder), an unlocated pose (layer 3, given content now) and a shape OpenXR refuses (layer 5) are
+  // left out of the plan.
+  layers::Entry next[] = {plan_entry(layers::kQuad, 1, L | R), plan_entry(layers::kQuad, 2, L),
+                          plan_entry(layers::kQuad, 3, L), plan_entry(layers::kQuad, 5, L)};
+  next[2].flags &= ~layers::kLocated;
+  next[3].a = -1;
+  slots[2].released_once = true;
+  n = layers::collect(next, 4, slots, &release, plan);
+  IWN_CHECK_EQ(release, 0u);
+  IWN_CHECK_EQ(n, 1);
+  IWN_CHECK_EQ(plan[0].id, 1u);
+  IWN_CHECK_EQ(layers::collect(next, -1, slots, &release, plan), 0);  // no list: nothing to show
+}
+
+IWN_TEST(Layers, ContentOnlyPlansAndContentUnderTheProjectionLayer) {
+  const layers::Entry proj = plan_entry(layers::kProjection, 0, layers::kListed);
+  const layers::Entry quad = plan_entry(layers::kQuad, 1, layers::kListed);
+  const layers::Entry under[] = {quad, proj};
+  const layers::Entry over[] = {proj, quad};
+  const layers::Entry only[] = {quad};
+  IWN_CHECK(layers::plan_has_content(under, 2) && layers::content_under_projection(under, 2));
+  IWN_CHECK(layers::plan_has_content(over, 2) && !layers::content_under_projection(over, 2));
+  IWN_CHECK(!layers::plan_has_content(&proj, 1) && !layers::content_under_projection(&proj, 1));
+  // a session that shows only quad or cylinder layers presents, with no projection layer to blend
+  IWN_CHECK(layers::plan_has_content(only, 1) && !layers::content_under_projection(only, 1));
 }
