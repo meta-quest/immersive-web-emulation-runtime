@@ -1,0 +1,17 @@
+# Embeds a text file as a C++ string: cmake -DIN=<file> -DOUT=<cc> -DSYMBOL=<name> -P embed.cmake
+# Uses a raw string literal split into chunks (compilers limit single literals to ~64 KB).
+file(READ "${IN}" content)
+string(LENGTH "${content}" len)
+set(out "// Generated from ${IN}. Do not edit.\n#include <cstddef>\nnamespace iwn {\nextern const char ${SYMBOL}[] =\n")
+set(pos 0)
+set(chunk 16000)
+while(pos LESS len)
+  string(SUBSTRING "${content}" ${pos} ${chunk} piece)
+  string(APPEND out "R\"IWNJS(${piece})IWNJS\"\n")
+  math(EXPR pos "${pos} + ${chunk}")
+endwhile()
+if(len EQUAL 0)
+  string(APPEND out "\"\"")
+endif()
+string(APPEND out ";\nextern const size_t ${SYMBOL}Size = sizeof(${SYMBOL}) - 1;\n}  // namespace iwn\n")
+file(WRITE "${OUT}" "${out}")

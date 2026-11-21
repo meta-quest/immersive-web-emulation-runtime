@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- @iwer/native template manifest (M1). ${...} placeholders are filled by build-apk.mjs (and by the Node packer
+     in M5, which rewrites the binary manifest instead). No Java/Kotlin code: the activity is the framework's
+     NativeActivity and loads libiwernative.so. M1 launches as a 2D panel; the XR module (M3) adds the
+     VR intent category and Horizon OS metadata. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="${PACKAGE}"
+    android:installLocation="auto">
+
+    <!-- Loopback sockets for the inspector and the debug endpoint (CDP-1, DBG-1) need INTERNET on Android. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-feature android:glEsVersion="0x00030002" android:required="true" />
+
+    <application
+        android:label="${LABEL}"
+        android:hasCode="false"
+        android:allowBackup="false"
+        android:extractNativeLibs="false">
+        <activity
+            android:name="android.app.NativeActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resizeableActivity="false"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|layoutDirection|locale|fontScale">
+            <meta-data android:name="android.app.lib_name" android:value="iwernative" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
