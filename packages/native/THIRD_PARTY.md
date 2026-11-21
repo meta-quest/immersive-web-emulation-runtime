@@ -261,3 +261,13 @@ decoder in the SNR tests.
 | gl-matrix | 3.4.4 | MIT | npm, github.com/toji/gl-matrix; `BUNDLED` in `web/xr/build.mjs` | vector/matrix math inside IWER's host entry, bundled into `web/xr/dist/xr.min.js` |
 
 IWER itself (`iwer/host`, bundled into `xr.min.js`) is first-party code under the same MIT license as this package.
+
+## web/dom: shipped in `web/dom/dist/dom.min.js`
+
+No third-party code. The DOM stand-ins (document, node/element interfaces, UI events, observers, geometry, the DOM-3
+window members) are written from the DOM, HTML, CSSOM / CSSOM View, UI Events, Pointer Events, Geometry Interfaces,
+Resize Observer, Intersection Observer, DOM Parsing and Selectors Level 4 specifications and `docs/spec/12`. It
+bundles `web/xr/src/geometry.ts` (our own `DOMPoint`/`DOMPointReadOnly`).
+
+Build/test only (not shipped): esbuild 0.28.2 (MIT, from web/glue's devDependencies) bundles it; TypeScript 6.0.3
+(Apache-2.0, the package's) type-checks it.

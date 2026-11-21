@@ -1,0 +1,10 @@
+{
+  "//": "Type-checks web/dom (src + tests). Same settings as the package root: .ts imports, type stripping in Node. Run from packages/native: node_modules/.bin/tsc -p web/dom",
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "lib": ["ES2024"],
+    "target": "ES2024"
+  },
+  "include": ["entry.ts", "src/**/*.ts", "test/**/*.ts"]
+}
