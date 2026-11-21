@@ -1,0 +1,20 @@
+{
+  "name": "@iwer/native-web-workers",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Worker, MessageChannel/MessagePort and the worker global scope for the @iwer/native runtime, over the native workers module (globalThis.__iwn.workers).",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\"",
+    "verify": "npm run typecheck && npm run build && npm test"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "^6.0.3"
+  }
+}

@@ -100,6 +100,7 @@ add_subdirectory(image)
 add_subdirectory(net)
 add_subdirectory(storage)
 add_subdirectory(canvas2d)
+add_subdirectory(workers)
 
 # --- Module registry ---------------------------------------------------------------------------------------------
 include(cmake/registry.cmake)

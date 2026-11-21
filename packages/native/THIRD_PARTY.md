@@ -211,3 +211,19 @@ redirect handling (Fetch §4.4), RFC 6455 framing/handshake, SHA-1 (FIPS 180-4),
 validation (Unicode table 3-7), the origin allowlist, the KV log format, Headers/Request/Response/fetch/
 XMLHttpRequest/WebSocket (WHATWG Fetch, XHR, WebSockets), Web Storage (HTML §12) and the Cache API (Service
 Workers §5).
+
+## runtime/workers + web/workers
+
+Shipped: only our own code (`runtime/workers/` in `libiwernative.so`, `web/workers/dist/workers.min.js`). The worker
+isolates reuse V8 (above) and the core's bootstrap; no new third-party code ships.
+
+Build/test only (not shipped):
+
+| component | version | license | source | used for |
+|---|---|---|---|---|
+| esbuild | 0.28.2 | MIT | npm | bundles `web/workers/dist/workers.js` / `workers.min.js` |
+| TypeScript | 6.0.3 | Apache-2.0 | npm | type-checks `web/workers` |
+| wasm-vips | 0.0.19 (libvips 8.18.7) | MIT (libvips: LGPL-2.1-or-later; the device test loads the unmodified npm build, nothing is linked into the runtime) | npm (`npm pack`, extracted outside the repo without install scripts), github.com/kleisauke/wasm-vips | device test THREADS: a real Emscripten pthreads + SIMD build (shared `WebAssembly.Memory`, 6 module workers named `em-pthread`, `Atomics.wait`); 1-vs-4-thread timing proves parallel execution |
+| @dimforge/rapier3d-simd-compat | 0.21.0 | Apache-2.0 | npm, github.com/dimforge/rapier.js | device test SIMD: Rapier's SIMD build (716 v128 locals) in a module worker and on the page, results compared bit for bit |
+| @babylonjs/havok | 1.3.14 | MIT | npm (IWSDK `packages/core` depends on `^1.3.10`) | device test HAVOK: IWSDK's physics engine (SIMD build) stepping a world in a module worker |
+| comlink | 4.4.2 | Apache-2.0 | npm, github.com/GoogleChromeLabs/comlink | device test WRK-6c: `wrap`/`expose` over a transferred `MessagePort` (the MSDF-worker pattern WRK-6 names) |
