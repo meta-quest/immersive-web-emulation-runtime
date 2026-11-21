@@ -1,0 +1,239 @@
+# GL-CTS-1 subset of the Khronos WebGL conformance suite (sdk/tests at the commit in cts/fetch-cts.sh).
+# One directory or file per line; "!path reason" excludes a test (the reason goes into the report).
+# Host: node cts/harness.mjs [--json report.json]   (Mesa llvmpipe through the GL addon)
+# Device: node cts/device-build.mjs ... && node cts/device-run.mjs --serial <s> --apk ... --json report.json
+# The other tex-image-and-sub-image directories (canvas, image, image_bitmap_*, svg_image, video) need Canvas 2D,
+# image decode or video sources the Node harness does not have.
+conformance2/buffers
+conformance2/state
+conformance2/uniforms
+conformance2/programs
+conformance2/vertex_arrays
+conformance2/samplers
+conformance2/sync
+conformance2/query
+conformance2/transform_feedback
+conformance2/rendering
+conformance2/misc
+conformance2/attribs
+conformance2/reading
+conformance2/renderbuffers
+conformance2/context
+conformance2/extensions
+conformance2/textures/misc
+conformance2/textures/image_data
+conformance2/textures/webgl_canvas
+conformance2/glsl3
+conformance/buffers
+conformance/state
+conformance/uniforms
+conformance/programs
+conformance/attribs
+conformance/rendering
+conformance/misc
+conformance/renderbuffers
+conformance/extensions
+conformance/textures/misc
+conformance/textures/image_data
+conformance/textures/webgl_canvas
+conformance/glsl
+
+# --- excluded: the Node harness has no Canvas 2D / image / video (these run on device with the M4 surfaces)
+!conformance2/samplers/sampler-drawing-test.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance2/textures/misc/canvas-remains-unchanged-after-used-in-webgl-texture.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance2/textures/misc/npot-video-sizing.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance2/textures/misc/origin-clean-conformance-offscreencanvas.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance2/textures/misc/pbo-texture-uploads.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance2/textures/misc/tex-image-10bpc.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance2/textures/misc/tex-image-with-bad-args-from-dom-elements.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance2/textures/misc/tex-subimage3d-canvas-bug.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/ext-sRGB.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance/extensions/ext-texture-compression-bptc.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/ext-texture-compression-rgtc.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-float-linear.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-float-with-canvas.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-float-with-image-data.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-float-with-image.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-float-with-video.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-half-float.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-half-float-linear.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-half-float-with-canvas.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-half-float-with-image-data.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-half-float-with-image.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/oes-texture-half-float-with-video.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/s3tc-and-rgtc.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/webgl-compressed-texture-astc.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/webgl-compressed-texture-etc1.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/webgl-compressed-texture-etc.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/webgl-compressed-texture-pvrtc.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/webgl-compressed-texture-s3tc-srgb.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/webgl-depth-texture.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/extensions/webgl-webcodecs-video-frame.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/rendering/clear-default-framebuffer-with-scissor-test.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/rendering/draw-webgl-to-canvas-2d-repeatedly.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/canvas-teximage-after-multiple-drawimages.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/exif-orientation.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance/textures/misc/gl-pixelstorei.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/gl-teximage.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/image-decoder-to-texture.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance/textures/misc/origin-clean-conformance.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/origin-clean-conformance-offscreencanvas.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/png-image-types.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance/textures/misc/tex-image-canvas-corruption.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/tex-image-with-format-and-type.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texparameter-test.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/tex-sub-image-2d-bad-args.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-active-bind-2.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-active-bind.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-complete.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-corner-case-videos.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-draw-with-2d-and-cube.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-hd-dpi.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-npot.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-npot-video.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/texture-srgb-upload.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance/textures/misc/texture-transparent-pixels-initialized.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance/textures/misc/texture-upload-size.html needs Canvas 2D (C2D-* stream M4; the Node harness has no 2D canvas)
+!conformance/textures/misc/tex-video-using-tex-unit-non-zero.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+!conformance/textures/misc/video-rotation.html needs image / video decode (IMG-* stream M4; not in the Node harness)
+
+# --- excluded: decisions pending or out of scope
+!conformance/rendering/draw-elements-out-of-bounds.html GL-11: index range checking vs robust access is undecided (spec open question 4)
+!conformance/rendering/gl-drawelements.html GL-11: index range checking vs robust access is undecided (spec open question 4)
+!host:conformance/extensions/khr-parallel-shader-compile.html compile stress test; minutes on llvmpipe (GL-20 runs on device)
+!conformance/extensions/oes-vertex-array-object.html needs ../demos/google/resources (not in the sdk/tests archive)
+!conformance/extensions/oes-vertex-array-object-bufferData.html needs ../demos/google/resources (not in the sdk/tests archive)
+!conformance/extensions/webgl-webcodecs-video-frame.html proposal extension, video (not offered)
+
+# --- excluded: validator-only negative tests (GL-CTS-1: the runtime does not claim a GLSL validator; the
+#     driver's compiler accepts these programs)
+!conformance2/uniforms/uniform-block-idents-as-expr.html validator-only (GLSL ES identifier rules the driver accepts)
+!conformance2/extensions/webgl-blend-func-extended.html validator-only part (multiple outputs without locations) + extension not offered
+!conformance/extensions/oes-standard-derivatives.html validator-only part (#extension after code)
+!conformance2/programs/active-built-in-attribs.html driver reports gl_VertexID as an active attribute differently (reflection is the driver's)
+
+# --- excluded: driver behaviour on Mesa llvmpipe (host only; these run on device)
+!host:conformance/uniforms/gl-uniformmatrix4fv.html Mesa drops uniforms that only feed an uninitialised gl_Position
+!host:conformance2/extensions/webgl-clip-cull-distance.html one cull-distance pixel differs on llvmpipe
+!host:conformance2/rendering/blitframebuffer-filter-outofbounds.html llvmpipe LINEAR blit samples outside the source rect at edges
+!host:conformance2/query/occlusion-query-scissor.html llvmpipe reports some scissored occlusion results as 0
+!host:conformance/extensions/ext-shader-texture-lod.html Mesa has no GL_EXT_shader_texture_lod for ESSL 1.00 (WebGL 1 surface)
+!host:conformance/uniforms/gl-uniform-struct-unused.html test assigns an undeclared global in strict mode (passes only in a browser realm)
+
+# --- excluded: known gaps of the binding (each listed in the stream report; validation not implemented yet)
+!conformance2/transform_feedback/simultaneous_binding.html known gap: buffer bound to an inactive transform feedback object and read by a draw
+!conformance2/transform_feedback/switching-objects.html known gap: buffers of paused, unbound transform feedback objects
+!conformance2/transform_feedback/unwritten-output-defaults-to-zero.html known gap: transformFeedbackVaryings for varyings not written
+!conformance2/textures/misc/immutable-tex-render-feedback.html known gap: texture completeness (levels outside base/max) in framebuffer status
+!conformance2/textures/misc/copy-texture-image-same-texture.html known gap: texture completeness in framebuffer status
+!conformance2/textures/misc/copy-texture-image.html known gap: copyTexImage2D component-size matching
+!conformance2/textures/misc/copy-texture-image-webgl-specific.html known gap: copyTexImage2D WebGL-specific format rules
+!conformance/textures/misc/cube-incomplete-fbo.html known gap: cube completeness in framebuffer status
+!conformance/rendering/rendering-sampling-feedback-loop.html known gap: texture completeness in feedback-loop detection
+!conformance2/misc/views-with-offsets.html known gap: error code order for some view/offset combinations
+!conformance2/rendering/blitframebuffer-test.html known gap: multisampled sRGB blit format equality
+!conformance/extensions/angle-instanced-arrays-out-of-bounds.html GL-11: index range checking vs robust access is undecided (spec open question 4)
+!conformance/extensions/webgl-draw-buffers.html WebGL 1 WEBGL_draw_buffers: not complete yet (IWSDK uses WebGL 2)
+!conformance/extensions/webgl-draw-buffers-broadcast-return.html WebGL 1 WEBGL_draw_buffers: not complete yet
+!conformance/extensions/oes-texture-float.html WebGL 1 float texture filtering rules (OES_texture_float_linear gating)
+!v1:conformance/extensions/ext-color-buffer-half-float.html WebGL 1 half-float copyTexImage2D rules (the WebGL 2 run passes)
+!conformance2/textures/misc/tex-image-with-different-data-source.html needs Canvas 2D / ImageBitmap sources (stream M4)
+!conformance/textures/misc/tex-image-and-uniform-binding-bugs.html needs Canvas 2D (stream M4)
+!conformance/textures/misc/tex-image-svg-image-no-natural-width-and-height.html needs image decode (stream M4)
+!conformance/textures/misc/texture-video-transparent.html needs video (not supported, documented)
+!conformance/textures/misc/upload-from-srcset-with-empty-data.html needs image decode (stream M4)
+!host:conformance2/extensions/ext-disjoint-timer-query-webgl2.html llvmpipe returns an absolute timestamp for TIME_ELAPSED (GL-26 passes on device: 13 us for 20 draws)
+!conformance2/extensions/ovr_multiview2.html known gap: `#extension GL_OVR_multiview` is accepted (three.js compatibility, GL-24) and one unallocated-storage attachment case raises a driver error (multiview rendering itself passes)
+
+# --- excluded: GLSL validator-only negative tests (GL-CTS-1: the runtime does not claim a GLSL validator; ANGLE
+#     rejects these programs in browsers, the GLES driver's own compiler accepts them)
+!conformance/glsl/bugs/essl3-shaders-with-webgl1.html validator-only (ESSL 3.00 shaders on a WebGL 1 context)
+!conformance/glsl/misc/attrib-location-length-limits.html validator-only (WebGL identifier length limit)
+!conformance/glsl/misc/extension-enable-and-disable.html validator-only (extension directive after disable)
+!conformance/glsl/misc/shader-uniform-packing-restrictions.html validator-only (WebGL uniform packing limits)
+!conformance/glsl/misc/shader-varying-packing-restrictions.html validator-only (WebGL varying packing limits)
+!conformance/glsl/misc/shader-with-257-character-define.html validator-only (WebGL 1 token length limit)
+!conformance/glsl/misc/shader-with-257-character-identifier.frag.html validator-only (WebGL 1 identifier length limit)
+!conformance/glsl/misc/shader-with-_webgl-identifier.vert.html validator-only (reserved _webgl prefix)
+!conformance/glsl/misc/shader-with-webgl-identifier.vert.html validator-only (reserved webgl_ prefix)
+!conformance/glsl/misc/shader-with-clipvertex.vert.html validator-only (desktop GLSL built-in)
+!conformance/glsl/misc/shader-with-glcolor.vert.html validator-only (desktop GLSL built-in)
+!conformance/glsl/misc/shader-with-glprojectionmatrix.vert.html validator-only (desktop GLSL built-in)
+!conformance/glsl/misc/shader-with-do-loop.html validator-only (WebGL 1 Appendix A loop restrictions)
+!conformance/glsl/misc/shader-with-while-loop.html validator-only (WebGL 1 Appendix A loop restrictions)
+!conformance/glsl/misc/shader-with-uniform-in-loop-condition.vert.html validator-only (WebGL 1 Appendix A loop restrictions)
+!conformance/glsl/misc/shaders-with-constant-expression-loop-conditions.html validator-only (WebGL 1 Appendix A loop restrictions)
+!conformance/glsl/misc/shader-with-reserved-words.html validator-only (reserved __ identifiers)
+!conformance/glsl/misc/struct-assign.html validator-only (structs containing arrays, WebGL 1)
+!conformance/glsl/misc/struct-equals.html validator-only (structs containing arrays, WebGL 1)
+!conformance/glsl/misc/struct-nesting-exceeds-maximum.html validator-only (WebGL struct nesting limit)
+!conformance/glsl/misc/ternary-operator-on-arrays.html validator-only (ternary on arrays)
+!conformance/glsl/reserved/_webgl_field.vert.html validator-only (reserved _webgl prefix)
+!conformance/glsl/reserved/_webgl_function.vert.html validator-only (reserved _webgl prefix)
+!conformance/glsl/reserved/_webgl_struct.vert.html validator-only (reserved _webgl prefix)
+!conformance/glsl/reserved/_webgl_variable.vert.html validator-only (reserved _webgl prefix)
+!conformance/glsl/reserved/webgl_field.vert.html validator-only (reserved webgl_ prefix)
+!conformance/glsl/reserved/webgl_function.vert.html validator-only (reserved webgl_ prefix)
+!conformance/glsl/reserved/webgl_struct.vert.html validator-only (reserved webgl_ prefix)
+!conformance/glsl/reserved/webgl_variable.vert.html validator-only (reserved webgl_ prefix)
+!conformance2/glsl3/forbidden-operators.html validator-only (ternary / sequence operators on arrays)
+!conformance2/glsl3/misplaced-version-directive.html validator-only (#version placement)
+!conformance2/glsl3/shader-with-1025-character-define.html validator-only (WebGL 2 token length limit)
+!conformance2/glsl3/shader-with-mis-matching-uniform-block.html validator-only (uniform block precision mismatch)
+!conformance2/glsl3/texture-offset-out-of-range.html validator-only (constant texel offset range)
+!conformance2/glsl3/uniform-block-layouts.html validator-only (packed/shared layouts disallowed)
+
+# --- excluded: ANGLE shader translation the runtime does not do (known gaps, support matrix; ANGLE renames every
+#     identifier, zero-initialises variables and forces std140, which plain GLES drivers do not)
+!conformance/glsl/misc/shader-with-non-reserved-words-5-of-8.html known gap: identifiers WebGL allows but GLES compilers reserve (dmat*)
+!conformance/glsl/misc/shader-with-non-reserved-words-6-of-8.html known gap: identifiers WebGL allows but GLES compilers reserve (dmat*x*)
+!conformance/glsl/misc/shader-with-double-underscore.html known gap: double-underscore identifiers the GLES compiler rejects
+!conformance/glsl/misc/global-variable-init.html known gap: non-constant global initialisers (ESSL 1.00 as ANGLE accepts it)
+!conformance/glsl/misc/uninitialized-local-global-variables.html known gap: zero-initialisation of uninitialised variables
+!conformance2/glsl3/uninitialized-local-global-variables.html known gap: zero-initialisation of uninitialised variables
+!conformance2/glsl3/uniform-block-layout-match.html known gap: default uniform block layout is std140 in WebGL (driver default differs)
+
+# --- excluded: host driver (Mesa llvmpipe) behaviour; the device run decides
+!conformance/glsl/bugs/in-parameter-passed-as-inout-argument-and-global.html driver compiler bug (Mesa and Adreno alias an in parameter passed as inout; ANGLE rewrites it)
+!host:conformance/glsl/variables/glsl-built-ins.html Mesa reports built-in constants that differ from the queried limits
+
+# --- excluded: needs Canvas 2D drawing (the harness only gives pages scratch ImageData storage)
+!conformance/glsl/samplers/glsl-function-texture2dproj.html needs Canvas 2D (fillRect)
+!conformance/glsl/samplers/glsl-function-texture2dprojlod.html needs Canvas 2D (fillRect)
+!conformance/glsl/bugs/nested-functions-should-not-crash.html driver compiler stress test (Mesa grew to 130 GB RSS; the harness memory guard stops at 8 GB)
+
+# --- excluded on the host only: CPU rasterizer timeouts and performance (llvmpipe), the device run includes them
+!host:conformance/rendering/texture-switch-performance.html performance test; llvmpipe is a CPU rasterizer
+!device:conformance/rendering/texture-switch-performance.html driver cost: changing a sampler uniform (glUniform1i) runs at 0.74x the baseline frame rate on Adreno; the binding adds < 0.02 us per switch (host measurement)
+!device:conformance2/rendering/texture-switch-performance.html driver cost: as above (0.74x baseline on Adreno)
+!host:conformance/extensions/ext-disjoint-timer-query.html llvmpipe returns an absolute timestamp for TIME_ELAPSED (GL-26 passes on device)
+!conformance/uniforms/out-of-bounds-uniform-array-access.html GL-11: out-of-bounds uniform array reads return driver data without robust access (undecided, spec open question 4; llvmpipe also times out)
+!host:conformance/rendering/multisample-corruption.html times out on llvmpipe (30 s limit)
+
+# --- excluded on the device only (Quest 3S, Adreno 740 V@0837.0.9; device run cts/device-run.mjs). The Adreno GLSL
+#     compiler accepts programs ANGLE rejects (validator-only, like the sections above), has a few code-generation
+#     bugs ANGLE works around, and two pages crash or hang it. No shader translator in the alpha.
+!device:conformance/glsl/bugs/character-set.html validator-only on Adreno (out-of-charset characters in preprocessor lines)
+!device:conformance/glsl/bugs/compound-assignment-type-combination.html validator-only on Adreno (float += vecN accepted)
+!device:conformance2/glsl3/compound-assignment-type-combination.html validator-only on Adreno (float += vecN accepted)
+!device:conformance/glsl/misc/boolean_precision.html validator-only on Adreno (precision on bool accepted)
+!device:conformance/glsl/misc/shader-with-function-scoped-struct.html validator-only on Adreno (struct scoping)
+!device:conformance/glsl/misc/shader-with-functional-scoping.html validator-only on Adreno (function scoping)
+!device:conformance/glsl/misc/shader-with-too-many-uniforms.html validator-only on Adreno (WebGL uniform packing limits)
+!device:conformance/glsl/misc/shader-without-precision.frag.html validator-only on Adreno (missing default float precision accepted)
+!device:conformance/glsl/misc/shaders-with-uniform-structs.html validator-only on Adreno (struct precision mismatch across stages)
+!device:conformance/glsl/misc/shader-with-global-variable-precision-mismatch.html validator-only on Adreno (uniform precision mismatch across stages)
+!device:conformance/glsl/preprocessor/comments.html Adreno preprocessor: partial comment at EOF accepted, backslash line continuation in a comment rejected
+!device:conformance2/glsl3/shader-with-invalid-characters.html Adreno preprocessor rejects a backslash inside a comment (ANGLE strips comments first)
+!device:conformance2/glsl3/attrib-location-length-limits.html validator-only on Adreno (WebGL 2 attribute name length limit)
+!device:conformance2/glsl3/invalid-default-precision.html validator-only on Adreno (default precision for uint accepted)
+!device:conformance2/glsl3/invalid-invariant.html validator-only on Adreno (global invariant pragma in a fragment shader accepted)
+!device:conformance2/glsl3/sampler-no-precision.html validator-only on Adreno (sampler3D etc. without precision accepted)
+!device:conformance2/glsl3/shader-with-1025-character-identifier.frag.html validator-only on Adreno (WebGL 2 identifier length limit)
+!device:conformance2/glsl3/array-length-side-effects.html Adreno code generation bug (side effects in array.length() expressions dropped; ANGLE rewrites)
+!device:conformance2/glsl3/switch-case.html Adreno code generation bug (some switch/case shapes render wrong; ANGLE rewrites)
+!device:conformance/glsl/bugs/long-expressions-should-not-crash.html Adreno compiler takes longer than the 60 s page limit on this stress shader
+!device:conformance/glsl/preprocessor/macro-expansion-tricky.html Adreno compiler stack overflow (libllvm-qgl recursion, 1000+ frames on the 8 MB JS thread stack) kills the app on one of these shaders
+!device:conformance2/attribs/gl-bindAttribLocation-aliasing-inactive.html known gap: WebGL 2 requires link failure when bindAttribLocation aliases inactive attributes; Adreno links (validator rule, later)
+!device:conformance2/extensions/ovr_multiview2_transform_feedback.html Adreno renders only view 0 of a multiview draw while transform feedback is paused (device probe: plain, instanced and MRT multiview draw every view)
+!device:conformance2/rendering/blitframebuffer-multisampled-readbuffer.html Adreno multisample resolve rounds one step lower (253,183,68 for 254,184,69; the test allows no tolerance)

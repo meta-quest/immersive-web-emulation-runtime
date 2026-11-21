@@ -1,0 +1,25 @@
+{
+  "name": "@iwer/native-webgl",
+  "version": "0.0.0",
+  "private": true,
+  "description": "WebGL 2 binding for the @iwer/native runtime (milestone M2): TypeScript over generated V8 fast-API natives (runtime/gl).",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "generate": "node ../../runtime/gl/gen/generate.mjs",
+    "check-generated": "node ../../runtime/gl/gen/generate.mjs --check",
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --expose-gc --test --test-concurrency=8 --test-reporter=spec \"test/*.test.ts\"",
+    "bench": "node --expose-gc bench/gl-bench.mjs",
+    "verify": "npm run check-generated && npm run typecheck && npm test"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/three": "0.181.0",
+    "esbuild": "0.28.2",
+    "three": "0.181.0",
+    "typescript": "^6.0.3"
+  }
+}

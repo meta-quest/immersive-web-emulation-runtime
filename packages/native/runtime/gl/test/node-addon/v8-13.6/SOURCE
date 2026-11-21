@@ -1,0 +1,3 @@
+v8-fast-api-calls.h from V8 tag 13.6.233.10 (the V8 inside Node 24.10, which does not ship this header):
+https://chromium.googlesource.com/v8/v8/+/refs/tags/13.6.233.10/include/v8-fast-api-calls.h
+License: BSD-3-Clause (the V8 project authors). Used only to build the host test addon.

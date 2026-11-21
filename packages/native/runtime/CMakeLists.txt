@@ -95,7 +95,7 @@ add_subdirectory(core)
 # in its own CMakeLists.txt. <module> is the JS name (globalThis.__iwn.<module>) and the suffix of
 # iwn_register_<module>. Order matters where a module builds optional parts against another one: image before
 # canvas2d and workers (decoded-image handles), gl before xr.
-# (none yet)
+add_subdirectory(gl)
 
 # --- Module registry ---------------------------------------------------------------------------------------------
 include(cmake/registry.cmake)

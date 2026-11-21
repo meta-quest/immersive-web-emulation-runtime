@@ -78,3 +78,28 @@ Considered and not used (size or fit): core-js-pure 3.50.0 (MIT): its URL polyfi
 minified because core-js bundles its own ES runtime; event-target-shim 6.0.2 (MIT): no capture/bubble path
 for DOM stand-ins; fast-text-encoding 1.0.6 (Apache-2.0): no `fatal`, streaming or UTF-16; text-encoding
 (deprecated, large tables). These are implemented from the specs in `web/glue/src/` instead.
+
+## runtime/gl + web/webgl: the WebGL binding (`web/webgl/dist/webgl.min.js`)
+
+Nothing third-party ships in the binding's code: the generator, the natives, the composites, the EGL/blob-cache
+code and the TypeScript binding are our own, written from the WebGL 1.0/2.0 specifications and extension
+registry texts, the WebGL 2.0 IDL, OpenGL ES 3.0/3.2 and EGL 1.5 (+ the EGL/GLES extensions named in
+`docs/spec/07-webgl2.md`), and the V8 embedder headers (`v8-fast-api-calls.h`, `v8-array-buffer.h`).
+
+Inputs the generator reads (checked in where noted):
+
+| component | version | license | source | used for |
+|---|---|---|---|---|
+| WebGL IDL files (`runtime/gl/gen/idl/*.idl`, checked in) | Chromium commit 754af040be824ba6308e15b8d6fa016c82f0fb8a (`gen/idl/REVISION`) | BSD-3-Clause (The Chromium Authors; webgl_rendering_context_base.idl also carries Apple's BSD-2 notice) | `chromium.googlesource.com/chromium/src/+/<rev>/third_party/blink/renderer/modules/webgl/` via `gen/fetch-idl.mjs` | the WebGL 1/2 + extension interfaces: operations, overloads, WebIDL lengths, constants |
+| Khronos GLES 3.2 / gl2ext / EGL headers | NDK r30 (30.0.16248370) sysroot | Apache-2.0 / MIT (Khronos) | Android NDK (dl.google.com) | C signatures of every GLES entry point and enum values (read by the generator; compiled against) |
+
+Build/test only (not shipped):
+
+| component | version | license | source | used for |
+|---|---|---|---|---|
+| `v8-fast-api-calls.h` (`runtime/gl/test/node-addon/v8-13.6/`, checked in) | V8 13.6.233.10 | BSD-3-Clause (the V8 project authors) | `chromium.googlesource.com/v8/v8/+/refs/tags/13.6.233.10/include/` | building the host test addon against the V8 inside Node 24 (which does not ship this header) |
+| Mesa (EGL + GLES 3.2, llvmpipe, surfaceless) | 26.1.1 (host system packages) | MIT | `mesa-libEGL`, `mesa-dri-drivers` RPMs | the real driver behind the host tests, three.js tests and the conformance runs |
+| three | 0.181.0 | MIT | npm | integration tests (`web/webgl/test/three.test.ts`); bundled into the on-device test APK only |
+| @types/three | 0.181.0 | MIT | npm | type-checking the three.js tests |
+| esbuild | 0.28.2 | MIT | npm | bundles `dist/webgl.js` and the device test app |
+| Khronos WebGL conformance tests (`sdk/tests`) | KhronosGroup/WebGL commit 193020cd37c3ad6aa068805ef7fb7eca187734b5 | Khronos MIT-style license (per-file headers) | `chromium.googlesource.com/external/khronosgroup/webgl/+archive/<rev>/sdk/tests.tar.gz` via `web/webgl/cts/fetch-cts.sh`, unpacked outside the repo | the GL-CTS-1 subset run by `web/webgl/cts/harness.mjs`; not checked in |
