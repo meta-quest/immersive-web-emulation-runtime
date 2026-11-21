@@ -40,9 +40,16 @@ import { XRRigidTransform } from '../../src/primitives/XRRigidTransform';
 import { XRView } from '../../src/views/XRView';
 import { NativePlane } from '../../src/planes/XRPlane';
 import { NativeMesh } from '../../src/meshes/XRMesh';
+import { XRRay } from '../../src/hittest/XRRay';
+import { XRHostHitTest } from '../../src/host/hit-test';
+import type {
+  XRHitTestResult,
+  XRHitTestSource,
+  XRTransientInputHitTestSource,
+} from '../../src/hittest/XRHitTest';
 import { XRSemanticLabels } from '../../src/labels/labels';
 import { XRHostInputMode } from '../../src/device/XRHostInput';
-import { P_DEVICE, P_SESSION, P_SPACE } from '../../src/private';
+import { P_DEVICE, P_FRAME, P_SESSION, P_SPACE } from '../../src/private';
 
 // ---------------------------------------------------------------------------
 // fixtures
@@ -1531,6 +1538,567 @@ describe('host mode', () => {
       projectionLayer(session);
       frameWith(device, session, () => 0);
       expect(getPlanes).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('hit test', () => {
+    // a 10 m floor at y = 0 and a wall mesh across z = -1 (x -2..2, y 0..3)
+    const floorPlane = () =>
+      new NativePlane(
+        new XRRigidTransform(),
+        [
+          new DOMPointReadOnly(-5, 0, -5),
+          new DOMPointReadOnly(5, 0, -5),
+          new DOMPointReadOnly(5, 0, 5),
+          new DOMPointReadOnly(-5, 0, 5),
+        ],
+        XRSemanticLabels.Floor,
+      );
+    const wallMesh = () =>
+      new NativeMesh(
+        new XRRigidTransform({ x: 0, y: 0, z: -1 }),
+        new Float32Array([-2, 0, 0, 2, 0, 0, 2, 3, 0, -2, 3, 0]),
+        new Uint32Array([0, 1, 2, 0, 2, 3]),
+        XRSemanticLabels.Wall,
+      );
+    // from the viewer (0, 1.72, 0.05), 45 degrees down and forward
+    const downRay = () =>
+      new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x: 0, y: -1, z: -1, w: 0 });
+
+    async function hitSession(
+      over: Partial<XRHostBackend>,
+      features = ['layers', 'local-floor', 'hit-test'],
+    ) {
+      const started = await startSession(over, { features });
+      projectionLayer(started.session);
+      const viewer = await requestSpace(started.session, 'viewer');
+      const floor = (await requestSpace(
+        started.session,
+        'local-floor',
+      )) as unknown as XRReferenceSpace;
+      return { ...started, viewer, floor };
+    }
+
+    const poseOf = (
+      device: XRDeviceBase,
+      frame: XRFrame,
+      result: XRHitTestResult,
+    ) =>
+      frame.getPose(
+        (result as unknown as { [k: symbol]: { offsetSpace: never } })[
+          Object.getOwnPropertySymbols(result)[0]
+        ].offsetSpace,
+        device[P_DEVICE].globalSpace,
+      )!.transform.matrix;
+
+    test('a source hits planes and meshes without plane or mesh detection, nearest first, +Y along the normal', async () => {
+      const getPlanes = jest.fn(() => [floorPlane()]);
+      const getMeshes = jest.fn(() => [wallMesh()]);
+      const { device, session, viewer } = await hitSession({
+        getPlanes,
+        getMeshes,
+      });
+      // no source yet: the scene is not read
+      frameWith(device, session, () => 0);
+      expect(getPlanes).not.toHaveBeenCalled();
+      const source = (await session.requestHitTestSource({
+        space: viewer as never,
+        offsetRay: downRay(),
+        entityTypes: ['plane', 'mesh'],
+      })) as XRHitTestSource;
+      const seen = frameWith(device, session, (_t, frame) =>
+        frame
+          .getHitTestResults(source)
+          .map((r) => poseOf(device, frame, r))
+          .map((m) => ({ p: position(m), y: [m[4], m[5], m[6]] })),
+      );
+      expect(getPlanes).toHaveBeenCalledTimes(1);
+      expect(getMeshes).toHaveBeenCalledTimes(1);
+      expect(seen).toHaveLength(2);
+      // the wall at z = -1 first: 1.05 m forward, so 1.05 m down
+      expect(seen[0].p[0]).toBeCloseTo(0, 5);
+      expect(seen[0].p[1]).toBeCloseTo(1.72 - 1.05, 5);
+      expect(seen[0].p[2]).toBeCloseTo(-1, 5);
+      expect(seen[0].y[2]).toBeCloseTo(1, 5); // the wall's normal faces the viewer
+      expect(seen[1].p[1]).toBeCloseTo(0, 5);
+      expect(seen[1].p[2]).toBeCloseTo(0.05 - 1.72, 5);
+      expect(seen[1].y[1]).toBeCloseTo(1, 5);
+    });
+
+    test('entityTypes picks planes or meshes; a ray outside the polygon or pointing away hits nothing', async () => {
+      const { device, session, viewer } = await hitSession({
+        getPlanes: () => [floorPlane()],
+        getMeshes: () => [wallMesh()],
+      });
+      const planesOnly = (await session.requestHitTestSource({
+        space: viewer as never,
+        offsetRay: downRay(),
+        entityTypes: ['plane'],
+      })) as XRHitTestSource;
+      const meshesOnly = (await session.requestHitTestSource({
+        space: viewer as never,
+        offsetRay: downRay(),
+        entityTypes: ['mesh'],
+      })) as XRHitTestSource;
+      const up = (await session.requestHitTestSource({
+        space: viewer as never,
+        offsetRay: new XRRay(
+          { x: 0, y: 0, z: 0, w: 1 },
+          { x: 0, y: 1, z: 0, w: 0 },
+        ),
+      })) as XRHitTestSource;
+      const far = (await session.requestHitTestSource({
+        space: viewer as never,
+        // 20 m to the side: past the floor polygon and the wall
+        offsetRay: new XRRay(
+          { x: 20, y: 0, z: 0, w: 1 },
+          { x: 0, y: -1, z: 0, w: 0 },
+        ),
+      })) as XRHitTestSource;
+      const seen = frameWith(device, session, (_t, frame) => ({
+        planes: frame
+          .getHitTestResults(planesOnly)
+          .map((r) => position(poseOf(device, frame, r))[1]),
+        meshes: frame
+          .getHitTestResults(meshesOnly)
+          .map((r) => position(poseOf(device, frame, r))[2]),
+        up: frame.getHitTestResults(up).length,
+        far: frame.getHitTestResults(far).length,
+      }));
+      expect(seen.planes).toHaveLength(1);
+      expect(seen.planes[0]).toBeCloseTo(0, 5);
+      expect(seen.meshes).toHaveLength(1);
+      expect(seen.meshes[0]).toBeCloseTo(-1, 5);
+      expect(seen.up).toBe(0);
+      expect(seen.far).toBe(0);
+      planesOnly.cancel();
+      expect(session[P_SESSION].hitTestSources.has(planesOnly)).toBe(false);
+    });
+
+    test('a hit from below a plane reports the normal turned to the ray; the pose is right-handed', async () => {
+      const ceiling = new NativePlane(
+        new XRRigidTransform({ x: 0, y: 2.5, z: 0 }),
+        floorPlane().polygon as DOMPointReadOnly[],
+        XRSemanticLabels.Ceiling,
+      );
+      const { device, session, viewer } = await hitSession({
+        getPlanes: () => [ceiling],
+      });
+      const source = (await session.requestHitTestSource({
+        space: viewer as never,
+        offsetRay: new XRRay(
+          { x: 0, y: 0, z: 0, w: 1 },
+          { x: 0, y: 1, z: -1, w: 0 },
+        ),
+      })) as XRHitTestSource;
+      const m = frameWith(device, session, (_t, frame) =>
+        poseOf(device, frame, frame.getHitTestResults(source)[0]),
+      );
+      expect(m[13]).toBeCloseTo(2.5, 5);
+      expect(m[5]).toBeCloseTo(-1, 5); // +Y points down, back at the viewer
+      // +Z: the ray's direction along the surface, reversed (towards the viewer)
+      expect(m[10]).toBeCloseTo(1, 5);
+      const x = vec3.fromValues(m[0], m[1], m[2]);
+      const y = vec3.fromValues(m[4], m[5], m[6]);
+      const z = vec3.fromValues(m[8], m[9], m[10]);
+      expect(vec3.dot(vec3.cross(vec3.create(), x, y), z)).toBeCloseTo(1, 5);
+    });
+
+    test('a controller target ray is cast from its pose this frame', async () => {
+      const { device, session } = await hitSession({
+        getMeshes: () => [wallMesh()],
+      });
+      const input = device.enableHostInput();
+      input.right.mode = XRHostInputMode.Controller;
+      input.right.targetRay.set([0.5, 1.2, 0, 0, 0, 0, 1]);
+      input.right.targetRayValid = true;
+      input.right.grip.set([0.5, 1.2, 0, 0, 0, 0, 1]);
+      input.right.gripValid = true;
+      device.runHostFrame(makeFrame());
+      const ray = [...session.inputSources][0].targetRaySpace;
+      const source = (await session.requestHitTestSource({
+        space: ray as never,
+      })) as XRHitTestSource;
+      input.right.targetRay.set([-0.5, 1.4, 0, 0, 0, 0, 1]);
+      source.cancel();
+      const meshes = (await session.requestHitTestSource({
+        space: ray as never,
+        entityTypes: ['mesh'],
+      })) as XRHitTestSource;
+      const p = frameWith(device, session, (_t, frame) =>
+        position(poseOf(device, frame, frame.getHitTestResults(meshes)[0])),
+      );
+      expect(p[0]).toBeCloseTo(-0.5, 5);
+      expect(p[1]).toBeCloseTo(1.4, 5);
+      expect(p[2]).toBeCloseTo(-1, 5);
+    });
+
+    test('a room-sized mesh is hit where brute force says (bounding volume tree)', async () => {
+      // a bumpy 120 x 120 grid (28 800 triangles) over x, z in -3..3
+      const n = 120;
+      const vertices = new Float32Array((n + 1) * (n + 1) * 3);
+      for (let i = 0; i <= n; i++) {
+        for (let j = 0; j <= n; j++) {
+          const v = (i * (n + 1) + j) * 3;
+          vertices[v] = -3 + (6 * j) / n;
+          vertices[v + 1] = 0.05 * Math.sin(i * 0.7) * Math.cos(j * 0.3);
+          vertices[v + 2] = -3 + (6 * i) / n;
+        }
+      }
+      const indices = new Uint32Array(n * n * 6);
+      let k = 0;
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          const a = i * (n + 1) + j;
+          indices.set([a, a + n + 1, a + 1, a + 1, a + n + 1, a + n + 2], k);
+          k += 6;
+        }
+      }
+      const room = new NativeMesh(
+        new XRRigidTransform(),
+        vertices,
+        indices,
+        XRSemanticLabels.GlobalMesh,
+      );
+      const { device, session, viewer } = await hitSession({
+        getMeshes: () => [room],
+      });
+      XRHostHitTest.buildBudgetMs = Infinity; // the whole tree in the first frame
+      const directions = [
+        [0, -1, -1],
+        [0.3, -1, -0.2],
+        [-0.7, -1, 0.4],
+        [0.05, -1, 0.9],
+      ];
+      const sources: XRHitTestSource[] = [];
+      for (const [x, y, z] of directions) {
+        sources.push(
+          (await session.requestHitTestSource({
+            space: viewer as never,
+            offsetRay: new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x, y, z, w: 0 }),
+          })) as XRHitTestSource,
+        );
+      }
+      const hits = frameWith(device, session, (_t, frame) =>
+        sources.map((s) =>
+          frame
+            .getHitTestResults(s)
+            .map((r) => position(poseOf(device, frame, r))),
+        ),
+      );
+      // brute force over every triangle, from the viewer's origin
+      const origin = [0, 1.72, 0.05];
+      directions.forEach(([x, y, z], d) => {
+        const len = Math.hypot(x, y, z);
+        const dir = [x / len, y / len, z / len];
+        let best = Infinity;
+        for (let t = 0; t < indices.length; t += 3) {
+          const [a, b, c] = [indices[t], indices[t + 1], indices[t + 2]].map(
+            (i) => [vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]],
+          );
+          const e1 = vec3.sub(vec3.create(), b as never, a as never);
+          const e2 = vec3.sub(vec3.create(), c as never, a as never);
+          const p = vec3.cross(vec3.create(), dir as never, e2);
+          const det = vec3.dot(e1, p);
+          if (Math.abs(det) < 1e-9) continue;
+          const s = vec3.sub(vec3.create(), origin as never, a as never);
+          const u = vec3.dot(s, p) / det;
+          if (u < 0 || u > 1) continue;
+          const q = vec3.cross(vec3.create(), s, e1);
+          const v = vec3.dot(dir as never, q) / det;
+          if (v < 0 || u + v > 1) continue;
+          const dist = vec3.dot(e2, q) / det;
+          if (dist > 0 && dist < best) best = dist;
+        }
+        expect(hits[d]).toHaveLength(1);
+        for (let axis = 0; axis < 3; axis++) {
+          expect(hits[d][0][axis]).toBeCloseTo(
+            origin[axis] + best * dir[axis],
+            4,
+          );
+        }
+      });
+      XRHostHitTest.buildBudgetMs = 2;
+    });
+
+    // a couch volume (x -1..1, y 0..0.85, z -1.45..-0.55) as the native adapter makes it from an XR_FB_scene 3D
+    // bounding box: 12 outward-facing (counter-clockwise) triangles
+    const couchBox = () => {
+      const [ox, oy, oz, w, h, d] = [-1, 0, -1.45, 2, 0.85, 0.9];
+      const vertices = new Float32Array(24);
+      for (let i = 0; i < 8; i++) {
+        vertices[i * 3] = ox + (i & 1 ? w : 0);
+        vertices[i * 3 + 1] = oy + (i & 2 ? h : 0);
+        vertices[i * 3 + 2] = oz + (i & 4 ? d : 0);
+      }
+      return new NativeMesh(
+        new XRRigidTransform(),
+        vertices,
+        new Uint32Array([
+          0, 4, 6, 0, 6, 2, 1, 3, 7, 1, 7, 5, 0, 1, 5, 0, 5, 4, 2, 6, 7, 2, 7,
+          3, 0, 2, 3, 0, 3, 1, 4, 5, 7, 4, 7, 6,
+        ]),
+        XRSemanticLabels.Couch,
+      );
+    };
+    // the room's global mesh: the seat at y 0.45 over the couch, facing up
+    const seatMesh = () =>
+      new NativeMesh(
+        new XRRigidTransform({ x: 0, y: 0.45, z: -1 }),
+        new Float32Array([-1, 0, -0.45, -1, 0, 0.45, 1, 0, 0.45, 1, 0, -0.45]),
+        new Uint32Array([0, 1, 2, 0, 2, 3]),
+        XRSemanticLabels.GlobalMesh,
+      );
+
+    test('without entityTypes: the global mesh alone when the room has one (no furniture box), else the planes', async () => {
+      let meshes = [couchBox(), seatMesh()];
+      const { device, session, viewer } = await hitSession({
+        getPlanes: () => [floorPlane()],
+        getMeshes: () => meshes,
+      });
+      // from the viewer (0, 1.72, 0.05) down towards the couch
+      const source = (await session.requestHitTestSource({
+        space: viewer as never,
+        offsetRay: new XRRay(
+          { x: 0, y: 0, z: 0, w: 1 },
+          { x: 0, y: -1, z: -0.6, w: 0 },
+        ),
+      })) as XRHitTestSource;
+      const heights = () =>
+        frameWith(device, session, (_t, frame) =>
+          frame
+            .getHitTestResults(source)
+            .map((r) => position(poseOf(device, frame, r))[1]),
+        );
+      // Quest Browser: the seat (the global mesh), not the box top at 0.85, not the floor
+      const seat = heights();
+      expect(seat).toHaveLength(1);
+      expect(seat[0]).toBeCloseTo(0.45, 5);
+      // no global mesh: WebXR's default entity type, planes (the floor), not the box
+      meshes = [couchBox()];
+      const floor = heights();
+      expect(floor).toHaveLength(1);
+      expect(floor[0]).toBeCloseTo(0, 5);
+    });
+
+    test('a ray from inside a furniture volume does not hit the inside of its box (front faces only)', async () => {
+      const { device, session } = await hitSession({
+        getPlanes: () => [floorPlane()],
+        getMeshes: () => [couchBox()],
+      });
+      const floor = (await requestSpace(
+        session,
+        'local-floor',
+      )) as unknown as XRReferenceSpace;
+      // a hand at y 0.6 over the seat, inside the couch's volume, pointing forward and down
+      const inside = new XRRay(
+        { x: 0, y: 0.6, z: -1, w: 1 },
+        { x: 0, y: -0.5, z: -1, w: 0 },
+      );
+      const meshes = (await session.requestHitTestSource({
+        space: floor as never,
+        offsetRay: inside,
+        entityTypes: ['mesh'],
+      })) as XRHitTestSource;
+      const both = (await session.requestHitTestSource({
+        space: floor as never,
+        offsetRay: inside,
+        entityTypes: ['mesh', 'plane'],
+      })) as XRHitTestSource;
+      // from outside, above the couch: the box top is hit
+      const above = (await session.requestHitTestSource({
+        space: floor as never,
+        offsetRay: new XRRay(
+          { x: 0, y: 2, z: -1, w: 1 },
+          { x: 0, y: -1, z: 0, w: 0 },
+        ),
+        entityTypes: ['mesh'],
+      })) as XRHitTestSource;
+      const seen = frameWith(device, session, (_t, frame) => ({
+        meshes: frame.getHitTestResults(meshes).length,
+        both: frame
+          .getHitTestResults(both)
+          .map((r) => position(poseOf(device, frame, r))[1]),
+        above: frame
+          .getHitTestResults(above)
+          .map((r) => position(poseOf(device, frame, r))[1]),
+      }));
+      expect(seen.meshes).toBe(0);
+      expect(seen.both).toHaveLength(1);
+      expect(seen.both[0]).toBeCloseTo(0, 5); // the floor, not the front face's inside
+      expect(seen.above).toHaveLength(1);
+      expect(seen.above[0]).toBeCloseTo(0.85, 5);
+    });
+
+    test("a room mesh's tree is built over frames: until it is ready the mesh is left out and the planes answer", async () => {
+      const n = 60;
+      const vertices = new Float32Array((n + 1) * (n + 1) * 3);
+      for (let i = 0; i <= n; i++) {
+        for (let j = 0; j <= n; j++) {
+          const v = (i * (n + 1) + j) * 3;
+          vertices.set([-3 + (6 * j) / n, 0.3, -3 + (6 * i) / n], v);
+        }
+      }
+      const indices = new Uint32Array(n * n * 6);
+      for (let i = 0, k = 0; i < n; i++) {
+        for (let j = 0; j < n; j++, k += 6) {
+          const a = i * (n + 1) + j;
+          indices.set([a, a + n + 1, a + 1, a + 1, a + n + 1, a + n + 2], k);
+        }
+      }
+      const room = new NativeMesh(
+        new XRRigidTransform(),
+        vertices,
+        indices,
+        XRSemanticLabels.GlobalMesh,
+      );
+      const { device, session, viewer } = await hitSession({
+        getPlanes: () => [floorPlane()],
+        getMeshes: () => [room],
+      });
+      const source = (await session.requestHitTestSource({
+        space: viewer as never,
+        offsetRay: downRay(),
+      })) as XRHitTestSource;
+      const heights = () =>
+        frameWith(device, session, (_t, frame) =>
+          frame
+            .getHitTestResults(source)
+            .map((r) => position(poseOf(device, frame, r))[1]),
+        );
+      XRHostHitTest.buildBudgetMs = 0; // a few nodes per frame
+      const building = heights();
+      expect(building).toHaveLength(1);
+      expect(building[0]).toBeCloseTo(0, 5); // the floor plane while the mesh's tree is incomplete
+      XRHostHitTest.buildBudgetMs = Infinity;
+      const ready = heights();
+      expect(ready).toHaveLength(1);
+      expect(ready[0]).toBeCloseTo(0.3, 5); // the global mesh
+      XRHostHitTest.buildBudgetMs = 2;
+    });
+
+    test('pooled frames drop the results of cancelled sources: asking for them throws', async () => {
+      const { device, session, viewer } = await hitSession({
+        getPlanes: () => [floorPlane()],
+      });
+      const make = () =>
+        session.requestHitTestSource({
+          space: viewer as never,
+          offsetRay: downRay(),
+        }) as Promise<XRHitTestSource>;
+      const sources = await Promise.all([make(), make(), make()]);
+      const transient = (await (
+        session as unknown as {
+          requestHitTestSourceForTransientInput(o: {
+            profile: string;
+          }): Promise<XRTransientInputHitTestSource>;
+        }
+      ).requestHitTestSourceForTransientInput({
+        profile: 'generic-touchscreen',
+      })) as XRTransientInputHitTestSource;
+      for (let i = 0; i < 3; i++) {
+        frameWith(device, session, () => 0);
+      }
+      sources.forEach((s) => s.cancel());
+      transient.cancel();
+      const kept: XRFrame[] = [];
+      const errors: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        frameWith(device, session, (_t, frame) => {
+          kept.push(frame);
+          for (const read of [
+            () => frame.getHitTestResults(sources[0]),
+            () =>
+              (
+                frame as unknown as {
+                  getHitTestResultsForTransientInput(
+                    s: XRTransientInputHitTestSource,
+                  ): unknown[];
+                }
+              ).getHitTestResultsForTransientInput(transient),
+          ]) {
+            try {
+              read();
+              errors.push('none');
+            } catch (e) {
+              errors.push((e as DOMException).name);
+            }
+          }
+        });
+      }
+      expect(errors).toEqual(Array(8).fill('InvalidStateError'));
+      // the reused frame objects hold no entry for the cancelled sources
+      for (const frame of kept) {
+        expect(frame[P_FRAME].hitTestResultsMap.size).toBe(0);
+        expect(frame[P_FRAME].transientHitTestResultsMap.size).toBe(0);
+      }
+    });
+
+    test('a throwing getMeshes is reported; planes are still hit and every source has a result list', async () => {
+      const { device, session, viewer, rec } = await hitSession({
+        getPlanes: () => [floorPlane()],
+        getMeshes: () => {
+          throw new Error('scene unavailable');
+        },
+        reportError: (error, source) => {
+          rec.errors.push({ error, source });
+        },
+      });
+      const source = (await session.requestHitTestSource({
+        space: viewer as never,
+        offsetRay: downRay(),
+      })) as XRHitTestSource;
+      const count = frameWith(
+        device,
+        session,
+        (_t, frame) => frame.getHitTestResults(source).length,
+      );
+      expect(count).toBe(1);
+      expect(rec.errors.map((e) => e.source)).toEqual(['host-hook']);
+    });
+
+    test('transient input sources: requested, answered with one entry per matching transient source, cancelled', async () => {
+      const { device, session } = await hitSession({
+        getPlanes: () => [floorPlane()],
+      });
+      const transient = (await (
+        session as unknown as {
+          requestHitTestSourceForTransientInput(o: {
+            profile: string;
+          }): Promise<XRTransientInputHitTestSource>;
+        }
+      ).requestHitTestSourceForTransientInput({
+        profile: 'generic-touchscreen',
+      })) as XRTransientInputHitTestSource;
+      // the headset's controllers are tracked pointers, not transient input
+      const input = device.enableHostInput();
+      input.right.mode = XRHostInputMode.Controller;
+      input.right.targetRayValid = true;
+      input.right.gripValid = true;
+      const results = frameWith(device, session, (_t, frame) =>
+        (
+          frame as unknown as {
+            getHitTestResultsForTransientInput(
+              s: XRTransientInputHitTestSource,
+            ): unknown[];
+          }
+        ).getHitTestResultsForTransientInput(transient),
+      );
+      expect(results).toEqual([]);
+      transient.cancel();
+      expect(session[P_SESSION].transientHitTestSources.size).toBe(0);
+    });
+
+    test('without hit-test enabled, requests reject with NotSupportedError; host mode installs XRRay', async () => {
+      const { session, viewer, globalObject } = await hitSession({}, [
+        'layers',
+        'local-floor',
+      ]);
+      await expect(
+        session.requestHitTestSource({ space: viewer as never }),
+      ).rejects.toMatchObject({ name: 'NotSupportedError' });
+      expect(globalObject.XRRay).toBe(XRRay);
+      expect(typeof globalObject.XRHitTestSource).toBe('function');
     });
   });
 

@@ -17,7 +17,12 @@ import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
 import { XRCPUDepthInformation } from '../depth/XRDepthInformation.js';
 import { XRWebGLDepthInformation } from '../depth/XRWebGLBinding.js';
 import { XREye, XRView } from '../views/XRView.js';
-import { XRHitTestResult, XRHitTestSource } from '../hittest/XRHitTest.js';
+import {
+  XRHitTestResult,
+  XRHitTestSource,
+  XRTransientInputHitTestResult,
+  XRTransientInputHitTestSource,
+} from '../hittest/XRHitTest.js';
 import { XRSpace, XRSpaceUtils } from '../spaces/XRSpace.js';
 import { mat4, quat, vec3 } from 'gl-matrix';
 
@@ -77,6 +82,10 @@ export class XRFrame {
     detectedMeshes: XRMeshSet;
     trackedAnchors: XRAnchorSet;
     hitTestResultsMap: Map<XRHitTestSource, XRHitTestResult[]>;
+    transientHitTestResultsMap: Map<
+      XRTransientInputHitTestSource,
+      XRTransientInputHitTestResult[]
+    >;
     depthDataMap: Map<XREye, XRCPUDepthInformation>;
     gpuDepthDataMap: Map<XREye, XRWebGLDepthInformation>;
   };
@@ -99,6 +108,7 @@ export class XRFrame {
       detectedMeshes: new XRMeshSet(),
       trackedAnchors: session[P_SESSION].frameTrackedAnchors,
       hitTestResultsMap: new Map(),
+      transientHitTestResultsMap: new Map(),
       depthDataMap: new Map(),
       gpuDepthDataMap: new Map(),
     };
@@ -362,6 +372,34 @@ export class XRFrame {
     } else {
       return [...this[P_FRAME].hitTestResultsMap.get(hitTestSource)!];
     }
+  }
+
+  getHitTestResultsForTransientInput(
+    hitTestSource: XRTransientInputHitTestSource,
+  ) {
+    if (!this[P_FRAME].active) {
+      throw new DOMException(
+        'XRFrame access outside the callback that produced it is invalid.',
+        'InvalidStateError',
+      );
+    }
+    const results = this[P_FRAME].transientHitTestResultsMap.get(hitTestSource);
+    if (results) {
+      return [...results];
+    }
+    // a cancelled source has no results (Chromium: InvalidStateError); one
+    // made after this frame's hit tests ran has none yet
+    if (
+      !this[P_FRAME].session[P_SESSION].transientHitTestSources.has(
+        hitTestSource,
+      )
+    ) {
+      throw new DOMException(
+        'The hit test source was cancelled.',
+        'InvalidStateError',
+      );
+    }
+    return [];
   }
 
   getDepthInformation(view: XRView): XRCPUDepthInformation | null {

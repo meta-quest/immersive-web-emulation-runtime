@@ -3,7 +3,8 @@
 // they are used (XR_KHR_opengl_es_enable, XR_KHR_android_create_instance, XR_KHR_loader_init_android,
 // XR_KHR_convert_timespec_time, XR_FB_display_refresh_rate, XR_FB_foveation(_configuration),
 // XR_FB_swapchain_update_state, XR_FB_color_space, XR_EXT_performance_settings, XR_FB_passthrough,
-// XR_META_passthrough_preferences, XR_KHR_composition_layer_cylinder for xr_layers.cc), against
+// XR_META_passthrough_preferences, XR_KHR_composition_layer_cylinder for xr_layers.cc; the scene extensions in
+// xr_scene.h), against
 // docs/spec/08, 09, 10 and 14 (DBG-SHOT). See xr_system.h for the threading model.
 #include "android/xr_system.h"
 
@@ -21,6 +22,7 @@
 #include "android/jni_android.h"
 #include "android/xr_input.h"
 #include "android/xr_loading.h"
+#include "android/xr_scene.h"
 #include "android/xr_shot.h"
 #include "iwn/core/clock.h"
 #include "iwn/core/log.h"
@@ -215,6 +217,9 @@ struct XrSystem::Impl {
   int pt_recommended = -1;
   // A run of frames of a session without an app frame (after a resume), covered with the opaque background.
   uint64_t covered_run = 0;
+
+  // scene model: planes, meshes, hit test (xr_scene.h)
+  XrScene scene;
 
   // input
   XrInput input;
@@ -603,6 +608,7 @@ bool XrSystem::Impl::initialize() {
   if (usable(XR_META_PASSTHROUGH_PREFERENCES_EXTENSION_NAME)) {
     enabled_exts.push_back(XR_META_PASSTHROUGH_PREFERENCES_EXTENSION_NAME);
   }
+  scene.choose_extensions(usable, &enabled_exts);
   ext_convert_time = has(enabled_exts, XR_KHR_CONVERT_TIMESPEC_TIME_EXTENSION_NAME);
   ext_refresh = has(enabled_exts, XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
   ext_foveation = has(enabled_exts, XR_FB_FOVEATION_EXTENSION_NAME) &&
@@ -801,6 +807,7 @@ bool XrSystem::Impl::initialize() {
     if (get_rate && XR_SUCCEEDED(get_rate(session, &cur))) current_rate = cur;
   }
 
+  scene.init(instance, session, enabled_exts);
   const double t_spaces = now_ms();
   input_ok = input.init(instance, session, input_ext, sys_hand_tracking);
   const double t_input = now_ms();
@@ -850,6 +857,10 @@ bool XrSystem::Impl::initialize() {
     info.set("passthrough", sys_passthrough);
     info.set("immersiveAr", cfg->immersive_ar && sys_passthrough);  // XR-AR-1 is opt-in (xr.immersiveAr)
     info.set("foveation", foveation_supported);
+    // plane-detection, mesh-detection, hit-test (XR-AR-2): the per-feature flags XR-PERM-1 grants by
+    info.set("planeDetection", scene.available());
+    info.set("meshDetection", scene.available());
+    info.set("hitTest", scene.available());
     info.set("explicitGrant", cfg->explicit_grant);
     // XR-LAYER-1: quad and cylinder layers (the WebXR 'layers' feature itself is granted with projection layers)
     Json comp = Json::object();
@@ -1118,6 +1129,7 @@ void XrSystem::Impl::end_webxr(bool by_system) {
   // The layer swapchains go with the session (once a frame still in flight is collected).
   const FrameSlot::State st = owner->slot_.state();
   comp_layers.end_session(st == FrameSlot::kRunning || st == FrameSlot::kDone);
+  scene.session_ended();
   life.on_session_ended(now_ms());
   if (input_ok) input.stop_haptics();
   // No WebXR content any more: the loading screen comes back, in front of the user (a reload boots the page again),
@@ -1311,6 +1323,7 @@ void XrSystem::Impl::begin_xr_session() {
     log(LogLevel::kInfo, "xr: requested %.0f Hz at session start: %s", cfg->frame_rate, result(r));
   }
   apply_perf(true);
+  scene.resumed();  // the room may have changed while the app was paused
   pacing.reset();
   {
     std::lock_guard<std::mutex> lock(stats_mu);
@@ -1371,6 +1384,7 @@ void XrSystem::Impl::poll_events() {
   for (;;) {
     XrEventDataBuffer ev{XR_TYPE_EVENT_DATA_BUFFER};
     if (xrPollEvent(instance, &ev) != XR_SUCCESS) break;
+    if (scene.on_event(ev)) continue;
     switch (ev.type) {
       case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED:
         handle_state(reinterpret_cast<XrEventDataSessionStateChanged&>(ev).state);
@@ -1617,6 +1631,7 @@ void XrSystem::Impl::run_frame() {
       last_viewer = loc.pose;
     }
     if (input_ok) input.sample(fs.predictedDisplayTime, base, session_hand_tracking, visibility.focused, hands);
+    scene.locate(base, fs.predictedDisplayTime);  // pose slots, read by JS during the frame like the record
 
     // The record (XRF-2), written while no JS frame is in flight.
     const double pdt = pacing.strictly_increasing(clock.to_perf_ms(fs.predictedDisplayTime));
@@ -1920,6 +1935,7 @@ void XrSystem::Impl::teardown() {
   if (loading_decode.joinable()) loading_decode.join();  // initialisation failed before it was collected
   loading.destroy();
   destroy_passthrough();
+  scene.destroy();
   if (input_ok) input.destroy();
   input_ok = false;
   for (XrSpace* s : {&view_space, &local_space, &stage_space}) {
@@ -2439,7 +2455,16 @@ Json XrSystem::stats() {
   input.set("handTracking", s.hand_tracking);
   j.set("input", input);
   j.set("neverOfferedErrors", x.never_offered_errors);
+  j.set("scene", x.scene.status());
   return j;
+}
+
+XrScene* XrSystem::scene() { return impl_ ? &impl_->scene : nullptr; }
+
+void XrSystem::want_scene() {
+  if (!impl_ || !impl_->scene.mark_wanted()) return;
+  Impl* x = impl_.get();
+  commands_.push([x] { x->scene.start("a session wants planes, meshes or hit test"); });
 }
 
 }  // namespace iwn::xr

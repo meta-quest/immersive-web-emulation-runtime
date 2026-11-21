@@ -66,6 +66,7 @@ describe('resolveNativeTarget', () => {
     assert.deepEqual(t.permissions, [
       'android.permission.INTERNET',
       'com.oculus.permission.HAND_TRACKING',
+      'com.oculus.permission.USE_ANCHOR_API',
       'com.oculus.permission.USE_SCENE',
     ]);
     assert.deepEqual(t.usesFeatures, [
@@ -103,7 +104,28 @@ describe('resolveNativeTarget', () => {
         features: { planeDetection: 'optional', meshDetection: 'required' },
       },
     });
-    assert.deepEqual(t.permissions, ['com.oculus.permission.USE_SCENE']);
+    assert.deepEqual(t.permissions, [
+      'com.oculus.permission.USE_ANCHOR_API',
+      'com.oculus.permission.USE_SCENE',
+    ]);
+  });
+
+  test('scene features declare USE_ANCHOR_API as well as USE_SCENE', () => {
+    // Quest offers the scene extensions only with USE_ANCHOR_API in the
+    // manifest, so a scene app without anchors still needs it.
+    for (const name of ['planeDetection', 'meshDetection', 'hitTest']) {
+      const t = resolveNativeTarget({
+        native: { packageId: 'com.a.b', features: { [name]: 'required' } },
+      });
+      assert.deepEqual(
+        t.permissions,
+        [
+          'com.oculus.permission.USE_ANCHOR_API',
+          'com.oculus.permission.USE_SCENE',
+        ],
+        name,
+      );
+    }
   });
 
   test('release signing defaults keyPasswordEnv to storePasswordEnv', () => {

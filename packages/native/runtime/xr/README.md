@@ -13,7 +13,9 @@ Sources: the behaviour spec (`docs/spec/`), IWER's host contract (`packages/iwer
 XR_FB_display_refresh_rate, XR_FB_foveation, XR_FB_foveation_configuration, XR_FB_swapchain_update_state,
 XR_FB_color_space, XR_EXT_performance_settings, XR_EXT_hand_tracking, XR_FB_hand_tracking_aim,
 XR_EXT_hand_interaction, XR_META_hand_tracking_microgestures, XR_META_touch_controller_plus,
-XR_FB_touch_controller_pro, XR_FB_passthrough, XR_META_passthrough_preferences), QCOM_texture_foveated, EGL 1.5 and
+XR_FB_touch_controller_pro, XR_FB_passthrough, XR_META_passthrough_preferences, XR_FB_spatial_entity,
+XR_FB_spatial_entity_query, XR_FB_spatial_entity_container, XR_FB_scene, XR_META_spatial_entity_mesh,
+XR_FB_scene_capture), QCOM_texture_foveated, EGL 1.5 and
 OpenGL ES 3.2 (shared objects, sync objects), the JNI specification and Android SDK/NDK references, V8 embedder
 headers, and our own runtime contracts (core `runtime.h`, `event_loop.h`, gl `iwn/gl.h`). Third-party code: the
 Khronos OpenXR loader 1.1.63 with its vendored jnipp and android-jni-wrappers, and jsoncpp (THIRD_PARTY.md,
@@ -29,6 +31,7 @@ Khronos OpenXR loader 1.1.63 with its vendored jnipp and android-jni-wrappers, a
 | `src/android/xr_input.{h,cc}` | OpenXR actions for Touch / Touch Plus / Touch Pro controllers and the hand interaction profile (poses, microgestures), hand tracking + aim, haptics |
 | `src/android/xr_layers.{h,cc}` | quad and cylinder layers (XR-LAYER-1): a swapchain per layer (sRGB, drawn through RGBA8 texture views), its acquired image, release of redrawn images, the frame's `XrCompositionLayerQuad` / `XrCompositionLayerCylinderKHR` structs in `renderState.layers` order |
 | `src/android/xr_loading.{h,cc}` | the loading screen's swapchains (static: the splash card, the spinner, the background colour) and its composition layers; the splash PNG's decode (image module) |
+| `src/android/xr_scene.{h,cc}` | the room from Space Setup for plane detection, mesh detection and hit test (XR-AR-2): scene queries, entity geometry snapshots, per-frame entity poses in a pose table of its own; host-tested against a fake runtime (`test/host/fake_openxr.h`, `iwn_xr_android_tests`) |
 | `src/android/xr_shot.{h,cc}` | eye-buffer screenshots for the debug endpoint's `shot` (readback on the XR thread, PNG on an encoder thread) |
 | `src/android/egl_xr.{h,cc}` | the XR thread's EGL context in the WebGL share group, cross-context fences |
 | `src/android/jni_android.{h,cc}` | JavaVM and Activity lookup for the loader and `xrCreateInstance` (through `ActivityThread`, non-SDK fields, Application context as the fallback; follow-up: take the NativeActivity's object from the app module instead) |

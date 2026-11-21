@@ -21,6 +21,14 @@ export interface FeatureManifestNeeds {
   usesFeatures: readonly string[];
 }
 
+// Quest offers the scene extensions (XR_FB_spatial_entity*, XR_FB_scene,
+// XR_META_spatial_entity_mesh) only to apps whose manifest also has
+// USE_ANCHOR_API; USE_SCENE alone leaves them out and the features unsupported.
+const SCENE_PERMISSIONS = [
+  'com.oculus.permission.USE_ANCHOR_API',
+  'com.oculus.permission.USE_SCENE',
+] as const;
+
 export const FEATURE_MANIFEST: Readonly<
   Record<NativeFeatureName, FeatureManifestNeeds>
 > = {
@@ -33,15 +41,15 @@ export const FEATURE_MANIFEST: Readonly<
     usesFeatures: [],
   },
   hitTest: {
-    permissions: ['com.oculus.permission.USE_SCENE'],
+    permissions: SCENE_PERMISSIONS,
     usesFeatures: [],
   },
   planeDetection: {
-    permissions: ['com.oculus.permission.USE_SCENE'],
+    permissions: SCENE_PERMISSIONS,
     usesFeatures: [],
   },
   meshDetection: {
-    permissions: ['com.oculus.permission.USE_SCENE'],
+    permissions: SCENE_PERMISSIONS,
     usesFeatures: [],
   },
   depthSensing: {

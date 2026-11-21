@@ -156,6 +156,7 @@ test('check: the app\'s own config and source are not dormant library code', () 
   assert.ok(lib.findings.every((f) => f.severity === 'info'), 'library mentions alone stay quiet');
   const app = [
     { key: 'XRSystem.offerSession("immersive-ar")', origin: 'config' as const, evidence: 'iwsdk.config.json world.xr.mode = "ar"' },
+    { key: 'XR feature light-estimation (required)', origin: 'config' as const, evidence: 'iwsdk.config.json world.xr.features.lightEstimation' },
     { key: 'XR feature hit-test (required)', origin: 'config' as const, evidence: 'iwsdk.config.json world.xr.features.hitTest' },
     { key: 'XRWebGLBinding.createEquirectLayer()', origin: 'source' as const, evidence: 'src/index.ts:3: new EquirectLayer' },
     { key: 'Document.createElement("video")', origin: 'source' as const, evidence: 'src/film.ts:9' },
@@ -164,7 +165,8 @@ test('check: the app\'s own config and source are not dormant library code', () 
   const r = evaluateCompat({ scan, app, surface, baseline });
   const sev = (k: string) => r.findings.find((f) => f.key === k)?.severity;
   assert.equal(sev('XRSystem.offerSession("immersive-ar")'), 'warn');
-  assert.equal(sev('XR feature hit-test (required)'), 'warn');
+  assert.equal(sev('XR feature light-estimation (required)'), 'warn');
+  assert.equal(sev('XR feature hit-test (required)'), undefined); // XR-AR-2: provided
   assert.equal(sev('XRWebGLBinding.createEquirectLayer()'), 'warn');
   assert.equal(r.findings.find((f) => f.key === 'XRWebGLBinding.createEquirectLayer()')?.source, 'app');
   assert.equal(sev('Document.createElement("video")'), 'warn');

@@ -70,6 +70,26 @@ export type XrNativeEvent =
   | { type: 'end' }
   | { type: 'running'; running: boolean };
 
+/** One entity of the room (runtime/xr xr_scene.h SceneEntity); geometry in the entity's own space. */
+export interface SceneEntityData {
+  id: string;
+  /** Its pose slot in scenePoses(). */
+  slot: number;
+  /** The runtime's labels, comma separated ("TABLE", "WALL_FACE", ...). */
+  labels: string;
+  /** 2D boundary: x y pairs in the entity's x-y plane. */
+  polygon?: Float32Array;
+  /** 3D bounding box: offset x y z (minimum corner), extent w h d. */
+  box?: Float32Array;
+  vertices?: Float32Array;
+  indices?: Uint32Array;
+}
+
+export interface SceneData {
+  version: number;
+  entities: SceneEntityData[];
+}
+
 /** kind of a frame-handler call. */
 export const FRAME_XR = 1;
 export const FRAME_TICK = 2;
@@ -129,6 +149,11 @@ export interface XrNatives {
   checkPermissions?(names: string[]): Record<string, boolean>;
   /** The permissions the app's manifest declares; null when the runtime cannot read them. */
   declaredPermissions?(): string[] | null;
+  /** The room's entities when their version differs from `knownVersion`, else null; the first call starts the query. */
+  sceneData?(knownVersion: number): SceneData | null;
+  /** The pose table (8 floats per slot), written before each frame. */
+  scenePoses?(): ArrayBuffer;
+  sceneStatus?(): Record<string, unknown>;
 }
 
 /** The internal surface of a WebGL context the hooks below take (web/webgl Ctx). */

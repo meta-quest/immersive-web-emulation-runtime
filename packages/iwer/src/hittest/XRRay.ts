@@ -54,26 +54,29 @@ export class XRRay {
       _direction.z = directionVec4[2];
       _direction.w = directionVec4[3];
     } else {
+      // dictionary members left out take the IDL defaults (DOMPointInit,
+      // XRRayDirectionInit), e.g. new XRRay({}, { x: 0, y: -1, z: 0 })
       if (origin) {
-        _origin.x = origin.x;
-        _origin.y = origin.y;
-        _origin.z = origin.z;
-        _origin.w = origin.w;
+        _origin.x = origin.x ?? 0;
+        _origin.y = origin.y ?? 0;
+        _origin.z = origin.z ?? 0;
+        _origin.w = origin.w ?? 1;
       }
       if (direction) {
-        if (
-          (direction.x === 0 && direction.y === 0 && direction.z === 0) ||
-          direction.w !== 0
-        ) {
+        const x = direction.x ?? 0;
+        const y = direction.y ?? 0;
+        const z = direction.z ?? -1;
+        const w = direction.w ?? 0;
+        if ((x === 0 && y === 0 && z === 0) || w !== 0) {
           throw new DOMException(
             'Invalid direction value to construct XRRay',
             'TypeError',
           );
         }
-        _direction.x = direction.x;
-        _direction.y = direction.y;
-        _direction.z = direction.z;
-        _direction.w = direction.w;
+        _direction.x = x;
+        _direction.y = y;
+        _direction.z = z;
+        _direction.w = w;
       }
     }
 

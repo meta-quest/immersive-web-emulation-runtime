@@ -21,15 +21,20 @@
 //                                       whether each is held (xr_permissions.h)
 //   checkPermissions(names) -> {name: bool}             checkSelfPermission, no dialog
 //   declaredPermissions() -> string[] | null            the manifest's permissions (null: unknown)
+//   sceneData(knownVersion) -> object | null   the room's entities when their version differs (starts the query)
+//   scenePoses() -> ArrayBuffer         entity poses, 8 floats per slot, written before each frame (xr_scene.h)
+//   sceneStatus() -> object             the scene model's state (diagnostics)
 #include <v8.h>
 
 #include <cmath>
+#include <cstring>
 #include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "android/xr_permissions.h"
+#include "android/xr_scene.h"
 #include "android/xr_system.h"
 #include "iwn/core/clock.h"
 #include "iwn/core/event_loop.h"
@@ -57,6 +62,7 @@ struct BindingState {
   v8::Global<v8::Function> handler;
   v8::Global<v8::ArrayBuffer> record_buffer;
   v8::Global<v8::ArrayBuffer> layer_buffer;
+  v8::Global<v8::ArrayBuffer> pose_buffer;
   const std::function<void(double)>* window_frame = nullptr;
   double window_time = 0;
   bool fence_created = false;
@@ -473,6 +479,72 @@ void CheckPermissions(const v8::FunctionCallbackInfo<v8::Value>& info) {
                                            iwn::xr::PermissionBroker::get().check(names)));
 }
 
+// A typed array over a copy of `data` (geometry is read once per scene version).
+template <typename T, typename Array>
+v8::Local<Array> typed_copy(v8::Isolate* iso, const std::vector<T>& data) {
+  v8::Local<v8::ArrayBuffer> buf = v8::ArrayBuffer::New(iso, data.size() * sizeof(T));
+  if (!data.empty()) std::memcpy(buf->Data(), data.data(), data.size() * sizeof(T));
+  return Array::New(buf, 0, data.size());
+}
+
+void SceneData(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  v8::Local<v8::Context> ctx = iso->GetCurrentContext();
+  XrSystem& xr = XrSystem::get();
+  xr.want_scene();
+  iwn::xr::XrScene* scene = xr.scene();
+  std::shared_ptr<const iwn::xr::SceneSnapshot> snap = scene ? scene->snapshot() : nullptr;
+  const double known = num(info, 0, -1);
+  if (!snap || static_cast<double>(snap->version) == known) {
+    info.GetReturnValue().SetNull();
+    return;
+  }
+  v8::Local<v8::Object> o = v8::Object::New(iso);
+  o->Set(ctx, str(iso, "version"), v8::Integer::NewFromUnsigned(iso, snap->version)).Check();
+  v8::Local<v8::Array> list = v8::Array::New(iso, static_cast<int>(snap->entities.size()));
+  uint32_t i = 0;
+  for (const iwn::xr::SceneEntity& e : snap->entities) {
+    v8::Local<v8::Object> eo = v8::Object::New(iso);
+    eo->Set(ctx, str(iso, "id"), v8::String::NewFromUtf8(iso, e.id.c_str()).ToLocalChecked()).Check();
+    eo->Set(ctx, str(iso, "slot"), v8::Integer::NewFromUnsigned(iso, e.slot)).Check();
+    eo->Set(ctx, str(iso, "labels"), v8::String::NewFromUtf8(iso, e.labels.c_str()).ToLocalChecked()).Check();
+    if (!e.polygon.empty()) {
+      eo->Set(ctx, str(iso, "polygon"), typed_copy<float, v8::Float32Array>(iso, e.polygon)).Check();
+    }
+    if (e.has_box) {
+      std::vector<float> box(e.box, e.box + 6);
+      eo->Set(ctx, str(iso, "box"), typed_copy<float, v8::Float32Array>(iso, box)).Check();
+    }
+    if (!e.indices.empty()) {
+      eo->Set(ctx, str(iso, "vertices"), typed_copy<float, v8::Float32Array>(iso, e.vertices)).Check();
+      eo->Set(ctx, str(iso, "indices"), typed_copy<uint32_t, v8::Uint32Array>(iso, e.indices)).Check();
+    }
+    list->Set(ctx, i++, eo).Check();
+  }
+  o->Set(ctx, str(iso, "entities"), list).Check();
+  info.GetReturnValue().Set(o);
+}
+
+void ScenePoses(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  BindingState& g = G();
+  if (g.pose_buffer.IsEmpty()) {
+    constexpr size_t bytes = iwn::xr::XrScene::kMaxSlots * iwn::xr::XrScene::kSlotFloats * sizeof(float);
+    std::shared_ptr<v8::BackingStore> store =
+        v8::ArrayBuffer::NewBackingStore(iwn::xr::XrScene::poses(), bytes, v8::BackingStore::EmptyDeleter, nullptr);
+    g.pose_buffer.Reset(iso, v8::ArrayBuffer::New(iso, std::move(store)));
+  }
+  info.GetReturnValue().Set(g.pose_buffer.Get(iso));
+}
+
+void SceneStatus(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  iwn::xr::XrScene* scene = XrSystem::get().scene();
+  Json j = scene ? scene->status() : Json::object();
+  if (!scene) j.set("phase", "unavailable");
+  info.GetReturnValue().Set(json_to_v8(iso, iso->GetCurrentContext(), j));
+}
+
 void DebugFoveation(const v8::FunctionCallbackInfo<v8::Value>& info) {
   v8::Isolate* iso = info.GetIsolate();
   info.GetReturnValue().Set(json_to_v8(iso, iso->GetCurrentContext(), XrSystem::get().debug_foveation()));
@@ -535,6 +607,7 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
       st.handler.Reset();
       st.record_buffer.Reset();
       st.layer_buffer.Reset();
+      st.pose_buffer.Reset();
       // The activity can be relaunched in this process (a new Runtime after onDestroy): the next registration must
       // start the XR system again.
       st.installed = false;
@@ -558,6 +631,7 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
     g.handler.Reset();
     g.record_buffer.Reset();
     g.layer_buffer.Reset();
+    g.pose_buffer.Reset();
   }
 
   v8::Local<v8::Object> o = v8::Object::New(isolate);
@@ -584,6 +658,9 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
   set_fn(isolate, ctx, o, "requestPermissions", RequestPermissions);
   set_fn(isolate, ctx, o, "checkPermissions", CheckPermissions);
   set_fn(isolate, ctx, o, "declaredPermissions", DeclaredPermissions);
+  set_fn(isolate, ctx, o, "sceneData", SceneData);
+  set_fn(isolate, ctx, o, "scenePoses", ScenePoses);
+  set_fn(isolate, ctx, o, "sceneStatus", SceneStatus);
   o->Set(ctx, str(isolate, "layoutVersion"), v8::Integer::NewFromUnsigned(isolate, L::kVersion)).Check();
   natives->Set(ctx, str(isolate, "xr"), o).Check();
 }

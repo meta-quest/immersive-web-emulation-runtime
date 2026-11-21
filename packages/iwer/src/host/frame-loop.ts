@@ -72,6 +72,10 @@ export class XRHostFrameLoop {
     const state = frame[P_FRAME];
     state.id = frameId;
     state.predictedDisplayTime = time;
+    // hit-test results are per frame: a reused object must not keep the
+    // results (and so the sources) of the frame it showed before
+    state.hitTestResultsMap.clear();
+    state.transientHitTestResultsMap.clear();
     // detectedPlanes / detectedMeshes still hold what this object showed two
     // frames ago: the scene sync brings them up to date in place (no
     // clear-and-refill), and without plane/mesh detection they stay empty

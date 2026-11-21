@@ -279,6 +279,7 @@ describe('manifest rewrite (PKG-8)', () => {
     const { summary, doc } = rewrite(t, false);
     assert.deepEqual(summary.permissions, [
       'com.oculus.permission.HAND_TRACKING',
+      'com.oculus.permission.USE_ANCHOR_API',
       'com.oculus.permission.USE_SCENE',
       'org.khronos.openxr.permission.OPENXR',
       'org.khronos.openxr.permission.OPENXR_SYSTEM',

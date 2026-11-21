@@ -37,6 +37,8 @@ import {
   XRHitTestOptionsInit,
   XRHitTestResult,
   XRHitTestSource,
+  XRTransientInputHitTestOptionsInit,
+  XRTransientInputHitTestSource,
 } from '../hittest/XRHitTest.js';
 import { XRInputSource, XRInputSourceArray } from '../input/XRInputSource.js';
 import {
@@ -217,6 +219,7 @@ export class XRSession extends EventTarget {
     updateTrackedMeshes: (frame: XRFrame) => void;
     // hit-test
     hitTestSources: Set<XRHitTestSource>;
+    transientHitTestSources: Set<XRTransientInputHitTestSource>;
     computeHitTestResults: (frame: XRFrame) => void;
     // depth sensing
     depthSensingUsage: XRDepthUsage;
@@ -814,6 +817,7 @@ export class XRSession extends EventTarget {
         }
       },
       hitTestSources: new Set(),
+      transientHitTestSources: new Set(),
       computeHitTestResults: (frame) => {
         const sem = this[P_SESSION].device[P_DEVICE].sem;
         if (!sem) return;
@@ -854,6 +858,7 @@ export class XRSession extends EventTarget {
         session.activeFrame = null;
         session.referenceSpaces.length = 0;
         session.hitTestSources.clear();
+        session.transientHitTestSources.clear();
         session.trackedPlanes.clear();
         session.trackedMeshes.clear();
         // Per-session tracked anchors only; persistentAnchors survive by design.
@@ -1292,7 +1297,11 @@ export class XRSession extends EventTarget {
         reject(
           new DOMException('XRSession has already ended.', 'InvalidStateError'),
         );
-      } else if (!this[P_SESSION].device[P_DEVICE].sem) {
+      } else if (
+        !this[P_SESSION].host &&
+        !this[P_SESSION].device[P_DEVICE].sem
+      ) {
+        // host mode hit-tests the host's scene (host/hit-test.ts)
         reject(
           new DOMException(
             'Synthethic Environment Module required for emulating hit-test',
@@ -1303,6 +1312,34 @@ export class XRSession extends EventTarget {
         const xrHitTestSource = new XRHitTestSource(this, options);
         this[P_SESSION].hitTestSources.add(xrHitTestSource);
         resolve(xrHitTestSource);
+      }
+    });
+  }
+
+  /**
+   * WebXR Hit Test: a source for transient input sources with the given
+   * profile. Results are computed in host mode; an emulated session gets an
+   * empty list each frame (its input sources are never transient).
+   */
+  requestHitTestSourceForTransientInput(
+    options: XRTransientInputHitTestOptionsInit,
+  ) {
+    return new Promise<XRTransientInputHitTestSource>((resolve, reject) => {
+      if (!this[P_SESSION].enabledFeatures.includes('hit-test')) {
+        reject(
+          new DOMException(
+            `WebXR feature "hit-test" is not supported by current session`,
+            'NotSupportedError',
+          ),
+        );
+      } else if (this[P_SESSION].ended) {
+        reject(
+          new DOMException('XRSession has already ended.', 'InvalidStateError'),
+        );
+      } else {
+        const source = new XRTransientInputHitTestSource(this, options);
+        this[P_SESSION].transientHitTestSources.add(source);
+        resolve(source);
       }
     });
   }

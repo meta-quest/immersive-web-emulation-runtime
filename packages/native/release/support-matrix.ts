@@ -65,7 +65,11 @@ export const ROWS: Row[] = [
   { group: 'WebXR', api: 'Equirect / cube layers, XRMediaBinding', keys: ['XREquirectLayer', 'XRCubeLayer', 'XRMediaBinding'] },
   // immersive-ar: device-tested on 2026-10-25 on a Quest 3 (the D122713586 AR samples, passthrough under the projection layer).
   { group: 'WebXR', api: 'immersive-ar (passthrough)', keys: ['XRSystem.requestSession("immersive-ar")', 'XRSystem.offerSession("immersive-ar")', 'XRSystem.isSessionSupported("immersive-ar")'], declares: ['passthrough'], requires: ['navigator.xr, immersive-vr sessions, reference spaces, XRWebGLLayer'], note: 'for apps that declare passthrough (IWSDK\'s world.xr.mode "ar" does); environmentBlendMode alpha-blend' },
-  { group: 'WebXR', api: 'Plane / mesh detection, hit test, anchors, depth', keys: ['XR feature plane-detection', 'XR feature hit-test', 'XR feature anchors', 'XR feature depth-sensing', 'XRAnchor'] },
+  // Planes, meshes, hit test: device-tested on 2026-10-25 on a Quest 3 without a room from Space Setup (empty lists) and
+  // with a synthetic room fed at the natives boundary (proto-roomscan, proto-placement, proto-showcase-ar). The native
+  // query path is host-tested against a fake runtime only, until a person runs Space Setup on a test unit.
+  { group: 'WebXR', api: 'Plane / mesh detection, hit test (incl. transient input)', keys: ['XR feature plane-detection', 'XR feature mesh-detection', 'XR feature hit-test', 'XRPlane', 'XRMesh', 'XRFrame.detectedPlanes', 'XRSession.requestHitTestSource', 'XRRay'], requires: ['immersive-ar (passthrough)'], deviceUntested: 'on a Quest 3 only without a room and with a synthetic room fed to the runtime; not yet against a real room from Space Setup', note: 'from the room of Space Setup (none: empty lists, no hits, where Quest Browser hits a floor plane); com.oculus.permission.USE_SCENE is asked for on first use' },
+  { group: 'WebXR', api: 'Anchors, depth', keys: ['XR feature anchors', 'XR feature depth-sensing', 'XRAnchor'] },
   { group: 'WebXR', api: 'Eye / gaze tracking', keys: ['XR feature eye-tracking'] },
   // --- graphics
   { group: 'Graphics', api: 'WebGL 2 and WebGL 1 (over OpenGL ES 3.2)', keys: ['WebGL2RenderingContext', 'WebGLRenderingContext', 'HTMLCanvasElement.getContext("webgl2")', 'HTMLCanvasElement.getContext("webgl")'] },

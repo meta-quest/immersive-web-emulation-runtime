@@ -277,6 +277,12 @@ export { XRAnchor, XRAnchorSet } from './anchors/XRAnchor.js';
 
 // Hit Test
 export { XRRay } from './hittest/XRRay.js';
+export {
+  XRHitTestSource,
+  XRHitTestResult,
+  XRTransientInputHitTestSource,
+  XRTransientInputHitTestResult,
+} from './hittest/XRHitTest.js';
 
 // Events
 export { XRSessionEvent } from './events/XRSessionEvent.js';

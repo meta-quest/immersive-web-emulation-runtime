@@ -11,6 +11,7 @@
 #                         input, passthrough, screenshots), runtime permissions + the V8 binding iwn_register_xr
 #                         (JS: globalThis.__iwn.xr).
 #   iwn_xr_core_tests     host unit tests (ctest).
+#   iwn_xr_android_tests  host tests of src/android code that makes OpenXR calls only, against a fake runtime.
 #   iwn_xr_record_dump    host tool: a known record written by the native writer (web/xr round-trip test).
 
 # Third-party sources: the upstream trees under IWN_THIRD_PARTY_DIR (see THIRD_PARTY.md), -DIWN_THIRD_PARTY_DIR or
@@ -79,6 +80,7 @@ if(IWN_ANDROID)
     src/android/xr_layers.cc
     src/android/xr_loading.cc
     src/android/xr_permissions.cc
+    src/android/xr_scene.cc
     src/android/xr_shot.cc
     src/v8/xr_binding.cc
   )
@@ -97,6 +99,15 @@ endif()
 iwn_add_host_test(iwn_xr_core_tests
   SOURCES test/host/xr_core_test.cc
   LIBS iwn_xr_core)
+
+# XR-thread code of src/android that makes OpenXR calls only (the scene model), against a fake runtime that behaves
+# as Meta's does where that code depends on it (test/host/fake_openxr.h).
+iwn_add_host_test(iwn_xr_android_tests
+  SOURCES test/host/xr_android_test.cc test/host/fake_openxr.cc src/android/xr_scene.cc
+  LIBS iwn_xr_core)
+if(TARGET iwn_xr_android_tests)
+  target_include_directories(iwn_xr_android_tests PRIVATE src)
+endif()
 
 if(IWN_BUILD_TESTS AND NOT IWN_ANDROID)
   add_executable(iwn_xr_record_dump test/host/record_dump_main.cc)

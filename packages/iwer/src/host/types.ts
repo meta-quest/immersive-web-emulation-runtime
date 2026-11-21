@@ -205,9 +205,10 @@ export interface XRHostSwapchain {
  * - `layer`: IWER's own per-frame work for an `XRWebGLLayer`, or the
  *   frame's layer list for `submitLayers`;
  * - `host-hook`: a per-frame `XRHostBackend` hook (`getPlanes`, `getMeshes`,
- *   `setPassthroughVisible`) or the frame-start input update that reads the
- *   host's input state. The step that threw is skipped for that frame (no
- *   plane or mesh update, input left as far as it got); the frame goes on.
+ *   `setPassthroughVisible`), the frame-start input update that reads the
+ *   host's input state, or the hit test over the host's scene. The step that
+ *   threw is skipped for that frame (no plane or mesh update, input left as
+ *   far as it got); the frame goes on.
  */
 export type XRHostErrorSource =
   | 'xr-frame-callback'
@@ -290,9 +291,11 @@ export interface XRHostBackend {
   invalidateDepth?: boolean;
   /**
    * Planes the host currently tracks, read once per visible frame while the
-   * session has plane-detection enabled. Each `NativePlane` keeps its
-   * identity for as long as the host tracks it, and its transform is in the
-   * base space. Assign a new `transform` or `polygon` to report a change.
+   * session has plane-detection enabled, or has hit-test enabled and at least
+   * one hit-test source (host mode hit-tests these planes and meshes). Each
+   * `NativePlane` keeps its identity for as long as the host tracks it, and its
+   * transform is in the base space. Assign a new `transform` or `polygon` to
+   * report a change.
    */
   getPlanes?(): ReadonlySet<NativePlane> | readonly NativePlane[] | null;
   /** Like `getPlanes`, for mesh-detection (assign new `vertices`/`indices` to report a change). */

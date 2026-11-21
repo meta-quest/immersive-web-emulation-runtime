@@ -8,6 +8,8 @@
 // IWER host mode's XRHostBackend over the native XR module (docs/spec/09 XRF-B-1..4).
 
 import type {
+  NativeMesh,
+  NativePlane,
   XRHostBackend,
   XRHostErrorSource,
   XRHostLayer,
@@ -18,6 +20,7 @@ import type {
 import type { GraphicsBridge } from './graphics.ts';
 import type { LayerBuffer } from './layers.ts';
 import type { WebGLHooks, XrNatives } from './natives.ts';
+import type { NativeScene } from './scene.ts';
 
 type ReportError = (error: unknown) => void;
 
@@ -34,6 +37,8 @@ export class NativeHostBackend implements XRHostBackend {
   private readonly layers: LayerBuffer | null;
   /** XR-LAYER-1 quad and cylinder layers: absent (IWER then throws NotSupportedError) without the native side. */
   getLayerColorTexture?: (id: number) => object | null;
+  /** The room (XR-AR-2); null without the scene natives. */
+  scene: NativeScene | null = null;
 
   constructor(
     natives: XrNatives,
@@ -128,6 +133,16 @@ export class NativeHostBackend implements XRHostBackend {
 
   setPassthroughVisible(visible: boolean): void {
     this.natives.setPassthroughVisible(visible);
+  }
+
+  /** Plane detection and hit test (IWER reads these at most once per frame; see scene.ts). */
+  getPlanes(): readonly NativePlane[] | null {
+    return this.scene ? this.scene.planes() : null;
+  }
+
+  /** Mesh detection and hit test. */
+  getMeshes(): readonly NativeMesh[] | null {
+    return this.scene ? this.scene.meshes() : null;
   }
 
   getOpaqueColorTexture(): object | null {

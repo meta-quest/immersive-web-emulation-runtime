@@ -237,12 +237,13 @@ test('pack gate: an app on a newer IWSDK minor than the shipped baseline passes 
 
 test('pack gate: the app\'s own AR config is checked even though library code mentions AR everywhere', async () => {
   const dir = packProject();
-  writeFileSync(path.join(dir, 'iwsdk.config.json'), JSON.stringify({ version: 'iwsdk.project.v1', native: { packageId: 'com.a.gate', appName: 'Gate' }, world: { xr: { mode: 'ar', features: { hitTest: { required: true } } } } }));
+  writeFileSync(path.join(dir, 'iwsdk.config.json'), JSON.stringify({ version: 'iwsdk.project.v1', native: { packageId: 'com.a.gate', appName: 'Gate' }, world: { xr: { mode: 'ar', features: { hitTest: { required: true }, lightEstimation: { required: true } } } } }));
   const a = packIo(dir);
   assert.equal(await runCli(['pack', '--template', templateFile], a), 0, a.err);
   // AR mode declares passthrough (pack derives it), so immersive-ar itself is offered (XR-AR-1)
   assert.doesNotMatch(a.err, /\[warn\] XRSystem\.offerSession\("immersive-ar"\)/);
-  assert.match(a.err, /\[warn\] XR feature hit-test \(required\)/);
+  assert.doesNotMatch(a.err, /\[warn\] XR feature hit-test \(required\)/); // XR-AR-2
+  assert.match(a.err, /\[warn\] XR feature light-estimation \(required\)/);
   assert.match(a.err, /There is no fallback route/);
   assert.doesNotMatch(a.err, /Trusted Web Activity|TWA/);
 });

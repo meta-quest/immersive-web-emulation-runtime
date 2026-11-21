@@ -302,9 +302,8 @@ only.
 (passthrough composited beneath the app's projection layer, blended by alpha; `environmentBlendMode
 'alpha-blend'`) for apps that declare passthrough: the packer writes `xr.immersiveAr: true` into the runtime config
 when the resolved features include passthrough (`world.xr.mode: "ar"` implies it), and only then is
-`isSessionSupported('immersive-ar')` true. `plane-detection`/`mesh-detection` from the scene model, `anchors`,
-`hit-test`: IWER host mode already models the swapchain options for passthrough and scene; the runtime implements
-them when AR is scheduled.
+`isSessionSupported('immersive-ar')` true. `plane-detection`/`mesh-detection` and `hit-test` from the scene model
+(XR-AR-2); `anchors`: IWER host mode already models it; the runtime implements it when scheduled.
 *Check:* packer tests (`xr.immersiveAr` with and without passthrough); a device run of an AR sample gets past
 `isSessionSupported`.
 
@@ -329,6 +328,38 @@ versions also `horizonos.permission.EYE_TRACKING`) is a runtime permission and m
 gaze tracking is granted.
 *Check:* web/xr tests (granted, denied, required, optional, asked once, undeclared, inline, request order, overlapping
 requests); host tests of the wait and of the request order; a device run with the permission not granted at install.
+
+**XR-AR-2 (MUST when offered).** `plane-detection`, `mesh-detection` and `hit-test` come from the headset's room
+(Space Setup), read with `XR_FB_spatial_entity`, `XR_FB_spatial_entity_query`, `XR_FB_spatial_entity_container`,
+`XR_FB_scene` and `XR_META_spatial_entity_mesh`; they are granted only when the runtime has those extensions
+(`capabilities()` `planeDetection`, `meshDetection`, `hitTest`), and `com.oculus.permission.USE_SCENE` is asked for
+before a session gets them (XR-PERM-1). The room is queried when a session wants any of the three, again when the app resumes
+and after a scene capture completes; Space Setup is never started by the runtime. Quest completes a query that finds
+no room with success (an empty scene); one that completes with an error, or whose results or rooms' contents cannot
+be read, failed (status `failed` with the error: `USE_SCENE` not granted, or the spatial-data service refusing the
+package), and the last room stays published until a query succeeds. The runtime hands out the same space handle again
+for an entity already loaded, so a re-query keeps those handles alive. Every entity is located in the base space for
+each frame handed to JS, through a pose table of its own (the frame record is unchanged, XRF-4). As in Quest
+Browser: an entity with a 2D boundary is a plane (`semanticLabel` from its scene label: `floor`, `wall`,
+`ceiling`, `table`, `couch`, `door`, `window`, `shelf` for storage, `bed`, `screen`, `lamp`, `plant`,
+`wall art`, `other`; orientation from its normal), one with a 3D bounding box is a mesh of that box, and the
+room mesh is a mesh labelled `global mesh`. Hit test (`requestHitTestSource`,
+`requestHitTestSourceForTransientInput`) casts each source's ray into those planes (inside the polygon) and
+meshes, also without plane or mesh detection; results are nearest first, posed with +Y along the surface normal.
+As in Quest Browser, mesh triangles are hit on their front face only (counter-clockwise seen from the ray, so a ray
+from inside a furniture volume does not hit the inside of its box), and a source without `entityTypes` hits the
+global mesh alone when the room has one, else the planes (WebXR's default entity type). A room mesh's
+bounding-volume tree is built a slice per frame after the room arrives; until it is ready the mesh is left out.
+Without a room, or with `com.oculus.permission.USE_SCENE` missing from the manifest, the lists are empty and hit
+tests find nothing (not granted: XR-PERM-1); Quest Browser instead hits a 10 x 10 m stage floor plane (or uses
+`XR_META_environment_raycast`), which the runtime does not do: no surface is made up (environment raycast is the
+later path). Without
+`com.oculus.permission.USE_ANCHOR_API` in the manifest the runtime offers none of the scene extensions, so the
+three features are not offered at all (required: `NotSupportedError`); the packer declares both permissions for
+each of them.
+*Check:* IWER host-mode tests (hit test), web/xr tests (planes, meshes, labels, hit test, empty room), host tests of
+the scene model against a fake runtime (`iwn_xr_android_tests`: re-query, failed query, teardown), a device run
+reading `__iwnXR.scene()` and the `xr.scene` stats section.
 
 **XR-SEC-1 (MUST NOT).** No secondary views, no `dom-overlay`, no camera access in the first release;
 requesting them as required rejects; as optional, dropped.

@@ -36,6 +36,8 @@ class Runtime;
 
 namespace iwn::xr {
 
+class XrScene;
+
 struct SwapchainRequest {
   uint32_t array_size = 2;  // 2: texture-array (multiview), 1: both eyes side by side
   double scale = 1.0;
@@ -113,6 +115,10 @@ class XrSystem {
   // Moves pending events into `out`; false when there were none (no allocation then).
   bool take_events(std::vector<XrEvent>* out);
   Json stats();
+  // The scene model (xr_scene.h; null before start()). want_scene(): a session wants scene data, so the XR thread
+  // queries the room (once per session).
+  XrScene* scene();
+  void want_scene();
   // Diagnostics: QCOM texture-foveation state of the current image in the JS thread's current GL context, and the
   // parameters the runtime last applied from that context.
   Json debug_foveation();

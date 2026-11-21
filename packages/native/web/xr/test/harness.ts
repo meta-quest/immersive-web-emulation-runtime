@@ -17,7 +17,7 @@ import vm from 'node:vm';
 
 import { COUNTS, F32, F64, HAND_F32, HAND_U32, HAND_U8, LAYOUT_VERSION, RECORD_BYTES, U32 } from '../src/layout.gen.ts';
 import { LAYER_BUFFER_VERSION, LAYER_BUFFER_WORDS, NAMES_AT, NO_LIST, COUNT_AT, VERSION_AT } from '../src/layers.ts';
-import type { NativeSwapchain, XrInfo, XrNativeEvent } from '../src/natives.ts';
+import type { NativeSwapchain, SceneData, XrInfo, XrNativeEvent } from '../src/natives.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const bundle = readFileSync(join(here, '../dist/xr.js'), 'utf8');
@@ -56,6 +56,9 @@ export interface Harness {
     hold?: boolean;
     release(): void;
   } | null;
+  /** With `scene: true`: what sceneData() answers (when its version differs from the caller's) and the pose table. */
+  sceneData: SceneData | null;
+  scenePoses: Float32Array;
   /** Runs one XR frame as the native pump does (kind 1), after writing a default frame unless told not to. */
   frame(opts?: Partial<FrameOptions>): void;
   tick(): void;
@@ -118,6 +121,8 @@ export function createHarness(
     permissions?: Record<string, boolean> | null;
     /** What declaredPermissions reports (the manifest); absent: natives without it (all count as declared). */
     declared?: string[] | null;
+    /** Provide the scene natives (sceneData, scenePoses, sceneStatus) of runtime/xr xr_scene.h. */
+    scene?: boolean;
   } = {},
 ): Harness {
   const buffer = new ArrayBuffer(RECORD_BYTES);
@@ -223,9 +228,23 @@ export function createHarness(
         ...(opts.declared !== undefined ? { declaredPermissions: () => opts.declared } : {}),
       }
     : {};
+
+  h.sceneData = null;
+  h.scenePoses = new Float32Array(512 * 8);
+  const sceneNatives = opts.scene
+    ? {
+        sceneData: (known: number) => {
+          calls.push(['sceneData', known]);
+          return h.sceneData && h.sceneData.version !== known ? h.sceneData : null;
+        },
+        scenePoses: () => h.scenePoses.buffer,
+        sceneStatus: () => ({ phase: h.sceneData ? 'ready' : 'querying' }),
+      }
+    : {};
   const natives = {
     ...layerNatives,
     ...permissionHelpers,
+    ...sceneNatives,
     layoutVersion: opts.layoutVersion ?? LAYOUT_VERSION,
     info: () => {
       calls.push(['info']);

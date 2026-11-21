@@ -46,7 +46,8 @@ test('rules: every area the spec covers has an owner', () => {
   assert.equal(ruleFor('Navigator.gpu')?.policy, 'absent');
   assert.equal(ruleFor('VideoDecoder')?.policy, 'absent');
   assert.equal(ruleFor('on:Window.keydown')?.policy, 'inert');
-  assert.equal(ruleFor('feature:plane-detection')?.policy, 'later');
+  assert.equal(ruleFor('feature:plane-detection')?.policy, 'provide');
+  assert.equal(ruleFor('feature:light-estimation')?.policy, 'later');
 });
 
 test('resolve: measured layers, V8, IWER, gaps and policies', () => {
@@ -58,7 +59,8 @@ test('resolve: measured layers, V8, IWER, gaps and policies', () => {
   assert.equal(st('Navigator.platform'), 'provided'); // instance members of navigator
   assert.equal(st('new Intl.Segmenter'), 'v8');
   assert.equal(st('XRFrame.getViewerPose()'), 'iwer');
-  assert.equal(st('XRFrame.detectedPlanes'), 'later');
+  assert.equal(st('XRSession.initiateRoomCapture()'), 'later');
+  assert.equal(st('XR feature plane-detection (required)'), 'iwer'); // XR-AR-2
   assert.equal(st('XRSystem.offerSession("immersive-ar")'), 'config'); // XR-AR-1: needs passthrough declared
   assert.equal(st('XRSystem.offerSession("immersive-vr")'), 'iwer');
   assert.equal(st('WebGL2RenderingContext.drawElements()'), 'provided');

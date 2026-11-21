@@ -139,9 +139,12 @@ test('scope: the static catalogue flags Web Audio beyond the basic set, window.o
   assert.equal(scanDist(dist("location.assign(withXR(true)); location.href = './?xr=off';")).hits.length, 0);
 });
 
-test('scope: AR/depth members IWER defines are "later", not "iwer"', () => {
-  for (const k of ['XRSession.requestHitTestSource()', 'XRFrame.createAnchor()', 'XRFrame.detectedMeshes', 'XRWebGLBinding.getDepthInformation()', 'XRSession.restorePersistentAnchor()'])
+test('scope: AR/depth members IWER defines are "later", not "iwer", until the headset backs them', () => {
+  for (const k of ['XRFrame.createAnchor()', 'XRWebGLBinding.getDepthInformation()', 'XRSession.restorePersistentAnchor()'])
     assert.equal(r(k).status, 'later', k);
+  // XR-AR-2: planes, meshes and hit test are backed by the scene model
+  for (const k of ['XRSession.requestHitTestSource()', 'XRFrame.detectedMeshes', 'XRFrame.detectedPlanes'])
+    assert.equal(r(k).status, 'iwer', k);
   assert.equal(r('XRFrame.getViewerPose()').status, 'iwer');
 });
 

@@ -32,6 +32,7 @@ import { FRAME_TICK, FRAME_XR } from './natives.ts';
 import type { GLContext, WebGLHooks, XrInfo, XrNativeEvent, XrNatives } from './natives.ts';
 import { RuntimePermissions, USE_SCENE } from './permissions.ts';
 import { FrameRecordView } from './record.ts';
+import { NativeScene } from './scene.ts';
 
 type Global = Record<string, unknown> & typeof globalThis;
 type Ctor = new (...args: never[]) => object;
@@ -63,6 +64,8 @@ export interface NativeXR {
    * one outside a session request (getUserMedia: CAMERA and HEADSET_CAMERA).
    */
   requestPermissions(names: readonly string[]): Promise<Record<string, boolean>>;
+  /** The room (diagnostics): the runtime's scene status and what the adapter lists this frame. */
+  scene(): Record<string, unknown>;
 }
 
 // XR-LIFE-1's M3 set. 'bounded-floor' is withdrawn when the headset has no boundary (XR-SPACE-1); 'hand-tracking'
@@ -91,6 +94,9 @@ const NATIVE_FEATURES: Readonly<Record<string, keyof XrInfo>> = {
   anchors: 'anchors',
   'depth-sensing': 'depthSensing',
 };
+
+/** Read from the room (XR-AR-2): granted only when the scene natives are there as well as the native flags. */
+const SCENE_FEATURES = ['plane-detection', 'mesh-detection', 'hit-test'];
 
 /** XR-PERM-1: features that need an Android runtime permission (the system dialog) before a session gets them. */
 const FEATURE_PERMISSIONS: Readonly<Record<string, string>> = {
@@ -201,6 +207,9 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     }
   }
   const backend = new NativeHostBackend(natives, gfx, hooks, report, schedule, layerBuffer);
+  // the room for planes, meshes and hit test, read once per XR frame (frames: the counter below)
+  const scene = new NativeScene(natives, () => frames);
+  if (scene.supported) backend.scene = scene;
 
   // The device starts with a provisional configuration so navigator.xr exists before any page script (DBG-STAGE);
   // the capabilities fill it in on first use (they need OpenXR to be initialised, which runs in parallel with boot).
@@ -241,6 +250,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     const features = config.supportedFeatures;
     if (caps.handTracking && !features.includes('hand-tracking')) features.push('hand-tracking');
     for (const [feature, flag] of Object.entries(NATIVE_FEATURES)) {
+      if (SCENE_FEATURES.includes(feature) && !scene.supported) continue;  // an older runtime without the scene natives
       if (caps[flag] === true && !features.includes(feature)) features.push(feature);
     }
     const bounded = features.indexOf('bounded-floor');
@@ -271,6 +281,8 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       features.includes('plane-detection'),
       features.includes('mesh-detection'),
     );
+    // the room query starts with the session, not with the first hit-test source
+    if (SCENE_FEATURES.some((f) => features.includes(f))) scene.start();
     if (lastVisibility) device.dispatchHostEvent({ type: 'visibilitychange', ...lastVisibility });
     (session as EventTarget).addEventListener?.('end', () => gfx.onSessionEnd(), { once: true });
   }
@@ -528,6 +540,10 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     }),
     gl: () => gfx.gl,
     requestPermissions: (names) => permissions.request(names),
+    scene: () => ({
+      ...(natives.sceneStatus?.() ?? { phase: 'unavailable' }),
+      adapter: { ...scene.summary(), listedFrames: scene.listedFrames },
+    }),
   };
   Object.defineProperty(g, '__iwnXR', { value: api, configurable: true, enumerable: false, writable: false });
   return api;

@@ -73,6 +73,13 @@ import type { XRRuntimeAdapter } from '../types/runtime-session.js';
 import type { XRDevice } from './XRDevice.js';
 import type { XRHostBackend, XRHostEvent, XRHostFrame } from '../host/types.js';
 import { XRHostWebGLBinding } from '../host/XRHostWebGLBinding.js';
+import {
+  XRHitTestResult,
+  XRHitTestSource,
+  XRTransientInputHitTestResult,
+  XRTransientInputHitTestSource,
+} from '../hittest/XRHitTest.js';
+import { XRRay } from '../hittest/XRRay.js';
 import { XRBoundedReferenceSpace } from '../spaces/XRBoundedReferenceSpace.js';
 import {
   XRCompositionLayer,
@@ -997,6 +1004,13 @@ export class XRDeviceBase {
       setGlobal('XRCylinderLayer', XRCylinderLayer);
       setGlobal('XRBoundedReferenceSpace', XRBoundedReferenceSpace);
       setGlobal('XRWebGLSubImage', XRWebGLSubImage);
+      // a host has no browser to provide the hit-test interfaces (pages
+      // construct XRRay themselves)
+      setGlobal('XRRay', XRRay);
+      setGlobal('XRHitTestSource', XRHitTestSource);
+      setGlobal('XRHitTestResult', XRHitTestResult);
+      setGlobal('XRTransientInputHitTestSource', XRTransientInputHitTestSource);
+      setGlobal('XRTransientInputHitTestResult', XRTransientInputHitTestResult);
       return;
     }
     if (polyfillLayers) {

@@ -98,7 +98,10 @@ export { XRBoundedReferenceSpace } from './spaces/XRBoundedReferenceSpace.js';
 export { XRJointSpace } from './spaces/XRJointSpace.js';
 export { XRView } from './views/XRView.js';
 export { XRViewport } from './views/XRViewport.js';
-export { XRRigidTransform } from './primitives/XRRigidTransform.js';
+export {
+  XRRigidTransform,
+  overwriteTransformMatrix,
+} from './primitives/XRRigidTransform.js';
 export { XRPose } from './pose/XRPose.js';
 export { XRViewerPose } from './pose/XRViewerPose.js';
 export { XRJointPose } from './pose/XRJointPose.js';
@@ -120,6 +123,13 @@ export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';
 export { XRMesh, XRMeshSet, NativeMesh } from './meshes/XRMesh.js';
 export { XRSemanticLabels } from './labels/labels.js';
 export { XRAnchor, XRAnchorSet } from './anchors/XRAnchor.js';
+export { XRRay } from './hittest/XRRay.js';
+export {
+  XRHitTestSource,
+  XRHitTestResult,
+  XRTransientInputHitTestSource,
+  XRTransientInputHitTestResult,
+} from './hittest/XRHitTest.js';
 export { XRSessionEvent } from './events/XRSessionEvent.js';
 export { XRInputSourceEvent } from './events/XRInputSourceEvent.js';
 export { XRInputSourcesChangeEvent } from './events/XRInputSourcesChangeEvent.js';

@@ -71,6 +71,38 @@ declare module 'iwer/host' {
 
   export type XRHostErrorSource = 'xr-frame-callback' | 'window-frame' | 'layer' | 'host-hook';
 
+  /** A DOMPointReadOnly (the runtime's, web/xr geometry.ts); the adapter's type check has no DOM library. */
+  export interface HostPoint {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+    readonly w: number;
+  }
+
+  export class XRRigidTransform {
+    constructor(position?: Partial<HostPoint>, orientation?: Partial<HostPoint>);
+    readonly matrix: Float32Array;
+    readonly position: HostPoint;
+    readonly orientation: HostPoint;
+  }
+
+  export function overwriteTransformMatrix(transform: XRRigidTransform, source: ArrayLike<number>): void;
+
+  export class NativePlane {
+    constructor(transform: XRRigidTransform, polygon: HostPoint[], semanticLabel: string);
+    transform: XRRigidTransform;
+    polygon: HostPoint[];
+    semanticLabel: string;
+  }
+
+  export class NativeMesh {
+    constructor(transform: XRRigidTransform, vertices: Float32Array, indices: Uint32Array, semanticLabel: string);
+    transform: XRRigidTransform;
+    vertices: Float32Array;
+    indices: Uint32Array;
+    semanticLabel: string;
+  }
+
   export interface XRHostBackend {
     beginSwapchain(options: XRHostSwapchainOptions): XRHostSwapchain | null;
     endSession(): void;
@@ -87,6 +119,8 @@ declare module 'iwer/host' {
     autoGrantOfferedSession?: boolean;
     invalidateDepth?: boolean;
     reportError?(error: unknown, source: XRHostErrorSource): void;
+    getPlanes?(): ReadonlySet<NativePlane> | readonly NativePlane[] | null;
+    getMeshes?(): ReadonlySet<NativeMesh> | readonly NativeMesh[] | null;
   }
 
   export type XRHostEvent =

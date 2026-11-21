@@ -17,6 +17,7 @@ import { invalidateHostPoses } from './frame.js';
 import { XRHostContentLayers } from './content-layers.js';
 import { XRHostFrameLoop, XRHostFrameRequest } from './frame-loop.js';
 import { XRHostFrameRate } from './frame-rate.js';
+import { XRHostHitTest } from './hit-test.js';
 import { XRHostLayerRequest, XRHostOutput } from './output.js';
 import { XRHostReferenceSpaces } from './reference-spaces.js';
 import { XRHostScene } from './scene.js';
@@ -30,6 +31,10 @@ import { XRSessionEvent } from '../events/XRSessionEvent.js';
 import type { XRFrame } from '../frameloop/XRFrame.js';
 import type { XRSession, XRVisibilityState } from '../session/XRSession.js';
 import type { XRWebGLLayer } from '../layers/XRWebGLLayer.js';
+import type { NativeMesh } from '../meshes/XRMesh.js';
+import type { NativePlane } from '../planes/XRPlane.js';
+
+type SceneList<T> = ReadonlySet<T> | readonly T[] | null | undefined;
 
 /**
  * Host frame ids are counted across sessions, never restarting: pose caches
@@ -51,7 +56,7 @@ function visibilityOf(visible: boolean, focused: boolean): XRVisibilityState {
  * The host-mode side of an `XRSession` (`session[P_SESSION].host`). It turns
  * host frames and host events into WebXR behaviour and delegates the details
  * to small parts: views, output (swapchain, foveation, passthrough), frame
- * rate, reference spaces, scene, and the frame loop.
+ * rate, reference spaces, scene, hit test, and the frame loop.
  */
 export class XRHostSession {
   readonly session: XRSession;
@@ -63,6 +68,7 @@ export class XRHostSession {
   readonly scene: XRHostScene;
   /** Quad and cylinder layers (WebXR Layers), each with its own swapchain. */
   readonly layers: XRHostContentLayers;
+  readonly hitTest: XRHostHitTest;
   private readonly loop: XRHostFrameLoop;
 
   /** The host frame being run; null outside `runFrame`. */
@@ -92,6 +98,7 @@ export class XRHostSession {
     const globalSpace = s.device[P_DEVICE].globalSpace;
     this.spaces = new XRHostReferenceSpaces(globalSpace, this.output);
     this.scene = new XRHostScene(globalSpace, s.trackedPlanes, s.trackedMeshes);
+    this.hitTest = new XRHostHitTest(globalSpace);
     this.loop = new XRHostFrameLoop(session);
     this.layers = new XRHostContentLayers(session, backend, (error) =>
       this.report(error, 'layer'),
@@ -213,21 +220,41 @@ export class XRHostSession {
           }
         }
         const xrFrame = this.loop.frameFor(frameId, time);
-        // a host list that cannot be read leaves the scene as it was
-        if (s.hasPlanes) {
+        // Hit test reads the host's scene too, also without plane or mesh
+        // detection; each list is read once per frame. A host list that
+        // cannot be read leaves the detected set as it was, and hit tests
+        // see no planes (or meshes) that frame.
+        const hits =
+          s.hasHitTest &&
+          (s.hitTestSources.size > 0 || s.transientHitTestSources.size > 0);
+        let planes: SceneList<NativePlane> = null;
+        let meshes: SceneList<NativeMesh> = null;
+        if (s.hasPlanes || hits) {
           try {
-            this.scene.syncPlanes(xrFrame, this.backend.getPlanes?.());
+            planes = this.backend.getPlanes?.();
+            if (s.hasPlanes) {
+              this.scene.syncPlanes(xrFrame, planes);
+            }
           } catch (error) {
             this.report(error, 'host-hook');
-            this.scene.keepPlanes(xrFrame);
+            planes = null;
+            if (s.hasPlanes) {
+              this.scene.keepPlanes(xrFrame);
+            }
           }
         }
-        if (s.hasMeshes) {
+        if (s.hasMeshes || hits) {
           try {
-            this.scene.syncMeshes(xrFrame, this.backend.getMeshes?.());
+            meshes = this.backend.getMeshes?.();
+            if (s.hasMeshes) {
+              this.scene.syncMeshes(xrFrame, meshes);
+            }
           } catch (error) {
             this.report(error, 'host-hook');
-            this.scene.keepMeshes(xrFrame);
+            meshes = null;
+            if (s.hasMeshes) {
+              this.scene.keepMeshes(xrFrame);
+            }
           }
         }
         // input sources must reflect this frame before any callback runs
@@ -242,6 +269,14 @@ export class XRHostSession {
         // nothing they cached may outlive the update (see host/frame.ts)
         invalidateHostPoses();
         s.updateActiveInputSources();
+        if (hits) {
+          // after the input update: rays from input spaces use this frame's poses
+          try {
+            this.hitTest.compute(xrFrame, session, planes, meshes);
+          } catch (error) {
+            this.report(error, 'host-hook');
+          }
+        }
         this.loop.runCallbacks(xrFrame, time, this.reportCallbackError);
       }
 

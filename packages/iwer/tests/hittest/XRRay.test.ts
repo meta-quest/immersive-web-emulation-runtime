@@ -79,6 +79,22 @@ describe('XRRay', () => {
       );
     });
 
+    it('should apply dictionary defaults to partial origin and direction', () => {
+      const ray = new XRRay({}, { x: 0, y: -1, z: 0 });
+
+      expect(ray.origin.x).toBe(0);
+      expect(ray.origin.y).toBe(0);
+      expect(ray.origin.z).toBe(0);
+      expect(ray.origin.w).toBe(1);
+      expect(ray.direction.y).toBe(-1);
+      expect(ray.direction.w).toBe(0);
+
+      const forward = new XRRay({ y: 1 }, {});
+      expect(forward.origin.y).toBe(1);
+      expect(forward.origin.w).toBe(1);
+      expect(forward.direction.z).toBe(-1);
+    });
+
     it('should create ray from XRRigidTransform', () => {
       const transform = new XRRigidTransform(
         { x: 1, y: 2, z: 3, w: 1 },
