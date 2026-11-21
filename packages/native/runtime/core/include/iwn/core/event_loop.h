@@ -64,7 +64,8 @@ class EventLoop {
     uint64_t tasks_run = 0;
     uint64_t high_tasks_run = 0;
     uint64_t timers_fired = 0;
-    uint64_t animation_frames = 0;
+    uint64_t animation_frames = 0;  // rounds of window rAF callbacks (only when the page requested one)
+    uint64_t frames = 0;            // frames the loop ran: every frame pump frame (OpenXR), else window rAF rounds
     uint64_t budget_carryovers = 0;
   };
 

@@ -234,11 +234,13 @@ bool EventLoop::run_once(double max_wait_ms) {
   // 3. Frames.
   if (pump_ && pump_->active()) {
     pump_->run_frame([this](double now) { run_window_frame(now); });
+    stats_.frames++;
     did_work = true;
   } else if (frame_requested_ && fallback_frame_ms_ > 0 && !frames_suspended_) {
     double now = now_ms();
     if (now >= last_frame_ms_ + fallback_frame_ms_) {
       run_window_frame(now);
+      stats_.frames++;
       did_work = true;
     }
   }

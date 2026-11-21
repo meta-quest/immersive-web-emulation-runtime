@@ -146,6 +146,7 @@ IWN_TEST(EventLoop, WindowFrameFallbackAt60Hz) {
   // No frame without a request (no busy loop).
   loop.run_once(50);
   IWN_CHECK_EQ(frames.size(), size_t(6));
+  IWN_CHECK_EQ(loop.stats().frames, uint64_t(6));
 }
 
 namespace {
@@ -177,6 +178,17 @@ IWN_TEST(EventLoop, FramePumpDrivesWindowFrames) {
   for (int i = 0; i < 3; ++i) loop.run_once(0);
   IWN_CHECK_EQ(pump.frames, 3);
   IWN_CHECK_EQ(raf, 3);
+}
+
+// The stats fps counts the pump's frames (OpenXR's, during XR) whether or not the page asked for window rAF.
+IWN_TEST(EventLoop, FramePumpFramesCountWithoutWindowRaf) {
+  EventLoop loop;
+  TestPump pump;
+  loop.set_frame_pump(&pump);
+  for (int i = 0; i < 3; ++i) loop.run_once(0);
+  IWN_CHECK_EQ(pump.frames, 3);
+  IWN_CHECK_EQ(loop.stats().frames, uint64_t(3));
+  IWN_CHECK_EQ(loop.stats().animation_frames, uint64_t(0));
 }
 
 IWN_TEST(EventLoop, QuitStopsRun) {

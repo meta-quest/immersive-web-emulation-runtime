@@ -668,15 +668,20 @@ void RuntimeImpl::run_animation_frame(double now) {
   }
   run_microtasks();
   in_frame_callbacks_ = was_inside;
-  ++fps_frames_;
-  if (now - fps_window_start_ >= 1000) {
-    fps_ = fps_frames_ * 1000.0 / (now - fps_window_start_);
-    fps_frames_ = 0;
-    fps_window_start_ = now;
-  }
 }
 
 void RuntimeImpl::after_iteration() {
+  // fps: the loop's frames over the last second, so OpenXR's frames during XR (the session's rAF), not only the
+  // rounds of window rAF, which an XR app may request rarely or never.
+  {
+    double now = now_ms();
+    uint64_t frames = loop_.stats().frames;
+    if (now - fps_window_start_ >= 1000) {
+      fps_ = static_cast<double>(frames - fps_frames_) * 1000.0 / (now - fps_window_start_);
+      fps_frames_ = frames;
+      fps_window_start_ = now;
+    }
+  }
   if (config_.stats_log_interval_ms > 0) {
     double now = now_ms();
     if (now - last_stats_log_ms_ >= config_.stats_log_interval_ms) {

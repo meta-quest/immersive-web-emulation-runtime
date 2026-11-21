@@ -391,9 +391,9 @@ class RuntimeImpl : public Runtime, public RuntimeHost {
     uint64_t count_in = 0, count_out = 0;
     double ms_in = 0, ms_out = 0, max_ms = 0;
   } gc_;
-  // fps over the last second of window animation frames
+  // fps over the last second of the loop's frames (EventLoop::Stats::frames)
   double fps_window_start_ = 0;
-  int fps_frames_ = 0;
+  uint64_t fps_frames_ = 0;
   double fps_ = 0;
   double last_stats_log_ms_ = 0;
   bool code_cache_scheduled_ = false;
