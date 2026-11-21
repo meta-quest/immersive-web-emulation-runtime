@@ -11,7 +11,7 @@
 // prints the size budget lines (minified + gzip).
 import { build } from 'esbuild';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
@@ -74,20 +74,27 @@ export const subtleBuildOptions = {
 
 /** The bundled packages (from the esbuild metafile), checked against BUNDLED. */
 export function bundledPackages(...metafiles) {
-  const names = new Set();
+  const dirs = new Map(); // name -> package directory
   for (const metafile of metafiles) {
     const output = metafile.outputs[Object.keys(metafile.outputs)[0]];
     for (const input of Object.keys(output.inputs)) {
-      const m = /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(input);
-      if (m && output.inputs[input].bytesInOutput > 0) names.add(m[1]);
+      if (output.inputs[input].bytesInOutput === 0) continue;
+      // The package is the one after the LAST node_modules/ (a pnpm install nests them:
+      // node_modules/.pnpm/<name>@<version>/node_modules/<name>/...).
+      const i = input.lastIndexOf('node_modules/');
+      if (i < 0) continue;
+      const m = /^((?:@[^/]+\/)?[^/]+)\//.exec(input.slice(i + 13));
+      if (m)
+        dirs.set(
+          m[1],
+          resolve(process.cwd(), input.slice(0, i + 13 + m[1].length)),
+        );
     }
   }
   const problems = [];
   const found = [];
-  for (const name of [...names].sort()) {
-    const pkg = JSON.parse(
-      readFileSync(join(here, 'node_modules', name, 'package.json'), 'utf8'),
-    );
+  for (const [name, dir] of [...dirs].sort(([a], [b]) => a.localeCompare(b))) {
+    const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
     if (!(name in BUNDLED))
       problems.push(
         `${name}@${pkg.version} is bundled but not listed in BUNDLED / THIRD_PARTY.md`,
@@ -96,7 +103,7 @@ export function bundledPackages(...metafiles) {
       problems.push(
         `${name} is ${pkg.version}, THIRD_PARTY.md records ${BUNDLED[name]}`,
       );
-    found.push({ name, version: pkg.version, license: pkg.license });
+    found.push({ name, version: pkg.version, license: pkg.license, dir });
   }
   return { found, problems };
 }
@@ -111,8 +118,7 @@ export function writeNotices(found) {
     '@noble/hashes. Their copyright and license notices follow.',
     '',
   ];
-  for (const { name, version, license } of found) {
-    const dir = join(here, 'node_modules', name);
+  for (const { name, version, license, dir } of found) {
     const file = readdirSync(dir).find((f) => /^licen[cs]e/i.test(f));
     if (!file) throw new Error(`no license file in ${dir}`);
     parts.push(

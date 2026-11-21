@@ -19,6 +19,7 @@ import {
   readFileSync,
   writeFileSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -53,12 +54,36 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
-describe('package shape (npm alpha)', () => {
-  test('private in the tree, alpha version, public alpha publishConfig', () => {
+describe('package shape', () => {
+  test('a public IWER package: fixed-group version, publish hooks, public publishConfig', () => {
     assert.equal(pkg.name, '@iwer/native');
-    assert.equal(pkg.private, true); // PKG-15: only the staged copy drops it
-    assert.match(pkg.version, /^0\.1\.0-alpha\.\d+$/);
-    assert.deepEqual(pkg.publishConfig, { access: 'public', tag: 'alpha' });
+    assert.equal(pkg.private, undefined); // PKG-15: published from the tree by pnpm release
+    const iwer = JSON.parse(
+      readFileSync(path.join(root, '../iwer/package.json'), 'utf8'),
+    );
+    assert.equal(
+      pkg.version,
+      iwer.version,
+      'the changesets fixed group keeps one version',
+    );
+    const changesets = JSON.parse(
+      readFileSync(path.join(root, '../../.changeset/config.json'), 'utf8'),
+    );
+    assert.ok(
+      changesets.fixed.some(
+        (g: string[]) => g.includes('iwer') && g.includes('@iwer/native'),
+      ),
+    );
+    assert.equal(
+      pkg.scripts.prepublishOnly,
+      'pnpm run build && node release/prepublish.mjs',
+    );
+    assert.equal(pkg.scripts.postpack, 'node release/prepublish.mjs --restore');
+    assert.equal(
+      pkg.scripts['release:ready'],
+      'node release/prepublish.mjs --check',
+    );
+    assert.deepEqual(pkg.publishConfig, { access: 'public' });
     assert.equal(pkg.license, 'MIT');
     assert.deepEqual(pkg.bin, { 'iwer-native': 'bin/iwer-native.mjs' });
     assert.equal(pkg.exports['.'].types, './lib/src/index.d.ts');
@@ -105,14 +130,17 @@ describe('package shape (npm alpha)', () => {
     if (existsSync(iwer)) assert.equal(mine, readFileSync(iwer, 'utf8'));
   });
 
-  test('staged package.json drops private, devDependencies and dev scripts only', () => {
+  test('staged package.json drops private, devDependencies and scripts only', () => {
     const staged = stagedPackageJson(pkg);
     assert.equal(staged.private, undefined);
     assert.equal(staged.devDependencies, undefined);
     assert.equal(staged.scripts, undefined);
     assert.equal(staged.version, pkg.version);
     assert.deepEqual(staged.files, pkg.files);
-    assert.equal(pkg.private, true, 'the tree copy is not mutated');
+    assert.ok(
+      pkg.scripts && pkg.devDependencies,
+      'the tree copy is not mutated',
+    );
   });
 
   test('whitelist expansion honours negations', () => {
@@ -735,5 +763,34 @@ describe('staging checks', () => {
     assert.match(head, /alpha/i);
     assert.match(head, /not every web API is supported/i);
     assert.match(head, /NotSupportedError/);
+  });
+});
+
+describe('release/prepublish.mjs (pnpm release)', () => {
+  const run = (args: string[], env: Record<string, string> = {}) =>
+    spawnSync(
+      process.execPath,
+      [path.join(root, 'release/prepublish.mjs'), ...args],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, ...env },
+      },
+    );
+
+  test('refuses to publish without the template APK', () => {
+    const r = run(['--check'], {
+      IWN_TEMPLATE_APK: path.join(os.tmpdir(), 'no-such-template.apk'),
+    });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /no template APK at .*no-such-template\.apk/);
+    assert.match(r.stderr, /release\/build-release\.sh/);
+  });
+
+  test('--restore leaves the tree\'s "bundled": null alone', () => {
+    const file = path.join(root, 'packager/templates.json');
+    const before = readFileSync(file, 'utf8');
+    assert.equal(JSON.parse(before).bundled, null);
+    assert.equal(run(['--restore']).status, 0);
+    assert.equal(readFileSync(file, 'utf8'), before);
   });
 });

@@ -11,8 +11,8 @@
 //   node release/stage-package.mjs [--template <apk>] [--out <dir>] [--pack] [--allow-missing-template] [--json]
 //
 // 1. Copies the `files` whitelist of package.json into <out>/package (default release/out/package) and writes a
-//    package.json there with "private" removed: the tree keeps "private": true (PKG-15) and only this dry-run copy
-//    is publishable. --template <apk> bundles the release template: copied to prebuilt/iwer-native-template.apk in
+//    package.json there without dev-only fields: a dry run of what `pnpm release` publishes from the tree, which
+//    release/prepublish.mjs checks the same way. --template <apk> bundles the release template: copied to prebuilt/iwer-native-template.apk in
 //    the copy, opened with the packer's template reader (contract check), and recorded with its sha256/size/runtime
 //    version as "bundled" in the copy's packager/templates.json. The tree never holds the 40 MB binary or its
 //    checksum.
@@ -100,15 +100,9 @@ export function contentProblems(dir, patterns = contentDenylist()) {
 
 export function stagedPackageJson(pkg) {
   const out = { ...pkg };
-  delete out.private; // the one-line flip, applied to the dry-run copy only
+  delete out.private;
   delete out.devDependencies;
-  out.scripts = Object.fromEntries(
-    Object.entries(pkg.scripts ?? {}).filter(
-      ([k]) =>
-        !/^(clean|build|typecheck|test|test:\w+|verify|release:\w+)$/.test(k),
-    ),
-  );
-  if (!Object.keys(out.scripts).length) delete out.scripts;
+  delete out.scripts; // build, test and publish hooks: nothing a user of the package runs
   return out;
 }
 
@@ -172,10 +166,10 @@ export function checkStage(
   const versionJs = path.join(dir, 'lib/src/version.js');
   if (
     existsSync(versionJs) &&
-    !readFileSync(versionJs, 'utf8').includes(`'${pkg.version}'`)
+    !readFileSync(versionJs, 'utf8').includes(JSON.stringify(pkg.version)) // generated like iwer's
   )
     problems.push(
-      `lib/src/version.js does not say ${pkg.version}: rebuild (npm run build)`,
+      `lib/src/version.js does not say ${pkg.version}: rebuild (pnpm run build)`,
     );
   const templates = existsSync(path.join(dir, 'packager/templates.json'))
     ? JSON.parse(

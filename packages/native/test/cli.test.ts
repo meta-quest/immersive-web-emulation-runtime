@@ -94,7 +94,7 @@ test('VERSION matches package.json', () => {
     readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
   );
   assert.equal(VERSION, pkg.version);
-  assert.equal(pkg.private, true);
+  assert.equal(pkg.private, undefined); // published from the tree by pnpm release
   assert.equal(pkg.bin['iwer-native'], 'bin/iwer-native.mjs');
 });
 

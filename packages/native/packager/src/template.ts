@@ -298,7 +298,7 @@ export async function resolveTemplate(
     throw new TemplateError(
       [
         `the template bundled with @iwer/native is missing (${path.join(root, listed.file)}).`,
-        'The package is incomplete: reinstall it (npm install @iwer/native@alpha), or pass --template <apk>.',
+        'The package is incomplete: reinstall it (npm install @iwer/native), or pass --template <apk>.',
       ].join('\n'),
     );
   const pinned = readPinnedTemplate(root);

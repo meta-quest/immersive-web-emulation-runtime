@@ -9,7 +9,6 @@
 // this prelude), the glue registry (event-path hook, event handler attributes, the URL behind `location`) and the
 // core natives (lifecycle state, the entry document's source). Captured once when the prelude is evaluated.
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const G = globalThis as any;
 
 export const HTML_NS = 'http://www.w3.org/1999/xhtml';

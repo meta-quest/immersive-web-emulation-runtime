@@ -14,7 +14,6 @@ import { G, str } from './env.ts';
 
 export { installGeometry as installPoints };
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const num = (v: unknown, d = 0): number => (v === undefined ? d : Number(v));
 
 const RX = Symbol('x');

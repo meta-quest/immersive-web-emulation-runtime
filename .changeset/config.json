@@ -2,7 +2,15 @@
   "$schema": "https://unpkg.com/@changesets/config@2.3.1/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [["iwer", "@iwer/devui", "@iwer/sem", "@iwer/extension-bridge"]],
+  "fixed": [
+    [
+      "iwer",
+      "@iwer/devui",
+      "@iwer/sem",
+      "@iwer/extension-bridge",
+      "@iwer/native"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",

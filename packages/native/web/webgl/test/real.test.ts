@@ -761,7 +761,7 @@ test(
         ifmt: number,
         x: number,
         y: number,
-        z: number,
+        _z: number,
         mode: number,
         flipY: boolean,
         alpha: number,
@@ -805,7 +805,7 @@ test(
         off: number,
         bytes: number,
         flipY: boolean,
-        alpha: number,
+        _alpha: number,
       ) {
         calls.push(`read:${bytes}`);
         if (h !== handle || closed) return false;

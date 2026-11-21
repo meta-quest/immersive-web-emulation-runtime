@@ -49,7 +49,7 @@ export function generateNotices({ root = PKG, env = process.env } = {}) {
   );
   const byId = new Map(inv.components.map((c) => [c.id, c]));
   const out = [
-    `Third-party software notices for ${pkg.name} ${pkg.version}`,
+    `Third-party software notices for ${pkg.name}`,
     '',
     `${pkg.name} is licensed under the MIT license (the LICENSE file of the npm package). The prebuilt template`,
     'APK in the package (prebuilt/iwer-native-template.apk), and therefore every APK packed from it, contains the',

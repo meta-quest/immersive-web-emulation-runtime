@@ -6,12 +6,12 @@
   "packageManager": "pnpm@10.33.4",
   "scripts": {
     "build": "pnpm --filter iwer run build",
-    "build:all": "pnpm --filter iwer run build && pnpm --filter @iwer/devui run build && pnpm --filter @iwer/sem run build && pnpm --filter @iwer/extension-bridge run build && pnpm --filter @iwer/extension run build",
+    "build:all": "pnpm --filter iwer run build && pnpm --filter @iwer/devui run build && pnpm --filter @iwer/sem run build && pnpm --filter @iwer/extension-bridge run build && pnpm --filter @iwer/extension run build && pnpm --filter @iwer/native run build",
     "build:tgz": "bash ./scripts/build-tgz.sh",
     "test": "pnpm --filter iwer run test",
-    "test:all": "pnpm --filter iwer run test && pnpm --filter @iwer/devui run test && pnpm --filter @iwer/extension-bridge run test && pnpm --filter @iwer/extension run test && pnpm test:e2e",
+    "test:all": "pnpm --filter iwer run test && pnpm --filter @iwer/devui run test && pnpm --filter @iwer/extension-bridge run test && pnpm --filter @iwer/extension run test && pnpm --filter @iwer/native run test:all && pnpm test:e2e",
     "test:e2e": "pnpm --filter @iwer/e2e exec playwright install chromium && pnpm --filter @iwer/e2e run test",
-    "typecheck": "pnpm --filter @iwer/e2e run typecheck && pnpm --filter @iwer/extension run typecheck:bridge && pnpm --filter @iwer/sem run typecheck:rooms",
+    "typecheck": "pnpm --filter @iwer/e2e run typecheck && pnpm --filter @iwer/extension run typecheck:bridge && pnpm --filter @iwer/sem run typecheck:rooms && pnpm --filter @iwer/native run typecheck:all",
     "examples:build": "pnpm build:all && pnpm --dir examples/basic run ci-build && pnpm --dir examples/devui-demo run ci-build && pnpm --dir examples/environment run ci-build",
     "verify": "pnpm build:all && pnpm typecheck && pnpm test:all && pnpm lint && pnpm format:check && pnpm changeset:status && pnpm docs:build && pnpm build:tgz && pnpm examples:build",
     "lint": "eslint .",
@@ -26,7 +26,7 @@
     "changeset": "changeset",
     "changeset:status": "changeset status",
     "version": "changeset version && pnpm install --lockfile-only",
-    "release": "pnpm build:all && changeset publish"
+    "release": "pnpm build:all && pnpm --filter @iwer/native run release:ready && changeset publish"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -64,7 +64,8 @@
   },
   "pnpm": {
     "overrides": {
-      "minimatch": "^10.0.0"
+      "minimatch": "^10.0.0",
+      "whatwg-url@17.3.0>webidl-conversions": "8.0.1"
     },
     "onlyBuiltDependencies": [
       "esbuild"

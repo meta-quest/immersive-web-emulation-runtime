@@ -12,8 +12,6 @@
 
 import { BaseEvent } from './env.ts';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 type Init = Record<string, any>;
 const n = (v: unknown, d = 0): number => (v === undefined ? d : Number(v));
 const b = (v: unknown): boolean => !!v;

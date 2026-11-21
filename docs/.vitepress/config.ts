@@ -87,6 +87,12 @@ export default defineConfig({
         ],
       },
       {
+        text: 'IWER Native',
+        items: [
+          { text: '@iwer/native: Quest apps, no browser', link: '/native' },
+        ],
+      },
+      {
         text: 'API Reference',
         items: [
           { text: 'XRDevice Class', link: '/api/xr-device' },

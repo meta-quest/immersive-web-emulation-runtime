@@ -809,7 +809,7 @@ export function resolve(
   ctx: ResolveContext = {},
 ): Resolution {
   const r = resolveMeasured(p, surface, ctx);
-  // the 0.1.0-alpha scope: present in a layer but not shipped as supported in the alpha,
+  // the alpha scope: present in a layer but not shipped as supported in the alpha,
   // so the checker warns as the README's support matrix (release/support-matrix.ts alphaLater rows) says "not yet".
   // A layer's NotSupportedError stub of such an API (web/audio's beyond-basic nodes without glue.audio.experimental)
   // is that alpha gate itself, and so is its absence (OfflineAudioContext is not installed then): both read "later"

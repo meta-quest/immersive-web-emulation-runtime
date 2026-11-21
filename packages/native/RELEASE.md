@@ -1,19 +1,20 @@
-# @iwer/native release procedure: 0.1.0-alpha.0 (public npm alpha)
+# @iwer/native release procedure
 
-**Nothing here publishes.** Publishing is a separate, manual step (section 9), after the open-source review in
-section 6. Every command runs from `immersive-web-emulation-runtime/packages/native/` with Node 24 (or 22.18+) on PATH.
+**Nothing here publishes.** @iwer/native is published by IWER's `pnpm release` with the rest of the changesets
+`fixed` group (section 9), after the open-source review in section 6; this file covers what it needs on top: the
+template APK. Every command runs from `immersive-web-emulation-runtime/packages/native/` with Node 24 (or 22.18+) on PATH.
 
 ## 1. Release design and open decisions
 
 | item                                     | design                                                                                                                                                                                                                                                                                                           | open                                                                                           |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Template APK delivery                    | **Bundled in the npm package** (`prebuilt/iwer-native-template.apk`, SHA-256 pinned in `packager/templates.json` as `"bundled"`, checked on every pack).                                                                                                                                                         | Deviates from PKG-2 (on-demand download); confirm for the alpha.                               |
-| `"private": true`                        | Stays in the tree (PKG-15). Only the staged copy (`release/out/package/`) drops it; publish only that copy (section 9).                                                                                                                                                                                          |                                                                                                |
+| Versioning                               | In IWER's changesets `fixed` group with `iwer`, `@iwer/devui`, `@iwer/sem` and `@iwer/extension-bridge`: one version for all, bumped by `pnpm version`, published by `pnpm release` from the tree (section 9).                                                                                                   |                                                                                                |
 | Package name                             | `@iwer/native` (working name).                                                                                                                                                                                                                                                                                   | Confirm the final name.                                                                        |
 | Issue tracker / repository URLs          | `meta-quest/immersive-web-emulation-runtime` (issues titled `[native]`). The source is in that repository under `packages/native/`; package.json has `repository` (with `"directory": "packages/native"`), `homepage` and `bugs`.                                                                                |                                                                                                |
 | Android API level of the native build    | `android-29` (= template `minSdkVersion`). The release build compiles at android-29 (runtime/audio calls `syscall(__NR_memfd_create)`).                                                                                                                                                                          |                                                                                                |
 | IWSDK release with native-target support | `@iwsdk/core`, `@iwsdk/vite-plugin-dev` and `@iwsdk/create` must ship the `native` key, the `metavr` build mode and `--metavr-native` (section 8). They ship in **IWSDK 1.2.0** (their changesets bump the minor version; 1.1.0 and earlier reject the `native` key), and the README names 1.2.0 as the minimum. | Publish IWSDK 1.2.0 right after this package (section 8).                                      |
-| Unscoped bin name `iwer-native`          | The bin differs from the package name, so a bare `npx iwer-native` without a local install looks up the unregistered unscoped `iwer-native` on npm. The README documents `npx -p @iwer/native@alpha iwer-native ...`.                                                                                            | Optionally reserve the unscoped name with a placeholder package that points at `@iwer/native`. |
+| Unscoped bin name `iwer-native`          | The bin differs from the package name, so a bare `npx iwer-native` without a local install looks up the unregistered unscoped `iwer-native` on npm. The README documents `npx -p @iwer/native iwer-native ...`.                                                                                                  | Optionally reserve the unscoped name with a placeholder package that points at `@iwer/native`. |
 
 **Why bundle the template for the alpha.** PKG-2 asks for an on-demand download with a pinned checksum, which keeps
 `npm install` under 5 MB. For the alpha that cannot work yet:
@@ -43,8 +44,8 @@ OUT=/some/dir release/build-release.sh --skip-web   # reuse the web/*/dist bundl
 ```
 
 It runs from a clean checkout: `node_modules/`, `web/*/dist/`, `lib/` and IWER's generated `src/version.ts` are
-gitignored, and the script recreates them. Every npm project commits its `package-lock.json`, and the script
-installs with `npm ci`. The build id is computed before the script writes anything into the checkout, so a fresh
+gitignored, and the script recreates them. Dependencies come from the IWER workspace's committed
+`pnpm-lock.yaml` (`pnpm install --frozen-lockfile` at the workspace root). The build id is computed before the script writes anything into the checkout, so a fresh
 clone of the release commit gets a bare commit id. `--skip-web` only works in a tree where step 2 already ran.
 
 Inputs (environment, required): `ANDROID_HOME` (Android SDK with build-tools 35.0.0 and platforms/android-34, from
@@ -62,7 +63,7 @@ refuses to start with less than 60 GB of available memory.
 What it does (see the header of `release/build-release.sh`):
 
 1. **Toolchain check.** Every input must exist and must not resolve under a directory in `IWN_FORBIDDEN_ROOTS`.
-2. **Web preludes:** `npm ci` where `node_modules` is missing. Every dependency that reaches a shipped bundle is also
+2. **Web preludes:** `pnpm install --frozen-lockfile` at the workspace root when `node_modules` is missing. Every dependency that reaches a shipped bundle is also
    pinned to an exact version in package.json, and `verify-third-party.mjs` checks the bundled versions against
    THIRD_PARTY.md. The tools whose output ships are pinned exactly too (esbuild in every web area, the package's
    TypeScript), and `verify-third-party.mjs` fails on a range. Before web/xr, IWER's `src/version.ts` is generated
@@ -89,29 +90,30 @@ What it does (see the header of `release/build-release.sh`):
    must sit in this package, in a recorded vendored `third_party/` dir or under a recorded `IWN_<X>_DIR` (generic
    roots such as `IWN_THIRD_PARTY_DIR` do not count), and every npm package named by an esbuild path comment in an
    unminified shipped bundle must have an entry.
-6. **Package:** `npm ci` (when `node_modules` is missing), `npm run build` (no source maps), `npm test`
+6. **Package:** `pnpm run build` (no source maps), `pnpm test`
    (`node --test --test-concurrency=4`), `release/support-matrix.ts --check` (README matrix current), then
    `release/stage-package.mjs --template <apk>`. That step copies the `files` whitelist into
-   `$OUT/package/`, removes `private`, bundles the template and runs `npm pack --dry-run`. It writes the size
+   `$OUT/package/`, bundles the template and runs `npm pack --dry-run`, with the same checks `pnpm release` runs
+   before publishing (`release/prepublish.mjs`). It writes the size
    report and `build-info.json` (version, template sha256, tarball shasum/integrity).
 
 Before the release candidate, also run:
 
 ```bash
-npm run verify                     # typecheck + the node:test suite + build + bin --help
-npm run release:check              # notices current + every bundled native/JS dependency recorded
+pnpm run verify                    # typecheck + the node:test suite + build + bin --help
+pnpm run release:check             # notices current + every bundled native/JS dependency recorded
 node release/support-matrix.ts --write   # after `node compat/scripts/snapshot.mjs` refreshes the inventory
 ```
 
 ## 3. What the package contains (`npm pack --dry-run`)
 
 ```
-@iwer/native@0.1.0-alpha.0   about 85 files
+@iwer/native@<version>   about 85 files
   ~46.8 MB  prebuilt/iwer-native-template.apk
    ~590 KB  lib/**            (CLI, config, packer, compat checker: compiled JS + .d.ts; built without source maps)
    ~850 KB  compat/data/surface-snapshot.json, static-baseline.json
    ~205 KB  THIRD_PARTY_NOTICES.txt
-             README.md, package.json (no "private", no devDependencies, no dev scripts), LICENSE (MIT),
+             README.md, package.json, LICENSE (MIT),
              packager/templates.json ("bundled": prebuilt/iwer-native-template.apk + sha256), bin/iwer-native.mjs
 tarball about 18.3 MB (17.5 MiB)
 ```
@@ -157,14 +159,14 @@ known limitation of the alpha.
   on the template would never reach a device.
 - Its integrity comes from the SHA-256 in `packager/templates.json`, checked on every pack, plus the registry's
   sha512 over the whole tarball. `build-info.json` records both, so they can be compared after publishing
-  (`npm view @iwer/native@0.1.0-alpha.0 dist.integrity`).
-- npm provenance (`--provenance`) needs a supported CI (GitHub Actions/GitLab). The alpha is published by
+  (`npm view @iwer/native@<version> dist.integrity`).
+- npm provenance (`--provenance`) needs a supported CI (GitHub Actions/GitLab). IWER's release runs by
   hand, not from CI, so it goes out without provenance. Publish from an account with
   2FA (`auth-and-writes`).
 - The unstripped libraries (`$OUT/symbols/`) and `build-info.json` are kept with the release for symbolicating
   crash reports. Do not publish them.
 
-## 6. Open-source review (before `npm publish`)
+## 6. Open-source review (before the first `pnpm release` with @iwer/native)
 
 1. **Approval:** confirm the release with Meta open source (the package, its notices and the template APK).
 2. **Source:** the package is MIT and its source, native runtime included, is public in
@@ -186,9 +188,8 @@ known limitation of the alpha.
    - the notices' Source lines name upstream projects only; `release/stage-package.mjs` rejects build-machine paths,
      review metadata and the names in `IWN_CONTENT_DENYLIST` in every shipped text file.
 4. **npm scope and name:** confirm that Meta's npm org owns `@iwer` (the IWER packages publish there) and that
-   `@iwer/native` is the final name. Also confirm `publishConfig: {access: public, tag: alpha}`. An alpha should
-   not be `latest`, but see section 9: on the first publish of a new package the registry points `latest` at it
-   anyway.
+   `@iwer/native` is the final name. It publishes as `latest` at the group's version (`publishConfig:
+{access: public}`), with the README's alpha disclaimer.
 5. **Trademarks:** the description and README say "Meta Quest" and "Horizon OS"; check the wording.
 6. **Privacy/telemetry:** the runtime sends nothing off the device. The debug endpoint and inspector listen on
    127.0.0.1 in debug builds only.
@@ -237,9 +238,14 @@ Plan (IWSDK's own release process; nothing here publishes):
    IWSDK 1.2.0 (or its prerelease). Between the two, the README's IWSDK path does not work yet; the plain Vite path
    does.
 
-## 9. Publish (manual; nothing here runs automatically)
+## 9. Publish (with `pnpm release`)
 
-Gates before `npm publish`:
+@iwer/native is published by IWER's release together with the rest of the changesets `fixed` group (`iwer`,
+`@iwer/devui`, `@iwer/sem`, `@iwer/extension-bridge`, `@iwer/native`), all at one version. The one step of its own is
+the template APK: it needs the Android NDK and the prebuilt V8 (section 2), so it is built before `pnpm release`
+and handed to it as a file.
+
+Gates before `pnpm release`:
 
 - [ ] section 6 signed off;
 - [ ] `release/build-release.sh --pack` passes on the release commit from a fresh clone (not a working tree with
@@ -255,28 +261,32 @@ Gates before `npm publish`:
       (section 8), and the smoke test below passed against local tarballs of both;
 - [ ] `compat/data/static-baseline.json` records that same IWSDK version (`"iwsdk"`). When the IWSDK version
       changes, make the baseline again from that version's create templates (compat/README.md, "Running the
-      sweep"; `--iwsdk <version>` labels tarballs that still carry the previous version) and rerun `npm test`, so
+      sweep"; `--iwsdk <version>` labels tarballs that still carry the previous version) and rerun `pnpm test`, so
       apps on the README's IWSDK get no baseline-version warning from `pack`.
 
 ```bash
-cd immersive-web-emulation-runtime/packages/native
-git status                                   # clean tree at the release commit
-export IWN_CONTENT_DENYLIST=<file>           # your organisation's internal names, one regular expression per line
-release/build-release.sh --pack              # writes release/out/iwer-native-0.1.0-alpha.0.tgz + release/out/package/
-cat release/out/size-report.md release/out/build-info.json
-tar -tzf release/out/iwer-native-0.1.0-alpha.0.tgz | head -100   # eyeball the contents
+cd immersive-web-emulation-runtime
+pnpm version                                 # changeset version: the fixed group's next version + CHANGELOGs; land it
 
-# Smoke test before publishing: a fresh IWSDK project wired to LOCAL tarballs of the changed IWSDK packages and of
-# @iwer/native (no Android SDK on PATH). Nothing resolves @iwer/native or IWSDK 1.2.0 from the registry yet. Build the
-# IWSDK tarballs on IWSDK's 1.2.0 release prep (package versions 1.2.0): tarballs that still say 1.1.0 make `pack`
-# warn that the app's IWSDK is older than the compat baseline. IWSDK depends on iwer, @iwer/devui and @iwer/sem
-# ^2.7.0 (on registry.npmjs.org since 2026-10-21): install from a registry that has them.
+# On the release commit, from a fresh clone, with the inputs of section 2:
+cd packages/native
+export IWN_CONTENT_DENYLIST=<file>           # your organisation's internal names, one regular expression per line
+OUT=/tmp/iwn-release release/build-release.sh --pack   # template APK + staged package + $OUT/iwer-native-<version>.tgz
+cat /tmp/iwn-release/size-report.md /tmp/iwn-release/build-info.json
+mkdir -p prebuilt && cp /tmp/iwn-release/template/iwer-native-template.apk prebuilt/   # gitignored; or IWN_TEMPLATE_APK
+```
+
+Smoke test before publishing: a fresh IWSDK project wired to local tarballs of the IWSDK packages and of
+@iwer/native (no Android SDK on PATH):
+
+```bash
+VERSION=$(node -p "require('./package.json').version")
 NATIVE_DIR=$PWD
-NATIVE_TGZ=$NATIVE_DIR/release/out/iwer-native-0.1.0-alpha.0.tgz
+NATIVE_TGZ=/tmp/iwn-release/iwer-native-$VERSION.tgz
 IWSDK=$(cd ../../../immersive-web-sdk && pwd)  # an IWSDK checkout next to this repository; adjust the path
 (cd "$IWSDK" && corepack pnpm@10.18.3 run build:tgz:dev) # packages/<name>/iwsdk-<name>.tgz
-cd /tmp && node "$IWSDK/packages/create/dist/cli.js" alpha-smoke --yes --metavr-native --no-install  # a bare name: create rejects paths
-cd /tmp/alpha-smoke
+cd /tmp && node "$IWSDK/packages/create/dist/cli.js" native-smoke --yes --metavr-native --no-install  # a bare name: create rejects paths
+cd /tmp/native-smoke
 for tgz in "$IWSDK"/packages/*/iwsdk-*.tgz; do       # direct deps and overrides must use the same spec (EOVERRIDE)
   name="@iwsdk/$(basename "$tgz" .tgz | sed 's/^iwsdk-//')"
   for field in dependencies devDependencies; do
@@ -289,30 +299,24 @@ npm install          # add --ignore-scripts where onnxruntime-node's install scr
 npm run build && npm run build:metavr      # both must pass: IWSDK accepts "native"; metavr build has no emulator
 npx iwer-native install && npx iwer-native run    # enters XR on a headset
 cd "$NATIVE_DIR"
+```
 
-# publish @iwer/native (public registry, 2FA). The staged tarball has no "private"; the tree keeps it.
+Then publish the whole group from `immersive-web-emulation-runtime/` (public registry, 2FA):
+
+```bash
+cd ../..
 npm whoami --registry https://registry.npmjs.org/        # logged in, and the network reaches the public registry
-npm access list packages @iwer --registry https://registry.npmjs.org/ | head   # the account can publish to @iwer
-npm publish release/out/iwer-native-0.1.0-alpha.0.tgz --access public --tag alpha --registry https://registry.npmjs.org/
-npm view @iwer/native@0.1.0-alpha.0 dist.integrity      # compare with release/out/build-info.json
+pnpm release        # build:all; @iwer/native's release:ready; changeset publish
+npm view @iwer/native dist.integrity                     # compare with /tmp/iwn-release/build-info.json
 npm dist-tag ls @iwer/native
 ```
 
-**`latest` on the first publish.** The registry always keeps a `latest` tag, so the first publish of a new package
-is expected to point `latest` at that version even with `--tag alpha`, and `npm dist-tag rm @iwer/native latest` is
-refused. Expect `latest: 0.1.0-alpha.0` and `alpha: 0.1.0-alpha.0` after this publish. That is acceptable for the
-alpha: `npm i @iwer/native` then installs the only version there is, which carries the alpha disclaimer. Later
-prereleases go out with `--tag alpha` and leave `latest` alone. Move `latest` only when a stable version exists.
+`pnpm release` runs `@iwer/native`'s `release:ready` (`release/prepublish.mjs --check`) before `changeset publish`:
+the template must be there, be a release build whose runtime version is this package's version, and the package
+with it bundled must pass every staged-package check (section 3). When it fails, nothing in the group publishes.
+While `changeset publish` packs @iwer/native, `prepublishOnly` records the template in `packager/templates.json`
+(`"bundled"`, with its sha256 and size) so the tarball carries it, and `postpack` puts the tree's `"bundled": null`
+back. The tree never holds the binary or its checksum.
 
-After IWSDK 1.2.0 (or its prerelease) is out, repeat the smoke test from the registry:
-`cd /tmp && npm create @iwsdk@latest alpha-smoke2 -- --yes --metavr-native` (`@iwsdk@next` for a prerelease), then
-`cd alpha-smoke2 && npm run build:metavr`.
-
-**Publish only the staged tarball.** Do not publish from the tree (`npm pkg delete private` + `npm publish` in
-`packages/native/`). The tree has `"bundled": null` in `packager/templates.json` and no `prebuilt/` directory, so
-that package would carry no template APK and no checksum, plus devDependencies and dev scripts. Every user's `pack`
-would fail, and npm never lets a version number be reused. `"private": true` stays in the tree (PKG-15); the only
-publishable copy is the one `release/stage-package.mjs` writes.
-
-If something goes wrong after publishing: `npm deprecate @iwer/native@0.1.0-alpha.0 "<reason>"`. Within 72 hours,
-`npm unpublish @iwer/native@0.1.0-alpha.0` is possible, but that version number can never be reused.
+If something goes wrong after publishing: `npm deprecate @iwer/native@<version> "<reason>"`. Within 72 hours,
+`npm unpublish @iwer/native@<version>` is possible, but that version number can never be reused.

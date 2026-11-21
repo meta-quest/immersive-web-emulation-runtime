@@ -9,7 +9,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\"",
-    "verify": "npm run typecheck && npm run build && npm test"
+    "verify": "pnpm run typecheck && pnpm run build && pnpm test"
   },
   "license": "MIT",
   "dependencies": {

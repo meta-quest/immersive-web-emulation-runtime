@@ -156,7 +156,7 @@ headless).
 (PKG-CFG-2), and the debug tools.
 _Check:_ owner review; every PKG-CFG-2 key appears on the page (script check against the schema).
 
-**PKG-15 (MUST).** The `@iwer/native` package is `"private": true` and outside the IWER changesets
-`fixed` group until a release is decided; it lives in `packages/native/` of the IWER monorepo, outside its pnpm
-workspace.
-_Check:_ `package.json` has `"private": true`; the changesets config's `fixed` group does not list it.
+**PKG-15 (MUST).** `@iwer/native` is a package of the IWER monorepo like the others: a pnpm workspace
+member in `packages/native/`, in the changesets `fixed` group, published by `pnpm release` with the template APK
+bundled (`release/prepublish.mjs`).
+_Check:_ the changesets config's `fixed` group lists it; `pnpm release` refuses to publish without the template.

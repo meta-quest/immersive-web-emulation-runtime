@@ -40,8 +40,6 @@ import {
   type Node,
 } from './nodes.ts';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /** Event handler IDL attributes on HTMLElement, Document and Window (GlobalEventHandlers, the common ones). */
 export const GLOBAL_HANDLERS = [
   'abort',

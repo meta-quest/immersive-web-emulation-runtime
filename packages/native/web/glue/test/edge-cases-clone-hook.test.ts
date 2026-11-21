@@ -515,7 +515,9 @@ describe('small WebIDL conversions', () => {
 });
 
 describe('abort ordering of dependent signals (DOM-10)', () => {
-  test("a source's abort steps run before its dependents' (matches Node)", async () => {
+  // AbortSignal.any() flattens to the original sources, so dep and dep2 are both dependents of ac.signal and abort
+  // in the order they were created (DOM "signal abort"). Not compared with the host Node: Node 24.16 changed its order.
+  test("a source's abort steps run before its dependents', in creation order", async () => {
     const code = `
       const order = [];
       const ac = new AbortController();
@@ -527,10 +529,8 @@ describe('abort ordering of dependent signals (DOM-10)', () => {
       ac.abort('r');
       order.join(' ');
     `;
-    const node = (0, eval)(code) as string;
     const { run } = await createGlueContext();
-    assert.equal(run(code), node);
-    assert.equal(node, 'source:truetrue dep:true dep2:truetrue');
+    assert.equal(run(code), 'source:truetrue dep:true dep2:truetrue');
   });
 });
 

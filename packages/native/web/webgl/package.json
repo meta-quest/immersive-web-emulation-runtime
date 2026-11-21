@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --expose-gc --test --test-concurrency=8 --test-reporter=spec \"test/*.test.ts\"",
     "bench": "node --expose-gc bench/gl-bench.mjs",
-    "verify": "npm run check-generated && npm run typecheck && npm test"
+    "verify": "pnpm run check-generated && pnpm run typecheck && pnpm test"
   },
   "license": "MIT",
   "devDependencies": {

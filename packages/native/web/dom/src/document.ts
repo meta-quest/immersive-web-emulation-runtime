@@ -60,8 +60,6 @@ import {
   walkElements,
 } from './nodes.ts';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 const ELEMENT_NAME = /^[A-Za-z_:][^\s"'>/=\x00-\x1f\x7f]*$/;
 
 function validName(name: string): string {

@@ -3,3 +3,5 @@ node_modules/
 # build output: web preludes (node build.mjs in each web/<area>), local CMake and test-addon builds
 web/*/dist/
 /build/
+# the release template APK for publishing (release/prepublish.mjs); never committed
+/prebuilt/

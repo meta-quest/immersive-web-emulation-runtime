@@ -12,6 +12,16 @@
 
 The Immersive Web Emulation Runtime (IWER) is a TypeScript-based tool designed to enable the running of WebXR applications in modern browsers without requiring native WebXR support. By emulating the WebXR Device API, IWER provides developers with the ability to test and run WebXR projects across a wide range of devices, ensuring compatibility and enhancing the development process.
 
+## Packages
+
+| package                                                                          |                                                                                                    |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`iwer`](https://www.npmjs.com/package/iwer)                                     | the WebXR runtime for emulation                                                                    |
+| [`@iwer/devui`](https://www.npmjs.com/package/@iwer/devui)                       | developer UI for IWER                                                                              |
+| [`@iwer/sem`](https://www.npmjs.com/package/@iwer/sem)                           | synthetic environment module                                                                       |
+| [`@iwer/extension-bridge`](https://www.npmjs.com/package/@iwer/extension-bridge) | local MCP bridge from coding agents to IWER                                                        |
+| [`@iwer/native`](https://www.npmjs.com/package/@iwer/native)                     | runs a WebXR app natively on Meta Quest and other Android OpenXR headsets, with no browser (alpha) |
+
 ## Documentation
 
 For detailed information about using IWER, including concepts, guides, and API references, please visit our documentation site:

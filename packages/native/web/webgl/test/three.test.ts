@@ -46,7 +46,7 @@ function renderer(
   const errors: string[] = [];
   const r = new THREE.WebGLRenderer({ canvas: canvas as never, context: gl });
   r.debug.onShaderError = (
-    g: unknown,
+    _g: unknown,
     p: unknown,
     vs: unknown,
     fs: unknown,

@@ -1,7 +1,6 @@
 {
   "name": "@iwer/native",
-  "version": "0.1.0-alpha.0",
-  "private": true,
+  "version": "2.8.0",
   "description": "ALPHA. Run an unmodified WebXR (IWSDK / three.js) bundle natively on Meta Quest and other Android OpenXR headsets, with no browser: prebuilt runtime template APK, packer/signer, compat checker and CLI. Not every web API is supported yet.",
   "type": "module",
   "main": "lib/src/index.js",
@@ -29,16 +28,27 @@
     "THIRD_PARTY_NOTICES.txt"
   ],
   "scripts": {
+    "gen:version": "node -p \"'export const VERSION = ' + JSON.stringify(require('./package.json').version) + ';'\" > src/version.ts",
     "clean": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\"",
-    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "prebuild": "pnpm run gen:version",
+    "build": "pnpm run clean && tsc -p tsconfig.build.json",
+    "pretypecheck": "pnpm run gen:version",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:all": "pnpm run typecheck && pnpm --filter \"./web/**\" run typecheck",
+    "pretest": "pnpm run gen:version",
     "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\" \"packager/test/**/*.test.ts\" \"compat/test/**/*.test.ts\"",
     "test:compat": "node --test --test-concurrency=4 --test-reporter=spec \"compat/test/**/*.test.ts\"",
-    "verify": "npm run typecheck && npm test && npm run build && node bin/iwer-native.mjs --help",
+    "test:web": "pnpm run build:web && pnpm --filter \"./web/**\" run test",
+    "test:all": "pnpm run test && pnpm run test:web",
+    "build:web": "node web/glue/build.mjs && node web/dom/build.mjs && node web/net/build.mjs && node web/storage/build.mjs && node web/image/build.mjs && node web/canvas2d/build.mjs && node web/webgl/build.mjs && node web/audio/build.mjs && node web/xr/build.mjs && node web/workers/build.mjs",
+    "verify": "pnpm run typecheck && pnpm test && pnpm run build && node bin/iwer-native.mjs --help",
     "release:notices": "node release/notices.mjs",
     "release:check": "node release/notices.mjs --check && node release/verify-third-party.mjs",
     "release:matrix": "node release/support-matrix.ts --write",
-    "release:stage": "node release/stage-package.mjs"
+    "release:stage": "node release/stage-package.mjs",
+    "prepublishOnly": "pnpm run build && node release/prepublish.mjs",
+    "release:ready": "node release/prepublish.mjs --check",
+    "postpack": "node release/prepublish.mjs --restore"
   },
   "engines": {
     "node": ">=20.19.0 <21.0.0-0 || >=22.12.0 <23.0.0-0 || >=24.0.0"
@@ -58,8 +68,7 @@
     "typescript": "6.0.3"
   },
   "publishConfig": {
-    "access": "public",
-    "tag": "alpha"
+    "access": "public"
   },
   "repository": {
     "type": "git",

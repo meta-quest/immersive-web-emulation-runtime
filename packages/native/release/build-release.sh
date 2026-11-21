@@ -12,8 +12,8 @@
 # Steps
 #   1. toolchain check: every input path must exist, and none may resolve under a directory listed in
 #      IWN_FORBIDDEN_ROOTS (colon-separated; for build machines that hold trees the build must not read)
-#   2. web preludes (glue, dom, net, storage, image, canvas2d, webgl, audio, xr, workers): npm ci from the committed
-#      lockfile (only when node_modules is missing), IWER's generated src/version.ts, node build.mjs in every shipped
+#   2. web preludes (glue, dom, net, storage, image, canvas2d, webgl, audio, xr, workers): pnpm install
+#      --frozen-lockfile at the IWER workspace root (only when node_modules is missing), IWER's generated src/version.ts, node build.mjs in every shipped
 #      web/<area>. --skip-web reuses the web/*/dist of an earlier run (web/*/dist/ is gitignored: a clean checkout
 #      needs this step)
 #   3. native: cmake (Android arm64, Release, -j8) -> libiwernative.so + apk-libs.txt; llvm-strip copies
@@ -21,7 +21,7 @@
 #      every compiled source in compile_commands.json must belong to a recorded component)
 #   5. template: release/stage-template-assets.mjs + packager/template/build-template.mjs (unsigned, PKG-1/PKG-3);
 #      zipalign -c -P 16 4 + readelf 16 KB LOAD alignment (PKG-3)
-#   6. package: npm run build, tests, release/stage-package.mjs --template <apk> (npm pack --dry-run, size report;
+#   6. package: pnpm run build, tests, release/stage-package.mjs --template <apk> (npm pack --dry-run, size report;
 #      --pack writes the tarball)
 # Outputs in $OUT (default release/out): template/iwer-native-template.apk, template-info.json, symbols/*.so
 # (unstripped), package/ (the staged npm package), pack-dry-run.json, size-report.md, build-info.json.
@@ -35,7 +35,8 @@
 #   IWN_THIRD_PARTY_DIR  upstream third-party source trees, one directory per project (THIRD_PARTY.md): openxr,
 #                     jsoncpp, oboe, dr_libs, libogg, libvorbis, freetype, harfbuzz, brotli, stb, skia (its LICENSE)
 #   IWN_SQLITE_DIR    SQLite amalgamation dir (default: $IWN_THIRD_PARTY_DIR/sqlite)
-#   NPM_REGISTRY      npm registry for dependency installs (default: npm's configured registry)
+#   NPM_REGISTRY      npm registry for dependency installs (default: the configured registry)
+#   PNPM              pnpm command (default: pnpm on PATH, else corepack pnpm, the version IWER's packageManager pins)
 #   IWN_CONTENT_DENYLIST  file of patterns no shipped text file may contain, one regular expression per line, for
 #                     the publishing organisation's own hosts, repositories and tools (release/stage-package.mjs)
 #   IWN_FORBIDDEN_ROOTS  colon-separated directories no input may resolve into (default: none)
@@ -105,18 +106,18 @@ if [ -z "${CI:-}" ] && command -v free >/dev/null; then
 fi
 mkdir -p "$OUT"
 
-# Install a package's npm dependencies when node_modules is missing: npm ci from its committed package-lock.json.
-# Every dependency that ends up in a shipped bundle is also pinned to an exact version in package.json (BUNDLED in
-# each build.mjs; verify-third-party.mjs checks the bundled versions against THIRD_PARTY.md).
-npm_deps() { # dir
-  [ -f "$1/package.json" ] && [ ! -d "$1/node_modules" ] || return 0
-  local flags=(--ignore-scripts --no-audit --no-fund)
+# Install the workspace's dependencies when they are missing: pnpm install --frozen-lockfile at the IWER workspace
+# root, from its committed pnpm-lock.yaml (this package and its web/* packages are workspace members). Every
+# dependency that ends up in a shipped bundle is also pinned to an exact version in package.json (BUNDLED in each
+# build.mjs; verify-third-party.mjs checks the bundled versions against THIRD_PARTY.md).
+WORKSPACE="$(cd "$PKG/../.." && pwd)"
+PNPM="${PNPM:-}"
+[ -n "$PNPM" ] || { if command -v pnpm >/dev/null; then PNPM=pnpm; else PNPM="corepack pnpm"; fi; }
+workspace_deps() {
+  [ ! -d "$PKG/node_modules" ] || return 0
+  local flags=(--frozen-lockfile --ignore-scripts)
   [ -z "$NPM_REGISTRY" ] || flags+=(--registry "$NPM_REGISTRY")
-  if [ -f "$1/package-lock.json" ]; then
-    (cd "$1" && npm ci "${flags[@]}")
-  else
-    (cd "$1" && npm install --no-save --no-package-lock "${flags[@]}")
-  fi
+  (cd "$WORKSPACE" && $PNPM install "${flags[@]}")
 }
 # web/xr bundles IWER from source, which imports its generated src/version.ts (gitignored there; IWER's prebuild
 # script writes it). Generate it the same way when it is missing.
@@ -124,7 +125,7 @@ IWER_DIR="$(cd "$PKG/.." && pwd)/iwer"
 iwer_version() {
   [ -f "$IWER_DIR/package.json" ] || die "IWER sources not found at $IWER_DIR (web/xr bundles them)"
   [ -f "$IWER_DIR/src/version.ts" ] && return 0
-  (cd "$IWER_DIR" && npm run --silent prebuild) || die "could not generate $IWER_DIR/src/version.ts"
+  (cd "$IWER_DIR" && $PNPM run --silent prebuild) || die "could not generate $IWER_DIR/src/version.ts"
   echo "  generated IWER src/version.ts"
 }
 
@@ -148,10 +149,10 @@ echo "  build id $IWN_BUILD_ID"
 # --- 2. web preludes -----------------------------------------------------------------------------------------
 if [ "$SKIP_WEB" = 0 ]; then
   log "web preludes"
+  workspace_deps
   for area in glue dom net storage image canvas2d webgl audio xr workers; do
     dir="$PKG/web/$area"
     [ -f "$dir/build.mjs" ] || die "web/$area/build.mjs missing"
-    npm_deps "$dir"
     if [ "$area" = xr ]; then iwer_version; fi
     (cd "$dir" && node build.mjs) >"$OUT/web-$area.log" 2>&1 || { tail -20 "$OUT/web-$area.log"; die "web/$area build failed"; }
     echo "  web/$area ok"
@@ -195,7 +196,7 @@ done
 
 # --- 4. notices and third-party verification -----------------------------------------------------------------
 log "notices"
-node "$PKG/release/notices.mjs" --check || die "THIRD_PARTY_NOTICES.txt is stale: run npm run release:notices and commit it"
+node "$PKG/release/notices.mjs" --check || die "THIRD_PARTY_NOTICES.txt is stale: run pnpm run release:notices and commit it"
 
 
 # --- 5. template APK -----------------------------------------------------------------------------------------
@@ -213,8 +214,8 @@ node "$PKG/release/verify-third-party.mjs" --apk "$APK" --build "$BUILD" || die 
 
 # --- 6. npm package ------------------------------------------------------------------------------------------
 log "npm package"
-npm_deps "$PKG"
-(cd "$PKG" && npm run --silent build && npm test --silent >"$OUT/test.log" 2>&1) || { tail -30 "$OUT/test.log"; die "build/tests failed"; }
+workspace_deps
+(cd "$PKG" && $PNPM run --silent build && $PNPM test --silent >"$OUT/test.log" 2>&1) || { tail -30 "$OUT/test.log"; die "build/tests failed"; }
 node "$PKG/release/support-matrix.ts" --check || die "README support matrix is stale: node release/support-matrix.ts --write"
 node "$PKG/release/stage-package.mjs" --template "$APK" --out "$OUT" $PACK
 

@@ -182,9 +182,9 @@ export function detect(root = PKG, apkFile = null, buildDir = null) {
           }
           for (const out of Object.values(meta.outputs ?? {}))
             for (const [input, info] of Object.entries(out.inputs ?? {})) {
-              const nm = /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(
-                input,
-              );
+              // The last node_modules/ names the package: under pnpm the path runs through
+              // node_modules/.pnpm/<pkg>@<version>/node_modules/<pkg>/.
+              const nm = /.*node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(input);
               if (nm && info.bytesInOutput > 0)
                 found.push({
                   kind: 'npm',

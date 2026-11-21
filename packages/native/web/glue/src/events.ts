@@ -62,7 +62,6 @@ export function setEventClock(now: () => number): void {
 }
 
 let reporter: (error: unknown) => void = (error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
 };
 /** Wired by the installer: how listener exceptions are reported ("report the exception", HTML §8.1.4.6). */

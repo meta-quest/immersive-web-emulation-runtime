@@ -44,8 +44,6 @@ import {
   type MatchElement,
 } from './selectors.ts';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 // --- owner document --------------------------------------------------------------------------------------------
 
 let defaultDocument: any = null;

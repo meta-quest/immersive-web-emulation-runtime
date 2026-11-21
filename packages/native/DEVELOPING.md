@@ -18,23 +18,26 @@ keeps build-machine paths, review metadata and the names listed in `IWN_CONTENT_
 Node 24 (or 22.18+) runs the TypeScript sources directly (type stripping), so tests need no build step.
 
 ```bash
-npm ci               # typescript, @types/node only
-npm test             # node:test, headless: no adb, no headset, no network
-npm run typecheck
-npm run build        # tsc → lib/ (the bin runs lib/src/cli/main.js; works on Node 20.19+)
-npm run verify       # all of the above + bin --help
-npm run release:check   # notices up to date, every bundled dependency recorded (THIRD_PARTY.md)
+pnpm install         # once, from the IWER monorepo root: the whole workspace, this package and web/* included
+pnpm test            # node:test, headless: no adb, no headset, no network
+pnpm run typecheck   # typecheck:all adds every web/* package
+pnpm run build       # tsc → lib/ (the bin runs lib/src/cli/main.js; works on Node 20.19+)
+pnpm run test:all    # the package's tests and every web/* suite (what the root `pnpm test:all` runs)
+pnpm run build:web   # every web/* prelude bundle, in dependency order (glue first)
+pnpm run verify      # typecheck + tests + build + bin --help
+pnpm run release:check   # notices up to date, every bundled dependency recorded (THIRD_PARTY.md)
 ```
 
-Formatting follows the IWER monorepo's `.prettierrc.json`.
+From the monorepo root, `pnpm build:all`, `pnpm typecheck`, `pnpm test:all`, `pnpm lint` and `pnpm format:check`
+cover this package like every other; prettier and eslint use the root configs.
 
 ## Repository notes
 
-The package is `"private": true` in this tree (PKG-15) and is not in the IWER changesets `fixed` group. The public
-alpha is published from a staged copy with `private` removed (`release/stage-package.mjs`; see RELEASE.md). The
-package lives in `packages/native/` of the IWER monorepo but stays out of its pnpm workspace (it has its own
-`package-lock.json`), its root eslint/prettier runs and the changesets `fixed` group
-(`privatePackages: { version: false, tag: false }`).
+@iwer/native is a regular package of the IWER monorepo: a pnpm workspace member (with its private build-time
+packages in `web/*`), in the changesets `fixed` group with `iwer`, `@iwer/devui`, `@iwer/sem` and
+`@iwer/extension-bridge`, and published by `pnpm release` (RELEASE.md, section 9). `src/version.ts` is generated
+from package.json before build, typecheck and test, as in `iwer`. The template APK is the one part the root scripts
+do not build: `release/build-release.sh` needs the Android NDK and the prebuilt V8.
 
 ## Open questions
 

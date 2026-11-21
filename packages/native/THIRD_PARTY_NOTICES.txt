@@ -1,4 +1,4 @@
-Third-party software notices for @iwer/native 0.1.0-alpha.0
+Third-party software notices for @iwer/native
 
 @iwer/native is licensed under the MIT license (the LICENSE file of the npm package). The prebuilt template
 APK in the package (prebuilt/iwer-native-template.apk), and therefore every APK packed from it, contains the

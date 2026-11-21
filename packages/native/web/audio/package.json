@@ -9,7 +9,7 @@
     "build": "node build.mjs",
     "test": "node --test --test-concurrency=8 --test-reporter=spec \"test/**/*.test.ts\"",
     "build:addon": "node test/build-addon.mjs",
-    "verify": "npm run typecheck && npm run build && npm test"
+    "verify": "pnpm run typecheck && pnpm run build && pnpm test"
   },
   "devDependencies": {
     "esbuild": "0.28.2"

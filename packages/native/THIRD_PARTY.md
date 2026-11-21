@@ -56,8 +56,9 @@ License notices: `npm run build` writes `web/glue/dist/glue.NOTICES.txt` with th
 each bundled package (taken from its `node_modules/<pkg>/LICENSE*`). MIT and BSD-2-Clause require these notices
 in redistributed copies, so the APK packer must ship that file next to `glue.min.js` and `glue-subtle.min.js` (for example under
 `assets/licenses/`). The build also fails if the bundle contains a package or version not listed above
-(`BUNDLED` in `web/glue/build.mjs`); `web/glue/package.json` pins the transitive `webidl-conversions` with an
-npm `overrides` entry, so the bundled version does not depend on the lockfile.
+(`BUNDLED` in `web/glue/build.mjs`); the transitive `webidl-conversions` is pinned by a pnpm override in the
+IWER root `package.json` (`pnpm.overrides`, `whatwg-url@17.3.0>webidl-conversions`) and is a direct dependency of
+`web/glue`, so the bundled version does not depend on the lockfile and its licence file is in reach.
 
 Swapped out at build time (not shipped; replaced by small shims in `web/glue/src/shims/`, see `web/glue/build.mjs`):
 

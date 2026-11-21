@@ -587,14 +587,12 @@ describe('crypto.subtle prelude (NET-STORE-4)', () => {
         .filter(([, v]) => v.bytesInOutput > 0)
         .map(([k]) => k);
     };
-    assert.equal(
-      (await inputsOf(buildOptions)).some((k) => k.includes('@noble')),
-      false,
-    );
-    assert.equal(
-      (await inputsOf(subtleBuildOptions)).some((k) => k.includes('@noble')),
-      true,
-    );
+    // The package is the one after the last node_modules/: pnpm's folder names carry peer suffixes
+    // (.pnpm/whatwg-url@17.3.0_@noble+hashes@2.4.0/node_modules/whatwg-url/...).
+    const noble = (k: string) =>
+      k.slice(k.lastIndexOf('node_modules/') + 13).startsWith('@noble/');
+    assert.equal((await inputsOf(buildOptions)).some(noble), false);
+    assert.equal((await inputsOf(subtleBuildOptions)).some(noble), true);
     const off = await createGlueContext();
     assert.equal(
       off.run(`'subtle' in crypto || typeof SubtleCrypto`),

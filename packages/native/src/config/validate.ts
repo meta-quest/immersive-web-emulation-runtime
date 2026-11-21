@@ -75,7 +75,7 @@ const ENV_VAR_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PERMISSION_NAME = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$/;
 /** Keys that look like they hold a secret value instead of naming a variable. */
 const SECRET_KEY = /(pass(word|phrase)?|secret|token|pin|credential)s?$/i;
-// eslint-disable-next-line no-control-regex
+
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
 /** Error carrying every problem found, one per line. */

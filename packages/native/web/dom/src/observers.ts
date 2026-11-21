@@ -21,8 +21,6 @@ import {
 } from './env.ts';
 import { DOMRectReadOnly } from './geometry.ts';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 interface MOOptions {
   childList: boolean;
   attributes: boolean;

@@ -754,7 +754,6 @@ const GLSL_CHARS = (() => {
  * declarator position; ignored in skipped groups), and non-ASCII characters inside comments as spaces. getShaderSource still returns the original.
  */
 function driverCharset(src: string): string {
-  // eslint-disable-next-line no-control-regex
   if (!/[^\x00-\x7f]/.test(src)) return src;
   let out = '';
   let i = 0;

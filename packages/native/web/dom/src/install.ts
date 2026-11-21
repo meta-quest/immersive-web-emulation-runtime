@@ -85,8 +85,6 @@ import {
 } from './window.ts';
 import { XMLSerializer } from './document.ts';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 export const DOM_REGISTRY_KEY: unique symbol = Symbol.for('iwn.dom') as never;
 
 export interface InstallDomOptions {

@@ -135,7 +135,7 @@ export function templateCheck(ctx: DoctorContext): DoctorCheck {
           id: 'template',
           status: 'fail',
           summary: `template APK: the bundled template is missing (${bundled.file})`,
-          hint: 'Reinstall @iwer/native (npm install @iwer/native@alpha).',
+          hint: 'Reinstall @iwer/native (npm install @iwer/native).',
         };
       return {
         id: 'template',
@@ -155,7 +155,7 @@ export function templateCheck(ctx: DoctorContext): DoctorCheck {
       id: 'template',
       status: 'fail',
       summary: `template APK: ${(e as Error).message.split('\n')[0]}`,
-      hint: 'Reinstall @iwer/native (npm install @iwer/native@alpha), or pass --template <apk> to pack.',
+      hint: 'Reinstall @iwer/native (npm install @iwer/native), or pass --template <apk> to pack.',
     };
   }
   if (existsSync(checkoutTemplatePath(root)))

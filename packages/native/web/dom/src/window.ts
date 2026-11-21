@@ -21,8 +21,6 @@ import {
 } from './env.ts';
 import { getPageSelection } from './document.ts';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 export class ScreenOrientation extends BaseEventTarget {
   get type(): string {
     const v = viewport();
