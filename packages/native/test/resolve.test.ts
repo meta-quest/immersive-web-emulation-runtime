@@ -97,6 +97,37 @@ describe('resolveNativeTarget', () => {
     ]);
   });
 
+  test("IWSDK's world.features.camera declares the camera (XR-CAM-1)", () => {
+    const t = resolveNativeTarget({
+      world: { xr: { mode: 'vr' }, features: { camera: true, grabbing: true } },
+      native: { packageId: 'com.a.b' },
+    });
+    assert.deepEqual(t.features, { camera: 'optional' });
+    assert.deepEqual(t.permissions, [
+      'android.permission.CAMERA',
+      'horizonos.permission.HEADSET_CAMERA',
+    ]);
+    assert.deepEqual(t.usesFeatures, [
+      { name: 'android.hardware.camera', required: false },
+      { name: 'com.oculus.feature.PASSTHROUGH', required: false },
+    ]);
+    for (const camera of [false, null, undefined]) {
+      const off = resolveNativeTarget({
+        world: { features: { camera } },
+        native: { packageId: 'com.a.b' },
+      });
+      assert.equal(off.features.camera, undefined);
+      assert.deepEqual(off.permissions, []);
+    }
+    const required = resolveNativeTarget({
+      native: { packageId: 'com.a.b', features: { camera: 'required' } },
+    });
+    assert.deepEqual(required.usesFeatures, [
+      { name: 'android.hardware.camera', required: true },
+      { name: 'com.oculus.feature.PASSTHROUGH', required: true },
+    ]);
+  });
+
   test('a uses-feature is required if any feature needing it is', () => {
     const t = resolveNativeTarget({
       native: {
@@ -241,7 +272,10 @@ test('camera: world.features.camera derives it (optional), native.features.camer
   assert.deepEqual(featuresFromWorld({ features: { camera: false } }), {});
   const t = resolveNativeTarget({ native: { packageId: 'com.a.b', features: { camera: 'required' } } });
   assert.deepEqual(t.permissions, ['android.permission.CAMERA', 'horizonos.permission.HEADSET_CAMERA']);
-  assert.deepEqual(t.usesFeatures, [{ name: 'com.oculus.feature.PASSTHROUGH', required: true }]);
+  assert.deepEqual(t.usesFeatures, [
+    { name: 'android.hardware.camera', required: true },
+    { name: 'com.oculus.feature.PASSTHROUGH', required: true },
+  ]);
   assert.equal(t.featuresDerived, false);
   assert.equal(resolveNativeTarget({ native: { packageId: 'com.a.b' } }).featuresDerived, true);
 });
@@ -262,6 +296,7 @@ test('withFeature adds a feature with its manifest entries and keeps the rest', 
   ]);
   // passthrough already made the uses-feature required; the optional camera does not weaken it
   assert.deepEqual(c.usesFeatures, [
+    { name: 'android.hardware.camera', required: false },
     { name: 'com.oculus.feature.PASSTHROUGH', required: true },
     { name: 'oculus.software.handtracking', required: false },
   ]);

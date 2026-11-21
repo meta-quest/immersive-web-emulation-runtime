@@ -79,6 +79,8 @@ export interface TexLevelInfo {
   width: number;
   height: number;
   depth: number;
+  /** set by a whole-image RGBA8 upload from native pixels: the level is RGBA / UNSIGNED_BYTE, whatever its format */
+  rgba8?: boolean;
 }
 
 export class WebGLTexture extends WebGLObject {

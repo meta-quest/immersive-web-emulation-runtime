@@ -16,6 +16,9 @@ import type { XrNatives } from './natives.ts';
 /** Planes, meshes, scene-based hit test and environment depth (the Scene API). */
 export const USE_SCENE = 'com.oculus.permission.USE_SCENE';
 
+/** The passthrough cameras (getUserMedia, XR-CAM-1): Camera2 access and the headset cameras. */
+export const CAMERA_PERMISSIONS: readonly string[] = ['android.permission.CAMERA', 'horizonos.permission.HEADSET_CAMERA'];
+
 export class RuntimePermissions {
   private readonly natives: XrNatives;
   private readonly report: (error: unknown) => void;

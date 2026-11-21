@@ -67,6 +67,9 @@ if(ANDROID OR IWN_GL_WITH_V8)
   # module. Generator expressions: runtime/CMakeLists.txt may add the image module after this one.
   target_compile_definitions(iwn_gl PRIVATE $<$<TARGET_EXISTS:iwn_image_v8>:IWN_GL_WITH_IMAGE=1>)
   target_link_libraries(iwn_gl PUBLIC $<TARGET_NAME_IF_EXISTS:iwn_image_v8>)
+  if(ANDROID)
+    target_link_libraries(iwn_gl PRIVATE nativewindow)  # AHardwareBuffer stores: GPU copy (src/gl_image.cc)
+  endif()
   # runtime/ build: the GL renderer goes into the core runtime's info{} (DBG-6, iwn::Runtime::set_info_field).
   if(TARGET iwn_core)
     target_link_libraries(iwn_gl PUBLIC iwn_core)

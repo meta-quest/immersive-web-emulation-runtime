@@ -64,14 +64,16 @@ export const FEATURE_MANIFEST: Readonly<
     permissions: ['com.oculus.permission.EYE_TRACKING'],
     usesFeatures: ['oculus.software.eye_tracking'],
   },
-  // Passthrough Camera API: CAMERA (Camera2) and HEADSET_CAMERA (the headset's passthrough cameras), both runtime
-  // permissions; Horizon Store ingestion wants passthrough declared by apps that request HEADSET_CAMERA.
+  // getUserMedia over the passthrough cameras (XR-CAM-1), Horizon OS Passthrough Camera API: CAMERA (Camera2) and
+  // HEADSET_CAMERA (the headset's passthrough cameras) are both runtime ("dangerous") permissions the user grants.
+  // Horizon Store ingestion wants passthrough declared by apps that request HEADSET_CAMERA, and the camera
+  // uses-feature keeps the store from implying a required camera from the CAMERA permission.
   camera: {
     permissions: [
       'android.permission.CAMERA',
       'horizonos.permission.HEADSET_CAMERA',
     ],
-    usesFeatures: ['com.oculus.feature.PASSTHROUGH'],
+    usesFeatures: ['com.oculus.feature.PASSTHROUGH', 'android.hardware.camera'],
   },
 };
 
@@ -80,7 +82,8 @@ export const INTERNET_PERMISSION = 'android.permission.INTERNET';
 
 /**
  * IWSDK `world.xr.features` keys that map to a native feature. Keys not listed
- * here (layers, unbounded) need no manifest entry.
+ * here (layers, unbounded) need no manifest entry. IWSDK's camera is a world
+ * feature (`world.features.camera`), not an XR one: see featuresFromWorld.
  */
 export const IWSDK_FEATURE_ALIASES: Readonly<
   Record<string, NativeFeatureName>

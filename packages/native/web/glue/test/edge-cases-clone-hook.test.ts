@@ -267,6 +267,18 @@ describe('navigator.permissions and DOM-1 window members', () => {
     assert.equal(await custom.run<Promise<string>>(`navigator.permissions.query({ name: 'xr-spatial-tracking' }).then((s) => s.state)`), 'prompt');
   });
 
+  test('query: a runtime prelude reports its own feature\'s grants (web/xr camera: camera once CAMERA + HEADSET_CAMERA)', async () => {
+    const { run } = await createGlueContext();
+    const q = (name: string) => run<Promise<string>>(`navigator.permissions.query({ name: '${name}' }).then((s) => s.state)`);
+    run(`var held = false; ${REG}.addPermissionSource(() => held ? ['camera'] : []);
+      ${REG}.addPermissionSource(() => { throw new Error('a broken source'); });`);
+    assert.equal(await q('camera'), 'prompt');
+    run(`held = true`);
+    assert.equal(await q('camera'), 'granted', 'asked at each query');
+    assert.equal(await q('microphone'), 'prompt');
+    assert.equal(await q('xr-spatial-tracking'), 'granted', 'the packaged grants stay');
+  });
+
   test('top/parent/frames are the window, frameElement and opener null, name a settable string', async () => {
     const { run } = await createGlueContext();
     assert.equal(run(`[top === window, parent === window, frames === window, frameElement, opener, JSON.stringify(name)].join()`), 'true,true,true,,,""');

@@ -1252,13 +1252,29 @@ function texFromSource(
       format === E.RGBA && type === E.UNSIGNED_BYTE && skipX === 0 && skipY === 0 && skipImages === 0 &&
       w === px.width && h === px.height && d === 1 && (!is3D || sub) && px.width > 0 && px.height > 0;
     if (direct) {
+      // A sub-image must fit its level (INVALID_VALUE): the GPU copy of a camera frame (gl_image.cc) is a blit, which
+      // would clip it without an error.
+      const into = sub && target === E.TEXTURE_2D ? tex._levels.get(level) : undefined;
+      if (sub && (xoff < 0 || yoff < 0 || zoff < 0 || (into && (xoff + w > into.width || yoff + h > into.height)))) {
+        return ctx._e(E.INVALID_VALUE, what);
+      }
       const alphaMode = premultiply === null ? -1 : premultiply ? 1 : 0;
+      // A texImage2D that respecifies a TEXTURE_2D level at the same size and internal format only replaces its
+      // contents: upload it as a texSubImage2D, without reallocating the level (Chromium's decoder does the same).
+      // A <video> texture (three.js VideoTexture) takes this path for every camera frame (XR-CAM-1). Only a level
+      // this path made qualifies: an unsized RGBA level specified with another type (FLOAT) must be reallocated.
+      const prev = !sub && target === E.TEXTURE_2D ? tex._levels.get(level) : undefined;
+      const replace =
+        prev?.rgba8 === true && prev.width === w && prev.height === h && prev.internalformat === internalformat;
       let ok = false;
       withTightUnpack(ctx, () => {
-        ok = n.imageUpload(px.handle, target, level, internalformat, xoff, yoff, zoff, is3D ? 2 : sub ? 1 : 0, flipY, alphaMode);
+        ok = n.imageUpload(px.handle, target, level, internalformat, xoff, yoff, zoff, is3D ? 2 : sub || replace ? 1 : 0, flipY, alphaMode);
       });
       if (!ok) throw domException(`${what}: the source is closed or detached`, 'InvalidStateError');
-      if (!sub) recordLevel(ctx, tex, level, internalformat, w, h, d);
+      if (!sub) {
+        recordLevel(ctx, tex, level, internalformat, w, h, d);
+        tex._levels.get(level)!.rgba8 = true;
+      }
       markAttachmentsDirty(ctx, tex);
       return;
     }

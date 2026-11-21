@@ -24,7 +24,7 @@ node --test test/*.test.ts                           # evaluates glue.min.js + d
 - **Elements** (`src/html-elements.ts`): `HTMLElement` and the interfaces apps create: canvas, div/span/p/headings/
   lists/tables, a, label, link, style, script, meta/title/base, input/textarea/button/select/option/form/fieldset,
   iframe (no content), template (parsed children go into `content`; deep clones copy it), source/track/picture,
-  video/audio (inert), plus `HTMLUnknownElement`,
+  video/audio (no decoder; camera streams play), plus `HTMLUnknownElement`,
   `SVGElement`/`SVGSVGElement`. Reflected attributes follow HTML (URL attributes resolve against the document URL).
   `GlobalEventHandlers` (`onclick`, `onpointerdown`, …) on elements, `document` and `window`.
 - **The document** (`src/document.ts`): built at boot from the entry document's markup (the core's
@@ -43,9 +43,14 @@ node --test test/*.test.ts                           # evaluates glue.min.js + d
   fetch fires `error`; inline scripts run when inserted; data blocks (`type="application/json"`, …) never run.
   `<link>` (stylesheet, preload, modulepreload, prefetch, icon) and `<style>` are accepted and fire `load`; nothing is
   styled. `link.relList.supports('modulepreload')` is true (Vite's preload helper checks it).
-- **Media** (DOM-6, out of the alpha scope): `<video>`/`<audio>`/`new Audio()` exist so feature tests work, but
+- **Media** (DOM-6): `<video>`/`<audio>`/`new Audio()` exist so feature tests work, but nothing is decoded:
   `canPlayType()` returns `''`, `play()` rejects with a `NotSupportedError` naming `HTMLVideoElement.play()` /
-  `HTMLMediaElement.play()`, and setting `src` fires `error` with `MEDIA_ERR_SRC_NOT_SUPPORTED`.
+  `HTMLMediaElement.play()`, and setting `src` fires `error` with `MEDIA_ERR_SRC_NOT_SUPPORTED`. The exception is a
+  camera `MediaStream` as `srcObject` (XR-CAM-1, web/xr `camera.ts`): it implements `Symbol.for('iwn.media.feed')`,
+  and the element plays it (HTML's readyState steps and events from the first frame, `autoplay`, `play()`/`pause()`,
+  `videoWidth`/`videoHeight`, `duration` Infinity, `requestVideoFrameCallback` per frame, `ended` when the stream
+  ends) and is a TexImageSource / CanvasImageSource of its newest frame (`Symbol.for('iwn.image.source')`), or while
+  paused of the frame it stopped at (its first if it never played; the feed's `hold()` keeps it).
 - **Observers** (DOM-10): `MutationObserver` with real records (childList, attributes, characterData, subtree,
   attributeFilter, old values; delivered in a microtask), `ResizeObserver` (fires once per observed element that has
   a box: the window size of DOM-3), `IntersectionObserver` (fires once, `isIntersecting: true`).

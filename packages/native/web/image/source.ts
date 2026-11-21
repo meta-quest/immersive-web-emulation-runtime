@@ -15,7 +15,7 @@ import type { NativeImageHandle } from './natives.ts';
 
 export const IMAGE_SOURCE: unique symbol = Symbol.for('iwn.image.source') as never;
 
-export type ImageSourceOrigin = 'bitmap' | 'image' | 'imagedata' | 'canvas' | 'webgl-canvas';
+export type ImageSourceOrigin = 'bitmap' | 'image' | 'imagedata' | 'canvas' | 'webgl-canvas' | 'video';
 
 interface DescriptorBase {
   /** What produced it. WebGL ignores UNPACK_FLIP_Y_WEBGL / UNPACK_PREMULTIPLY_ALPHA_WEBGL for 'bitmap' (GL-16). */
@@ -56,9 +56,13 @@ export function isImageSourceProvider(value: unknown): value is ImageSourceProvi
   );
 }
 
-/** HTMLVideoElement / VideoFrame look-alikes (no video support yet: GL-17 wants a TypeError). */
+/**
+ * HTMLVideoElement / VideoFrame look-alikes that are not image sources (GL-17 wants a TypeError). A <video> playing a
+ * camera stream (web/dom, XR-CAM-1) is a provider of its frames; one without throws the TypeError itself.
+ */
 export function isVideoLike(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) return false;
+  if (isImageSourceProvider(value)) return false;
   const name = (value as { constructor?: { name?: string } }).constructor?.name;
   return name === 'HTMLVideoElement' || name === 'VideoFrame' || 'videoWidth' in value;
 }

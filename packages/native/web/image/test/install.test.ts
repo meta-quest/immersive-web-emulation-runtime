@@ -55,6 +55,13 @@ test('getImageSource: descriptors and GL-17 errors', async () => {
   assert.throws(() => getImageSource(new g.Image()), (e: Error) => e.name === 'InvalidStateError');
   assert.throws(() => getImageSource({ videoWidth: 2, videoHeight: 2 }), TypeError);
   assert.throws(() => getImageSource({}), TypeError);
+  // XR-CAM-1: a <video> playing a camera stream is a provider of its newest frame (web/dom)
+  const frame = { kind: 'pixels', origin: 'video', width: 2, height: 1, premultiplied: false, data: new Uint8Array(8) };
+  const playing = { videoWidth: 2, videoHeight: 1, [Symbol.for('iwn.image.source')]: () => frame };
+  assert.equal(getImageSource(playing, 'drawImage'), frame);
+  const bitmapOfVideo = await g.createImageBitmap(playing);
+  assert.equal(bitmapOfVideo.width, 2);
+  bitmapOfVideo.close();
   const data = getImageSource(new g.ImageData(2, 1));
   assert.equal(data.kind, 'pixels');
 });

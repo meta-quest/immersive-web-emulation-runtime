@@ -37,8 +37,10 @@ Khronos OpenXR loader 1.1.63 with its vendored jnipp and android-jni-wrappers, a
 | `src/android/egl_xr.{h,cc}` | the XR thread's EGL context in the WebGL share group, cross-context fences |
 | `src/android/jni_android.{h,cc}` | JavaVM and Activity lookup for the loader and `xrCreateInstance` (through `ActivityThread`, non-SDK fields, Application context as the fallback; follow-up: take the NativeActivity's object from the app module instead) |
 | `src/v8/xr_binding.cc` | `iwn_register_xr`: `globalThis.__iwn.xr`, the core FramePump, `shot`, the `xr` stats section, the shutdown hook |
+| `src/android/xr_camera.{h,cc}`, `include/iwn/xr/camera_convert.h`, `src/core/camera_convert.cc` | the passthrough cameras for getUserMedia (XR-CAM-1): Camera2 NDK on the cameras Horizon OS tags as passthrough (left, right), an `AImageReader` of YUV_420_888, each frame converted to RGBA8 on the reader's thread (full-range BT.601, host-tested) into a pool of four AHardwareBuffer pixel stores, rewritten in place once released, the one released longest ago first (recycled stores: whatever keeps a frame gets a copy, runtime/image INTEROP.md); nothing reads the camera list or opens a camera until CAMERA and HEADSET_CAMERA are held (Horizon OS keeps a list read before the grant empty); open/close on a worker thread, opens queued at shutdown refused and one already opening closed after it; a progress line every 300 frames; host-tested against a fake camera service (`test/host/fake_camera.h`, `iwn_xr_camera_tests`) |
+| `src/v8/camera_binding.cc` | `iwn_register_camera` (registered from this library): `globalThis.__iwn.camera` (`declared` from config `xr.features.camera`, `permitted`, `devices`, `hidden`, `open`, `frame` as an image-module handle, `close`, a coalesced per-frame task), the `camera` stats section |
 | `manifest/vr-manifest.json` | manifest entries every XR APK needs (OpenXR permissions and broker queries, VR category, head tracking, focus awareness, hand tracking, passthrough); the packager template (`packager/template/AndroidManifest.xml`) carries them, `tools/build-xr-apk.mjs` adds them to the runtime's test template |
-| `test/host/` | host unit tests (`iwn_xr_core_tests`, 73 tests, incl. the frame handoff with real threads, input mapping (hands, controllers, microgestures) and the loading screen's hand-over and placement) and `iwn_xr_record_dump` (a record written by the native writer, read by web/xr's round-trip test) |
+| `test/host/` | host unit tests (`iwn_xr_core_tests`, 89 tests, incl. the frame handoff with real threads, input mapping (hands, controllers, microgestures) and the loading screen's hand-over and placement, the camera's YUV conversion), the src/android tests against fakes (`iwn_xr_android_tests`: scene and anchors on a fake OpenXR runtime; `iwn_xr_camera_tests`: the cameras on a fake camera service whose list is fixed when the camera manager is made, with fake NDK headers in `fake_ndk/`), `iwn_xr_depth_tests` and `iwn_xr_record_dump` (a record written by the native writer, read by web/xr's round-trip test) |
 | `tools/` | device-check tooling: `m3-check.mjs` (the M3 device check), `xr-check.mjs` (eval/stats/shot/watch over the debug endpoint), `build-xr-test-apk.mjs` + `xr-test-app/` (the pipeline test app and its variants; the same `main.js` runs in Quest Browser through `browser-ab.mjs` for A/B checks), `build-showcase-apk.mjs` (+ `showcase-dom/dom-shim.js`, TEST-ONLY DOM scaffolding until a DOM module exists), `build-xr-apk.mjs` |
 
 ## How it works
@@ -283,7 +285,7 @@ in the page's context without touching its GL error state).
 ```bash
 # host (V8-free core) and the JS adapter
 cmake -S runtime -B <host-build> -G Ninja -DIWN_TOOLCHAIN_DIR=<clean toolchain> -DIWN_THIRD_PARTY_DIR=<third-party trees> && ninja -C <host-build> iwn_xr_core_tests iwn_xr_record_dump
-<host-build>/xr/iwn_xr_core_tests                        # 73 tests
+<host-build>/xr/iwn_xr_core_tests                        # 84 tests
 node runtime/xr/gen/generate-layout.mjs --check
 (cd web/xr && IWN_XR_RECORD_DUMP=<host-build>/xr/iwn_xr_record_dump npm run verify)   # typecheck + 35 tests
 

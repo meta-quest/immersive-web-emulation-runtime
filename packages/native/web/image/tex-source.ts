@@ -13,7 +13,8 @@ import { type ImageSourceDescriptor, isImageSourceProvider, isVideoLike, IMAGE_S
 
 /**
  * Returns the source's pixels or throws:
- *  - TypeError for video sources (no video yet) and for values that are not image sources;
+ *  - TypeError for video sources that are not image sources (only a <video> playing a camera stream is one) and for
+ *    values that are not image sources;
  *  - DOMException InvalidStateError (from the source) for a closed ImageBitmap, an image that is not loaded or is
  *    broken, or a detached ImageData.
  * `api` names the calling method for error messages, e.g. "texImage2D" on "WebGL2RenderingContext".

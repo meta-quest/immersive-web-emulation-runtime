@@ -10,7 +10,7 @@
  *
  * Two inputs decide a row: the rule table below (the area that owns the API,
  * the spec requirement IDs, and the spec's policy: provide / later / absent /
- * inert), and a measured inventory (inventory.ts: what the built layers
+ * inert / declared), and a measured inventory (inventory.ts: what the built layers
  * install today; iwer-inventory: what IWER host mode implements). The result
  * is a status per API key from the tracer (tracer.ts) or the static scan.
  */
@@ -29,6 +29,7 @@ export const AREAS = {
   storage: 'web/storage + runtime/storage',
   audio: 'web/audio + runtime/audio',
   workers: 'web/workers + runtime/workers',
+  xr: 'web/xr + runtime/xr',
   dom: 'DOM stand-ins (no module yet)',
   input: 'input (IWER host input)',
   iwer: 'IWER host mode',
@@ -45,7 +46,9 @@ export type Policy =
   /** Deliberately absent (feature detection must see `undefined`). */
   | 'absent'
   /** Accepted but never fires/does nothing (no 2D panel, no keyboard). */
-  | 'inert';
+  | 'inert'
+  /** Provided for an app that declares the rule's `feature` (getUserMedia: camera, XR-CAM-1), else absent. */
+  | 'declared';
 
 export type Status =
   /** In V8's own context (ECMAScript, Intl, WebAssembly). */
@@ -83,12 +86,24 @@ export interface Rule {
   spec: string[];
   policy: Policy;
   note?: string;
+  /** policy 'declared': the packer feature (native.features) that turns the API on. */
+  feature?: string;
+  /** policy 'absent': a layer defines the member for another use, and this use fails (NotSupportedError). */
+  throws?: boolean;
 }
 
 /** What the app declares, as the packer resolves it (native.features, or derived from the config and the dist). */
 export interface ResolveContext {
   declared?: ReadonlySet<string>;
 }
+
+/** A rule's policy for this app: a 'declared' API is absent for an app that does not declare its feature. */
+export function policyFor(rule: Rule | undefined, ctx: ResolveContext = {}): Policy | undefined {
+  if (rule?.policy !== 'declared') return rule?.policy;
+  return rule.feature && ctx.declared?.has(rule.feature) ? 'provide' : 'absent';
+}
+
+const CAMERA_DECLARE = 'declare the camera (native.features.camera, or IWSDK\'s world.features.camera; a bundle that is not IWSDK and calls getUserMedia gets it from pack)';
 
 const PASSTHROUGH_DECLARE = 'declare passthrough (native.features.passthrough, or IWSDK\'s world.xr.mode "ar", from which pack derives it)';
 
@@ -103,10 +118,15 @@ export const RULES: Rule[] = [
   // --- deliberately absent or out of scope (DOM-4, DOM-6, DOM-10, XR-SEC-1, the developer page) ---
   { re: /^(Navigator\.gpu|GPU\w*|navigator\.gpu|getContext:webgpu)\b/, area: 'none', spec: ['DOM-4'], policy: 'absent', note: 'no WebGPU' },
   { re: /^(VideoFrame|VideoDecoder|VideoEncoder|AudioDecoder|AudioEncoder|ImageDecoder|EncodedVideoChunk|EncodedAudioChunk|VideoColorSpace)\b/, area: 'none', spec: ['DOM-11'], policy: 'absent', note: 'no WebCodecs (three probes VideoFrame)' },
+  // XR-CAM-1, DOM-4, DOM-6: getUserMedia({ video }) over the passthrough cameras and a <video> that plays the stream,
+  // installed by web/xr and web/dom only for an app that declares the camera (else absent, XR-SEC-1)
+  { re: /^(MediaDevices\.getDisplayMedia)\b/, area: 'none', spec: ['DOM-4'], policy: 'absent', note: 'no screen capture' },
+  { re: /^(Navigator\.mediaDevices|MediaDevices|MediaStream|MediaStreamTrack|MediaDeviceInfo|InputDeviceInfo|getUserMedia)\b/, area: 'xr', spec: ['XR-CAM-1', 'DOM-4', 'XR-SEC-1'], policy: 'declared', feature: 'camera', note: 'video from the passthrough cameras (no microphone); CAMERA and HEADSET_CAMERA are asked for on first use' },
+  { re: /^(HTMLVideoElement|HTMLMediaElement)\.(srcObject|play|pause|requestVideoFrameCallback|cancelVideoFrameCallback)$|^requestVideoFrameCallback$/, area: 'dom', spec: ['DOM-6', 'XR-CAM-1'], policy: 'declared', feature: 'camera', note: 'a <video> plays a camera MediaStream (srcObject) only; other media does not play (play() rejects with NotSupportedError)' },
   // DOM-6: <video>/<audio> elements are inert stand-ins (canPlayType('') , play() rejects); playback itself is absent
-  { re: /^(HTMLVideoElement|HTMLAudioElement|HTMLMediaElement)\.(play|load|src|srcObject|requestVideoFrameCallback|captureStream|mozCaptureStream|fastSeek|setMediaKeys|setSinkId|addTextTrack)$|^(MediaSource|ManagedMediaSource|SourceBuffer\w*|requestVideoFrameCallback|TextTrack\w*|VideoPlaybackQuality)\b/, area: 'dom', spec: ['DOM-6'], policy: 'absent', note: 'no <video>/<audio> playback: the element stand-ins are inert and play() rejects with NotSupportedError' },
+  { re: /^(HTMLVideoElement|HTMLAudioElement|HTMLMediaElement)\.(play|load|src|srcObject|requestVideoFrameCallback|captureStream|mozCaptureStream|fastSeek|setMediaKeys|setSinkId|addTextTrack)$|^(MediaSource|ManagedMediaSource|SourceBuffer\w*|requestVideoFrameCallback|TextTrack\w*|VideoPlaybackQuality)\b/, area: 'dom', spec: ['DOM-6'], policy: 'absent', throws: true, note: 'no <video>/<audio> playback of media files: play() rejects with NotSupportedError (a <video> plays only a camera stream, XR-CAM-1)' },
   { re: /^(HTMLVideoElement|HTMLAudioElement|HTMLMediaElement|Audio)\b/, area: 'dom', spec: ['DOM-6'], policy: 'inert', note: 'inert <video>/<audio> stand-in: canPlayType() returns \'\', nothing ever plays' },
-  { re: /^(Navigator\.mediaDevices|MediaDevices|MediaStream\w*|MediaRecorder|getUserMedia|RTC\w*|ImageCapture|MediaElementAudioSourceNode|MediaStreamAudio\w*|BaseAudioContext\.createMediaElementSource|BaseAudioContext\.createMediaStream\w*|AudioContext\.createMediaElementSource|AudioContext\.createMediaStream\w*)\b/, area: 'none', spec: ['DOM-4', 'XR-SEC-1'], policy: 'absent', note: 'no camera/microphone/media streams' },
+  { re: /^(MediaStream\w*|MediaRecorder|getUserMedia|RTC\w*|ImageCapture|MediaElementAudioSourceNode|MediaStreamAudio\w*|BaseAudioContext\.createMediaElementSource|BaseAudioContext\.createMediaStream\w*|AudioContext\.createMediaElementSource|AudioContext\.createMediaStream\w*)\b/, area: 'none', spec: ['DOM-4', 'XR-SEC-1'], policy: 'absent', note: 'no microphone, recording or WebRTC (camera video: getUserMedia for an app that declares the camera)' },
   { re: /^(caches|CacheStorage|Cache)\b/, area: 'storage', spec: ['NET-STORE-3'], policy: 'absent', note: 'the Cache API is absent in this alpha' },
   { re: /^(Navigator\.serviceWorker|ServiceWorker\w*|Notification|PushManager|Navigator\.clipboard|Clipboard\w*|Navigator\.wakeLock|WakeLock\w*|Navigator\.share|Navigator\.canShare|Navigator\.mediaCapabilities|Navigator\.bluetooth|Navigator\.usb|Navigator\.hid|Navigator\.serial|Navigator\.requestMIDIAccess|Navigator\.credentials|Navigator\.geolocation|Geolocation\w*|PaymentRequest|SpeechSynthesis\w*|speechSynthesis|SpeechRecognition|webkitSpeechRecognition|EventSource|WebTransport|SharedWorker|Navigator\.userAgentData|NavigatorUAData)\b/, area: 'none', spec: ['DOM-4', 'DOM-10', 'NET-STORE-3'], policy: 'absent' },
   // WRK-6: BroadcastChannel is optional; absent unless a built layer (web/workers) defines it (then the surface wins)
@@ -375,14 +395,20 @@ const ALPHA_LATER: Array<{ re: RegExp; note: string }> = [
 function resolveMeasured(p: ParsedKey, surface: MeasuredSurface, ctx: ResolveContext): Resolution {
   // a miss probe (`probe:Navigator.gpu`) of an absent-by-design API resolves by that API's rule
   // (`miss:serviceWorker (in, Navigator chain)` is an `in` test on navigator: Navigator.serviceWorker)
-  const bare = p.kind === 'probe' ? ruleFor(/\(in, (Navigator|WorkerNavigator) chain\)/.test(p.key) && !p.iface ? `Navigator.${p.member}` : p.base.replace(/^probe:/, '')) : undefined;
+  const bareRule = p.kind === 'probe' ? ruleFor(/\(in, (Navigator|WorkerNavigator) chain\)/.test(p.key) && !p.iface ? `Navigator.${p.member}` : p.base.replace(/^probe:/, '')) : undefined;
+  const bare = bareRule && forApp(bareRule, ctx);
   // parseKey folds the Window. prefix into the bare global; the page's own postMessage/close keep it in the key
   const page = /^Window\.(postMessage|close)\(/.exec(p.key);
-  const rule = (page ? ruleFor(`Window.${page[1]}`) : undefined) ?? ruleFor(p.base) ?? (bare?.policy === 'absent' ? bare : undefined);
+  const found = (page ? ruleFor(`Window.${page[1]}`) : undefined) ?? ruleFor(p.base);
+  const rule = (found && forApp(found, ctx)) ?? (bare?.policy === 'absent' ? bare : undefined);
   const area: Area = rule?.area ?? 'none';
   const spec = rule?.spec ?? [];
   const note = rule?.note;
   const probeOnly = p.kind === 'probe' || p.kind === 'global' || p.kind === 'get';
+  // a declared feature's API (getUserMedia for the camera): its layer installs it only when the app declares the
+  // feature, which the measured surface (made without a declaration) cannot see
+  if (found?.policy === 'declared' && rule?.policy === 'provide')
+    return { status: 'provided', area, layer: AREAS[area], spec, note: `the app declares the ${found.feature} feature${note ? `; ${note}` : ''}` };
 
   // XR-LIFE-7: the app's config never offers an immersive session (project.ts NO_XR_ENTRY)
   if (p.key.startsWith('no XR entry')) {
@@ -476,6 +502,8 @@ function resolveMeasured(p: ParsedKey, surface: MeasuredSurface, ctx: ResolveCon
       // check sees it present, and calling it throws NotSupportedError on the headset
       return { status: probeOnly ? 'partial' : 'unsupported', area, layer: m.layer, spec, stub: true, note: `${note ? `${note}; ` : ''}${m.layer} installs it as a stub that throws NotSupportedError (or warns "not implemented"), so a feature check sees it present and calling it fails` };
     }
+    // web/dom's <video> plays camera streams only: its play() exists, and fails for any other media
+    if (m && rule.throws) return { status: probeOnly ? 'partial' : 'unsupported', area, layer: m.layer, spec, note: `${note ? `${note}; ` : ''}${m.layer} defines it, but here it fails (NotSupportedError)` };
     if (m) return { status: 'provided', area, layer: m.layer, spec, note: note ? `${note}; provided by ${m.layer}` : undefined };
     return { status: probeOnly ? 'absent-ok' : 'unsupported', area, spec, note };
   }
@@ -520,6 +548,15 @@ function resolveMeasured(p: ParsedKey, surface: MeasuredSurface, ctx: ResolveCon
   const owner = p.iface && p.member ? surface.globals.get(p.iface) ?? surface.globals.get(INSTANCE_OF[p.iface] ?? '') : undefined;
   if (owner) return { status: 'gap', area, spec, note: `${p.iface} exists (${owner}) but has no ${p.member}: missing${note ? `; ${note}` : ''}` };
   return { status: 'gap', area, spec, note };
+}
+
+/** The rule as it applies to this app: a 'declared' rule is 'provide' or (with the way to declare it) 'absent'. */
+function forApp(rule: Rule, ctx: ResolveContext): Rule {
+  if (rule.policy !== 'declared') return rule;
+  const policy = policyFor(rule, ctx)!;
+  if (policy === 'provide') return { ...rule, policy };
+  const how = rule.feature === 'camera' ? CAMERA_DECLARE : `declare the ${rule.feature} feature`;
+  return { ...rule, policy, throws: true, note: `${rule.note ? `${rule.note}; ` : ''}absent unless the app declares the ${rule.feature}: ${how}` };
 }
 
 /** A member a built layer installs as a stub (recorded under the interface or one of its audio-context aliases). */
@@ -712,10 +749,11 @@ export interface HeadsetTrim {
   stubs?: string[];
 }
 
-export function headsetTrim(surface: MeasuredSurface): HeadsetTrim {
+export function headsetTrim(surface: MeasuredSurface, ctx: ResolveContext = {}): HeadsetTrim {
   const keep = new Set<string>([...surface.globals.keys(), ...surface.v8Globals]);
   const stubs = new Set<string>();
-  const absentRules = RULES.filter((r) => r.policy === 'absent' && !/^\^getContext:/.test(r.re.source));
+  // a declared feature's API stays (Chromium's getUserMedia stands in for web/xr's), an undeclared one goes
+  const absentRules = RULES.filter((r) => policyFor(r, ctx) === 'absent' && !/^\^getContext:/.test(r.re.source));
   for (const m of surface.members.keys()) {
     const k = /^(navigator|Navigator|WorkerNavigator)\.(.+)$/.exec(m);
     const c = /^(crypto|Crypto)\.(.+)$/.exec(m);

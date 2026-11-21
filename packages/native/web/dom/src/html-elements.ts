@@ -12,8 +12,9 @@
 // - HTMLImageElement is the image prelude's (it subclasses this HTMLElement).
 // - <script src> runs (classic through fetch + global eval, module through import()) and fires load/error;
 //   <link> and <style> are accepted and fire load (no styling).
-// - <video>/<audio> are inert in this alpha: canPlayType() is '', play() rejects with NotSupportedError naming the
-//   API, and a src fires `error` (MEDIA_ERR_SRC_NOT_SUPPORTED), so apps can feature-detect and fall back.
+// - <video>/<audio> decode nothing: canPlayType() is '', play() rejects with NotSupportedError naming the API, and a
+//   src fires `error` (MEDIA_ERR_SRC_NOT_SUPPORTED), so apps can feature-detect and fall back. The one exception is
+//   a camera MediaStream as srcObject (XR-CAM-1), which plays (see the media section).
 
 import {
   BaseEvent,
@@ -339,7 +340,11 @@ defineHandler(HTMLCanvasElement.prototype, 'webglcontextlost');
 defineHandler(HTMLCanvasElement.prototype, 'webglcontextrestored');
 defineHandler(HTMLCanvasElement.prototype, 'webglcontextcreationerror');
 
-// --- media (inert in the alpha) --------------------------------------------------------------------------------------
+// --- media -----------------------------------------------------------------------------------------------------------
+// No decoder: a `src` (or a srcObject that is not a camera stream) fails as an unplayable source. A camera
+// MediaStream (web/xr camera.ts, XR-CAM-1) plays: it hands the element its video through MEDIA_FEED, and the element
+// runs HTML's readyState steps on its frames, resolves play(), calls requestVideoFrameCallback callbacks per frame,
+// and is a TexImageSource / CanvasImageSource of its newest frame (runtime/image INTEROP.md's IMAGE_SOURCE).
 
 class TimeRanges {
   get length(): number {
@@ -356,6 +361,38 @@ class TimeRanges {
   }
 }
 
+/** The protocol a playable srcObject implements: `srcObject[MEDIA_FEED]()` returns its video, or null. */
+export const MEDIA_FEED: unique symbol = Symbol.for('iwn.media.feed') as never;
+/** runtime/image's source protocol (web/image/source.ts IMAGE_SOURCE). */
+const IMAGE_SOURCE: unique symbol = Symbol.for('iwn.image.source') as never;
+
+export interface MediaFeed {
+  /** Size of the newest frame (0 before the first). */
+  readonly width: number;
+  readonly height: number;
+  /** Frames delivered so far. */
+  readonly frames: number;
+  /** Seconds from the first frame to the newest (the frame's media time). */
+  readonly mediaTime: number;
+  /** The stream has no live video any more. */
+  readonly ended: boolean;
+  /** The newest frame as an image-source descriptor, null before the first. Read it during the call only. */
+  frame(): object | null;
+  /**
+   * The newest frame, kept as it is until release() (what a paused element shows); null when the feed cannot keep
+   * one (the element then shows the newest frame).
+   */
+  hold?(): { frame: object; release(): void } | null;
+  /** `fn` runs after every new frame (ended = false) and once when the feed ends; returns the unsubscribe. */
+  listen(fn: (ended: boolean) => void): () => void;
+}
+
+function feedOf(value: unknown): MediaFeed | null {
+  if (value === null || typeof value !== 'object') return null;
+  const f = (value as { [MEDIA_FEED]?: unknown })[MEDIA_FEED];
+  return typeof f === 'function' ? ((f as () => MediaFeed | null).call(value) ?? null) : null;
+}
+
 const MEDIA = Symbol('iwn.dom.media');
 interface MediaState {
   volume: number;
@@ -365,7 +402,24 @@ interface MediaState {
   error: { code: number; message: string } | null;
   srcObject: unknown;
   generation: number;
+  // a playing feed
+  feed: MediaFeed | null;
+  unlisten: (() => void) | null;
+  /** The frame a paused element shows (HTML: the frame at the current playback position, which a pause stops). */
+  held: { frame: object; release(): void } | null;
+  ready: number;
+  network: number;
+  paused: boolean;
+  ended: boolean;
+  presented: number;
+  width: number;
+  height: number;
+  plays: Array<{ resolve: () => void; reject: (e: unknown) => void }>;
+  callbacks: Map<number, (now: number, metadata: object) => void>;
+  nextCallback: number;
 }
+
+const now = (): number => (typeof G.performance?.now === 'function' ? G.performance.now() : Date.now());
 
 export class HTMLMediaElement extends HTMLElement {
   static readonly NETWORK_EMPTY = 0;
@@ -378,32 +432,40 @@ export class HTMLMediaElement extends HTMLElement {
   static readonly HAVE_FUTURE_DATA = 3;
   static readonly HAVE_ENOUGH_DATA = 4;
   /** @internal */ get _m(): MediaState {
-    return ((this as any)[MEDIA] ??= { volume: 1, muted: false, playbackRate: 1, defaultPlaybackRate: 1, error: null, srcObject: null, generation: 0 });
+    return ((this as any)[MEDIA] ??= {
+      volume: 1, muted: false, playbackRate: 1, defaultPlaybackRate: 1, error: null, srcObject: null, generation: 0,
+      feed: null, unlisten: null, held: null, ready: 0, network: 0, paused: true, ended: false, presented: 0, width: 0,
+      height: 0, plays: [], callbacks: new Map(), nextCallback: 0,
+    });
   }
   get currentSrc(): string {
     return '';
   }
   get currentTime(): number {
-    return 0;
+    const m = this._m;
+    return m.feed && m.ready > 0 ? m.feed.mediaTime : 0;
   }
   set currentTime(_v: number) {}
   get duration(): number {
-    return NaN;
+    // a MediaStream is live: Infinity once its metadata is known (Media Capture and Streams §6.1)
+    const m = this._m;
+    return m.feed && m.ready > 0 ? Infinity : NaN;
   }
   get paused(): boolean {
-    return true;
+    return this._m.paused;
   }
   get ended(): boolean {
-    return false;
+    return this._m.ended;
   }
   get seeking(): boolean {
     return false;
   }
   get readyState(): number {
-    return 0;
+    return this._m.ready;
   }
   get networkState(): number {
-    return this._m.error ? 3 : 0;
+    const m = this._m;
+    return m.feed ? m.network : m.error ? 3 : 0;
   }
   get error(): { code: number; message: string } | null {
     return this._m.error;
@@ -438,8 +500,14 @@ export class HTMLMediaElement extends HTMLElement {
     return this._m.srcObject;
   }
   set srcObject(v: unknown) {
-    this._m.srcObject = v ?? null;
-    if (v) this._unsupported();
+    const m = this._m;
+    this._detachFeed();
+    m.srcObject = v ?? null;
+    m.error = null;
+    if (!v) return;
+    const feed = feedOf(v);
+    if (feed) this._attachFeed(feed);
+    else this._unsupported();
   }
   get buffered(): TimeRanges {
     return new TimeRanges();
@@ -457,13 +525,46 @@ export class HTMLMediaElement extends HTMLElement {
     return '';
   }
   play(): Promise<void> {
-    return Promise.reject(
-      domException(`${this[Symbol.toStringTag] === 'HTMLVideoElement' ? 'HTMLVideoElement' : 'HTMLMediaElement'}.play(): media playback is not supported by @iwer/native in this alpha`, 'NotSupportedError'),
-    );
+    const m = this._m;
+    if (!m.feed) {
+      return Promise.reject(
+        domException(`${this[Symbol.toStringTag] === 'HTMLVideoElement' ? 'HTMLVideoElement' : 'HTMLMediaElement'}.play(): media playback is not supported by @iwer/native in this alpha (a camera MediaStream as srcObject plays)`, 'NotSupportedError'),
+      );
+    }
+    return new Promise<void>((resolve, reject) => {
+      const gen = m.generation;
+      if (m.paused) {
+        m.paused = false;
+        this._hold(false);
+        queueTask(() => {
+          if (m.generation !== gen) return;
+          fire(this, 'play');
+          if (m.ready >= 3 && !m.paused) fire(this, 'playing');
+        });
+      }
+      // HTML: the promise resolves once playback can start (the 'playing' notification).
+      if (m.ready >= 3) queueTask(() => resolve());
+      else m.plays.push({ resolve, reject });
+    });
   }
-  pause(): void {}
+  pause(): void {
+    const m = this._m;
+    if (!m.feed || m.paused) return;
+    m.paused = true;
+    if (m.ready >= 2) this._hold(true);
+    const gen = m.generation;
+    this._settlePlays(domException('The play() request was interrupted by a call to pause().', 'AbortError'));
+    queueTask(() => {
+      if (m.generation === gen) fire(this, 'pause');
+    });
+  }
   load(): void {
-    if (this.getAttribute('src')) this._unsupported();
+    const m = this._m;
+    if (m.feed) {
+      const feed = m.feed;
+      this._detachFeed();
+      this._attachFeed(feed);
+    } else if (this.getAttribute('src')) this._unsupported();
   }
   fastSeek(_t: number): void {}
   addTextTrack(): never {
@@ -482,8 +583,128 @@ export class HTMLMediaElement extends HTMLElement {
       fire(this, 'error');
     });
   }
+  /** @internal: start playing a camera stream (HTML's resource selection for a MediaProvider). */
+  _attachFeed(feed: MediaFeed): void {
+    const m = this._m;
+    const gen = ++m.generation;
+    m.feed = feed;
+    m.network = 2;
+    m.unlisten = feed.listen((ended) => this._feedChanged(gen, ended));
+    queueTask(() => {
+      if (m.generation !== gen) return;
+      fire(this, 'loadstart');
+      this._feedChanged(gen, false);
+    });
+  }
+  /** @internal */
+  _detachFeed(): void {
+    const m = this._m;
+    if (!m.feed) return;
+    const gen = ++m.generation;
+    const hadData = m.ready > 0;
+    m.unlisten?.();
+    m.unlisten = null;
+    this._hold(false);
+    m.feed = null;
+    m.ready = 0;
+    m.network = 0;
+    m.ended = false;
+    m.presented = 0;
+    m.width = m.height = 0;
+    // Pending requestVideoFrameCallback callbacks stay for the next presented frame, whatever its source (as in
+    // Chromium): three's VideoTexture registers one and re-registers it only from inside it.
+    this._settlePlays(domException('The play() request was interrupted by a new load request.', 'AbortError'));
+    m.paused = true;
+    if (hadData) {
+      queueTask(() => {
+        if (m.generation === gen) fire(this, 'emptied');
+      });
+    }
+  }
+  /** @internal: the feed has a new frame or ended. */
+  _feedChanged(gen: number, ended: boolean): void {
+    const m = this._m;
+    const f = m.feed;
+    if (m.generation !== gen || !f) return;
+    if (ended || f.ended) {
+      if (m.ended) return;
+      m.ended = true;
+      m.network = 1;
+      fire(this, 'ended');
+      return;
+    }
+    if (f.frames === 0 || f.frames === m.presented) return;
+    m.presented = f.frames;
+    if (m.ready === 0) {
+      // HAVE_METADATA, then (a live stream has its data with its first frame) HAVE_ENOUGH_DATA
+      m.network = 1;
+      m.width = f.width;
+      m.height = f.height;
+      m.ready = 1;
+      fire(this, 'durationchange');
+      if (this instanceof HTMLVideoElement) fire(this, 'resize');
+      fire(this, 'loadedmetadata');
+      m.ready = 4;
+      fire(this, 'loadeddata');
+      fire(this, 'canplay');
+      if (m.paused && this.hasAttribute('autoplay')) {
+        m.paused = false;
+        fire(this, 'play');
+      }
+      if (!m.paused) fire(this, 'playing');
+      else this._hold(true); // not playing: it shows its first frame
+      fire(this, 'canplaythrough');
+      this._settlePlays(null);
+    } else if (f.width !== m.width || f.height !== m.height) {
+      m.width = f.width;
+      m.height = f.height;
+      if (this instanceof HTMLVideoElement) fire(this, 'resize');
+    }
+    if (!m.paused && m.callbacks.size > 0) this._runFrameCallbacks(f);
+  }
+  /** @internal: keep the current frame (paused) or let it go. */
+  _hold(keep: boolean): void {
+    const m = this._m;
+    m.held?.release();
+    m.held = null;
+    if (!keep || !m.feed?.hold) return;
+    try {
+      m.held = m.feed.hold() ?? null;
+    } catch (e) {
+      reportException(e);
+    }
+  }
+  /** @internal: requestVideoFrameCallback callbacks, once each, for the frame just presented. */
+  _runFrameCallbacks(f: MediaFeed): void {
+    const m = this._m;
+    const list = [...m.callbacks.values()];
+    m.callbacks.clear();
+    const t = now();
+    const metadata = {
+      presentationTime: t, expectedDisplayTime: t, width: f.width, height: f.height, mediaTime: f.mediaTime,
+      presentedFrames: f.frames, processingDuration: 0,
+    };
+    for (const cb of list) {
+      try {
+        cb.call(this, t, metadata);
+      } catch (e) {
+        reportException(e);
+      }
+    }
+  }
+  /** @internal: resolve (error null) or reject the pending play() promises. */
+  _settlePlays(error: unknown): void {
+    const m = this._m;
+    const plays = m.plays;
+    m.plays = [];
+    for (const p of plays) {
+      if (error) p.reject(error);
+      else p.resolve();
+    }
+  }
   override _reflect(local: string, ns: string | null, _old: string | null, value: string | null): void {
-    if (local === 'src' && ns === null) {
+    // srcObject wins over src (HTML resource selection)
+    if (local === 'src' && ns === null && !this._m.feed) {
       if (value) this._unsupported();
       else {
         this._m.generation++;
@@ -503,15 +724,42 @@ for (const [k, v] of Object.entries({ NETWORK_EMPTY: 0, NETWORK_IDLE: 1, NETWORK
   Object.defineProperty(HTMLMediaElement.prototype, k, { value: v, enumerable: true });
 }
 
+const NO_FRAME = { kind: 'pixels', origin: 'video', width: 0, height: 0, premultiplied: false, data: new Uint8Array(0) };
+
 export class HTMLVideoElement extends HTMLMediaElement {
   get videoWidth(): number {
-    return 0;
+    const m = this._m;
+    return m.ready > 0 ? m.width : 0;
   }
   get videoHeight(): number {
-    return 0;
+    const m = this._m;
+    return m.ready > 0 ? m.height : 0;
   }
   getVideoPlaybackQuality(): Record<string, number> {
-    return { creationTime: 0, droppedVideoFrames: 0, totalVideoFrames: 0, corruptedVideoFrames: 0 };
+    return { creationTime: now(), droppedVideoFrames: 0, totalVideoFrames: this._m.presented, corruptedVideoFrames: 0 };
+  }
+  /** Calls `callback(now, metadata)` once, when the next frame is presented (Video Frame Callback draft). */
+  requestVideoFrameCallback(callback: (now: number, metadata: object) => void): number {
+    if (typeof callback !== 'function') {
+      throw new TypeError("Failed to execute 'requestVideoFrameCallback' on 'HTMLVideoElement': parameter 1 is not of type 'Function'.");
+    }
+    const m = this._m;
+    const id = ++m.nextCallback;
+    m.callbacks.set(id, callback);
+    return id;
+  }
+  cancelVideoFrameCallback(handle: number): void {
+    this._m.callbacks.delete(Number(handle));
+  }
+  /**
+   * TexImageSource / CanvasImageSource: the newest frame of a playing camera stream, the frame a paused one stopped at
+   * (0x0 before its first).
+   */
+  [IMAGE_SOURCE](): object {
+    const m = this._m;
+    if (!m.feed) throw new TypeError('video sources are not supported by this runtime (only a camera MediaStream plays in a <video>)');
+    if (m.ready < 2) return NO_FRAME;
+    return (m.paused && m.held ? m.held.frame : m.feed.frame()) ?? NO_FRAME;
   }
   override get [Symbol.toStringTag](): string {
     return 'HTMLVideoElement';

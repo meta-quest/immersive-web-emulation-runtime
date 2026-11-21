@@ -181,3 +181,14 @@ test('scope: a navigation during the trace is reported (DOM-5) and marks a lost 
   lost.main = null;
   assert.match(evaluateCompat({ surface: snap, trace: lost }).findings.find((x) => x.key === 'page navigation (headless run)')!.message, /none of the app's API use was recorded/);
 });
+
+test('scope: <video> plays a camera stream only in an app that declares the camera; media files never play (DOM-6, XR-CAM-1)', () => {
+  const cam = { declared: new Set(['camera']) };
+  const rc = (k: string) => resolve(parseKey(normaliseKey(k)), snap, cam);
+  for (const k of ['HTMLMediaElement.play()', 'HTMLVideoElement.srcObject=']) {
+    assert.equal(r(k).status, 'unsupported', k);
+    assert.equal(rc(k).status, 'provided', k);
+  }
+  assert.equal(rc('HTMLAudioElement.play()').status, 'unsupported');
+  assert.notEqual(rc('HTMLMediaElement.src=').status, 'provided'); // a media file URL: still no playback
+});

@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { allowEntryFor, AREAS, controlTrim, headsetTrim, measuredSurface, parseKey, resolve, rootOf, ruleFor } from '../src/providers.ts';
+import { allowEntryFor, AREAS, controlTrim, headsetTrim, measuredSurface, parseKey, policyFor, resolve, rootOf, ruleFor } from '../src/providers.ts';
 import { fakeSurface } from './helpers.ts';
 
 test('parseKey normalises tracer keys', () => {
@@ -244,4 +244,26 @@ test('WebSocket origins are matched as http(s) origins, as the runtime and the c
   assert.equal(allowEntryFor('https://cdn.example.net'), 'https://cdn.example.net');
   // WebSocket itself is absent in the alpha: no allowlist advice for it
   assert.match(resolve(parseKey('new WebSocket(cross-origin wss://game.example.net)'), fakeSurface()).note ?? '', /not supported in this alpha/);
+});
+
+test('resolve: the camera APIs are provided for an app that declares the camera, absent otherwise (XR-CAM-1, XR-SEC-1)', () => {
+  const s = fakeSurface();
+  const declared = { declared: new Set(['camera']) };
+  for (const k of ['MediaDevices.getUserMedia()', 'MediaDevices.enumerateDevices()', 'Navigator.mediaDevices', 'new MediaStream', 'MediaStreamTrack.stop()', 'HTMLVideoElement.srcObject=', 'HTMLVideoElement.requestVideoFrameCallback()']) {
+    const r = resolve(parseKey(k), s, declared);
+    assert.equal(r.status, 'provided', k);
+    assert.ok(r.spec.includes('XR-CAM-1'), k);
+    assert.notEqual(resolve(parseKey(k), s).status, 'provided', k);
+  }
+  assert.equal(resolve(parseKey('MediaDevices.getUserMedia()'), s).status, 'unsupported');
+  assert.equal(resolve(parseKey('Navigator.mediaDevices'), s).status, 'absent-ok');
+  // the microphone, recording, screen capture and WebRTC stay absent with the camera declared
+  for (const k of ['new MediaRecorder', 'MediaDevices.getDisplayMedia()', 'new RTCPeerConnection', 'BaseAudioContext.createMediaStreamSource()'])
+    assert.equal(resolve(parseKey(k), s, declared).status, 'unsupported', k);
+  assert.equal(policyFor(ruleFor('MediaDevices.getUserMedia'), declared), 'provide');
+  assert.equal(policyFor(ruleFor('MediaDevices.getUserMedia')), 'absent');
+  // the headless trace keeps Chromium's mediaDevices only for an app that declares the camera
+  const re = (t: { absent: string[] }) => t.absent.some((src) => new RegExp(src).test('Navigator.mediaDevices'));
+  assert.equal(re(headsetTrim(s)), true);
+  assert.equal(re(headsetTrim(s, declared)), false);
 });

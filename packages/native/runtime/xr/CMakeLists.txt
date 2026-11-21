@@ -9,9 +9,12 @@
 #                         static, symbols hidden.
 #   iwn_xr                Android: the XR thread (instance, session, swapchains, layers, quad and cylinder layers,
 #                         input, passthrough, scene, spatial anchors, environment depth, screenshots), runtime
-#                         permissions + the V8 binding iwn_register_xr (JS: globalThis.__iwn.xr).
+#                         permissions + the V8 binding iwn_register_xr (JS: globalThis.__iwn.xr); with the image
+#                         module, also the passthrough cameras for getUserMedia (XR-CAM-1) and their binding
+#                         iwn_register_camera (JS: globalThis.__iwn.camera).
 #   iwn_xr_core_tests     host unit tests (ctest); iwn_xr_depth_tests: the depth record (XR-DEPTH-2).
 #   iwn_xr_android_tests  host tests of src/android code that makes OpenXR calls only, against a fake runtime.
+#   iwn_xr_camera_tests   host tests of the passthrough cameras (xr_camera.cc) against a fake camera service.
 #   iwn_xr_record_dump    host tool: a known record written by the native writer (web/xr round-trip test).
 
 # Third-party sources: the upstream trees under IWN_THIRD_PARTY_DIR (see THIRD_PARTY.md), -DIWN_THIRD_PARTY_DIR or
@@ -28,6 +31,7 @@ endif()
 add_library(iwn_xr_core STATIC
   src/core/anchors.cc
   src/core/depth_record.cc
+  src/core/camera_convert.cc
   src/core/frame_record.cc
   src/core/handoff.cc
   src/core/input_map.cc
@@ -99,6 +103,12 @@ if(IWN_ANDROID)
     target_link_libraries(iwn_xr PRIVATE iwn_image_core)
     target_compile_definitions(iwn_xr PRIVATE IWN_XR_HAVE_IMAGE=1)
   endif()
+  # The passthrough cameras (XR-CAM-1): frames are image-module pixel stores, so they need its V8 binding.
+  if(TARGET iwn_image_v8)
+    target_sources(iwn_xr PRIVATE src/android/xr_camera.cc src/v8/camera_binding.cc)
+    target_link_libraries(iwn_xr PRIVATE iwn_image_v8 camera2ndk mediandk)
+    set_property(GLOBAL APPEND PROPERTY IWN_NATIVE_MODULES "camera:iwn_xr")
+  endif()
 endif()
 
 iwn_add_host_test(iwn_xr_core_tests
@@ -117,6 +127,18 @@ endif()
 iwn_add_host_test(iwn_xr_depth_tests
   SOURCES test/host/xr_depth_test.cc
   LIBS iwn_xr_core)
+
+# The passthrough cameras (xr_camera.cc) against a fake camera service that behaves as Horizon OS's where that code
+# depends on it (test/host/fake_camera.h); test/host/fake_ndk stands in for the NDK camera headers and the JNI broker.
+if(TARGET iwn_image_core)
+  iwn_add_host_test(iwn_xr_camera_tests
+    SOURCES test/host/xr_camera_test.cc test/host/fake_camera.cc src/android/xr_camera.cc
+    LIBS iwn_xr_core iwn_image_core)
+  if(TARGET iwn_xr_camera_tests)
+    target_include_directories(iwn_xr_camera_tests BEFORE PRIVATE test/host/fake_ndk)
+    target_include_directories(iwn_xr_camera_tests PRIVATE src)
+  endif()
+endif()
 
 if(IWN_BUILD_TESTS AND NOT IWN_ANDROID)
   add_executable(iwn_xr_record_dump test/host/record_dump_main.cc)

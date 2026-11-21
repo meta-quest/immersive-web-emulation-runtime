@@ -27,7 +27,7 @@ developer page (PKG-14) are not part of this directory.
 | `src/server.ts` | static server for a `dist/`: injects the tooling `<script>`s at the top of `<head>`, prepends the worker tracer to worker scripts, collects worker reports. 127.0.0.1 only. |
 | `src/trace-run.ts` | the headless run: Playwright (from the project), IWER emulator (`iwer/build/iwer.js`), the headset trim, grant the offered session (or request via an "Enter XR"-like button), scripted input (controller aim, trigger, squeeze, thumbsticks, hands + pinch), collect. Cross-origin requests and WebSockets are blocked (native default) unless allowlisted or served from a local mirror. |
 | `src/inventory.ts` | what the runtime provides **today**, measured: evaluates the core bootstrap and every `web/<area>/dist/<area>.js` (only the area's own bundle: other bundles there are opt-in preludes) in a bare V8 context with permissive fake natives (without the opt-in WebSocket transport) and records the globals/members each layer adds, and which of them are stubs (members, and constructors that throw `NotSupportedError`). Unbuilt areas fall back to source tokens. |
-| `src/providers.ts` | the rule table (API → owning area, spec IDs, policy: provide / later / absent / inert) and status resolution against the inventory and IWER host mode's classes (`iwer-host.module.js`). |
+| `src/providers.ts` | the rule table (API → owning area, spec IDs, policy: provide / later / absent / inert / declared: provided only for an app that declares the packer feature, as `getUserMedia` for `camera`) and status resolution against the inventory and IWER host mode's classes (`iwer-host.module.js`). |
 | `src/matrix.ts` | aggregation into the ranked matrix (Markdown + JSON). |
 | `src/scan.ts` | static scan of a dist (signal catalogue, cross-origin URLs, injected emulator: its own markers plus the packager's `detectInjection`, so the gate and `pack` agree). |
 | `src/project.ts` | what the app itself declares: `iwsdk.config.json` `world.xr` (session mode, features, required or not) and the app's own source (`src/`, scripts at the project root, the entry scripts `index.html` references, its inline scripts; comments stripped; IWSDK `XRQuadLayer`/`XRCylinderLayer` components; IWSDK XR options given in code; `<video>` playback; feature checks of absent APIs). |
@@ -43,7 +43,7 @@ developer page (PKG-14) are not part of this directory.
 
 - **Headset trim** (`providers.ts` `headsetTrim`, applied by `compat --trace` and the sweep): before anything is
   wrapped, the globals and `navigator` / `crypto` / `BaseAudioContext` members the rule table marks absent are deleted
-  from the page and its workers (WebGPU, WebCodecs, media streams and `mediaDevices`, `AudioWorklet` and
+  from the page and its workers (WebGPU, WebCodecs, media streams and `mediaDevices` unless the app declares the camera, `AudioWorklet` and
   `ctx.audioWorklet` (AUD-6), `BroadcastChannel` (optional in WRK-6), `SharedWorker`, clipboard, service workers,
   `crypto.subtle`, and the alpha's out-of-scope `WebSocket`, `indexedDB`, `caches`, ...; about 140 names in Chromium
   1208), unless a runtime layer the packer ships provides them anyway (opt-in preludes and natives the packed runtime
@@ -233,7 +233,7 @@ Three static sources, one optional dynamic one:
   count the same (`World.create(el, { xr: { sessionMode: SessionMode.ImmersiveAR, features: { hitTest: { required:
   true } } }, features: { camera: ... } })`, `launchXR(world, ...)`, `xr: false`, `offer: 'none'`). This is how AR
   sessions, required AR features, `XRQuadLayer`/`XRCylinderLayer` components, IWSDK's camera feature (`CameraSource` /
-  `CameraUtils`, which call `getUserMedia`; XR-SEC-1), desktop-only apps (XR-LIFE-7), `<video>`/`<audio>` playback
+  `CameraUtils`, which call `getUserMedia`; provided when the app declares the camera, XR-CAM-1, else absent, XR-SEC-1), desktop-only apps (XR-LIFE-7), `<video>`/`<audio>` playback
   (an element made, then *that element* played or given a source: a variable or field assigned from
   `createElement('video'|'audio')` / `new Audio(`, one whose name says media (`introVideo`, `this.bgm`), or
   `new Audio(url)`; an element made only for `canPlayType`, a three.js `action.play()` or an `img.src =` is not
@@ -280,7 +280,7 @@ Three static sources, one optional dynamic one:
 | the app never reached XR (with the reason: an `immersive-ar` request the headset rejects, blocked origins, an uncaught error, or still loading at the boot timeout); uncaught errors; a hung main thread | | | warn |
 
 The advice block (feature-detect or remove; there is no fallback route) is printed when an unsupported API is a trace error, or when the app's own source, config or trace
-needs a required feature that is specified for later, or an unsupported API (WebGPU, camera, video
+needs a required feature that is specified for later, or an unsupported API (WebGPU, the camera in an app that does not declare it, video
 playback, WebCodecs), or when the app never offers an immersive session (XR-LIFE-7). `pack --json` carries the
 gate's warnings and the advice under `compat` also when the gate passes.
 
@@ -294,7 +294,8 @@ package's `files`, this README and `scripts/` are not).
 ## What to do when the check fails
 
 This alpha does not provide every web API (the README's support matrix lists what it does). Out of scope for now:
-WebGPU, `<video>` and media streams, WebCodecs, camera/microphone, `AudioWorklet` and Web Audio beyond the basic
+WebGPU, `<video>` and media streams (a `<video>` plays only a camera stream, and only in an app that declares the camera:
+`native.features.camera` or IWSDK's `world.features.camera`), WebCodecs, the microphone, `AudioWorklet` and Web Audio beyond the basic
 set (AudioContext lifecycle, AudioBufferSource, Gain, Panner/Listener, `decodeAudioData`; other nodes and
 `OfflineAudioContext` warn as "planned for a later release"), WebSocket, IndexedDB, the Cache API, `crypto.subtle`,
 service workers, the system keyboard, `window.open()` / external links / OAuth redirects (`open()` warns: it returns

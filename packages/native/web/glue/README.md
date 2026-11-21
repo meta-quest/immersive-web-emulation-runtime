@@ -22,8 +22,10 @@ handlers, `reportError`, `queueMicrotask`, `AbortController`/`AbortSignal`, `DOM
 `top`/`parent`/`frames` (the window), `frameElement`/`opener` (null) and `name` ('').
 
 `navigator.permissions.query()` resolves `granted` for the features the app already holds: config
-`permissions.granted` (the packager's list; default `['xr-spatial-tracking']`) plus `device.info().grantedPermissions`.
-Other valid names resolve `prompt`; unknown names reject with `TypeError`, as in browsers.
+`permissions.granted` (the packager's list; default `['xr-spatial-tracking']`) plus `device.info().grantedPermissions`
+and what runtime preludes report for their own features (`addPermissionSource`, below: web/xr's camera reports
+`camera` once CAMERA and HEADSET_CAMERA are held). Other valid names resolve `prompt`; unknown names reject with
+`TypeError`, as in browsers.
 
 Not owned here (no stream owns them yet; see the open question in the report): DOM-2's UI event
 constructors (`UIEvent`, `MouseEvent`, `PointerEvent`, `WheelEvent`, `KeyboardEvent`, `FocusEvent`,
@@ -71,6 +73,8 @@ Other runtime JS uses this registry (type `GlueRegistry` in `src/index.ts`):
 - `cloneRegistry`: `registerCloneable({ is, clone })`, `registerTransferable({ is, transfer })`, `registerNonSerializable(test)`. `ImageData`, `ImageBitmap`, `MessagePort` and DOM stand-ins register here; registered types always use the JS clone path, so they work with or without the native hook.
 - `scope`: `'window'` or `'worker'`.
 - `verifyIntl()`: the JS-6 report on V8's Intl. The debug endpoint and device tests use it.
+- `addPermissionSource(fn)`: `fn()` returns the PermissionName values the app holds right now through its own
+  feature's Android runtime grants; `permissions.query` asks it at each query (one that throws reports nothing).
 - `clock`, `utf8Encode`, `base64Encode`, `installed`.
 
 

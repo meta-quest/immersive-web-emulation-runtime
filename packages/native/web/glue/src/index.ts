@@ -128,6 +128,12 @@ export interface GlueRegistry {
   navigation: Navigation | null;
   /** The JS-6 report on this global's Intl (or on `intl`, for tests). */
   verifyIntl(intl?: unknown): IntlReport;
+  /**
+   * DOM-4: a runtime prelude that knows of its feature's Android runtime grants reports the PermissionName values the
+   * app holds right now (web/xr's camera: `camera` once CAMERA and HEADSET_CAMERA are held); navigator.permissions
+   * .query answers them `granted`. `source` runs at each query; one that throws reports nothing.
+   */
+  addPermissionSource(source: () => readonly string[]): void;
 }
 
 export interface InstallOptions {
@@ -564,7 +570,20 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
       return {};
     }
   };
-  const navigator = createNavigator(config, info, !isWindow);
+  const permissionSources: Array<() => readonly string[]> = [];
+  const runtimeGrants = (): string[] => {
+    const out: string[] = [];
+    for (const source of permissionSources) {
+      try {
+        const names = source();
+        if (Array.isArray(names)) for (const n of names) out.push(String(n));
+      } catch {
+        // a failing source grants nothing
+      }
+    }
+    return out;
+  };
+  const navigator = createNavigator(config, info, !isWindow, runtimeGrants);
   if (isWindow) def('Navigator', Navigator);
   else def('WorkerNavigator', WorkerNavigator);
   def('Permissions', Permissions);
@@ -612,6 +631,9 @@ export function installGlue(global: typeof globalThis, options: InstallOptions =
     installSubtle,
     navigation,
     verifyIntl: (intl?: unknown) => verifyIntl(intl ?? g.Intl),
+    addPermissionSource: (source) => {
+      if (typeof source === 'function') permissionSources.push(source);
+    },
   };
   Object.defineProperty(global, REGISTRY_KEY, {
     value: registry,

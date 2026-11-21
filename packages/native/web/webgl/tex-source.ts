@@ -21,7 +21,8 @@
 //
 // ImageData-shaped objects ({ width, height, data: Uint8ClampedArray }) work without the protocol. WebGL
 // canvases are read back through their context (readPixels of the drawing buffer, bottom-up -> flipped).
-// Video sources throw TypeError (no video yet, documented).
+// A <video> playing a camera MediaStream implements IMAGE_SOURCE (its newest frame, a native handle: XR-CAM-1);
+// other video sources throw TypeError.
 
 import type { Ctx } from './core.ts';
 import * as E from './gen/enums.gen.ts';
@@ -74,11 +75,12 @@ export function domException(message: string, name: string): Error {
 
 export function getSourcePixels(source: unknown, ctx: Ctx, what: string): SourcePixels {
   if (source === null || typeof source !== 'object') throw new TypeError(`${what}: source is not a TexImageSource`);
+  const image = (source as Record<PropertyKey, unknown>)[IMAGE_SOURCE];
+  // A <video> playing a camera stream is an image source (its newest frame); other video sources are not.
   const ctor = (source as { constructor?: { name?: string } }).constructor?.name ?? '';
-  if (ctor === 'HTMLVideoElement' || ctor === 'VideoFrame') {
+  if (typeof image !== 'function' && (ctor === 'HTMLVideoElement' || ctor === 'VideoFrame')) {
     throw new TypeError(`${what}: video sources are not supported by this runtime`);
   }
-  const image = (source as Record<PropertyKey, unknown>)[IMAGE_SOURCE];
   if (typeof image === 'function') {
     // Throws TypeError / InvalidStateError itself (closed bitmap, broken image, zero-sized canvas).
     const d = (image as () => ImageSourceDescriptor).call(source);

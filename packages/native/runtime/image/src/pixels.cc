@@ -74,8 +74,10 @@ std::unique_ptr<PixelStore> PixelStore::AllocateHardwareBuffer(uint32_t width, u
   desc.height = height;
   desc.layers = 1;
   desc.format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
+  // GPU_COLOR_OUTPUT too: the WebGL binding copies such a store into the app's texture with a framebuffer blit
+  // (runtime/gl gl_image.cc), which needs the imported buffer to be a complete read framebuffer attachment.
   desc.usage = AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN |
-               AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
+               AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE | AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
   AHardwareBuffer* buffer = nullptr;
   if (AHardwareBuffer_allocate(&desc, &buffer) != 0 || buffer == nullptr) return nullptr;
   AHardwareBuffer_Desc actual = {};
@@ -171,6 +173,25 @@ void PixelStore::Unlock() const {
 #if defined(__ANDROID__)
   if (backing_ == Backing::kHardwareBuffer) AHardwareBuffer_unlock(ahb_, nullptr);
 #endif
+}
+
+std::shared_ptr<const PixelStore> KeepablePixels(const std::shared_ptr<const PixelStore>& store) {
+  if (!store || !store->recycled()) return store;
+  std::unique_ptr<PixelStore> copy = PixelStore::AllocateHeap(store->width(), store->height());
+  if (!copy) return nullptr;
+  {
+    ScopedPixels src = store->Read();
+    if (!src.ok()) return nullptr;
+    MutablePixelView dst = copy->LockWrite();
+    const PixelView& v = src.view();
+    for (uint32_t y = 0; y < v.height; ++y) {
+      std::memcpy(dst.data + size_t{y} * dst.stride, v.data + size_t{y} * v.stride, size_t{v.width} * 4);
+    }
+    copy->UnlockWrite();
+  }
+  copy->set_alpha(store->alpha());
+  copy->set_opaque(store->opaque());
+  return std::shared_ptr<const PixelStore>(std::move(copy));
 }
 
 std::unique_ptr<PixelStore> HeapAllocator(uint32_t width, uint32_t height) {

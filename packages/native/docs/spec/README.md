@@ -56,9 +56,9 @@ Status: draft. Requirements that depend on an open question say so; the question
 | M6 perf gate | targets met; 23 proto samples headless + device | PERF-*, PKG-SIZE-1, HL-4, GAP-2, GAP-3, GAP-6, GAP-8, GAP-9, GAP-11 |
 
 `XR-*` includes XR-IDLE-1..3 (the idle presentation), XR-LIFE-7 (apps that never offer a session),
-XR-LAYER-1 (quad and cylinder layers) and XR-SEC-1. SHOULD and MAY requirements in a row are planned for
-that milestone but do not block its exit check. Withdrawn IDs (IN-8, DBG-LOG, DBG-INPUT, DBG-RELOAD,
-DBG-8) are in no row.
+XR-LAYER-1 (quad and cylinder layers), XR-SEC-1 and XR-CAM-1 (the passthrough cameras). SHOULD and MAY
+requirements in a row are planned for that milestone but do not block its exit check. Withdrawn IDs (IN-8,
+DBG-LOG, DBG-INPUT, DBG-RELOAD, DBG-8) are in no row.
 
 ## Sources used for this spec
 

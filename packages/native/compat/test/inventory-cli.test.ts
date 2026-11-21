@@ -124,19 +124,29 @@ test('cli: the dormant-library baseline applies to IWSDK apps only; a plain thre
     'index.html': '<html><head><script type="module" src="/main.js"></script></head></html>',
   };
   // Vite's vanilla layout: main.js at the project root, no src/, no IWSDK
-  const plain = writeTree(tempDir(), { ...files, 'package.json': '{"dependencies":{"three":"0.181.0"}}', 'main.js': 'const s = await navigator.mediaDevices.getUserMedia({ video: true });\nconst q = binding.createEquirectLayer({});' });
+  // native.features without the camera: pack does not declare it, so getUserMedia is absent on the headset
+  const noCamera = JSON.stringify({ native: { packageId: 'com.example.plain', features: { handTracking: true } } });
+  const plain = writeTree(tempDir(), { ...files, 'iwsdk.config.json': noCamera, 'package.json': '{"dependencies":{"three":"0.181.0"}}', 'main.js': 'const s = await navigator.mediaDevices.getUserMedia({ video: true });\nconst q = binding.createEquirectLayer({});' });
   const a = io(plain);
   assert.equal(await runCli(['compat', '--verbose'], a), 0);
   assert.match(a.out, /\[warn\] MediaDevices\.getUserMedia\(\)/);
   assert.match(a.out, /\[warn\] XRWebGLBinding\.createEquirectLayer\(\)/);
   assert.doesNotMatch(a.out, /library code every IWSDK build carries/);
   // the same bundle without app source: still the app's (no IWSDK), so still warnings
-  const bare = writeTree(tempDir(), { ...files, 'package.json': '{"dependencies":{"three":"0.181.0"}}' });
+  const bare = writeTree(tempDir(), { ...files, 'iwsdk.config.json': noCamera, 'package.json': '{"dependencies":{"three":"0.181.0"}}' });
   const b = io(bare);
   await runCli(['compat'], b);
   assert.match(b.out, /\[warn\] MediaDevices\.getUserMedia\(\)/);
+  // derived features (no native.features): pack declares the camera for a bundle that is not IWSDK and calls
+  // getUserMedia, so it is provided
+  const derived = writeTree(tempDir(), { ...files, 'package.json': '{"dependencies":{"three":"0.181.0"}}' });
+  const dv = io(derived);
+  await runCli(['compat', '--json'], dv);
+  const rdv = JSON.parse(dv.out) as { findings: Array<{ key: string; status: string }>; supported: Record<string, number> };
+  assert.equal(rdv.findings.find((f) => f.key === 'MediaDevices.getUserMedia()'), undefined);
+  assert.ok((rdv.supported.provided ?? 0) > 0);
   // an IWSDK project with the same bundle and no app use: dormant library code
-  const iw = writeTree(tempDir(), { ...files, 'package.json': '{"dependencies":{"@iwsdk/core":"1.1.0"}}' });
+  const iw = writeTree(tempDir(), { ...files, 'iwsdk.config.json': noCamera, 'package.json': '{"dependencies":{"@iwsdk/core":"1.1.0"}}' });
   const c = io(iw);
   await runCli(['compat', '--verbose'], c);
   assert.match(c.out, /\[info\] MediaDevices\.getUserMedia\(\).*library code every IWSDK build carries/);
@@ -278,4 +288,28 @@ test('cli: declaredFeatures resolves the features as pack does (native.features,
   assert.deepEqual([...declaredFeatures(explicit, scan(explicit))], ['handTracking']);
   // what pack resolved wins over the file
   assert.deepEqual([...declaredFeatures(ar, scan(ar), { names: ['passthrough'], derived: false })], ['passthrough']);
+});
+
+test('cli: an IWSDK app that declares the camera (world.features.camera) gets no unsupported finding for it (XR-CAM-1)', async () => {
+  const files = {
+    'dist/index.html': '<html><head></head><body><script type="module" src="/assets/a.js"></script></body></html>',
+    'dist/assets/a.js': 'const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});const d=await navigator.mediaDevices.enumerateDevices();v.srcObject=s;v.requestVideoFrameCallback(f);',
+    'package.json': '{"dependencies":{"@iwsdk/core":"1.0.0"}}',
+    'src/index.ts': "import { CameraSource, World } from '@iwsdk/core';\nWorld.create(el, { features: { camera: true } });\nentity.addComponent(CameraSource, {});",
+  };
+  const declaring = writeTree(tempDir(), { ...files, 'iwsdk.config.json': JSON.stringify({ world: { xr: { mode: 'vr' }, features: { camera: true } } }) });
+  const a = io(declaring);
+  assert.equal(await runCli(['compat', '--json'], a), 0);
+  const r = JSON.parse(a.out) as { advice?: string; findings: Array<{ key: string; status: string; severity: string }> };
+  assert.deepEqual(r.findings.filter((f) => f.status === 'unsupported'), []);
+  // provided: counted as supported, not listed
+  assert.equal(r.findings.find((f) => f.key === 'MediaDevices.getUserMedia()'), undefined);
+  assert.equal(r.advice, undefined);
+  // the same app with the camera left out of native.features: unsupported, with the way to declare it
+  const left = writeTree(tempDir(), { ...files, 'iwsdk.config.json': JSON.stringify({ world: { xr: { mode: 'vr' }, features: { camera: true } }, native: { packageId: 'com.example.cam', features: {} } }) });
+  const b = io(left);
+  await runCli(['compat', '--json'], b);
+  const f = (JSON.parse(b.out) as { findings: Array<{ key: string; status: string; message: string }> }).findings.find((x) => x.key === 'MediaDevices.getUserMedia()');
+  assert.equal(f?.status, 'unsupported');
+  assert.match(f!.message, /native\.features\.camera/);
 });

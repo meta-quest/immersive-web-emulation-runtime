@@ -117,7 +117,7 @@ export const NATIVE_TARGET_JSON_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       description:
-        'Default: derived from world.xr.features (and passthrough for AR, camera for world.features.camera).',
+        'Default: derived from world.xr.features (and passthrough for AR, camera for world.features.camera). camera: getUserMedia over the passthrough cameras (permissions android.permission.CAMERA and horizonos.permission.HEADSET_CAMERA).',
       properties: Object.fromEntries(
         NATIVE_FEATURE_NAMES.map((n) => [n, featureFlag]),
       ),

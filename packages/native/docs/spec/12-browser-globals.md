@@ -38,7 +38,8 @@ question), `userAgentData` absent or minimal, `platform` (`Linux armv8l` or as Q
 `language`, `languages` (from the device locale), `onLine`, `hardwareConcurrency` (WRK-12), `deviceMemory`
 (SHOULD), `maxTouchPoints`, `xr` (IWER), `getGamepads()` (IN-9), `vibrate()` false, `sendBeacon()` false,
 `permissions.query` (resolves `granted` for features the app already has, `prompt` otherwise),
-`storage.estimate`, `mediaCapabilities` absent, `mediaDevices` absent, `gpu` absent (no WebGPU),
+`storage.estimate`, `mediaCapabilities` absent, `mediaDevices` absent unless the app declares the camera
+(then the passthrough cameras, XR-CAM-1), `gpu` absent (no WebGPU),
 `serviceWorker` absent, `clipboard` absent, `wakeLock` absent, `share` absent.
 *Check:* runtime test listing `typeof` for each.
 
@@ -58,8 +59,8 @@ evaluation (deferred-module semantics: DOMContentLoaded after the entry module e
 `hasFocus()`; `title` (from `index.html`); `head`, `body`, `documentElement`; `createElement`/
 `createElementNS` for any tag returning an element of the right interface (`HTMLCanvasElement`,
 `HTMLImageElement`, `HTMLDivElement`, `HTMLLinkElement`, `HTMLScriptElement`, `HTMLStyleElement`,
-`HTMLVideoElement`/`HTMLAudioElement` (inert: `canPlayType('')`, `play()` rejects
-`NotSupportedError`), generic `HTMLElement` otherwise); `createTextNode`, `createDocumentFragment`,
+`HTMLVideoElement`/`HTMLAudioElement` (no decoder: `canPlayType('')`, `play()` rejects `NotSupportedError`, a
+`src` fires `error`; a camera `MediaStream` as `srcObject` plays, XR-CAM-1), generic `HTMLElement` otherwise); `createTextNode`, `createDocumentFragment`,
 `createEvent`; `getElementById`, `getElementsByTagName/ClassName`, `querySelector/All` for simple
 selectors (tag, `#id`, `.class`, `[attr]`, descendant combinator) over the stand-in tree;
 `activeElement`, `fullscreenElement` null with `exitFullscreen` resolving, `pointerLockElement` null;

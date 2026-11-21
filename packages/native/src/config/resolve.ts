@@ -259,9 +259,10 @@ export function featuresFromWorld(
   world: unknown,
 ): Partial<Record<NativeFeatureName, FeatureRequirement>> {
   const out: Partial<Record<NativeFeatureName, FeatureRequirement>> = {};
-  const xr = (
-    world as { xr?: { mode?: unknown; features?: unknown } } | undefined
-  )?.xr;
+  const w = world as
+    | { xr?: { mode?: unknown; features?: unknown }; features?: unknown }
+    | undefined;
+  const xr = w?.xr;
   if (xr?.features && typeof xr.features === 'object') {
     for (const [key, flag] of Object.entries(
       xr.features as Record<string, unknown>,
@@ -278,8 +279,10 @@ export function featuresFromWorld(
     }
   }
   if (xr?.mode === 'ar') out.passthrough = 'required';
-  const camera = (world as { features?: { camera?: unknown } } | undefined)
-    ?.features?.camera;
+  const camera =
+    w?.features && typeof w.features === 'object'
+      ? (w.features as Record<string, unknown>).camera
+      : undefined;
   // IWSDK starts the camera on demand (CameraSource), and the app runs without it
   if (camera !== undefined && camera !== false && camera !== null)
     out.camera = 'optional';

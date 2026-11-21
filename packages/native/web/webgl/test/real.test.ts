@@ -372,6 +372,21 @@ test('GL-16: UNPACK_FLIP_Y / PREMULTIPLY for typed arrays and ImageData; ignored
   assert.throws(() => gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, closed), (e: Error) => e.name === 'InvalidStateError');
   class HTMLVideoElement {}
   assert.throws(() => gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, new HTMLVideoElement()), TypeError);
+  // XR-CAM-1: a <video> playing a camera stream is an image source of its newest frame (web/dom); flags apply
+  const frame = new Uint8Array([10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255]);
+  const IMAGE_SOURCE = Symbol.for('iwn.image.source');
+  class PlayingVideo {
+    [IMAGE_SOURCE]() {
+      return { kind: 'pixels', origin: 'video', width: 2, height: 2, premultiplied: false, data: frame };
+    }
+  }
+  Object.defineProperty(PlayingVideo, 'name', { value: 'HTMLVideoElement' });
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, new PlayingVideo());
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  assert.equal(gl.getError(), gl.NO_ERROR);
+  px = readRGBA(gl, 2, 2);
+  assert.deepEqual([...px.slice(0, 4)], [70, 80, 90, 255], 'flipped: the last row of the frame first');
 });
 
 test('GL-16/17: runtime/image sources (Symbol.for("iwn.image.source")): pixels and native-handle descriptors', opt, () => {
@@ -426,8 +441,24 @@ test('GL-16/17: runtime/image sources (Symbol.for("iwn.image.source")): pixels a
     // RGBA8 whole image: one native upload straight from the store, flags passed through
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    // the 2x2 RGBA level above came from another path (its type is not known here): allocated again (mode 0)
     assert.deepEqual(calls, ['upload:0:true:1']);
+    // respecified at the same size from native pixels again, it is replaced in place (mode 1)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    assert.deepEqual(calls, ['upload:0:true:1', 'upload:1:true:1']);
+    calls.splice(0, 1);
     assert.deepEqual([...readRGBA(gl, 2, 2).slice(0, 4)], [0, 0, 255, 255]);
+    // a fresh texture, a level of another size or another internal format: allocated (mode 0)
+    const fresh = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, fresh);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.texImage2D(gl.TEXTURE_2D, 1, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    assert.deepEqual(calls.slice(1), ['upload:0:true:1', 'upload:0:true:1', 'upload:1:true:1', 'upload:0:true:1']);
+    gl.deleteTexture(fresh);
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    assert.equal(gl.getError(), gl.NO_ERROR);
     // ImageBitmap: flags ignored (GL-16)
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
     assert.deepEqual(calls.at(-1), 'upload:1:false:-1');

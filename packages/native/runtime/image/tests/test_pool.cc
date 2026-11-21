@@ -1,6 +1,8 @@
 // Decode pool and transfer registry.
 #include <atomic>
 #include <chrono>
+#include <cstring>
+#include <memory>
 #include <thread>
 
 #include "iwn/image/decode.h"
@@ -43,6 +45,33 @@ TEST(pool_decodes_concurrently) {
     }
   }
   CHECK_EQ(ok.load(), 64);
+}
+
+TEST(keepable_pixels_copies_a_recycled_store_only) {
+  using iwn::image::PixelStore;
+  std::shared_ptr<PixelStore> camera(PixelStore::AllocateHeap(4, 2).release());
+  {
+    iwn::image::MutablePixelView w = camera->LockWrite();
+    for (uint32_t y = 0; y < 2; ++y) std::memset(w.data + y * w.stride, 0x40 + static_cast<int>(y), 16);
+    camera->UnlockWrite();
+  }
+  camera->set_opaque(true);
+  // an ordinary store is immutable: kept as it is
+  std::shared_ptr<const PixelStore> same = iwn::image::KeepablePixels(camera);
+  CHECK(same.get() == camera.get());
+  // a recycled one (a camera frame the producer rewrites once released) is copied, and the copy keeps its pixels
+  camera->set_recycled(true);
+  std::shared_ptr<const PixelStore> kept = iwn::image::KeepablePixels(camera);
+  CHECK(kept && kept.get() != camera.get());
+  CHECK(!kept->recycled());
+  CHECK(kept->opaque());
+  {
+    iwn::image::MutablePixelView w = camera->LockWrite();
+    std::memset(w.data, 0, 16);  // the producer writes the next frame into the original
+    camera->UnlockWrite();
+  }
+  iwn::image::ScopedPixels p = kept->Read();
+  CHECK(p.ok() && p.view().data[0] == 0x40 && p.view().data[p.view().stride] == 0x41);
 }
 
 TEST(transfer_registry_take_once) {

@@ -35,8 +35,8 @@ type ImageSourceDescriptor =
   (`'webgl-canvas'`; B decides how it reads back). They must return pixels that are **upright** (top row first in
   canvas space, C2D-2) and must throw a DOMException `InvalidStateError` for a zero-sized canvas.
 - Consumers call `getImageSource(source, apiName)` (`web/image/tex-source.ts`, also on the image registry
-  `globalThis[Symbol.for('iwn.image')].getImageSource`). It throws `TypeError` for video sources (no video yet,
-  GL-17) and non-sources, and passes through the producer's `InvalidStateError` (closed bitmap, image not loaded
+  `globalThis[Symbol.for('iwn.image')].getImageSource`). It throws `TypeError` for video sources that are not
+  providers (GL-17: only a `<video>` playing a camera stream is one, `origin: 'video'`, XR-CAM-1) and non-sources, and passes through the producer's `InvalidStateError` (closed bitmap, image not loaded
   or broken, detached `ImageData`).
 - A `'pixels'` descriptor's `data` belongs to the producer: read it during the call, never keep or modify it.
 
@@ -66,16 +66,25 @@ type ImageSourceDescriptor =
 5. Keep the `shared_ptr` only for the duration of the call (or until a deferred upload has read the pixels):
    `ImageBitmap.close()` drops the JS handle's reference, the store is freed when the last reference goes.
 
-Zero-copy path toward the GPU (optional, later): with `BindingConfig::gpu_backed = true` the decoder writes into
-an `AHardwareBuffer` (`PixelStore::Backing::kHardwareBuffer`, `hardware_buffer()`: `R8G8B8A8_UNORM`, usage
-`CPU_READ_OFTEN | CPU_WRITE_OFTEN | GPU_SAMPLED_IMAGE`). B may then import it once with
-`eglGetNativeClientBufferANDROID` + `eglCreateImageKHR(EGL_NATIVE_BUFFER_ANDROID)` into a scratch texture
-(`glEGLImageTargetTexture2DOES`) and copy GPU-side into the app's texture (`glCopyImageSubData`, GLES 3.2) instead
-of a CPU upload: no driver-side memcpy on the GL thread. The app texture must not *become* the EGLImage (WebGL
-semantics: the app owns its texture's storage, may `generateMipmap`, may respecify). `Read()` on such a store
-locks the buffer for CPU access, so the CPU path in step 4 keeps working. Status: the AHardwareBuffer allocation
-and decode path compiles and is wired in but has **never run on a device**; default off until B measures it
-(C2D-3's ≤ 0.2 ms budget for a 1024² upload is the target).
+Stores are immutable once published, with one exception: a **recycled** store (`PixelStore::recycled()`, the
+camera's frame pool, runtime/xr `xr_camera.cc`) is rewritten in place by its producer once nothing else holds it.
+Uploads and reads of the current frame use it as it is; whatever keeps its pixels beyond that (an identity
+`createImageBitmap`, `share`, `exportTransfer`) takes a heap copy (`KeepablePixels`), so a page that holds frames
+never pins the producer's pool.
+
+Zero-copy path toward the GPU: an `AHardwareBuffer` store (`PixelStore::Backing::kHardwareBuffer`,
+`hardware_buffer()`: `R8G8B8A8_UNORM`, usage `CPU_READ_OFTEN | CPU_WRITE_OFTEN | GPU_SAMPLED_IMAGE |
+GPU_COLOR_OUTPUT`) is imported once with `eglGetNativeClientBufferANDROID` + `eglCreateImageKHR(EGL_NATIVE_BUFFER_ANDROID)`
+into a texture of the share group (`glEGLImageTargetTexture2DOES`) and blitted GPU-side into the app's RGBA8 (or
+unsized RGBA/UNSIGNED_BYTE) `TEXTURE_2D` level (`glBlitFramebuffer`, flipped by the blit for `UNPACK_FLIP_Y_WEBGL`;
+`runtime/gl` `gl_image.cc`) instead of a CPU upload: no flip copy and no driver-side memcpy on the GL thread. The app
+texture never *becomes* the EGLImage (WebGL semantics: the app owns its texture's storage, may `generateMipmap`, may
+respecify). A blit clips silently, so a sub-image that does not fit its level goes to the CPU path, whose
+`glTexSubImage2D` raises `INVALID_VALUE` (the binding refuses it first when it knows the level). Other targets and
+formats, and alpha conversions, fall back to the CPU path: `Read()` on such a store locks the buffer for CPU access,
+so step 4 keeps working. Status: the passthrough camera's frames (XR-CAM-1) take it on device (1280x1080 frames on a
+Quest 3: 0.13 ms median per `texImage2D` of the `<video>`, against 2-3 ms on the CPU path); the decoder's
+`BindingConfig::gpu_backed = true` (decode into such stores) stays off until it is measured.
 
 ## 4. Canvas 2D (stream C2D)
 

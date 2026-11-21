@@ -2,8 +2,8 @@
 // IN-2..6), pacing (XR-LOOP-5, PERF-JS-3), perf-level policy (XR-PERF-1), session-lifetime policy (XR-LIFE-4/5/7),
 // the runtime-permission wait and order (XR-PERM-1), config parsing, the PNG writer (DBG-SHOT), the
 // XR-thread/JS-thread handoff, the loading screen (XR-IDLE-1: when it is shown, the hand-over to the app's first
-// frame, its placement, layout and spinner image) and the spatial anchors' slot table, pose buffer and UUID text
-// (XR-ANCHOR-1).
+// frame, its placement, layout and spinner image), the spatial anchors' slot table, pose buffer and UUID text
+// (XR-ANCHOR-1) and the passthrough camera's YUV conversion and device labels (XR-CAM-1).
 #include <zlib.h>
 
 #include <atomic>
@@ -15,6 +15,7 @@
 
 #include "iwn/core/json.h"
 #include "iwn/xr/anchors.h"
+#include "iwn/xr/camera_convert.h"
 #include "iwn/xr/frame_record.h"
 #include "iwn/xr/handoff.h"
 #include "iwn/xr/input_map.h"
@@ -2193,4 +2194,88 @@ IWN_TEST(Anchors, PoseBufferHoldsFlagsAndPose) {
   t.free(a);  // freed: cleared
   for (int i = 0; i < kAnchorStride; ++i) IWN_CHECK_EQ(p[i], 0.0f);
   IWN_CHECK_EQ(AnchorTable::pose_bytes(), sizeof(float) * kMaxAnchors * kAnchorStride);
+}
+
+// --- camera ---------------------------------------------------------------------------------------------------------
+
+namespace {
+
+// The exact full-range BT.601 formula, for comparison.
+void yuv_reference(int y, int u, int v, int out[3]) {
+  const double r = y + 1.402 * (v - 128), g = y - 0.344136 * (u - 128) - 0.714136 * (v - 128), b = y + 1.772 * (u - 128);
+  const double c[3] = {r, g, b};
+  for (int i = 0; i < 3; ++i) out[i] = static_cast<int>(std::lround(std::fmin(255, std::fmax(0, c[i]))));
+}
+
+}  // namespace
+
+IWN_TEST(Camera, YuvSemiPlanarMatchesBt601FullRange) {
+  // 6x4 NV12-like layout: Y rows padded to 8 bytes, one interleaved U/V plane (pixel stride 2) with 8-byte rows.
+  const int w = 6, h = 4;
+  std::vector<uint8_t> y(8 * h), uv(8 * (h / 2));
+  for (int r = 0; r < h; ++r)
+    for (int x = 0; x < w; ++x) y[r * 8 + x] = static_cast<uint8_t>(16 + 37 * r + 23 * x);
+  for (int r = 0; r < h / 2; ++r)
+    for (int x = 0; x < w / 2; ++x) {
+      uv[r * 8 + 2 * x] = static_cast<uint8_t>(40 + 60 * x + 30 * r);       // U
+      uv[r * 8 + 2 * x + 1] = static_cast<uint8_t>(230 - 70 * x - 20 * r);  // V
+    }
+  YuvPlanes p;
+  p.y = y.data();
+  p.u = uv.data();
+  p.v = uv.data() + 1;
+  p.y_row_stride = 8;
+  p.uv_row_stride = 8;
+  p.uv_pixel_stride = 2;
+  std::vector<uint8_t> out(static_cast<size_t>(w) * 4 * h + 16, 7);
+  yuv420_to_rgba(p, w, h, out.data(), static_cast<size_t>(w) * 4);
+  for (int r = 0; r < h; ++r)
+    for (int x = 0; x < w; ++x) {
+      int ref[3];
+      const int c = (r / 2) * 8 + (x / 2) * 2;
+      yuv_reference(y[r * 8 + x], uv[c], uv[c + 1], ref);
+      const uint8_t* px = &out[(static_cast<size_t>(r) * w + x) * 4];
+      for (int i = 0; i < 3; ++i) IWN_CHECK(std::abs(px[i] - ref[i]) <= 1);
+      IWN_CHECK_EQ(int(px[3]), 255);
+    }
+  IWN_CHECK_EQ(int(out[static_cast<size_t>(w) * 4 * h]), 7);  // nothing written past the image
+}
+
+IWN_TEST(Camera, YuvPlanarOddSizeAndPrimaries) {
+  // 3x3 planar (I420): chroma planes of 2x2, the last column and row reuse the edge sample.
+  const uint8_t y[9] = {76, 76, 76, 150, 150, 150, 29, 29, 29};
+  const uint8_t u[4] = {85, 85, 44, 44};
+  const uint8_t v[4] = {255, 255, 21, 21};
+  YuvPlanes p;
+  p.y = y;
+  p.u = u;
+  p.v = v;
+  p.y_row_stride = 3;
+  p.uv_row_stride = 2;
+  p.uv_pixel_stride = 1;
+  uint8_t out[3 * 3 * 4] = {};
+  yuv420_to_rgba(p, 3, 3, out, 12);
+  // full-range red (Y 76, U 85, V 255) → (254, 0, 0); green-ish row 2 uses the second chroma row
+  IWN_CHECK(out[0] >= 253 && out[1] <= 1 && out[2] <= 1);
+  IWN_CHECK_EQ(int(out[2 * 4]), int(out[0]));  // x = 2 reuses chroma column 1 (same as column 0 here)
+  int ref[3];
+  yuv_reference(29, 44, 21, ref);
+  for (int i = 0; i < 3; ++i) IWN_CHECK(std::abs(out[(2 * 3 + 2) * 4 + i] - ref[i]) <= 1);
+  // gray stays gray
+  const uint8_t gy = 128, gc = 128;
+  YuvPlanes g{&gy, &gc, &gc, 1, 1, 1};
+  uint8_t px[4] = {};
+  yuv420_to_rgba(g, 1, 1, px, 4);
+  IWN_CHECK(px[0] == 128 && px[1] == 128 && px[2] == 128 && px[3] == 255);
+  // bad input writes nothing
+  uint8_t untouched[4] = {1, 2, 3, 4};
+  yuv420_to_rgba(YuvPlanes{}, 1, 1, untouched, 4);
+  IWN_CHECK_EQ(int(untouched[0]), 1);
+}
+
+IWN_TEST(Camera, LabelsNameTheFacing) {
+  IWN_CHECK_EQ(camera_label("50", 0, LensFacing::kBack), std::string("Left passthrough camera (id 50), facing back"));
+  IWN_CHECK_EQ(camera_label("51", 1, LensFacing::kBack), std::string("Right passthrough camera (id 51), facing back"));
+  IWN_CHECK_EQ(camera_label("0", -1, LensFacing::kFront), std::string("Camera 0, facing front"));
+  IWN_CHECK_EQ(camera_label("9", 5, LensFacing::kExternal), std::string("Camera 9, facing external"));
 }

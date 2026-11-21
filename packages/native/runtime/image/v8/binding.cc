@@ -744,7 +744,9 @@ void JsTransform(const v8::FunctionCallbackInfo<v8::Value>& info) {
   p.allocator = OutputAllocator(Config());
   info.GetReturnValue().Set(Submit(st, ctx, [src, p](const std::atomic<bool>*) {
     if (IsIdentity(src->width(), src->height(), src->alpha(), src->opaque(), p)) {
-      return Completion{0, Status::kOk, "", src};  // immutable: share it
+      // immutable: share it; a recycled store (a camera frame) gets a copy the producer cannot rewrite
+      std::shared_ptr<const PixelStore> kept = KeepablePixels(src);
+      return kept ? Completion{0, Status::kOk, "", kept} : Completion{0, Status::kOutOfMemory, "", nullptr};
     }
     ScopedPixels sp = src->Read();
     std::unique_ptr<PixelStore> out;
@@ -798,7 +800,9 @@ void JsShare(const v8::FunctionCallbackInfo<v8::Value>& info) {
   v8::Isolate* iso = info.GetIsolate();
   HandleBox* box = BoxOf(st, info[0]);
   if (!box || !box->store) return Throw(iso, "image.share: not a live image handle");
-  v8::Local<v8::Object> h = NewHandle(st, iso->GetCurrentContext(), box->store);
+  std::shared_ptr<const PixelStore> kept = KeepablePixels(box->store);  // recycled pixels: a copy
+  if (!kept) return Throw(iso, "image.share: out of memory");
+  v8::Local<v8::Object> h = NewHandle(st, iso->GetCurrentContext(), kept);
   if (h.IsEmpty()) return Throw(iso, "image.share: cannot create the handle");
   info.GetReturnValue().Set(h);
 }
@@ -818,7 +822,9 @@ void JsExportTransfer(const v8::FunctionCallbackInfo<v8::Value>& info) {
   v8::Isolate* iso = info.GetIsolate();
   HandleBox* box = BoxOf(st, info[0]);
   if (!box || !box->store) return Throw(iso, "image.exportTransfer: not a live image handle");
-  const uint64_t id = TransferRegistry::Shared().Put(box->store);
+  std::shared_ptr<const PixelStore> kept = KeepablePixels(box->store);  // recycled pixels: a copy
+  if (!kept) return Throw(iso, "image.exportTransfer: out of memory");
+  const uint64_t id = TransferRegistry::Shared().Put(kept);
   ReleaseBox(box);
   SetSize(iso, iso->GetCurrentContext(), info[0].As<v8::Object>(), nullptr);
   info.GetReturnValue().Set(v8::Number::New(iso, static_cast<double>(id)));

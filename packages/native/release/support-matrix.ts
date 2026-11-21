@@ -39,7 +39,7 @@ export interface Row {
   alphaLater?: string;
   /** Implemented and in the surface, but no device run has exercised it yet: what is missing (shown as a note). */
   deviceUntested?: string;
-  /** Packer features the row's APIs need (`passthrough`): its keys resolve as for an app that declares them. */
+  /** Packer features the row's APIs need (`passthrough`, `camera`): its keys resolve as for an app that declares them. */
   declares?: string[];
   /** `api` of rows this one depends on: unless they are all "supported", this row is "not yet" too. */
   requires?: string[];
@@ -102,11 +102,16 @@ export const ROWS: Row[] = [
   { group: 'DOM and page', api: 'document / element stand-ins (createElement canvas/img/script, querySelector, style accepted), events, location, history, matchMedia', keys: ['Document', 'HTMLCanvasElement', 'HTMLElement', 'EventTarget', 'CustomEvent', 'location', 'matchMedia'], note: 'no layout or CSS rendering' },
   { group: 'DOM and page', api: 'Gamepad API (navigator.getGamepads)', keys: ['Navigator.getGamepads'], note: 'XR controllers come through XRInputSource.gamepad, not navigator.getGamepads()' },
   { group: 'DOM and page', api: 'DOM layout, CSS rendering, HTML UI / 2D panel, pointer and keyboard events', keys: ['on:HTMLCanvasElement.pointerdown', 'on:Window.keydown'], note: 'listeners are accepted and never fire' },
-  { group: 'DOM and page', api: '`<video>` / `<audio>` playback, MediaSource', keys: ['HTMLVideoElement.play', 'MediaSource'], alphaLater: 'video is out of the alpha scope (play() rejects with NotSupportedError)' },
+  { group: 'DOM and page', api: '`<video>` / `<audio>` playback, MediaSource', keys: ['HTMLVideoElement.play', 'MediaSource'], alphaLater: 'media playback is out of the alpha scope (play() of a media file rejects with NotSupportedError; a `<video>` plays a camera stream, see Camera)' },
   { group: 'DOM and page', api: 'System keyboard / text input', keys: ['on:Window.keydown'], alphaLater: 'out of the alpha scope' },
   { group: 'DOM and page', api: 'window.open, external links, OAuth redirects', keys: ['open'], alphaLater: 'out of the alpha scope' },
   { group: 'DOM and page', api: 'WebRTC', keys: ['RTCPeerConnection'], alphaLater: 'out of the alpha scope (absent)' },
-  { group: 'DOM and page', api: 'Camera / microphone (getUserMedia), clipboard, notifications, geolocation, Web Bluetooth/USB/HID/Serial, speech', keys: ['Navigator.mediaDevices', 'Navigator.clipboard', 'Notification', 'Navigator.geolocation', 'Navigator.bluetooth'] },
+  // Camera: device-tested on 2026-10-25 on a Quest 3 (proto-camera, IWSDK's CameraSource; permissions granted at
+  // install): both passthrough cameras, 1280x1080@30, a <video> VideoTexture. On 2026-10-26 (a probe page, installed
+  // without grants): the grant at getUserMedia after an early enumerateDevices, held ImageBitmaps, two requests for one
+  // camera, a sleep past a minute with a stream open. The denial path is unit-tested only.
+  { group: 'DOM and page', api: 'Camera: getUserMedia({ video }) over the passthrough cameras, enumerateDevices, MediaStream, `<video>` srcObject', keys: ['Navigator.mediaDevices', 'MediaDevices.getUserMedia()', 'MediaDevices.enumerateDevices()', 'MediaStream', 'MediaStreamTrack', 'HTMLVideoElement.srcObject'], declares: ['camera'], note: 'only for apps that declare the camera (native.features.camera or IWSDK\'s world.features.camera); CAMERA and HEADSET_CAMERA are asked for on first use' },
+  { group: 'DOM and page', api: 'Microphone, screen capture, clipboard, notifications, geolocation, Web Bluetooth/USB/HID/Serial, speech', keys: ['MediaDevices.getDisplayMedia()', 'MediaRecorder', 'Navigator.clipboard', 'Notification', 'Navigator.geolocation', 'Navigator.bluetooth'] },
 ];
 
 const SUPPORTED: ReadonlySet<Status> = new Set(['v8', 'provided', 'iwer', 'config']);

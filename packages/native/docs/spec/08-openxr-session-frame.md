@@ -424,6 +424,38 @@ ones, the `xr-depth` log line reports the per-frame acquire cost. The display ra
 page's GPU cost from frame to frame, which the live depth changes 30 times a second; Quest Browser shows the same (the
 measurements are in the depth commit's test plan).
 
-**XR-SEC-1 (MUST NOT).** No secondary views, no `dom-overlay`, no camera access in the first release;
-requesting them as required rejects; as optional, dropped.
+**XR-SEC-1 (MUST NOT).** No secondary views, no `dom-overlay`, and no camera access for an app that does not
+declare the camera (XR-CAM-1); requesting the views or `dom-overlay` as required rejects, as optional, dropped.
+Without the declaration `navigator.mediaDevices` is absent (DOM-4).
 *Check:* tests.
+
+**XR-CAM-1 (SHOULD).** An app that declares the camera (`native.features.camera`, or IWSDK's
+`world.features.camera`, PKG-8) gets `navigator.mediaDevices` over the headset's passthrough cameras (Horizon OS
+Passthrough Camera API: Camera2 on the cameras the vendor tag `com.meta.extra_metadata.camera_source` marks 0,
+left then right): `enumerateDevices()` lists them as `videoinput` with labels naming the side and the facing
+("Left passthrough camera (id 50), facing back"), `getUserMedia({ video })` opens one at a native size and rate
+chosen by the constraints (Media Capture and Streams SelectSettings, resizeMode `none`, Chromium's default ideal
+640x480 at 30 Hz) and resolves a `MediaStream` whose `MediaStreamTrack` reports its settings, stops, clones and
+ends (`ended` event) when the system takes the camera away; audio is not offered (`NotFoundError`); an unsatisfiable
+required constraint rejects with `OverconstrainedError`, a camera the app may not use (permissions not granted)
+with `NotAllowedError`. A camera opens once per app (Android disconnects an earlier open of the same camera): a
+`getUserMedia` for a camera that is open shares its source in the mode it runs in, a new track on the same frames.
+While the page is hidden (`document.visibilityState`) the cameras are closed and their tracks stay live with
+`muted` true (`mute` event); visible again, each opens in the same mode and its tracks unmute (`unmute`); a camera
+that cannot open again ends its tracks. A disabled track (`enabled = false`) renders black frames. A `<video>`
+plays such a stream (`srcObject`; readyState steps, `play()`, `videoWidth`/`videoHeight`,
+`requestVideoFrameCallback`), and `texImage2D`/`texSubImage2D`, `drawImage` and `createImageBitmap` take its
+newest frame (GL-17), or while paused the frame it stopped at (its first if it never played); an `ImageBitmap`,
+clone or transfer of a frame is a copy, so held frames never stall the camera. Frames are YUV_420_888 converted to
+RGBA8 off the JS thread into AHardwareBuffers that WebGL copies on the GPU (into RGBA8 or unsized
+RGBA/UNSIGNED_BYTE levels; a `texSubImage2D` that does not fit its level is `INVALID_VALUE`). The camera needs
+`android.permission.CAMERA` and `horizonos.permission.HEADSET_CAMERA` (runtime permissions the user grants). Until
+both are held, `enumerateDevices()` gives one `videoinput` with an empty `deviceId`, `label` and `groupId`
+(Media Capture and Streams' device information exposure) and the runtime reads no camera list (Horizon OS keeps a
+list read before the grant empty until the app restarts); once both are held,
+`navigator.permissions.query({ name: 'camera' })` answers `granted` (DOM-4).
+*Check:* unit tests (constraints, permissions before and after the grant, shared cameras, the page's visibility,
+stream/track lifecycle, disabled tracks, `<video>` playback and pause, uploads and their bounds, recycled frames
+copied for keeping); proto-camera from D122713586 unchanged on a Quest 3 shows the camera feed in its mirror at
+30 Hz and holds the display rate; a probe page grants at `getUserMedia` after an early `enumerateDevices`, holds
+`ImageBitmap`s, opens one camera twice and sleeps the headset past a minute with a stream open.

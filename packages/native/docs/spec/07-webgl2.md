@@ -164,7 +164,8 @@ results on the same inputs, including `ImageBitmap` sources (flags have no effec
 
 **GL-17 (MUST).** `texImage2D(…, source)` with a 2D canvas, another context's WebGL canvas, an `ImageBitmap`,
 an `HTMLImageElement` or `ImageData` uses the source's size; a closed bitmap or an unloaded image throws
-`InvalidStateError`; a `HTMLVideoElement`/`VideoFrame` throws `TypeError` (no video yet, documented).
+`InvalidStateError`; a `HTMLVideoElement` playing a camera stream (XR-CAM-1) uploads its newest frame (0x0 before
+the first); other `HTMLVideoElement`s and `VideoFrame` throw `TypeError` (no video decoding, documented).
 *Check:* tests.
 
 ## Shaders and programs

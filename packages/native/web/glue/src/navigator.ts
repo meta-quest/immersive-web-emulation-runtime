@@ -6,10 +6,11 @@
  */
 
 // `navigator` basics (HTML §8.9.1 NavigatorID/Language/OnLine/Concurrency, Device Memory, Permissions,
-// Storage) for DOM-4. `xr` (IWER) and `getGamepads` (input) are installed by their owners on the same
-// object. Members a browser has but this runtime does not (userAgentData, mediaDevices, gpu,
-// serviceWorker, clipboard, wakeLock, share, mediaCapabilities) are deliberately absent so feature
-// detection takes its fallback path.
+// Storage) for DOM-4. `xr` (IWER), `getGamepads` (input) and, for an app that declares the camera,
+// `mediaDevices` (web/xr camera.ts, XR-CAM-1) are installed by their owners on the same object. Members a
+// browser has but this runtime does not (userAgentData, gpu, serviceWorker, clipboard, wakeLock, share,
+// mediaCapabilities, and mediaDevices without the camera) are deliberately absent so feature detection
+// takes its fallback path.
 
 import type { DeviceInfo, GlueConfig } from './natives.ts';
 import { defineEventHandler, EventTarget } from './events.ts';
@@ -330,16 +331,23 @@ tag(WorkerNavigator, 'WorkerNavigator');
 /** Permissions an app of this runtime holds without a prompt when the config does not list them. */
 export const DEFAULT_GRANTED_PERMISSIONS: readonly string[] = ['xr-spatial-tracking'];
 
-export function createNavigator(config: GlueConfig, info: () => DeviceInfo, worker = false): Navigator {
+export function createNavigator(
+  config: GlueConfig,
+  info: () => DeviceInfo,
+  worker = false,
+  runtimeGrants: () => readonly string[] = () => [],
+): Navigator {
   const first = info();
   // DOM-4: `granted` for features the app already has: the packaged ones (config.permissions.granted,
-  // default DEFAULT_GRANTED_PERMISSIONS) plus Android runtime grants the host reports in device.info().
+  // default DEFAULT_GRANTED_PERMISSIONS) plus Android runtime grants the host reports in device.info() or a
+  // runtime prelude reports for its own feature (GlueRegistry.addPermissionSource).
   const configured = new Set(
     Array.isArray(config.permissions?.granted) ? config.permissions.granted.map(String) : DEFAULT_GRANTED_PERMISSIONS,
   );
   const granted = (): ReadonlySet<string> => {
-    const extra = info().grantedPermissions;
-    if (!Array.isArray(extra) || extra.length === 0) return configured;
+    const reported = info().grantedPermissions;
+    const extra = [...(Array.isArray(reported) ? reported : []), ...runtimeGrants()];
+    if (extra.length === 0) return configured;
     const all = new Set(configured);
     for (const p of extra) all.add(String(p));
     return all;

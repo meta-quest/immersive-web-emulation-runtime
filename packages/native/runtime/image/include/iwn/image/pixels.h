@@ -81,7 +81,8 @@ class PixelStore {
                                            void (*release)(void*));
 
 #if defined(__ANDROID__)
-  // Allocates an AHardwareBuffer (R8G8B8A8_UNORM, CPU read/write often, GPU sampled). nullptr on failure or when
+  // Allocates an AHardwareBuffer (R8G8B8A8_UNORM, CPU read/write often, GPU sampled and colour output). nullptr on
+  // failure or when
   // width * height exceeds kMaxPixels.
   static std::unique_ptr<PixelStore> AllocateHardwareBuffer(uint32_t width, uint32_t height);
   AHardwareBuffer* hardware_buffer() const { return ahb_; }
@@ -102,6 +103,11 @@ class PixelStore {
   // Metadata is set by the producer before the store is published.
   void set_alpha(AlphaMode mode) { alpha_ = mode; }
   void set_opaque(bool opaque) { opaque_ = opaque; }
+  // A store its producer rewrites in place once nothing else holds it (the camera's frame pool, runtime/xr
+  // xr_camera.cc): every other store's pixels never change, so handles share them, but whatever keeps a recycled
+  // store's pixels beyond the producer's frame (an ImageBitmap, a clone, a transfer) takes its own copy (KeepablePixels).
+  void set_recycled(bool recycled) { recycled_ = recycled; }
+  bool recycled() const { return recycled_; }
 
   // CPU access. Read() may be called from any thread once the store is published.
   ScopedPixels Read() const;
@@ -120,6 +126,7 @@ class PixelStore {
   Backing backing_ = Backing::kHeap;
   AlphaMode alpha_ = AlphaMode::kUnpremultiplied;
   bool opaque_ = false;
+  bool recycled_ = false;
   uint8_t* heap_ = nullptr;
   void (*release_)(void*) = nullptr;  // frees heap_ (std::free when null)
 #if defined(__ANDROID__)
@@ -127,6 +134,10 @@ class PixelStore {
   mutable void* locked_ptr_ = nullptr;
 #endif
 };
+
+// `store` itself, or for a recycled store (PixelStore::recycled) a heap copy of its pixels and metadata, which stays as
+// it is while the producer rewrites the original. nullptr when the copy cannot be made (out of memory).
+std::shared_ptr<const PixelStore> KeepablePixels(const std::shared_ptr<const PixelStore>& store);
 
 // Allocator used by decoders and transforms for their final output, so the runtime can choose heap or
 // AHardwareBuffer-backed stores without the decode code knowing.

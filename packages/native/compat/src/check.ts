@@ -18,6 +18,7 @@ import {
   AREAS,
   NAVIGATION_NOTE,
   parseKey,
+  policyFor,
   resolve,
   rootOf,
   ruleFor,
@@ -88,7 +89,10 @@ export interface CompatOptions {
   baseline?: { keys: ReadonlySet<string>; origins: ReadonlySet<string>; counts?: ReadonlyMap<string, number>; iwsdk?: string };
   /** The app's @iwsdk/core version (compared with the baseline's: baselineDrift). */
   iwsdkVersion?: string;
-  /** The packer features the app declares (cli.ts declaredFeatures): `passthrough` turns immersive-ar on (XR-AR-1). */
+  /**
+   * The packer features the app declares (cli.ts declaredFeatures): `passthrough` turns immersive-ar on (XR-AR-1),
+   * `camera` getUserMedia (XR-CAM-1).
+   */
   declared?: ReadonlySet<string>;
 }
 
@@ -344,7 +348,7 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
     if (!m) continue;
     const expr = m[1]!.replace(/\?\./g, '.');
     const root = expr.startsWith('navigator.') ? `Navigator.${expr.slice('navigator.'.length)}` : expr;
-    if (hits.has(root) || ruleFor(root)?.policy !== 'absent') continue;
+    if (hits.has(root) || policyFor(ruleFor(root), ctx) !== 'absent') continue;
     const r = resolve(parseKey(root), opts.surface, ctx);
     if (r.status === 'unsupported' || r.status === 'absent-ok') {
       hits.set(root, e);

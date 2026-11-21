@@ -188,6 +188,12 @@ test('check: media probes are not failures; playback is', () => {
   const r2 = evaluateCompat({ trace: play, surface });
   assert.equal(r2.ok, false);
   assert.equal(r2.findings[0]?.key, 'HTMLMediaElement.play()');
+  // an app that declares the camera plays its camera stream (srcObject) in a <video> (DOM-6, XR-CAM-1)
+  const cam = trace('app', { 'MediaDevices.getUserMedia()': rec(), 'HTMLMediaElement.srcObject=': rec(), 'HTMLMediaElement.play()': rec() });
+  const r3 = evaluateCompat({ trace: cam, surface, declared: new Set(['camera']) });
+  assert.equal(r3.ok, true);
+  assert.equal(r3.findings.some((f) => f.status === 'unsupported'), false);
+  assert.equal(evaluateCompat({ trace: cam, surface }).ok, false);
 });
 
 test('check: stubs and missing members the app calls are visible', () => {
@@ -267,7 +273,13 @@ test('check: WebGPU, the camera feature and desktop-only apps warn from the app\
   const fc = rc.findings.find((x) => x.key === 'MediaDevices.getUserMedia()')!;
   assert.equal(fc.severity, 'warn');
   assert.ok(fc.spec.includes('XR-SEC-1'));
+  assert.match(fc.message, /absent unless the app declares the camera/);
   assert.equal(rc.advice, UNSUPPORTED_ADVICE);
+  // ... and declared (native.features.camera / world.features.camera), web/xr provides it (XR-CAM-1)
+  const rd = evaluateCompat({ scan: cam, surface, baseline, declared: new Set(['camera']), app: [{ key: 'MediaDevices.getUserMedia()', origin: 'config', evidence: 'world.features.camera = true' }] });
+  assert.equal(rd.findings.find((x) => x.key === 'MediaDevices.getUserMedia()' && x.severity !== 'info'), undefined);
+  assert.equal(rd.findings.some((x) => x.status === 'unsupported'), false);
+  assert.equal(rd.advice, undefined);
   // XR-LIFE-7
   const rx = evaluateCompat({ scan: cam, surface, baseline, app: [{ key: 'no XR entry (xr: false)', origin: 'config', evidence: 'world.xr = false' }] });
   const fx = rx.findings.find((x) => x.key === 'no XR entry (xr: false)')!;

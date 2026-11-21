@@ -125,6 +125,8 @@ export function createHarness(
     scene?: boolean;
     /** More natives (a feature's own calls), present before the prelude is evaluated. */
     natives?: Record<string, unknown>;
+    /** The camera natives (globalThis.__iwn.camera, xr_camera.h) for getUserMedia tests. */
+    camera?: object;
   } = {},
 ): Harness {
   const buffer = new ArrayBuffer(RECORD_BYTES);
@@ -363,7 +365,7 @@ export function createHarness(
     addEventListener: (type: string, fn: () => void) => {
       if (type === 'load') loadListeners.push(fn);
     },
-    __iwn: { xr: natives },
+    __iwn: { xr: natives, ...(opts.camera ? { camera: opts.camera } : {}) },
     __iwnWebGL: webgl,
   };
   sandbox.globalThis = sandbox;

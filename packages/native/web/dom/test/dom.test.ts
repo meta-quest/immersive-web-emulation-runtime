@@ -235,6 +235,149 @@ test('DOM-6: <video>/<audio> are inert and say so (NotSupportedError naming the 
   assert.equal(c.run(`auErr && au instanceof HTMLAudioElement && au.paused`), true);
 });
 
+test('XR-CAM-1: pending requestVideoFrameCallback callbacks survive a source change (three VideoTexture after a camera switch)', async () => {
+  const c = createDomContext({ html: '' });
+  c.run(`
+    function camera() {
+      var listeners = new Set();
+      var feed = { width: 0, height: 0, frames: 0, mediaTime: 0, ended: false, current: null,
+        frame() { return this.current; },
+        listen(fn) { listeners.add(fn); return () => listeners.delete(fn); } };
+      return {
+        stream: { [Symbol.for('iwn.media.feed')]() { return feed; } },
+        push(w, h) {
+          feed.frames++; feed.width = w; feed.height = h; feed.mediaTime = feed.frames / 30;
+          feed.current = { kind: 'handle', origin: 'video', handle: { frame: feed.frames }, width: w, height: h, premultiplied: false };
+          for (const fn of [...listeners]) fn(false);
+        },
+      };
+    }
+    var left = camera(), right = camera(), seen = [];
+    var v = document.createElement('video');
+    v.muted = true; v.srcObject = left.stream; v.play();
+    left.push(640, 480);
+    // VideoTexture registers one callback and re-registers it from inside it
+    function onFrame(now, m) { seen.push(m.width); v.requestVideoFrameCallback(onFrame); }
+    v.requestVideoFrameCallback(onFrame);
+    left.push(640, 480);
+    v.srcObject = right.stream; v.play();
+  `);
+  await tick(5);
+  c.run(`right.push(1280, 960); right.push(1280, 960)`);
+  assert.deepEqual(JSON.parse(c.run(`JSON.stringify(seen)`)), [640, 1280, 1280]);
+});
+
+test('XR-CAM-1: a <video> plays a camera stream (srcObject with MEDIA_FEED): events, play(), size, rVFC, frames', async () => {
+  const c = createDomContext({ html: '' });
+  // A fake camera MediaStream as web/xr camera.ts builds it: frames are pushed by the test.
+  c.run(`
+    var listeners = new Set();
+    var feed = { width: 0, height: 0, frames: 0, mediaTime: 0, ended: false, current: null,
+      frame() { return this.current; },
+      listen(fn) { listeners.add(fn); return () => listeners.delete(fn); } };
+    function push(w, h) {
+      feed.frames++; feed.width = w; feed.height = h; feed.mediaTime = feed.frames / 30;
+      feed.current = { kind: 'handle', origin: 'video', handle: { frame: feed.frames }, width: w, height: h, premultiplied: false };
+      for (const fn of [...listeners]) fn(false);
+    }
+    function end() { feed.ended = true; for (const fn of [...listeners]) fn(true); }
+    var stream = { [Symbol.for('iwn.media.feed')]() { return feed; } };
+    var v = document.createElement('video');
+    var events = [];
+    for (const t of ['loadstart', 'durationchange', 'resize', 'loadedmetadata', 'loadeddata', 'canplay', 'play', 'playing', 'canplaythrough', 'pause', 'ended', 'emptied', 'error'])
+      v.addEventListener(t, () => events.push(t + ':' + v.readyState));
+    v.setAttribute('playsinline', ''); v.setAttribute('autoplay', ''); v.muted = true;
+    v.srcObject = stream;
+    var src = Symbol.for('iwn.image.source');
+  `);
+  assert.equal(c.run(`v.readyState + ' ' + v.networkState + ' ' + v.paused`), '0 2 true');
+  // before any frame: a 0x0 image source, not a TypeError (the stream is attached)
+  assert.equal(c.run(`v[src]().width + 'x' + v[src]().height`), '0x0');
+  await tick(5);
+  assert.deepEqual(JSON.parse(c.run(`JSON.stringify(events)`)), ['loadstart:0']);
+  c.run(`push(1280, 1080)`);
+  // HAVE_METADATA then HAVE_ENOUGH_DATA with the first frame; autoplay starts it
+  assert.deepEqual(JSON.parse(c.run(`JSON.stringify(events)`)), [
+    'loadstart:0', 'durationchange:1', 'resize:1', 'loadedmetadata:1', 'loadeddata:4', 'canplay:4', 'play:4', 'playing:4', 'canplaythrough:4',
+  ]);
+  assert.equal(c.run(`v.videoWidth + 'x' + v.videoHeight + ' ' + v.duration + ' ' + v.paused`), '1280x1080 Infinity false');
+  assert.equal(c.run(`v[src]().handle.frame`), 1);
+  assert.equal(await c.run<Promise<string>>(`v.play().then(() => 'resolved')`), 'resolved');
+  // requestVideoFrameCallback: once per presented frame, with metadata; cancel works
+  c.run(`var seen = []; v.requestVideoFrameCallback((now, m) => seen.push([typeof now, m.width, m.height, m.presentedFrames]));
+    var cancelled = v.requestVideoFrameCallback(() => seen.push('cancelled')); v.cancelVideoFrameCallback(cancelled);`);
+  c.run(`push(1280, 1080); push(1280, 1080)`);
+  assert.deepEqual(JSON.parse(c.run(`JSON.stringify(seen)`)), [['number', 1280, 1080, 2]]);
+  assert.equal(c.run(`v[src]().handle.frame + ' ' + v.getVideoPlaybackQuality().totalVideoFrames + ' ' + (v.currentTime > 0)`), '3 3 true');
+  // pause: no frame callbacks while paused; a size change fires resize
+  c.run(`events.length = 0; v.pause(); v.requestVideoFrameCallback(() => seen.push('paused'));`);
+  await tick(5);
+  c.run(`push(640, 480)`);
+  assert.deepEqual(JSON.parse(c.run(`JSON.stringify(events)`)), ['pause:4', 'resize:4']);
+  assert.equal(c.run(`seen.length + ' ' + v.videoWidth`), '1 640');
+  // play() from paused with data resolves and fires play/playing
+  c.run(`events.length = 0`);
+  assert.equal(await c.run<Promise<string>>(`v.play().then(() => 'ok')`), 'ok');
+  await tick(5);
+  assert.deepEqual(JSON.parse(c.run(`JSON.stringify(events)`)), ['play:4', 'playing:4']);
+  // the stream ends: 'ended'
+  c.run(`events.length = 0; end()`);
+  assert.deepEqual(JSON.parse(c.run(`JSON.stringify(events)`)), ['ended:4']);
+  assert.equal(c.run(`v.ended`), true);
+  // srcObject = null: emptied, back to HAVE_NOTHING; listeners released
+  c.run(`events.length = 0; v.srcObject = null`);
+  await tick(5);
+  assert.deepEqual(JSON.parse(c.run(`JSON.stringify(events)`)), ['emptied:0']);
+  assert.equal(c.run(`v.readyState + ' ' + v.videoWidth + ' ' + listeners.size + ' ' + v.paused`), '0 0 0 true');
+  assert.throws(() => c.run(`v[src]()`), /video sources are not supported/);
+  // a play() pending before the first frame resolves at it; a srcObject that is not a camera stream still errors
+  c.run(`feed.frames = 0; feed.ended = false; var v2 = document.createElement('video'); v2.srcObject = stream; var p2 = v2.play().then(() => 'played:' + v2.readyState);`);
+  await tick(5);
+  c.run(`push(320, 240)`);
+  assert.equal(await c.run<Promise<string>>(`p2`), 'played:4');
+  c.run(`var v3 = document.createElement('video'); var err3 = 0; v3.onerror = () => err3 = v3.error.code; v3.srcObject = {};`);
+  await tick(5);
+  assert.equal(c.run(`err3`), 4);
+});
+
+test('XR-CAM-1: a paused <video> shows the frame it stopped at (its first when never played), play() the newest', async () => {
+  const c = createDomContext({ html: '' });
+  // As web/xr camera.ts: hold() gives a frame of its own (a copied handle) that stays until release().
+  c.run(`
+    var listeners = new Set(); var released = [];
+    var feed = { width: 0, height: 0, frames: 0, mediaTime: 0, ended: false, current: null,
+      frame() { return this.current; },
+      hold() { const f = this.current; return f && { frame: { ...f, kept: true }, release: () => released.push(f.handle.frame) }; },
+      listen(fn) { listeners.add(fn); return () => listeners.delete(fn); } };
+    function push() {
+      feed.frames++; feed.width = 64; feed.height = 48;
+      feed.current = { kind: 'handle', origin: 'video', handle: { frame: feed.frames }, width: 64, height: 48, premultiplied: false };
+      for (const fn of [...listeners]) fn(false);
+    }
+    var stream = { [Symbol.for('iwn.media.feed')]() { return feed; } };
+    var src = Symbol.for('iwn.image.source');
+    var shown = (v) => v[src]().handle.frame + (v[src]().kept ? ' kept' : '');
+    var v = document.createElement('video'); v.autoplay = true; v.srcObject = stream;
+  `);
+  await tick(5);
+  c.run(`push(); push()`);
+  assert.equal(c.run(`shown(v)`), '2', 'playing: the newest frame');
+  c.run(`v.pause(); push(); push()`);
+  assert.equal(c.run(`shown(v)`), '2 kept', 'paused: the frame it stopped at');
+  assert.equal(await c.run<Promise<string>>(`v.play().then(() => shown(v))`), '4');
+  assert.deepEqual([...c.run<number[]>(`released`)], [2], 'play() lets the kept frame go');
+  // never played: its first frame, until play()
+  c.run(`feed.frames = 0; var still = document.createElement('video'); still.srcObject = stream;`);
+  await tick(5);
+  c.run(`push(); push(); push()`);
+  assert.equal(c.run(`still.paused + ' ' + shown(still)`), 'true 1 kept');
+  // srcObject = null lets it go too; a feed that cannot keep a frame shows the newest while paused
+  c.run(`still.srcObject = null`);
+  assert.deepEqual([...c.run<number[]>(`released`)], [2, 1]);
+  c.run(`delete feed.hold; v.pause(); push()`);
+  assert.equal(c.run(`v.paused + ' ' + shown(v)`), 'true 4');
+});
+
 test('DOM-10: MutationObserver records, ResizeObserver and IntersectionObserver fire once', async () => {
   const c = createDomContext({ html: '<body><div id="t"></div></body>' });
   c.run(`var records = []; var t = document.getElementById('t');

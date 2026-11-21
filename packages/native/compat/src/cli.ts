@@ -79,7 +79,7 @@ export function readAllowlist(projectRoot: string): string[] {
  * The features pack declares for the project (src/config/resolve.ts: native.features, else derived from world.xr,
  * AR mode implying passthrough, and world.features.camera; packager/src/pack.ts distFeatures: a dist that is not
  * IWSDK and calls getUserMedia gets the camera when the features are derived). What the headset offers depends on
- * them: passthrough turns immersive-ar on (XR-AR-1).
+ * them: passthrough turns immersive-ar on (XR-AR-1), camera getUserMedia (XR-CAM-1).
  */
 export function declaredFeatures(projectRoot: string, scan: ScanResult, given?: { names: string[]; derived: boolean }): Set<string> {
   let resolved = given;
@@ -116,7 +116,7 @@ export async function checkProject(opts: Omit<CompatCliOptions, 'stdout' | 'stde
     if (!pw || !iwer || !existsSync(iwer))
       throw new CompatUsageError('--trace needs playwright and iwer in the project\'s node_modules (IWSDK projects have both via @iwsdk/cli and @iwsdk/vite-plugin-dev)');
     opts.log?.(`tracing ${dist} headlessly (IWER ${path.relative(opts.projectRoot, iwer)})`);
-    const trim = headsetTrim(surface);
+    const trim = headsetTrim(surface, { declared });
     const run = (t: typeof trim) => runTrace({ distDir: dist, iwerSource: readFileSync(iwer, 'utf8'), playwright: pw, log: opts.log, allow, mirrors, trim: t, emulateAR: declared.has('passthrough'), bootTimeoutMs: opts.bootMs });
     trace = await run(trim);
     traceAgain = async (roots: string[]) => {
