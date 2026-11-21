@@ -51,19 +51,9 @@ const fixture = (f: string) => path.join(FIXTURES, f);
 describe('keystores (PKG-7)', () => {
   const cases: [string, string, Record<string, string>][] = [
     ['p12-jdk17.p12', 'keytool 17 PKCS#12 (PBES2 AES-256, HMAC-SHA256)', {}],
-    [
-      'p12-jdk8.p12',
-      'keytool 8 PKCS#12 (3DES key, RC2-40 certs, HMAC-SHA1)',
-      {},
-    ],
     ['openssl3.p12', 'OpenSSL 3 PKCS#12 (PBES2 everywhere)', {}],
-    ['openssl-3des.p12', 'OpenSSL PKCS#12 with 3DES and a SHA-1 MAC', {}],
     ['ec-jdk17.p12', 'EC P-256 key', {}],
-    [
-      'jdk8.jks',
-      'JKS with a separate key password',
-      { keyPassword: 'iwn-test-key', alias: 'upload' },
-    ],
+    ['two-keys.p12', 'PKCS#12 with two keys, by alias', { alias: 'second' }],
   ];
   for (const [file, what, extra] of cases) {
     test(what, () => {
@@ -84,30 +74,30 @@ describe('keystores (PKG-7)', () => {
         loadKeystoreFile(fixture('p12-jdk17.p12'), { storePassword: 'nope' }),
       /password is wrong/,
     );
-    assert.throws(
-      () => loadKeystoreFile(fixture('jdk8.jks'), { storePassword: 'nope' }),
-      /password is wrong/,
-    );
   });
-  test('wrong JKS key password', () => {
-    assert.throws(
-      () =>
-        loadKeystoreFile(fixture('jdk8.jks'), {
-          storePassword: STORE_PASSWORD,
-          keyPassword: 'nope',
-          alias: 'upload',
-        }),
-      /key password is wrong/,
-    );
+  test('legacy formats are refused with the conversion command', () => {
+    // jdk8.jks: JKS from keytool 8; p12-jdk8.p12: PKCS#12 from keytool 8 (3DES key, RC2-40 certs)
+    for (const file of ['jdk8.jks', 'p12-jdk8.p12'])
+      assert.throws(
+        () =>
+          loadKeystoreFile(fixture(file), {
+            storePassword: STORE_PASSWORD,
+            keyPassword: 'iwn-test-key',
+            alias: 'upload',
+          }),
+        new RegExp(
+          `(JKS keystores are not supported|legacy encryption).*keytool -importkeystore -srckeystore ${fixture(file).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} `,
+        ),
+        file,
+      );
   });
   test('several keys need an alias; unknown alias lists the aliases', () => {
     assert.throws(
       () =>
-        loadKeystoreFile(fixture('jdk8.jks'), {
+        loadKeystoreFile(fixture('two-keys.p12'), {
           storePassword: STORE_PASSWORD,
-          keyPassword: 'iwn-test-key',
         }),
-      /several keys \(.*upload.*\); set "keyAlias"/,
+      /several keys \(upload, second\); set "keyAlias"/,
     );
     assert.throws(
       () =>
@@ -365,7 +355,7 @@ describe('APK Signature Scheme v2 + v3', () => {
     );
   });
   test('signer cert in the APK is the keystore certificate', async () => {
-    const id = loadKeystoreFile(fixture('p12-jdk8.p12'), {
+    const id = loadKeystoreFile(fixture('p12-jdk17.p12'), {
       storePassword: STORE_PASSWORD,
     });
     const r = verifyApk(signApk(await zipOf(1), id));
@@ -373,6 +363,6 @@ describe('APK Signature Scheme v2 + v3', () => {
       r.signers[0].certificateSha256,
       new X509Certificate(id.certificates[0]).fingerprint256,
     );
-    assert.equal(readFileSync(fixture('p12-jdk8.p12')).length > 0, true);
+    assert.equal(readFileSync(fixture('p12-jdk17.p12')).length > 0, true);
   });
 });

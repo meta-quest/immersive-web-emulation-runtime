@@ -2,7 +2,7 @@
 
 `iwer-native pack` turns an IWSDK/Vite `dist/` into an installable Quest APK with **no Android SDK, NDK,
 Gradle or JDK** on the developer's machine (PKG-1). Everything here is plain Node (no npm dependencies): ZIP,
-binary AndroidManifest, PNG, ASN.1/X.509, PKCS#12/JKS keystores, APK Signature Scheme v2 + v3.
+binary AndroidManifest, PNG, ASN.1/X.509, PKCS#12 keystores, APK Signature Scheme v2 + v3.
 
 Status (2026-10-20): working end to end, verified on two Quest 3S:
 
@@ -34,21 +34,21 @@ template APK ──open, check contract─────────────�
  sign: APK Signing Block with v2 + v3 (+ 4096 padding) → self-verify → atomic write
 ```
 
-| source file                                   | what                                                                                                                       |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `src/pack.ts`                                 | the orchestrator, signing-key choice, report (PKG-11)                                                                      |
-| `src/zip.ts`                                  | ZIP reader, deterministic aligning writer, `zipalign -c -P 16 4` equivalent                                                |
-| `src/axml.ts`, `src/manifest.ts`              | Android binary XML codec; manifest rewrite and summary (PKG-8)                                                             |
-| `src/apk-sign.ts`                             | APK Signature Scheme v2/v3 signer and verifier (PKG-7)                                                                     |
-| `src/keystore.ts`, `src/rc2.ts`, `src/der.ts` | PKCS#12 (PBES2, PKCS#12 PBE 3DES/RC2, SHA-1/SHA-2 MAC) and JKS readers                                                     |
-| `src/signing-key.ts`                          | per-machine debug key, self-signed X.509                                                                                   |
-| `src/dist.ts`                                 | dist walk, compression policy, `index.html` scan (PKG-5), injection check (PKG-6)                                          |
-| `src/runtime-config.ts`                       | `assets/iwn/config.json`                                                                                                   |
-| `src/template.ts`                             | template resolution, pinned download + cache + checksum (PKG-2)                                                            |
-| `src/png.ts`                                  | PNG decode/encode/resize for icons                                                                                         |
-| `src/splash.ts`, `src/ttf.ts`                 | the launch splash image (generated card or the app's PNG) and the small TrueType reader/rasterizer that draws the app name |
-| `template/`                                   | stand-in template build (`build-template.mjs`, manifest, `src/template_main.c`)                                            |
-| `templates.json`                              | the pinned template for this package version (null until CI publishes one)                                                 |
+| source file                      | what                                                                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `src/pack.ts`                    | the orchestrator, signing-key choice, report (PKG-11)                                                                      |
+| `src/zip.ts`                     | ZIP reader, deterministic aligning writer, `zipalign -c -P 16 4` equivalent                                                |
+| `src/axml.ts`, `src/manifest.ts` | Android binary XML codec; manifest rewrite and summary (PKG-8)                                                             |
+| `src/apk-sign.ts`                | APK Signature Scheme v2/v3 signer and verifier (PKG-7)                                                                     |
+| `src/keystore.ts`, `src/der.ts`  | PKCS#12 reader (PBES2/AES, SHA-1/SHA-2 MAC); refuses JKS, JCEKS and legacy 3DES/RC2 PKCS#12 with the conversion command    |
+| `src/signing-key.ts`             | per-machine debug key, self-signed X.509                                                                                   |
+| `src/dist.ts`                    | dist walk, compression policy, `index.html` scan (PKG-5), injection check (PKG-6)                                          |
+| `src/runtime-config.ts`          | `assets/iwn/config.json`                                                                                                   |
+| `src/template.ts`                | template resolution, pinned download + cache + checksum (PKG-2)                                                            |
+| `src/png.ts`                     | PNG decode/encode/resize for icons                                                                                         |
+| `src/splash.ts`, `src/ttf.ts`    | the launch splash image (generated card or the app's PNG) and the small TrueType reader/rasterizer that draws the app name |
+| `template/`                      | stand-in template build (`build-template.mjs`, manifest, `src/template_main.c`)                                            |
+| `templates.json`                 | the pinned template for this package version (null until CI publishes one)                                                 |
 
 ## Template contract (for the runtime's template build)
 
@@ -128,7 +128,7 @@ O=Android, C=US`, 30 years, created on first use in the user's config dir (`$XDG
   `IWER_NATIVE_CONFIG_DIR` overrides). Never in the project. Concurrent first packs are safe: the key pair is
   written to a temporary directory renamed to `debug-key/` in one step, so one key wins and every process signs
   with it. A corrupt or mismatched pair is refused up front with the directory to delete.
-- **Release builds** (`--release`) use the `signing` section: `keystore` (PKCS#12 or JKS), `keyAlias` (optional
+- **Release builds** (`--release`) use the `signing` section: `keystore` (PKCS#12), `keyAlias` (optional
   when the keystore has one key), `storePasswordEnv`/`keyPasswordEnv` name the environment variables. Without a
   `signing` section a release build is signed with the debug key and warns (sideload only). Debug packs never
   need the keystore file: when it is absent (kept only on release machines) they warn and continue; `--release`
@@ -137,9 +137,10 @@ O=Android, C=US`, 30 years, created on first use in the user's config dir (`$XDG
 - v2 + v3 (v3 signer range 28..max), block padded to 4096 bytes. Signatures are deterministic, so the same
   inputs give the same APK (PKG-9): RSA PKCS#1 v1.5 by construction, ECDSA (P-256/P-384/P-521) with RFC 6979
   nonces (`src/ecdsa.ts`; k\*G via node:crypto ECDH, every signature verified before use).
-- Read: PKCS#12 from keytool 8 (3DES key, RC2-40 certs) and 17 (PBES2 AES-256, HMAC-SHA256), OpenSSL 3 default
-  and legacy-3DES files, JKS (separate key password). Not read: JCEKS, PKCS#12 with PBMAC1 integrity
-  (convert with keytool/openssl; the error says so). No key rotation (v3 proof-of-rotation) yet.
+- Read: PKCS#12 with PBES2/AES (keytool from JDK 12, 11.0.12 and 8u301; OpenSSL 3; Android Studio). Refused,
+  with the `keytool -importkeystore ... -deststoretype pkcs12` command that converts them: JKS, JCEKS, PKCS#12
+  with the legacy 3DES/RC2 PBE schemes (keytool 8-11, OpenSSL 1.x). Not read: PKCS#12 with PBMAC1 integrity
+  (the error says so). No key rotation (v3 proof-of-rotation) yet.
 
 ## Template download (PKG-2)
 
@@ -206,16 +207,17 @@ What IWSDK needs (the IWSDK diff of this stack implements it):
 ## Checks
 
 `npm test` (from `packages/native`) runs everything headless: 190 tests incl. 71 here (`packager/test/`):
-ZIP/alignment, binary XML round trip on aapt2 output, manifest rules (INTERNET matrix), PNG, RC2 (RFC 2268
-vectors), PKCS#12/JKS fixtures, v2/v3 sign/verify/tamper, pack contents/reproducibility/refusals, template
+ZIP/alignment, binary XML round trip on aapt2 output, manifest rules (INTERNET matrix), PNG, PKCS#12
+fixtures (and the refusal of JKS and legacy PKCS#12), v2/v3 sign/verify/tamper, pack contents/reproducibility/refusals, template
 download/cache/tamper. When the Android SDK is present (CI, or `$ANDROID_HOME`), the
 SDK cross-check runs `apksigner verify` (v2 and v3), `aapt2 dump badging` (package, label, debuggable,
 permissions, launchable activity) and `zipalign -c -P 16 4` (build-tools 35) on packer output; these are CI
 checks only, the packer never calls them.
 
 Test fixtures: `test/fixtures/*.p12|.jks` are throwaway keys made with keytool 8/17 and OpenSSL 3.5 (store
-password `iwn-test-store`, JKS key password `iwn-test-key`; `multi-jdk.jks` has aliases `upload`/`legacy`
-with key passwords `iwn-upload-key`/`iwn-legacy-key`); `template-manifest.axml` is aapt2 34's output for
+password `iwn-test-store`; `jdk8.jks` and `p12-jdk8.p12` are keytool 8 files kept to test their refusal);
+`two-keys.p12` (aliases `upload`/`second`) joins two OpenSSL-made PKCS#12 files (PBES2 AES-256) under one
+HMAC-SHA256 MAC; `template-manifest.axml` is aapt2 34's output for
 `template/AndroidManifest.xml`.
 
 ## Gaps and open questions

@@ -7,7 +7,7 @@
 
 /**
  * ASN.1 DER: a small encoder and a tolerant BER/DER decoder (ITU-T X.690),
- * enough for X.509 certificates, PKCS#8, PKCS#12 and the JKS key wrapper.
+ * enough for X.509 certificates, PKCS#8, and PKCS#12.
  */
 
 export const TAG = {

@@ -5,7 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { existsSync } from 'node:fs';
+import { X509Certificate } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import {
+  keystoreFormat,
+  loadKeystoreFile,
+  loadKeystoreIdentity,
+} from '../../packager/src/keystore.ts';
+import { checkIdentity } from '../../packager/src/signing-key.ts';
 import path from 'node:path';
 import { IWSDK_CONFIG_FILE, loadNativeProject } from '../config/load.ts';
 import { NativeConfigError } from '../config/validate.ts';
@@ -30,7 +37,14 @@ import {
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip';
 
 export interface DoctorCheck {
-  id: 'node' | 'adb' | 'devices' | 'config' | 'signing-env' | 'template';
+  id:
+    | 'node'
+    | 'adb'
+    | 'devices'
+    | 'config'
+    | 'signing-env'
+    | 'signing-keystore'
+    | 'template';
   status: CheckStatus;
   summary: string;
   /** What to do about it. */
@@ -213,6 +227,59 @@ function deviceCheck(output: string | null, stderr: string): DoctorCheck {
   };
 }
 
+/**
+ * Opens the release keystore the way pack --release does, so doctor fails on a keystore pack would refuse (JKS, legacy
+ * PKCS#12, wrong password, missing alias). Without the password variables only the format is checked.
+ */
+function keystoreCheck(
+  ctx: DoctorContext,
+  file: string | null | undefined,
+  signing: {
+    keyAlias: string | null;
+    storePasswordEnv: string;
+    keyPasswordEnv: string;
+  },
+): DoctorCheck | null {
+  if (!file || !existsSync(file)) return null; // the config check already warns about a missing keystore
+  const storePassword = ctx.env[signing.storePasswordEnv];
+  const keyPassword = ctx.env[signing.keyPasswordEnv] ?? storePassword;
+  try {
+    const buffer = readFileSync(file);
+    if (storePassword === undefined) {
+      const format = keystoreFormat(buffer);
+      if (format !== 'pkcs12')
+        // the format errors need no password: let the loader word them
+        loadKeystoreIdentity(buffer, {
+          storePassword: '',
+          description: `keystore ${file}`,
+          file,
+        });
+      return {
+        id: 'signing-keystore',
+        status: 'ok',
+        summary: `release signing: keystore ${file} is PKCS#12 (set ${signing.storePasswordEnv} to check the password and key)`,
+      };
+    }
+    const id = loadKeystoreFile(file, {
+      storePassword,
+      keyPassword,
+      alias: signing.keyAlias,
+    });
+    checkIdentity(id);
+    return {
+      id: 'signing-keystore',
+      status: 'ok',
+      summary: `release signing: ${id.description} opens (${new X509Certificate(id.certificates[0]).subject.replace(/\n/g, ', ')})`,
+    };
+  } catch (error) {
+    return {
+      id: 'signing-keystore',
+      status: 'fail',
+      summary: `release signing: ${(error as Error).message}`,
+    };
+  }
+}
+
 function configChecks(ctx: DoctorContext): DoctorCheck[] {
   const configPath = path.join(ctx.projectRoot, IWSDK_CONFIG_FILE);
   if (!existsSync(configPath)) {
@@ -258,6 +325,8 @@ function configChecks(ctx: DoctorContext): DoctorCheck[] {
               hint: 'export the keystore password(s) in those variables before pack --release (never in iwsdk.config.json).',
             },
       );
+      const keystore = keystoreCheck(ctx, loaded.files.keystore, signing);
+      if (keystore) checks.push(keystore);
     } else {
       checks.push({
         id: 'signing-env',

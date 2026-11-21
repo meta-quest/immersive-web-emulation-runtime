@@ -72,7 +72,7 @@ Build/test only (not shipped): esbuild 0.28.2 (MIT, npm) bundles the glue; TypeS
 Test fixtures: `web/glue/test/fixtures/wpt-*.json` are copies of web-platform-tests `url/resources/` files
 (`urltestdata.json`, `setters_tests.json`, `toascii.json`), 3-Clause BSD License
 (web-platform-tests contributors), fetched 2026-10-19 from Chromium's mirror
-`chromium.googlesource.com/chromium/src/+/refs/heads/main/third_party/blink/web_tests/external/wpt/url/resources/`.
+`chromium.googlesource.com/chromium/src/+/refs/heads/main/third_party/blink/web_tests/external/wpt/url/resources/`. Their licence text is in `web/glue/test/fixtures/LICENSE.md`.
 
 Considered and not used (size or fit): core-js-pure 3.50.0 (MIT): its URL polyfill passes only 95.2 % of
 `urltestdata.json` (file: and blob: edge cases), and DOMException + structuredClone + atob/btoa cost ~44 KB
@@ -275,22 +275,17 @@ Build/test only (not shipped): esbuild 0.28.2 (MIT, from web/glue's devDependenc
 
 ## packager: Node packer/signer, shipped in `lib/packager/`
 
-No third-party code. ZIP, Android binary XML, PNG, ASN.1/DER, X.509, PKCS#12, RC2 and APK Signature
+No third-party code. ZIP, Android binary XML, PNG, ASN.1/DER, X.509, PKCS#12 and APK Signature
 Scheme v2/v3 are implemented from public specifications: PKWARE APPNOTE (ZIP), AOSP `ResourceTypes.h`
 (Apache-2.0; binary XML/`Res_value` layout, read as a format definition), W3C PNG, ITU-T X.690, RFC 5280,
-RFC 7292 (PKCS#12 + appendix B KDF), RFC 8018 (PBES2/PBKDF2), RFC 2268 (RC2), source.android.com "APK
+RFC 7292 (PKCS#12 + appendix B KDF), RFC 8018 (PBES2/PBKDF2), source.android.com "APK
 Signature Scheme v2/v3", the Android SDK `android.R.attr` IDs (`aapt2 dump resources android.jar`), Meta's
 public Horizon OS VR manifest documentation, the Khronos OpenXR Android loader documentation. Cryptographic
-primitives (SHA, HMAC, PBKDF2, AES, 3DES, RSA, ECDSA, X.509 parsing) come from Node's built-in `node:crypto`;
+primitives (SHA, HMAC, PBKDF2, AES, RSA, ECDSA, X.509 parsing) come from Node's built-in `node:crypto`;
 deterministic ECDSA nonces follow RFC 6979.
 
-Exception: JKS (keytool's pre-JDK 9 format) has no public specification. Its layout (magic/version/entries,
-the SHA-1 integrity digest over the password, the string "Mighty Aphrodite" and the body, and the
-KeyProtector SHA-1 keystream with its salt/check digest) follows the behaviour of OpenJDK's
-`sun.security.provider.JavaKeyStore` and `sun.security.provider.KeyProtector` (GPLv2 with the Classpath
-Exception), as commonly described from that source and known to the implementer; it is used as a format
-description only, no OpenJDK code was copied, and the reader is validated against keystores written by JDK 8
-and JDK 17 `keytool` (fixtures in `packager/test/fixtures/`).
+Keystores: only PKCS#12 with PBES2/AES is read. JKS, JCEKS and PKCS#12 files with the legacy 3DES/RC2 PBE schemes
+are detected by their headers and algorithm identifiers and refused with the keytool command that converts them.
 
 Build/test only (not shipped): Android SDK build-tools 34/35 (`aapt2`, `apksigner`, `zipalign`; Apache-2.0,
 dl.google.com) for the CI cross-checks and the template build; Android NDK r27c (clang, for

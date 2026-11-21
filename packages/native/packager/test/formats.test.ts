@@ -31,7 +31,6 @@ import {
   placeholderIcon,
   resize,
 } from '../src/png.ts';
-import { rc2CbcDecrypt, rc2EncryptBlock, rc2Expand } from '../src/rc2.ts';
 import {
   checkAlignment,
   entryData,
@@ -135,43 +134,6 @@ describe('der', () => {
     assert.equal(
       time(new Date(Date.UTC(2056, 0, 2, 3, 4, 5))).toString('latin1', 2),
       '20560102030405Z',
-    );
-  });
-});
-
-describe('rc2 (RFC 2268 test vectors)', () => {
-  const vectors: [string, number, string, string][] = [
-    ['0000000000000000', 63, '0000000000000000', 'ebb773f993278eff'],
-    ['ffffffffffffffff', 64, 'ffffffffffffffff', '278b27e42e2f0d49'],
-    ['3000000000000000', 64, '1000000000000001', '30649edf9be7d2c2'],
-    ['88', 64, '0000000000000000', '61a8a244adacccf0'],
-    ['88bca90e90875a', 64, '0000000000000000', '6ccf4308974c267f'],
-    [
-      '88bca90e90875a7f0f79c384627bafb2',
-      128,
-      '0000000000000000',
-      '2269552ab0f85ca6',
-    ],
-  ];
-  for (const [key, bits, plain, cipher] of vectors) {
-    test(`key ${key} bits ${bits}`, () => {
-      const K = rc2Expand(Buffer.from(key, 'hex'), bits);
-      assert.equal(
-        rc2EncryptBlock(K, Buffer.from(plain, 'hex')).toString('hex'),
-        cipher,
-      );
-    });
-  }
-  test('CBC decrypt rejects bad padding', () => {
-    assert.throws(
-      () =>
-        rc2CbcDecrypt(
-          Buffer.alloc(5, 1),
-          40,
-          Buffer.alloc(8),
-          Buffer.alloc(8, 9),
-        ),
-      /padding/,
     );
   });
 });

@@ -88,7 +88,7 @@ export interface NativeSplashOptions {
 }
 
 export interface NativeSigningOptions {
-  /** Keystore file (PKCS#12 or JKS). Project-relative or absolute. */
+  /** Keystore file (PKCS#12, any extension). Project-relative or absolute. */
   keystore: string;
   /** Key alias inside the keystore. Defaults to the keystore's only key. */
   keyAlias?: string;

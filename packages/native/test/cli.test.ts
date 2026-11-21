@@ -18,7 +18,12 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
-import { buildTestDist, buildTestTemplate } from '../packager/test/helpers.ts';
+import {
+  buildTestDist,
+  buildTestTemplate,
+  FIXTURES,
+  STORE_PASSWORD,
+} from '../packager/test/helpers.ts';
 import { EXIT, runCli, splitShellWords, type CliIo } from '../src/cli/main.ts';
 import { runDoctor } from '../src/cli/doctor.ts';
 import { loadNativeProject } from '../src/config/load.ts';
@@ -731,24 +736,83 @@ describe('doctor', () => {
       },
       { 'k.jks': 'x' },
     );
+    // a PKCS#12 keystore with a .jks name, as Android Studio writes them
+    copyFileSync(path.join(FIXTURES, 'p12-jdk17.p12'), path.join(dir, 'k.jks'));
     const a = io({
       cwd: dir,
       exec: healthy(),
-      env: { STORE_PW: 'secret-value' },
+      env: { STORE_PW: STORE_PASSWORD },
     });
-    assert.equal(await runCli(['doctor'], a.io), EXIT.ok);
+    assert.equal(await runCli(['doctor'], a.io), EXIT.ok, a.out());
     assert.match(
       a.out(),
       /\[warn\] release signing: KEY_PW not set \(needed for pack --release only\)/,
     );
-    assert.ok(!a.out().includes('secret-value'));
+    assert.ok(!a.out().includes(STORE_PASSWORD));
     const b = io({
       cwd: dir,
       exec: healthy(),
       env: { STORE_PW: 'secret-value', KEY_PW: 'k' },
     });
-    assert.equal(await runCli(['doctor'], b.io), EXIT.ok);
+    // the wrong password fails here, as pack --release would
+    assert.equal(await runCli(['doctor'], b.io), EXIT.failure);
+    assert.match(b.out(), /\[fail\] release signing: .*password is wrong/);
     assert.ok(!b.out().includes('secret-value'));
+    const c = io({
+      cwd: dir,
+      exec: healthy(),
+      env: { STORE_PW: STORE_PASSWORD },
+    });
+    assert.equal(await runCli(['doctor'], c.io), EXIT.ok, c.out());
+    assert.match(
+      c.out(),
+      /\[ok\]\s+release signing: keystore .*k\.jks alias upload opens/,
+    );
+  });
+
+  test('doctor fails on a keystore pack --release would refuse', async () => {
+    for (const [fixture, message] of [
+      ['jdk8.jks', /JKS keystores are not supported/],
+      ['p12-jdk8.p12', /legacy encryption/],
+    ] as const) {
+      const dir = project({
+        native: {
+          packageId: 'com.a.b',
+          signing: {
+            keystore: 'release.ks',
+            keyAlias: 'upload',
+            storePasswordEnv: 'STORE_PW',
+          },
+        },
+      });
+      copyFileSync(path.join(FIXTURES, fixture), path.join(dir, 'release.ks'));
+      const t = io({
+        cwd: dir,
+        exec: healthy(),
+        env: { STORE_PW: STORE_PASSWORD },
+      });
+      assert.equal(await runCli(['doctor'], t.io), EXIT.failure, fixture);
+      assert.match(t.out(), message, fixture);
+      assert.match(
+        t.out(),
+        /keytool -importkeystore -srckeystore \S*release\.ks /,
+        fixture,
+      );
+    }
+    // without the password, JKS is still caught from its header
+    const dir = project({
+      native: {
+        packageId: 'com.a.b',
+        signing: { keystore: 'release.ks', storePasswordEnv: 'STORE_PW' },
+      },
+    });
+    copyFileSync(path.join(FIXTURES, 'jdk8.jks'), path.join(dir, 'release.ks'));
+    const t = io({ cwd: dir, exec: healthy(), env: {} });
+    assert.equal(await runCli(['doctor'], t.io), EXIT.failure);
+    assert.match(
+      t.out(),
+      /\[fail\] release signing: .*JKS keystores are not supported/,
+    );
   });
 
   test('a debug machine without the release keystore: doctor and validate warn, pack --release still needs it', async () => {

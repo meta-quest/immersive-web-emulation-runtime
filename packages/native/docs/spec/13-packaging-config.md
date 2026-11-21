@@ -55,8 +55,8 @@ _Check:_ the showcase built with its shipped config fails to pack with that mess
 `build:metavr` it packs.
 
 **PKG-7 (MUST).** Signing: debug builds use a per-machine debug key generated on first use (stored in the
-user's config dir, never in the project); release builds use the developer's keystore (PKCS12 or JKS) given
-by path, with the store password, key alias and key password read from environment variables whose
+user's config dir, never in the project); release builds use the developer's keystore (PKCS12 with PBES2/AES; JKS and legacy
+3DES/RC2 PKCS12 are refused with the keytool command that converts them) given by path, with the store password, key alias and key password read from environment variables whose
 names the config supplies (never the secrets themselves in config). Signatures: APK Signature Scheme v2
 and v3 (v1 not required for minSdk ≥ 29). Implemented in Node with no Java dependency.
 _Check:_ `apksigner verify --verbose` (CI check) passes v2+v3; a store-keystore build with the store

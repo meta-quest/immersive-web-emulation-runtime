@@ -14,13 +14,13 @@ The Immersive Web Emulation Runtime (IWER) is a TypeScript-based tool designed t
 
 ## Packages
 
-| package                                                                          |                                                                                                    |
-| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`iwer`](https://www.npmjs.com/package/iwer)                                     | the WebXR runtime for emulation                                                                    |
-| [`@iwer/devui`](https://www.npmjs.com/package/@iwer/devui)                       | developer UI for IWER                                                                              |
-| [`@iwer/sem`](https://www.npmjs.com/package/@iwer/sem)                           | synthetic environment module                                                                       |
-| [`@iwer/extension-bridge`](https://www.npmjs.com/package/@iwer/extension-bridge) | local MCP bridge from coding agents to IWER                                                        |
-| [`@iwer/native`](https://www.npmjs.com/package/@iwer/native)                     | runs a WebXR app natively on Meta Quest and other Android OpenXR headsets, with no browser (alpha) |
+| package                                                                          |                                                                                                                                       |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [`iwer`](https://www.npmjs.com/package/iwer)                                     | the WebXR runtime for emulation                                                                                                       |
+| [`@iwer/devui`](https://www.npmjs.com/package/@iwer/devui)                       | developer UI for IWER                                                                                                                 |
+| [`@iwer/sem`](https://www.npmjs.com/package/@iwer/sem)                           | synthetic environment module                                                                                                          |
+| [`@iwer/extension-bridge`](https://www.npmjs.com/package/@iwer/extension-bridge) | local MCP bridge from coding agents to IWER                                                                                           |
+| [`@iwer/native`](https://www.npmjs.com/package/@iwer/native)                     | runs a WebXR app natively on Meta Quest and other Android OpenXR headsets, with no browser (experimental alpha, not production ready) |
 
 ## Documentation
 

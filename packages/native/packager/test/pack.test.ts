@@ -858,7 +858,7 @@ describe(
         out,
         /Verified using v3 scheme \(APK Signature Scheme v3\): true/,
       );
-      const keystore = path.join(FIXTURES, 'jdk8.jks');
+      const keystore = path.join(FIXTURES, 'two-keys.p12');
       const rel = await pack(
         input({
           template: tpl,
@@ -866,12 +866,11 @@ describe(
           target: target({
             signing: {
               keystore,
-              keyAlias: 'upload',
+              keyAlias: 'second',
               storePasswordEnv: 'S',
-              keyPasswordEnv: 'K',
             },
           }),
-          env: { S: STORE_PASSWORD, K: 'iwn-test-key' },
+          env: { S: STORE_PASSWORD },
           files: { icon: null, keystore },
         }),
       );
@@ -880,7 +879,7 @@ describe(
         '--print-certs',
         rel.outFile,
       ]).toString();
-      assert.match(certs, /CN=iwer-native test jks/);
+      assert.match(certs, /CN=iwer-native test two-keys second/);
       if (!existsSync(checkoutTemplate)) {
         t.diagnostic(
           'aapt2/zipalign checks need packager/template/out (node packager/template/build-template.mjs)',

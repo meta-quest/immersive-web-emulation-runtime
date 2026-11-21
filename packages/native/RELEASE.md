@@ -196,17 +196,15 @@ known limitation of the alpha.
 7. **Licences of npm polyfills in the preludes:** whatwg-url, webidl-conversions, punycode, @noble/hashes,
    web-streams-polyfill and gl-matrix (all MIT/BSD-2) are in the notices. indexeddbshim/websql-configurable stay
    out (idb.min.js is not shipped).
-8. **The JKS keystore reader** (`packager/src/keystore.ts`, release signing): JKS has no public specification. The
-   reader follows the format and key protection of OpenJDK's `JavaKeyStore`/`KeyProtector` (GPLv2 with the
-   Classpath Exception) as known to the implementer; no code was copied, and the tests read keystores written by JDK
-   keytool (THIRD_PARTY.md, packager section). Decide whether it ships in the alpha or the packer reads PKCS#12
-   only (keytool's default format since JDK 9).
+8. **Keystores:** the packer reads PKCS#12 with PBES2/AES only and refuses JKS and legacy 3DES/RC2 PKCS#12 with
+   the keytool conversion command, so it carries no reader built from OpenJDK's undocumented JKS format and no
+   hand-written legacy cipher.
 
 ## 7. Known limitations
 
 The README's "Known limitations" section and support matrix are the user-facing list (WebXR features not yet
-supported, out-of-scope web APIs, size, controller differences from Quest Browser, what has not been tried with
-real hands, foveation savings). The support matrix is generated (`node release/support-matrix.ts --write`) from the
+supported, out-of-scope web APIs, size, controller details, what has not been tried with
+real hands). The support matrix is generated (`node release/support-matrix.ts --write`) from the
 compat checker's inventory and the alpha scope in `release/support-matrix.ts`.
 
 ## 8. IWSDK release (needed by the README's IWSDK path)

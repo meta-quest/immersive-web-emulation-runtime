@@ -556,7 +556,7 @@ describe('support matrix', () => {
       matrixMarkdown(snapshot),
       /\| Hand tracking [^|]*\| supported \| tested on Quest 3 and Quest 3S with simulated hands [^|]*buttons 5-9/,
     );
-    // controllers ran on headsets (virtual controllers, 2026-10-21): supported, with the differences from Quest Browser
+    // controllers ran on headsets (virtual controllers, 2026-10-21): supported, with the menu-button and grip details
     const controllers = classify(
       ROWS.find((r) => r.api.startsWith('Controllers ('))!,
       snapshot,
@@ -565,7 +565,7 @@ describe('support matrix', () => {
     assert.equal(controllers.deviceUntested, undefined);
     assert.match(
       matrixMarkdown(snapshot),
-      /\| Controllers \([^|]*\| supported \| tested on Quest 3 and Quest 3S [^|]*buttons\[12\]/,
+      /\| Controllers \([^|]*\| supported \| tested on Quest 3 and Quest 3S [^|]*buttons\[7\]/,
     );
     const probe = {
       group: 'Test',

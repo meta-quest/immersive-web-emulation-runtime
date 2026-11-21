@@ -5,8 +5,9 @@ headsets, with no browser. Its runtime drives the app's WebXR session through IW
 over OpenGL ES, Canvas 2D, Web Audio, workers, fetch and storage underneath, and the `iwer-native` CLI packs and
 signs your web build into an APK.
 
-::: warning Alpha
-Not every web API is supported yet. Run `npx -p @iwer/native iwer-native compat` on your build before you rely on
+::: warning Experimental alpha, not production ready
+This is a very early, experimental release: expect missing web APIs, bugs and breaking changes in any release, and
+do not rely on it for apps you ship to users. Not every web API is supported yet. Run `npx -p @iwer/native iwer-native compat` on your build before you rely on
 it, and check the [support matrix](https://github.com/meta-quest/immersive-web-emulation-runtime/tree/main/packages/native#support-matrix).
 :::
 

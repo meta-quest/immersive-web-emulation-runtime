@@ -96,8 +96,7 @@ export const ROWS: Row[] = [
     note: 'IWER host mode over OpenXR',
     requires: ['WebGL 2 and WebGL 1 (over OpenGL ES 3.2)'],
   },
-  // Controllers: device-tested on 2026-10-21 with Meta's virtual Touch Plus controllers on a Quest 3 and a Quest 3S,
-  // side by side with Quest Browser 156. Hands: device-tested on 2026-10-21 with Horizon OS's virtual hands on a
+  // Controllers: device-tested on 2026-10-21 with Meta's virtual Touch Plus controllers on a Quest 3 and a Quest 3S. Hands: device-tested on 2026-10-21 with Horizon OS's virtual hands on a
   // Quest 3 and a Quest 3S (joints, pinch, switching to controllers and back), microgestures with real hands.
   {
     group: 'WebXR',
@@ -106,7 +105,7 @@ export const ROWS: Row[] = [
     requires: [
       'navigator.xr, immersive-vr sessions, reference spaces, XRWebGLLayer',
     ],
-    note: "tested on Quest 3 and Quest 3S with simulated Touch Plus controllers, side by side with Quest Browser 156: same profiles, buttons, axes, press thresholds and events. Differences from Quest Browser: the left menu button is buttons[7] (Quest Browser: buttons[12], after extra buttons 7-11 this runtime does not expose), and the grip pose is tilted about 15° from Quest Browser's",
+    note: "tested on Quest 3 and Quest 3S with simulated Touch Plus controllers (profiles, buttons, axes, press thresholds, events); the left menu button is buttons[7], and the grip pose is OpenXR's grip pose as is (see Known limitations)",
   },
   {
     group: 'WebXR',
@@ -115,7 +114,7 @@ export const ROWS: Row[] = [
     requires: [
       'navigator.xr, immersive-vr sessions, reference spaces, XRWebGLLayer',
     ],
-    note: 'tested on Quest 3 and Quest 3S with simulated hands (25 joints, pinch select, switching to controllers and back) and with real hands (microgestures on hand buttons 5-9, as in Quest Browser); the system menu gesture is not yet device-tested',
+    note: 'tested on Quest 3 and Quest 3S with simulated hands (25 joints, pinch select, switching to controllers and back) and with real hands (microgestures on hand buttons 5-9); the system menu gesture is not yet device-tested',
   },
   {
     group: 'WebXR',
@@ -176,7 +175,7 @@ export const ROWS: Row[] = [
     requires: ['immersive-ar (passthrough)'],
     deviceUntested:
       'on a Quest 3 only without a room and with a synthetic room fed to the runtime; not yet against a real room from Space Setup',
-    note: 'from the room of Space Setup (none: empty lists, no hits, where Quest Browser hits a floor plane); com.oculus.permission.USE_SCENE is asked for on first use',
+    note: 'from the room of Space Setup (none: empty lists and no hits, not even a floor); com.oculus.permission.USE_SCENE is asked for on first use',
   },
   {
     group: 'WebXR',
@@ -202,7 +201,7 @@ export const ROWS: Row[] = [
       'XRWebGLDepthInformation',
     ],
     requires: ['immersive-ar (passthrough)'],
-    note: 'texture-array, one layer per eye; com.oculus.permission.USE_SCENE is asked for on first use; depthDataFormat reads float32 where Quest Browser says unsigned-short (same texture)',
+    note: 'texture-array, one layer per eye; com.oculus.permission.USE_SCENE is asked for on first use; depthDataFormat reads float32',
   },
   {
     group: 'WebXR',
