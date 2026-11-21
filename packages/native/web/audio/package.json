@@ -1,0 +1,17 @@
+{
+  "name": "@iwer/native-web-audio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Web Audio API for @iwer/native over the native audio module (runtime/audio).",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node build.mjs",
+    "test": "node --test --test-concurrency=8 --test-reporter=spec \"test/**/*.test.ts\"",
+    "build:addon": "node test/build-addon.mjs",
+    "verify": "npm run typecheck && npm run build && npm test"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

@@ -227,3 +227,25 @@ Build/test only (not shipped):
 | @dimforge/rapier3d-simd-compat | 0.21.0 | Apache-2.0 | npm, github.com/dimforge/rapier.js | device test SIMD: Rapier's SIMD build (716 v128 locals) in a module worker and on the page, results compared bit for bit |
 | @babylonjs/havok | 1.3.14 | MIT | npm (IWSDK `packages/core` depends on `^1.3.10`) | device test HAVOK: IWSDK's physics engine (SIMD build) stepping a world in a module worker |
 | comlink | 4.4.2 | Apache-2.0 | npm, github.com/GoogleChromeLabs/comlink | device test WRK-6c: `wrap`/`expose` over a transferred `MessagePort` (the MSDF-worker pattern WRK-6 names) |
+
+## runtime/audio + web/audio: shipped in every APK
+
+| component | version | license | source | used for |
+|---|---|---|---|---|
+| Oboe | 1.9.0 | Apache-2.0 | github.com/google/oboe tag 1.9.0 (03242e9e), the library-only copy JUCE 8.0.8 vendors in `modules/juce_audio_devices/native/oboe` (github.com/juce-framework/JUCE; `$IWN_THIRD_PARTY_DIR/oboe` or `IWN_OBOE_DIR`) | audio output on AAudio: low-latency float stream, reopened after disconnects and route changes |
+| dr_mp3 | 0.7.3 | public domain (Unlicense) or MIT-0, choice | github.com/mackron/dr_libs @ fa931f3285ced10ace628f7f1ac951e1951e7ea6, `dr_mp3.h` (based on minimp3; `$IWN_THIRD_PARTY_DIR/dr_libs` or `IWN_DR_LIBS_DIR`) | MP3 decode (MPEG-1/2/2.5 Layer III, ID3 skip, LAME/Xing gapless trim) |
+| libvorbis (+ libvorbisfile) | xiph main @ 2d79800b6751dddd4b8b4ad50832faa5ae2a00d9 | BSD-3-Clause | gitlab.xiph.org/xiph/vorbis at the commit named (`$IWN_THIRD_PARTY_DIR/libvorbis` or `IWN_LIBVORBIS_DIR`) | Ogg Vorbis decode. Chosen over stb_vorbis 1.22 after fuzzing found unbounded allocations and an out-of-bounds write in stb_vorbis's comment-header parsing |
+| libogg | 1.3.5 | BSD-3-Clause | libogg-1.3.5.tar.gz from downloads.xiph.org/releases/ogg (`$IWN_THIRD_PARTY_DIR/libogg` or `IWN_LIBOGG_DIR`) | Ogg framing for libvorbis |
+| KISS FFT | 131.1.0 (upstream febd4caeed32e33ad8b2e0bb5ea77542c40f18ec) | BSD-3-Clause | vendored in `runtime/audio/third_party/kissfft/` (copied from github.com/mborgerding/kissfft at that commit) | real FFTs: AnalyserNode, ConvolverNode partitions, PeriodicWave tables |
+| Android NDK media (`AMediaExtractor`, `AMediaCodec`, libmediandk) | API 28+ (memfd via `syscall(__NR_memfd_create)`, so it builds for android-29) | part of the OS | Android NDK headers | AAC/M4A, FLAC and Ogg Opus decode on device |
+
+Our own code, written from the Web Audio API 1.0 / 1.1 specification (graph, mixing rules, AudioParam automation,
+node formulas, Biquad coefficients, Panner equal-power/distance/cone, Convolver normalisation, Analyser windowing),
+the RIFF/WAVE and ITU-T G.711 specifications (WAV parser), standard DSP texts (Kaiser-windowed sinc resampler,
+non-uniformly partitioned overlap-save convolution) and Brown & Duda, "A structural model for binaural sound synthesis"
+(IEEE Trans. Speech Audio Proc., 1998), for the HRTF approximation. No measured HRIR data set ships.
+
+Build/test only (not shipped): esbuild 0.28.2 (MIT, npm) bundles `web/audio/dist/audio.min.js`; super-three 0.181.0
+(MIT, npm) for the optional three.js compatibility test (installed outside the repo); ffmpeg 8.0.1
+generates `runtime/audio/test/fixtures/` (our own 440/660 Hz test tones, `make-fixtures.sh`) and is the reference
+decoder in the SNR tests.

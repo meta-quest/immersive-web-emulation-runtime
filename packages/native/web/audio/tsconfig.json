@@ -1,0 +1,5 @@
+{
+  "//": "Type-checks the Web Audio layer and its tests with the package's compiler settings.",
+  "extends": "../../tsconfig.json",
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

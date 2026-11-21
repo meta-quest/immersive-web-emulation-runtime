@@ -97,6 +97,7 @@ add_subdirectory(core)
 # canvas2d and workers (decoded-image handles), gl before xr.
 add_subdirectory(gl)
 add_subdirectory(image)
+add_subdirectory(audio)
 add_subdirectory(net)
 add_subdirectory(storage)
 add_subdirectory(canvas2d)
