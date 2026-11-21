@@ -353,6 +353,7 @@ async function pack({
         distDir,
         strict: values.strict,
         allow: loaded.target.network.allow,
+        features: { names: Object.keys(loaded.target.features), derived: !!loaded.target.featuresDerived },
       });
     } catch (error) {
       const message = `compat check could not run: ${(error as Error).message} (pass --skip-compat to pack anyway)`;

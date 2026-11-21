@@ -30,6 +30,7 @@ import { LayerBuffer } from './layers.ts';
 import { LAYOUT_VERSION } from './layout.gen.ts';
 import { FRAME_TICK, FRAME_XR } from './natives.ts';
 import type { GLContext, WebGLHooks, XrInfo, XrNativeEvent, XrNatives } from './natives.ts';
+import { RuntimePermissions, USE_SCENE } from './permissions.ts';
 import { FrameRecordView } from './record.ts';
 
 type Global = Record<string, unknown> & typeof globalThis;
@@ -55,12 +56,18 @@ export interface NativeXR {
   };
   /** The WebGL context the session renders with (diagnostics). */
   gl(): GLContext | null;
+  /**
+   * XR-PERM-1: asks for Android runtime permissions (the system dialog at most once per permission and process,
+   * after any request in flight; one dialog for the ones not asked yet) and resolves each name to whether the app
+   * holds it. A permission the manifest does not declare is never asked for (false). For runtime code that needs
+   * one outside a session request (getUserMedia: CAMERA and HEADSET_CAMERA).
+   */
+  requestPermissions(names: readonly string[]): Promise<Record<string, boolean>>;
 }
 
 // XR-LIFE-1's M3 set. 'bounded-floor' is withdrawn when the headset has no boundary (XR-SPACE-1); 'hand-tracking'
-// is added when the system tracks hands. Later milestones (not granted, so required requests reject with
-// NotSupportedError and optional ones are dropped): plane-detection, mesh-detection, anchors, hit-test,
-// depth-sensing; immersive-ar is opt-in (xr.immersiveAr).
+// is added when the system tracks hands; the AR features (NATIVE_FEATURES) when the native side supports them.
+// immersive-ar is offered when the app declares passthrough (the packer writes xr.immersiveAr).
 const BASE_FEATURES = [
   'viewer',
   'local',
@@ -71,6 +78,51 @@ const BASE_FEATURES = [
   'medium-fixed-foveation-level',
   'high-fixed-foveation-level',
 ];
+
+/**
+ * XR-PERM-1: features a session can be granted only when the native side reports support (the capability flag
+ * here, from capabilities()); until then required requests reject with NotSupportedError and optional ones are
+ * dropped, as for any unsupported feature.
+ */
+const NATIVE_FEATURES: Readonly<Record<string, keyof XrInfo>> = {
+  'plane-detection': 'planeDetection',
+  'mesh-detection': 'meshDetection',
+  'hit-test': 'hitTest',
+  anchors: 'anchors',
+  'depth-sensing': 'depthSensing',
+};
+
+/** XR-PERM-1: features that need an Android runtime permission (the system dialog) before a session gets them. */
+const FEATURE_PERMISSIONS: Readonly<Record<string, string>> = {
+  'plane-detection': USE_SCENE,
+  'mesh-detection': USE_SCENE,
+  'hit-test': USE_SCENE,
+  'depth-sensing': USE_SCENE,
+};
+
+/**
+ * XR-PERM-1: features Quest Browser offers in immersive sessions only (its IsFeatureValidForMode): for any other mode
+ * a required one rejects the request with NotSupportedError and an optional one is dropped, before any dialog or
+ * native work. Quest Browser's table allows depth-sensing in every mode, but its inline sessions never get it.
+ */
+const IMMERSIVE_ONLY = new Set([
+  'bounded-floor',
+  'unbounded',
+  'hand-tracking',
+  'layers',
+  'hit-test',
+  'anchors',
+  'plane-detection',
+  'mesh-detection',
+  'depth-sensing',
+]);
+
+/** A sequence<DOMString> member of XRSessionInit as an array (absent or not iterable: empty). */
+function featureList(value: unknown): string[] {
+  if (value == null || typeof value === 'string') return [];
+  if (typeof (value as Iterable<unknown>)[Symbol.iterator] !== 'function') return [];
+  return Array.from(value as Iterable<unknown>, String);
+}
 
 /**
  * Touch Plus with the profile list Quest Browser reports for it (IN-2): measured with Meta's virtual Touch Plus
@@ -188,6 +240,9 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     }
     const features = config.supportedFeatures;
     if (caps.handTracking && !features.includes('hand-tracking')) features.push('hand-tracking');
+    for (const [feature, flag] of Object.entries(NATIVE_FEATURES)) {
+      if (caps[flag] === true && !features.includes(feature)) features.push(feature);
+    }
     const bounded = features.indexOf('bounded-floor');
     if (caps.hasStage !== true && bounded >= 0) features.splice(bounded, 1);
     if (caps.refreshRates && caps.refreshRates.length > 0) {
@@ -236,6 +291,92 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       },
     );
   }
+  // XR-PERM-1: features valid only in immersive sessions (IMMERSIVE_ONLY): another mode drops the optional ones and
+  // rejects a required one. The init itself when nothing changes.
+  function forMode(mode: string, init: object | undefined): object | undefined {
+    if (mode === 'immersive-vr' || mode === 'immersive-ar') return init;
+    const o = (init ?? {}) as { requiredFeatures?: unknown; optionalFeatures?: unknown };
+    const refused = featureList(o.requiredFeatures).find((f) => IMMERSIVE_ONLY.has(f));
+    if (refused) {
+      throw new DOMException(`The feature '${refused}' is not supported for mode: ${mode}.`, 'NotSupportedError');
+    }
+    const optional = featureList(o.optionalFeatures);
+    if (!optional.some((f) => IMMERSIVE_ONLY.has(f))) return init;
+    return { ...o, optionalFeatures: optional.filter((f) => !IMMERSIVE_ONLY.has(f)) };
+  }
+  // XR-PERM-1: before a session gets features that need a runtime permission, ask for it (once: the system dialog).
+  // Granted: the request goes on unchanged. Denied: a required feature rejects the request with NotSupportedError
+  // (as an unsupported one does), an optional one is dropped; so does a permission the manifest does not declare,
+  // which is never asked for. No dialog for a request that fails anyway (an unsupported mode or required feature, an
+  // active session) or for features the runtime cannot grant.
+  const permissions = new RuntimePermissions(natives, report);
+  function withPermissions(mode: string, init: object | undefined): Promise<object | undefined> | null {
+    if (device.activeSession || !config.supportedSessionModes.includes(mode as never)) return null;
+    const o = (init ?? {}) as { requiredFeatures?: unknown; optionalFeatures?: unknown };
+    const required = featureList(o.requiredFeatures);
+    const optional = featureList(o.optionalFeatures);
+    const supported = config.supportedFeatures as string[];
+    if (!required.every((f) => supported.includes(f))) return null;
+    const needed = new Set<string>();
+    for (const f of [...required, ...optional]) {
+      const permission = FEATURE_PERMISSIONS[f];
+      if (permission && supported.includes(f)) needed.add(permission);
+    }
+    if (needed.size === 0) return null;
+    return permissions.request([...needed]).then((held) => {
+      const denied = (f: string) => FEATURE_PERMISSIONS[f] !== undefined && held[FEATURE_PERMISSIONS[f]] !== true;
+      const refused = required.find(denied);
+      if (refused) {
+        const permission = FEATURE_PERMISSIONS[refused];
+        const why = permissions.declared(permission)
+          ? 'which the user did not grant'
+          : "which the app's manifest does not declare (declare the feature in native.features)";
+        throw new DOMException(`The required feature '${refused}' needs ${permission}, ${why}.`, 'NotSupportedError');
+      }
+      if (!optional.some(denied)) return init;
+      return { ...o, optionalFeatures: optional.filter((f) => !denied(f)) };
+    });
+  }
+  // Session requests reach IWER in the order they were made, as in a browser (a later immersive request is refused
+  // while an earlier one is pending): a request waiting for the permission dialog holds back those made after it,
+  // which ask for their own permissions only once it has reached IWER. Without one waiting, a request goes to IWER
+  // at once.
+  let waiting: Promise<void> | null = null;
+  function inOrder(
+    mode: string,
+    init: object | undefined,
+    call: (init: object | undefined) => Promise<object>,
+  ): Promise<object> {
+    let valid: object | undefined;
+    try {
+      valid = forMode(mode, init);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    const before = waiting;
+    const asking = before ? null : withPermissions(mode, valid);
+    if (!before && !asking) return call(valid);
+    let reached!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    waiting = gate;
+    void gate.then(() => {
+      if (waiting === gate) waiting = null;
+    });
+    const ready = before ? before.then(() => withPermissions(mode, valid) ?? valid) : asking!;
+    return ready.then(
+      (i) => {
+        reached();
+        return call(i);
+      },
+      (error: unknown) => {
+        reached();
+        throw error;
+      },
+    );
+  }
+
   const proto = XRSystem.prototype as unknown as Record<string, unknown>;
   const requestSession = proto.requestSession as (this: XRSystem, mode: string, init?: object) => Promise<object>;
   const offerSession = proto.offerSession as (this: XRSystem, mode: string, init?: object) => Promise<object>;
@@ -253,7 +394,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     writable: true,
     value: function requestSessionNative(this: XRSystem, mode: string, init?: object) {
       capabilities();
-      const p = requestSession.call(this, mode, init);
+      const p = inOrder(String(mode), init, (i) => requestSession.call(this, mode, i));
       trackRequest(p);
       p.then((s) => onSession(s, String(mode)), () => {});
       return p;
@@ -264,7 +405,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     writable: true,
     value: function offerSessionNative(this: XRSystem, mode: string, init?: object) {
       capabilities();
-      const p = offerSession.call(this, mode, init);
+      const p = inOrder(String(mode), init, (i) => offerSession.call(this, mode, i));
       trackRequest(p);
       return p;
     },
@@ -386,6 +527,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       layerEntries: layerBuffer?.lastCount ?? 0,
     }),
     gl: () => gfx.gl,
+    requestPermissions: (names) => permissions.request(names),
   };
   Object.defineProperty(g, '__iwnXR', { value: api, configurable: true, enumerable: false, writable: false });
   return api;

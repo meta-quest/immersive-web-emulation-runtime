@@ -71,9 +71,9 @@ export interface TraceRunOptions {
    */
   trim?: HeadsetTrim;
   /**
-   * Let the emulated device offer `immersive-ar` (default false: like the headset today, XR-AR-1 is for later,
-   * so isSessionSupported("immersive-ar") is false and AR requests reject). The sweep turns it on to record what
-   * AR samples use once in XR.
+   * Let the emulated device offer `immersive-ar` (default false: like the headset for an app that does not declare
+   * passthrough, isSessionSupported("immersive-ar") is false and AR requests reject). `compat --trace` turns it on
+   * for an app that declares passthrough (XR-AR-1), the sweep to record what AR samples use once in XR.
    */
   emulateAR?: boolean;
   /** Explicit chromium binary (else Playwright's default for its version). */

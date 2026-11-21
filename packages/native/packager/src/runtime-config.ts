@@ -92,6 +92,9 @@ export function appRuntimeConfig(input: RuntimeConfigInput): {
         dynamic: target.foveation.dynamic,
       },
       features: { ...target.features },
+      // XR-AR-1: immersive-ar (passthrough under the projection layer) is offered to apps that declare passthrough
+      // (world.xr.mode "ar" implies it). Without it the key stays the template's (off by default).
+      ...(target.features.passthrough ? { immersiveAr: true } : {}),
       // The loading screen until the app's first XR frame (runtime/xr
       // loading.h): the system splash image (splash.ts) with a spinner, on
       // the background ("black", "contextual" or "#rrggbb"). Without a splash

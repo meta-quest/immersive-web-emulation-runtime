@@ -70,6 +70,9 @@ const LATER_AUDIO_FACTORIES = ['Oscillator', 'BiquadFilter', 'Convolver', 'Analy
 const LATER_AUDIO_NODES = ['Oscillator', 'BiquadFilter', 'Convolver', 'Analyser', 'DynamicsCompressor', 'StereoPanner', 'Delay', 'WaveShaper', 'IIRFilter', 'ConstantSource', 'ChannelMerger', 'ChannelSplitter'];
 
 
+/** A call of getUserMedia: the packer derives the camera feature from it for non-IWSDK bundles (pack.ts). */
+export const CAMERA_SIGNAL: ScanSignal = S('MediaDevices.getUserMedia()', /\bgetUserMedia\s*\(/);
+
 /** The catalogue. Keys use the tracer's vocabulary so providers.ts resolves them. */
 export const SIGNALS: ScanSignal[] = [
   // absent by design
@@ -87,7 +90,7 @@ export const SIGNALS: ScanSignal[] = [
   S('new Audio', /\bnew\s+Audio\s*\(/),
   S('BaseAudioContext.createMediaElementSource()', /\.createMediaElementSource\s*\(/),
   S('BaseAudioContext.createMediaStreamSource()', /\.createMediaStreamSource\s*\(/),
-  S('MediaDevices.getUserMedia()', /\bgetUserMedia\s*\(/),
+  CAMERA_SIGNAL,
   S('Navigator.mediaDevices', /\bnavigator\.mediaDevices\b/, 'probe'),
   S('new MediaRecorder', /\bnew\s+MediaRecorder\s*\(/),
   S('new RTCPeerConnection', /\bnew\s+RTCPeerConnection\s*\(/),

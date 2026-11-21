@@ -74,7 +74,10 @@ configurable); hand-tracking permission and feature (`required="false"`) when th
 tracking (or always, configurable); `android.permission.INTERNET` whenever the network allowlist is
 non-empty **or** the build can serve the inspector or debug endpoint (all debug builds, and release builds
 packed with the inspector flag), because Android refuses any AF_INET socket, loopback included, without
-it; passthrough/scene/anchor permissions only for AR features (later); minSdk 29 (or Meta's current
+it; passthrough/scene/anchor permissions only for AR features, and `CAMERA` + `HEADSET_CAMERA` only for the camera
+feature (declared with `native.features.camera`, derived from IWSDK's `world.features.camera`, or, for a non-IWSDK
+bundle without `native.features`, from a `getUserMedia` call in the dist); `xr.immersiveAr` in the runtime config
+when passthrough is declared (XR-AR-1); minSdk 29 (or Meta's current
 floor), targetSdk per Meta's store rule at pack time (configurable; default kept current by the runtime
 release).
 *Check:* `am start -S -n <pkg>/android.app.NativeActivity` launches a packed app (or the moved perf tool

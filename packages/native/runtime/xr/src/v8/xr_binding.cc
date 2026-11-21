@@ -17,12 +17,19 @@
 //                                       (iwn/xr/layers.h; external backing store, the same memory for the process)
 //   beginLayerSwapchain(kind 2|3, width, height, arraySize, format, isStatic, mipLevels, textureArray) -> object | null
 //   destroyLayerSwapchain(id)  acquireLayerImage(id) -> GL name | 0
+//   requestPermissions(names) -> Promise<{name: bool}>   XR-PERM-1: system dialog for the ones not held, then
+//                                       whether each is held (xr_permissions.h)
+//   checkPermissions(names) -> {name: bool}             checkSelfPermission, no dialog
+//   declaredPermissions() -> string[] | null            the manifest's permissions (null: unknown)
 #include <v8.h>
 
 #include <cmath>
 #include <functional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "android/xr_permissions.h"
 #include "android/xr_system.h"
 #include "iwn/core/clock.h"
 #include "iwn/core/event_loop.h"
@@ -55,6 +62,9 @@ struct BindingState {
   bool fence_created = false;
   bool in_frame = false;
   std::vector<XrEvent> events;
+  // requestPermissions promises of the current page, by request id
+  uint64_t next_permission_request = 0;
+  std::unordered_map<uint64_t, v8::Global<v8::Promise::Resolver>> permission_requests;
 };
 
 BindingState& G() {
@@ -374,6 +384,95 @@ void EndFrameGL(const v8::FunctionCallbackInfo<v8::Value>&) {
   g.fence_created = true;
 }
 
+// An array of strings (anything else: empty).
+std::vector<std::string> string_list(const v8::FunctionCallbackInfo<v8::Value>& info, int i) {
+  std::vector<std::string> out;
+  if (info.Length() <= i || !info[i]->IsArray()) return out;
+  v8::Isolate* iso = info.GetIsolate();
+  v8::Local<v8::Context> ctx = iso->GetCurrentContext();
+  v8::Local<v8::Array> arr = info[i].As<v8::Array>();
+  for (uint32_t k = 0; k < arr->Length() && k < 64; ++k) {
+    v8::Local<v8::Value> v;
+    if (!arr->Get(ctx, k).ToLocal(&v) || !v->IsString()) continue;
+    v8::String::Utf8Value s(iso, v);
+    if (*s) out.emplace_back(*s, s.length());
+  }
+  return out;
+}
+
+v8::Local<v8::Object> permission_map(v8::Isolate* iso, v8::Local<v8::Context> ctx, const std::vector<std::string>& names,
+                                     const std::vector<bool>& held) {
+  v8::Local<v8::Object> o = v8::Object::New(iso);
+  for (size_t i = 0; i < names.size(); ++i) {
+    v8::Local<v8::String> key;
+    if (!v8::String::NewFromUtf8(iso, names[i].data(), v8::NewStringType::kNormal, static_cast<int>(names[i].size()))
+             .ToLocal(&key)) {
+      continue;
+    }
+    o->Set(ctx, key, v8::Boolean::New(iso, i < held.size() && held[i])).Check();
+  }
+  return o;
+}
+
+void RequestPermissions(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  v8::Local<v8::Context> ctx = iso->GetCurrentContext();
+  v8::Local<v8::Promise::Resolver> resolver;
+  if (!v8::Promise::Resolver::New(ctx).ToLocal(&resolver)) return;
+  info.GetReturnValue().Set(resolver->GetPromise());
+  BindingState& g = G();
+  std::vector<std::string> names = string_list(info, 0);
+  if (!g.rt || names.empty()) {
+    (void)resolver->Resolve(ctx, v8::Object::New(iso)).FromMaybe(false);
+    return;
+  }
+  const uint64_t id = ++g.next_permission_request;
+  Runtime* rt = g.rt;
+  const bool queued = iwn::xr::PermissionBroker::get().request(
+      names, [] { return XrSystem::get().focused(); },
+      [rt, id, names](std::vector<bool> held) {
+        // the broker's worker is joined in the shutdown hook, before the runtime goes away
+        rt->post_task([rt, id, names, held = std::move(held)] {
+          BindingState& st = G();
+          auto it = st.permission_requests.find(id);
+          if (it == st.permission_requests.end()) return;  // the page was replaced meanwhile
+          v8::Isolate* iso = rt->isolate();
+          v8::Local<v8::Context> ctx = rt->context();
+          v8::Local<v8::Promise::Resolver> resolver = it->second.Get(iso);
+          st.permission_requests.erase(it);
+          (void)resolver->Resolve(ctx, permission_map(iso, ctx, names, held)).FromMaybe(false);
+        });
+      });
+  if (!queued) {
+    // the runtime is shutting down (the page's last `end` listener asked): the state now, no dialog
+    (void)resolver->Resolve(ctx, permission_map(iso, ctx, names, iwn::xr::PermissionBroker::get().check(names)))
+        .FromMaybe(false);
+    return;
+  }
+  g.permission_requests.emplace(id, v8::Global<v8::Promise::Resolver>(iso, resolver));
+}
+
+void DeclaredPermissions(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  const auto declared = iwn::xr::PermissionBroker::get().declared();
+  if (!declared) {
+    info.GetReturnValue().SetNull();
+    return;
+  }
+  v8::Local<v8::Context> ctx = iso->GetCurrentContext();
+  v8::Local<v8::Array> arr = v8::Array::New(iso, static_cast<int>(declared->size()));
+  uint32_t i = 0;
+  for (const std::string& name : *declared) arr->Set(ctx, i++, str(iso, name.c_str())).Check();
+  info.GetReturnValue().Set(arr);
+}
+
+void CheckPermissions(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  const std::vector<std::string> names = string_list(info, 0);
+  info.GetReturnValue().Set(permission_map(iso, iso->GetCurrentContext(), names,
+                                           iwn::xr::PermissionBroker::get().check(names)));
+}
+
 void DebugFoveation(const v8::FunctionCallbackInfo<v8::Value>& info) {
   v8::Isolate* iso = info.GetIsolate();
   info.GetReturnValue().Set(json_to_v8(iso, iso->GetCurrentContext(), XrSystem::get().debug_foveation()));
@@ -419,6 +518,7 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
       XrSystem::get().request_shot(params["eye"].string_or("both"), params["scale"].as_number(1.0), std::move(reply));
     });
     rt->add_stats_provider("xr", [] { return XrSystem::get().stats(); });
+    iwn::xr::PermissionBroker::get().start();
     rt->add_shutdown_hook([] {
       BindingState& st = G();
       // PROC-7: the page's WebXR session ends first (its `end` event fires), then OpenXR is torn down.
@@ -426,6 +526,10 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
         std::vector<XrEvent> end_event{XrEvent{XrEvent::kSessionEnd}};
         call_handler(st.rt, kKindEvents, &end_event);
       }
+      // After the page's last JS (an `end` listener may still ask) and before the XR system its wait asks for the
+      // focus: the broker refuses requests until the next registration, and no promise of this isolate stays.
+      iwn::xr::PermissionBroker::get().stop();
+      st.permission_requests.clear();
       XrSystem::get().stop();
       if (st.rt) st.rt->set_frame_pump(nullptr);
       st.handler.Reset();
@@ -450,6 +554,7 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
       xr.notify_page_started();
     }
     g.generation = rt->context_generation();
+    g.permission_requests.clear();
     g.handler.Reset();
     g.record_buffer.Reset();
     g.layer_buffer.Reset();
@@ -476,6 +581,9 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
   set_fn(isolate, ctx, o, "beginLayerSwapchain", BeginLayerSwapchain);
   set_fn(isolate, ctx, o, "destroyLayerSwapchain", DestroyLayerSwapchain);
   set_fn(isolate, ctx, o, "acquireLayerImage", AcquireLayerImage);
+  set_fn(isolate, ctx, o, "requestPermissions", RequestPermissions);
+  set_fn(isolate, ctx, o, "checkPermissions", CheckPermissions);
+  set_fn(isolate, ctx, o, "declaredPermissions", DeclaredPermissions);
   o->Set(ctx, str(isolate, "layoutVersion"), v8::Integer::NewFromUnsigned(isolate, L::kVersion)).Check();
   natives->Set(ctx, str(isolate, "xr"), o).Check();
 }

@@ -88,6 +88,8 @@ export interface CompatOptions {
   baseline?: { keys: ReadonlySet<string>; origins: ReadonlySet<string>; counts?: ReadonlyMap<string, number>; iwsdk?: string };
   /** The app's @iwsdk/core version (compared with the baseline's: baselineDrift). */
   iwsdkVersion?: string;
+  /** The packer features the app declares (cli.ts declaredFeatures): `passthrough` turns immersive-ar on (XR-AR-1). */
+  declared?: ReadonlySet<string>;
 }
 
 /** `1.2.0`, `v1.2.0-rc.1` -> [1, 2, 0]; undefined for anything else (a tag, a path, a placeholder). */
@@ -188,6 +190,7 @@ function originAllowed(origin: string, allow: string[]): boolean {
 export function evaluateCompat(opts: CompatOptions): CompatReport {
   const allow = opts.allow ?? [];
   const strict = opts.strict ?? false;
+  const ctx = { declared: opts.declared };
   type Use = { traced: boolean; app: boolean; inDist: boolean; distCount: number; strength: 'call' | 'probe'; evidence: string[]; guarded?: string };
   const byKey = new Map<string, Use>();
   const add = (key: string, source: 'trace' | 'static' | 'app', strength: 'call' | 'probe', ev: string, count = 0, guarded?: string) => {
@@ -342,7 +345,7 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
     const expr = m[1]!.replace(/\?\./g, '.');
     const root = expr.startsWith('navigator.') ? `Navigator.${expr.slice('navigator.'.length)}` : expr;
     if (hits.has(root) || ruleFor(root)?.policy !== 'absent') continue;
-    const r = resolve(parseKey(root), opts.surface);
+    const r = resolve(parseKey(root), opts.surface, ctx);
     if (r.status === 'unsupported' || r.status === 'absent-ok') {
       hits.set(root, e);
       named.add(root);
@@ -355,7 +358,7 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
   const supported: Partial<Record<Status, number>> = {};
   for (const [key, u] of byKey) {
     const p = parseKey(key);
-    const r = resolve(p, opts.surface);
+    const r = resolve(p, opts.surface, ctx);
     if (r.status === 'config' && p.arg) {
       const origin = p.arg.split(' ')[1] ?? '';
       if (originAllowed(origin, allow)) {
@@ -370,6 +373,9 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
     const base = opts.baseline;
     const dormant = !u.traced && !u.app && !!base?.keys.has(key) && (base.counts?.get(key) === undefined || u.distCount <= base.counts.get(key)!);
     let severity: Severity = dormant ? 'info' : severityFor(r.status, u, strict, !!r.stub);
+    // an immersive-ar string in the bundle only (no request traced or in the app's own code or config): a mention,
+    // not a request, so the passthrough declaration it would need is informational
+    if (r.status === 'config' && /\("immersive-ar"\)$/.test(key) && !u.traced && !u.app && u.strength === 'probe') severity = 'info';
     // an absent-by-design API the app names but did not call in the trace: was it feature-detected?
     let guardNote = '';
     const hitRoot = rootName(key);
@@ -407,7 +413,7 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
   }
   for (const [root, e] of hits) {
     const p = parseKey(root);
-    const r = resolve(p, opts.surface);
+    const r = resolve(p, opts.surface, ctx);
     const nav = shownRoot(root);
     const test = root.includes('.') ? `if (${nav})` : `typeof ${root} !== 'undefined'`;
     // the app's own source checks for the root somewhere. Which code threw is not known here (a use outside that
@@ -573,7 +579,7 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
         why = `as the app's own ${noEntry.origin === 'config' ? 'config' : 'code'} says (${noEntry.evidence}), it does not offer a session; see the "${noEntry.key}" finding`;
         spec = ['XR-LIFE-7'];
       } else if (askedAR && !opts.trace.emulateAR) {
-        why = 'the app asked for an immersive-ar session, which the headset does not offer until XR-AR-1 (the headless device is set up the same way), so it got none';
+        why = 'the app asked for an immersive-ar session, which the headset offers only to apps that declare passthrough (the headless device is set up the same way), so it got none';
         spec = ['XR-AR-1'];
       } else if (blocked.length) {
         why = `the run blocked ${blocked.length} cross-origin request(s) (${blocked.slice(0, 2).join(', ')}); if the app needs them to boot it fails the same way on the headset. Add the origin to native.network.allow (the trace then lets it through), or pass --mirror <url-prefix>=<dir> to serve a local copy`;

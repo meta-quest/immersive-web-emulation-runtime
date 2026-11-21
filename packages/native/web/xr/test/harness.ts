@@ -44,6 +44,18 @@ export interface Harness {
   layerWords: { u32: Uint32Array; f32: Float32Array };
   info: XrInfo;
   swapchain: NativeSwapchain | null;
+  /**
+   * The fake permission state (XR-PERM-1): what checkPermissions reports, and what requestPermissions grants (the
+   * "user's answer" for each name; unlisted names are denied). Null: natives without the permission helpers. With
+   * `hold` set, native requests wait (the dialog is up) until release() answers them, in the order they were made.
+   */
+  permissions: {
+    held: Record<string, boolean>;
+    answer: Record<string, boolean>;
+    fail?: boolean;
+    hold?: boolean;
+    release(): void;
+  } | null;
   /** Runs one XR frame as the native pump does (kind 1), after writing a default frame unless told not to. */
   frame(opts?: Partial<FrameOptions>): void;
   tick(): void;
@@ -102,6 +114,10 @@ export function createHarness(
     noLayers?: boolean;
     /** The layer buffer's version as the native side writes it. */
     layerBufferVersion?: number;
+    /** The user's answer per permission (see Harness.permissions); null: no permission helpers. */
+    permissions?: Record<string, boolean> | null;
+    /** What declaredPermissions reports (the manifest); absent: natives without it (all count as declared). */
+    declared?: string[] | null;
   } = {},
 ): Harness {
   const buffer = new ArrayBuffer(RECORD_BYTES);
@@ -175,8 +191,41 @@ export function createHarness(
           return name;
         },
       };
+
+  const heldAnswers: Array<() => void> = [];
+  h.permissions =
+    opts.permissions === null
+      ? null
+      : {
+          held: {},
+          answer: { ...opts.permissions },
+          release() {
+            for (const answer of heldAnswers.splice(0)) answer();
+          },
+        };
+  const permissionHelpers = h.permissions
+    ? {
+        requestPermissions: (names: string[]) => {
+          calls.push(['requestPermissions', [...names]]);
+          const p = h.permissions!;
+          if (p.fail) return Promise.reject(new Error('requestPermissions failed'));
+          const answer = () => {
+            for (const n of names) if (p.answer[n] === true) p.held[n] = true;
+            return Object.fromEntries(names.map((n) => [n, p.held[n] === true]));
+          };
+          if (!p.hold) return Promise.resolve(answer());
+          return new Promise((resolve) => heldAnswers.push(() => resolve(answer())));
+        },
+        checkPermissions: (names: string[]) => {
+          calls.push(['checkPermissions', [...names]]);
+          return Object.fromEntries(names.map((n) => [n, h.permissions!.held[n] === true]));
+        },
+        ...(opts.declared !== undefined ? { declaredPermissions: () => opts.declared } : {}),
+      }
+    : {};
   const natives = {
     ...layerNatives,
+    ...permissionHelpers,
     layoutVersion: opts.layoutVersion ?? LAYOUT_VERSION,
     info: () => {
       calls.push(['info']);

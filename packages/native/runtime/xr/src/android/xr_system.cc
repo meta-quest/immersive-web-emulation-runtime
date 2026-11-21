@@ -449,6 +449,10 @@ bool XrSystem::wait_initialized(int timeout_ms) {
   return impl_->init_done && impl_->init_ok;
 }
 
+bool XrSystem::focused() const {
+  return impl_ && impl_->state.load(std::memory_order_relaxed) == XR_SESSION_STATE_FOCUSED;
+}
+
 void XrSystem::stop() {
   if (!started_ || !impl_) return;
   impl_->quit = true;

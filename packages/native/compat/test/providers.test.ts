@@ -59,7 +59,7 @@ test('resolve: measured layers, V8, IWER, gaps and policies', () => {
   assert.equal(st('new Intl.Segmenter'), 'v8');
   assert.equal(st('XRFrame.getViewerPose()'), 'iwer');
   assert.equal(st('XRFrame.detectedPlanes'), 'later');
-  assert.equal(st('XRSystem.offerSession("immersive-ar")'), 'later');
+  assert.equal(st('XRSystem.offerSession("immersive-ar")'), 'config'); // XR-AR-1: needs passthrough declared
   assert.equal(st('XRSystem.offerSession("immersive-vr")'), 'iwer');
   assert.equal(st('WebGL2RenderingContext.drawElements()'), 'provided');
   assert.equal(st('WebGLActiveInfo.name'), 'partial'); // interface present, `this.name =` in the layer: an instance field
@@ -141,7 +141,12 @@ test('resolve: AR support checks, crypto.subtle, the bare canvas global, WebSock
   const s = fakeSurface();
   const r = (k: string) => resolve(parseKey(k), s);
   assert.equal(r('XRSystem.isSessionSupported("immersive-ar")').status, 'absent-ok');
-  assert.equal(r('XRSystem.requestSession("immersive-ar")').status, 'later');
+  assert.equal(r('XRSystem.requestSession("immersive-ar")').status, 'config');
+  assert.match(r('XRSystem.requestSession("immersive-ar")').note!, /native\.features\.passthrough/);
+  // XR-AR-1: pack turns immersive-ar on for an app that declares passthrough
+  const ar = { declared: new Set(['passthrough']) };
+  for (const k of ['XRSystem.isSessionSupported("immersive-ar")', 'XRSystem.requestSession("immersive-ar")', 'XRSystem.offerSession("immersive-ar")'])
+    assert.equal(resolve(parseKey(k), s, ar).status, 'iwer', k);
   // NET-STORE-4: absent in the alpha (the digest-only prelude has no config key, so it is not offered as a route)
   assert.equal(r('Crypto.subtle').status, 'absent-ok');
   assert.deepEqual(r('Crypto.subtle').spec, ['NET-STORE-4']);

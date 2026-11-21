@@ -11,8 +11,9 @@ import path from 'node:path';
 import { before, test } from 'node:test';
 import { buildTestDist, buildTestTemplate } from '../../packager/test/helpers.ts';
 import { runCli, type CliIo } from '../../src/cli/main.ts';
-import { loadBaseline } from '../src/cli.ts';
+import { declaredFeatures, loadBaseline } from '../src/cli.ts';
 import { buildInventory } from '../src/inventory.ts';
+import { scanDist } from '../src/scan.ts';
 import { fromSnapshot, toSnapshot } from '../src/surface.ts';
 import { measuredSurface, parseKey, resolve } from '../src/providers.ts';
 import { tempDir, writeTree } from './helpers.ts';
@@ -234,12 +235,13 @@ test('pack gate: an app on a newer IWSDK minor than the shipped baseline passes 
   assert.equal(await runCli(['compat'], packIo(older)), 0);
 });
 
-test('pack gate: the app\'s own AR config warns even though library code mentions AR everywhere', async () => {
+test('pack gate: the app\'s own AR config is checked even though library code mentions AR everywhere', async () => {
   const dir = packProject();
   writeFileSync(path.join(dir, 'iwsdk.config.json'), JSON.stringify({ version: 'iwsdk.project.v1', native: { packageId: 'com.a.gate', appName: 'Gate' }, world: { xr: { mode: 'ar', features: { hitTest: { required: true } } } } }));
   const a = packIo(dir);
   assert.equal(await runCli(['pack', '--template', templateFile], a), 0, a.err);
-  assert.match(a.err, /\[warn\] XRSystem\.offerSession\("immersive-ar"\)/);
+  // AR mode declares passthrough (pack derives it), so immersive-ar itself is offered (XR-AR-1)
+  assert.doesNotMatch(a.err, /\[warn\] XRSystem\.offerSession\("immersive-ar"\)/);
   assert.match(a.err, /\[warn\] XR feature hit-test \(required\)/);
   assert.match(a.err, /There is no fallback route/);
   assert.doesNotMatch(a.err, /Trusted Web Activity|TWA/);
@@ -264,4 +266,15 @@ test('compat: --mirror is validated', async () => {
   const a = io(proj);
   assert.equal(await runCli(['compat', '--trace', '--mirror', 'nope'], a), 2);
   assert.match(a.err, /--mirror wants/);
+});
+
+test('cli: declaredFeatures resolves the features as pack does (native.features, else derived; AR mode -> passthrough)', () => {
+  const dist = { 'dist/index.html': '<html></html>', 'dist/assets/a.js': 'navigator.mediaDevices.getUserMedia({video:true})' };
+  const ar = writeTree(tempDir(), { ...dist, 'iwsdk.config.json': JSON.stringify({ world: { xr: { mode: 'ar', features: { hitTest: { required: true } } } } }) });
+  const scan = (root: string) => scanDist(path.join(root, 'dist'));
+  assert.deepEqual([...declaredFeatures(ar, scan(ar))].sort(), ['camera', 'hitTest', 'passthrough']);
+  const explicit = writeTree(tempDir(), { ...dist, 'iwsdk.config.json': JSON.stringify({ world: { xr: { mode: 'ar' } }, native: { packageId: 'com.a.b', features: { handTracking: true, anchors: false } } }) });
+  assert.deepEqual([...declaredFeatures(explicit, scan(explicit))], ['handTracking']);
+  // what pack resolved wins over the file
+  assert.deepEqual([...declaredFeatures(ar, scan(ar), { names: ['passthrough'], derived: false })], ['passthrough']);
 });

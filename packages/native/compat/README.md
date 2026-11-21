@@ -51,8 +51,9 @@ developer page (PKG-14) are not part of this directory.
   *stub* does not count as providing either: an absent-by-design member a layer only stubs,
   such as web/audio's `createScriptProcessor`, is replaced by a method that throws `NotSupportedError`, as on the
   headset), and `getContext` returns null for context types other than
-  `2d` / `webgl` / `webgl2`. The emulated device offers `inline` and `immersive-vr` only (the headset has no
-  `immersive-ar` until XR-AR-1; the sweep turns AR on to record what the AR samples use in XR). So the app's feature
+  `2d` / `webgl` / `webgl2`. The emulated device offers `inline` and `immersive-vr`, and `immersive-ar`
+  only for an app that declares passthrough, as the headset does (XR-AR-1; the sweep turns AR on to record what the AR
+  samples use in XR). So the app's feature
   detection takes the headset's branch in the trace: three.js's WebGPURenderer falls back to WebGL2, a
   `typeof VideoDecoder` guard skips the clip, an optional "Enter AR" button stays hidden. A guarded probe of a
   removed `navigator` member is recorded (`miss:Navigator.gpu`); an unguarded use throws in the page as it would on
@@ -279,7 +280,7 @@ Three static sources, one optional dynamic one:
 | the app never reached XR (with the reason: an `immersive-ar` request the headset rejects, blocked origins, an uncaught error, or still loading at the boot timeout); uncaught errors; a hung main thread | | | warn |
 
 The advice block (feature-detect or remove; there is no fallback route) is printed when an unsupported API is a trace error, or when the app's own source, config or trace
-needs `immersive-ar` (asking `isSessionSupported` does not count), a required feature that is specified for later, or an unsupported API (WebGPU, camera, video
+needs a required feature that is specified for later, or an unsupported API (WebGPU, camera, video
 playback, WebCodecs), or when the app never offers an immersive session (XR-LIFE-7). `pack --json` carries the
 gate's warnings and the advice under `compat` also when the gate passes.
 
@@ -297,7 +298,7 @@ WebGPU, `<video>` and media streams, WebCodecs, camera/microphone, `AudioWorklet
 set (AudioContext lifecycle, AudioBufferSource, Gain, Panner/Listener, `decodeAudioData`; other nodes and
 `OfflineAudioContext` warn as "planned for a later release"), WebSocket, IndexedDB, the Cache API, `crypto.subtle`,
 service workers, the system keyboard, `window.open()` / external links / OAuth redirects (`open()` warns: it returns
-null on the headset; a cross-origin navigation is logged and ignored there), images other than PNG/JPEG/WebP/GIF, DOM layout/CSS-driven UI, and `immersive-ar` until XR-AR-1. There is no fallback route. When
+null on the headset; a cross-origin navigation is logged and ignored there), images other than PNG/JPEG/WebP/GIF, and DOM layout/CSS-driven UI. `immersive-ar` needs the `passthrough` feature (IWSDK's AR mode declares it; without it the request warns as a config problem). There is no fallback route. When
 the checker fails:
 
 1. **Feature-detect the API**: absent APIs are `undefined` on the headset, so `if ('VideoDecoder' in globalThis)`

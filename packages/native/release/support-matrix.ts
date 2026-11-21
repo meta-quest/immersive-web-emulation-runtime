@@ -39,6 +39,8 @@ export interface Row {
   alphaLater?: string;
   /** Implemented and in the surface, but no device run has exercised it yet: what is missing (shown as a note). */
   deviceUntested?: string;
+  /** Packer features the row's APIs need (`passthrough`): its keys resolve as for an app that declares them. */
+  declares?: string[];
   /** `api` of rows this one depends on: unless they are all "supported", this row is "not yet" too. */
   requires?: string[];
   note?: string;
@@ -61,7 +63,9 @@ export const ROWS: Row[] = [
   // Quad / cylinder layers: device-tested on 2026-10-25 on a Quest 3 (proto-layers, IWSDK 1.0.0 and 1.1.0).
   { group: 'WebXR', api: 'Quad / cylinder layers (createQuadLayer, createCylinderLayer, getSubImage)', keys: ['XRQuadLayer', 'XRCylinderLayer', 'XRWebGLBinding.createQuadLayer', 'XRWebGLBinding.createCylinderLayer', 'XRWebGLBinding.getSubImage'], requires: ['Projection layers (XRWebGLBinding.createProjectionLayer)'], note: 'mono and stereo layouts, texture and texture-array; the redraw event never fires (the runtime keeps layer content)' },
   { group: 'WebXR', api: 'Equirect / cube layers, XRMediaBinding', keys: ['XREquirectLayer', 'XRCubeLayer', 'XRMediaBinding'] },
-  { group: 'WebXR', api: 'immersive-ar (passthrough), plane / mesh detection, hit test, anchors, depth', keys: ['XR feature plane-detection', 'XR feature hit-test', 'XR feature anchors', 'XR feature depth-sensing', 'XRAnchor'] },
+  // immersive-ar: device-tested on 2026-10-25 on a Quest 3 (the D122713586 AR samples, passthrough under the projection layer).
+  { group: 'WebXR', api: 'immersive-ar (passthrough)', keys: ['XRSystem.requestSession("immersive-ar")', 'XRSystem.offerSession("immersive-ar")', 'XRSystem.isSessionSupported("immersive-ar")'], declares: ['passthrough'], requires: ['navigator.xr, immersive-vr sessions, reference spaces, XRWebGLLayer'], note: 'for apps that declare passthrough (IWSDK\'s world.xr.mode "ar" does); environmentBlendMode alpha-blend' },
+  { group: 'WebXR', api: 'Plane / mesh detection, hit test, anchors, depth', keys: ['XR feature plane-detection', 'XR feature hit-test', 'XR feature anchors', 'XR feature depth-sensing', 'XRAnchor'] },
   { group: 'WebXR', api: 'Eye / gaze tracking', keys: ['XR feature eye-tracking'] },
   // --- graphics
   { group: 'Graphics', api: 'WebGL 2 and WebGL 1 (over OpenGL ES 3.2)', keys: ['WebGL2RenderingContext', 'WebGLRenderingContext', 'HTMLCanvasElement.getContext("webgl2")', 'HTMLCanvasElement.getContext("webgl")'] },
@@ -111,8 +115,9 @@ export function classify(row: Row, snapshot: SurfaceSnapshot, seen: ReadonlySet<
   const surface = fromSnapshot(snapshot);
   const statuses: Record<string, Status> = {};
   const layers = new Set<string>();
+  const ctx = { declared: new Set(row.declares ?? []) };
   for (const k of row.keys) {
-    const r = resolve(parseKey(k), surface);
+    const r = resolve(parseKey(k), surface, ctx);
     statuses[k] = r.status;
     if (r.layer) layers.add(r.layer);
   }

@@ -30,6 +30,12 @@ export interface XrInfo {
   /** immersive-ar is offered: passthrough is available and the config opted in (xr.immersiveAr, XR-AR-1). */
   immersiveAr?: boolean;
   foveation?: boolean;
+  // Native support of the AR features (XR-PERM-1: a session can be granted one only when its flag is true).
+  planeDetection?: boolean;
+  meshDetection?: boolean;
+  hitTest?: boolean;
+  anchors?: boolean;
+  depthSensing?: boolean;
   explicitGrant?: boolean;
   /** XR-LAYER-1: quad and cylinder layers (cylinder needs XR_KHR_composition_layer_cylinder). */
   compositionLayers?: { quad: boolean; cylinder: boolean; maxLayers: number; bufferVersion: number };
@@ -113,6 +119,16 @@ export interface XrNatives {
   destroyLayerSwapchain?(id: number): void;
   /** The GL name of the image layer swapchain `id` draws into now (acquired at once), 0 when there is none. */
   acquireLayerImage?(id: number): number;
+  /**
+   * XR-PERM-1: asks Android for runtime permissions (one system dialog for the ones not held, after any request in
+   * flight; none for those already put to the user in this process or not in the manifest) and resolves each name to
+   * whether it is held once the dialog is answered.
+   */
+  requestPermissions?(names: string[]): Promise<Record<string, boolean>>;
+  /** checkSelfPermission for each name; no dialog. */
+  checkPermissions?(names: string[]): Record<string, boolean>;
+  /** The permissions the app's manifest declares; null when the runtime cannot read them. */
+  declaredPermissions?(): string[] | null;
 }
 
 /** The internal surface of a WebGL context the hooks below take (web/webgl Ctx). */

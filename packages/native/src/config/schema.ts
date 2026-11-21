@@ -117,7 +117,7 @@ export const NATIVE_TARGET_JSON_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       description:
-        'Default: derived from world.xr.features (and passthrough for AR).',
+        'Default: derived from world.xr.features (and passthrough for AR, camera for world.features.camera).',
       properties: Object.fromEntries(
         NATIVE_FEATURE_NAMES.map((n) => [n, featureFlag]),
       ),

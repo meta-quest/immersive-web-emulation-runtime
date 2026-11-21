@@ -441,6 +441,67 @@ describe('launch splash and loading screen (native.splash)', () => {
   });
 });
 
+describe('AR on and the camera feature (XR-AR-1, XR-PERM-1)', () => {
+  const unpack = (file: string) => {
+    const zip = readZip(readFileSync(file));
+    return {
+      cfg: JSON.parse(entryData(zip, findEntry(zip, 'assets/iwn/config.json')!).toString()),
+      manifest: summarizeManifest(decodeAxml(entryData(zip, findEntry(zip, 'AndroidManifest.xml')!))),
+    };
+  };
+  const fromWorld = (world: unknown, native: Record<string, unknown> = {}) =>
+    resolveNativeTarget(
+      { version: 'iwsdk.project.v1', world, native: { packageId: 'com.example.packtest', appName: 'Pack Test', ...native } },
+      { packageJson: { name: 'pack-test', version: '1.2.3' } },
+    );
+  const CAMERA = ['android.permission.CAMERA', 'horizonos.permission.HEADSET_CAMERA'];
+
+  test('an app that declares passthrough gets xr.immersiveAr; a VR app keeps the template default', async () => {
+    const ar = unpack((await pack(input({ target: fromWorld({ xr: { mode: 'ar' } }) }))).outFile);
+    assert.equal(ar.cfg.xr.immersiveAr, true);
+    assert.equal(ar.cfg.xr.features.passthrough, 'required');
+    const explicit = unpack((await pack(input({ target: target({ features: { passthrough: 'optional' } }) }))).outFile);
+    assert.equal(explicit.cfg.xr.immersiveAr, true);
+    const vr = unpack((await pack(input({ target: fromWorld({ xr: { mode: 'vr' } }) }))).outFile);
+    assert.equal(vr.cfg.xr.immersiveAr, undefined);
+  });
+
+  test('world.features.camera declares camera: both camera permissions and the passthrough uses-feature', async () => {
+    const t = fromWorld({ xr: { mode: 'vr' }, features: { camera: true } });
+    assert.equal(t.features.camera, 'optional');
+    const r = await pack(input({ target: t }));
+    const { cfg, manifest } = unpack(r.outFile);
+    for (const perm of CAMERA) assert.ok(manifest.permissions.includes(perm), perm);
+    assert.deepEqual(manifest.features.find((f) => f.name === 'com.oculus.feature.PASSTHROUGH'), {
+      name: 'com.oculus.feature.PASSTHROUGH',
+      required: false,
+    });
+    assert.equal(cfg.xr.features.camera, 'optional');
+    assert.equal(cfg.xr.immersiveAr, undefined, 'the camera alone does not turn AR on');
+  });
+
+  test('a non-IWSDK dist that calls getUserMedia gets camera unless native.features is set; IWSDK bundles do not', async () => {
+    const camDist = buildTestDist(path.join(scratch, 'cam-plain'), {
+      'assets/index.js': 'navigator.mediaDevices.getUserMedia({ video: true }).then((s) => (video.srcObject = s));',
+    });
+    const derived = await pack(input({ target: fromWorld({ xr: { mode: 'vr' } }), distDir: camDist }));
+    for (const perm of CAMERA) assert.ok(derived.manifest.permissions.includes(perm), perm);
+    assert.equal(unpack(derived.outFile).cfg.xr.features.camera, 'optional');
+    assert.ok(derived.warnings.some((w) => /assets\/index\.js calls getUserMedia: declared the camera feature/.test(w)));
+
+    const explicit = await pack(input({ target: target({ features: { handTracking: true } }), distDir: camDist }));
+    assert.ok(!explicit.manifest.permissions.includes('horizonos.permission.HEADSET_CAMERA'), 'native.features is authoritative');
+
+    // every IWSDK build carries its camera code: only world.features.camera counts there
+    const iwsdkDist = buildTestDist(path.join(scratch, 'cam-iwsdk'), {
+      'assets/index.js': 'const m = "iwsdk.scene.json"; navigator.mediaDevices.getUserMedia({ video: true });',
+    });
+    const iwsdk = await pack(input({ target: fromWorld({ xr: { mode: 'vr' } }), distDir: iwsdkDist }));
+    assert.ok(!iwsdk.manifest.permissions.includes('horizonos.permission.HEADSET_CAMERA'));
+    assert.ok(!iwsdk.warnings.some((w) => /getUserMedia/.test(w)));
+  });
+});
+
 describe('refusals (PKG-5, PKG-6, PKG-7)', () => {
   test('no module script', async () => {
     const d = buildTestDist(scratchDir('nomod'), {

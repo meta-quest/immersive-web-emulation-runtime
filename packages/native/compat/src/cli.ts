@@ -17,8 +17,8 @@
  * requests to `native.network.allow` origins through and serves `--mirror`
  * prefixes from local directories; other cross-origin requests are blocked, as
  * on the headset. The page is trimmed to the headset's surface first (absent-by-
- * design APIs deleted, no immersive-ar), so feature detection takes the
- * headset's path.
+ * design APIs deleted, immersive-ar only for an app that declares passthrough),
+ * so feature detection takes the headset's path.
  * The dormant-library baseline applies only to IWSDK apps (the project depends
  * on @iwsdk/core, or the bundle carries IWSDK's markers).
  * When the trimmed run has a TypeError and the app touched a removed root (navigator.gpu, ctx.audioWorklet), up to
@@ -35,8 +35,9 @@ import path from 'node:path';
 import { evaluateCompat, formatCompatReport, type CompatReport } from './check.ts';
 import { projectSignals } from './project.ts';
 import { controlTrim, headsetTrim } from './providers.ts';
-import { scanDist } from './scan.ts';
+import { CAMERA_SIGNAL, scanDist, type ScanResult } from './scan.ts';
 import { loadSurface, packageRoot } from './surface.ts';
+import { featuresFromWorld } from '../../src/config/resolve.ts';
 import { findIwerBuild, loadPlaywright, runTrace, type TraceResult } from './trace-run.ts';
 
 export interface CompatCliOptions {
@@ -52,6 +53,11 @@ export interface CompatCliOptions {
   mirrors?: string[];
   /** Trace run: how long to wait for the app to offer or request a session (ms, default 25000). */
   bootMs?: number;
+  /**
+   * The packer's resolved features (pack passes them: `names` from native.features or derived, `derived` when
+   * native.features is absent). Default: read from iwsdk.config.json the same way (declaredFeatures).
+   */
+  features?: { names: string[]; derived: boolean };
   stdout: (t: string) => void;
   stderr: (t: string) => void;
 }
@@ -69,11 +75,37 @@ export function readAllowlist(projectRoot: string): string[] {
   }
 }
 
+/**
+ * The features pack declares for the project (src/config/resolve.ts: native.features, else derived from world.xr,
+ * AR mode implying passthrough, and world.features.camera; packager/src/pack.ts distFeatures: a dist that is not
+ * IWSDK and calls getUserMedia gets the camera when the features are derived). What the headset offers depends on
+ * them: passthrough turns immersive-ar on (XR-AR-1).
+ */
+export function declaredFeatures(projectRoot: string, scan: ScanResult, given?: { names: string[]; derived: boolean }): Set<string> {
+  let resolved = given;
+  if (!resolved) {
+    let cfg: { native?: { features?: unknown }; world?: unknown } = {};
+    try {
+      cfg = JSON.parse(readFileSync(path.join(projectRoot, 'iwsdk.config.json'), 'utf8')) as typeof cfg;
+    } catch {
+      /* no or unreadable config: only what the dist implies */
+    }
+    const nf = cfg.native?.features;
+    resolved = nf && typeof nf === 'object'
+      ? { names: Object.entries(nf as Record<string, unknown>).filter(([, v]) => v !== false && v !== null && v !== undefined).map(([k]) => k), derived: false }
+      : { names: Object.keys(featuresFromWorld(cfg.world)), derived: true };
+  }
+  const out = new Set(resolved.names);
+  if (resolved.derived && !out.has('camera') && !scan.iwsdk && scan.hits.some((h) => h.key === CAMERA_SIGNAL.key)) out.add('camera');
+  return out;
+}
+
 export async function checkProject(opts: Omit<CompatCliOptions, 'stdout' | 'stderr' | 'json' | 'verbose'> & { log?: (m: string) => void }): Promise<CompatReport> {
   const dist = path.resolve(opts.projectRoot, opts.distDir ?? 'dist');
   if (!existsSync(path.join(dist, 'index.html'))) throw new CompatUsageError(`${dist} has no index.html; build first (vite build)`);
   const { surface, origin } = await loadSurface();
   const scan = scanDist(dist);
+  const declared = declaredFeatures(opts.projectRoot, scan, opts.features);
   const allow = opts.allow ?? readAllowlist(opts.projectRoot);
   let trace: TraceResult | undefined;
   let traceAgain: ((roots: string[]) => Promise<NonNullable<TraceResult['controls']>>) | undefined;
@@ -85,7 +117,7 @@ export async function checkProject(opts: Omit<CompatCliOptions, 'stdout' | 'stde
       throw new CompatUsageError('--trace needs playwright and iwer in the project\'s node_modules (IWSDK projects have both via @iwsdk/cli and @iwsdk/vite-plugin-dev)');
     opts.log?.(`tracing ${dist} headlessly (IWER ${path.relative(opts.projectRoot, iwer)})`);
     const trim = headsetTrim(surface);
-    const run = (t: typeof trim) => runTrace({ distDir: dist, iwerSource: readFileSync(iwer, 'utf8'), playwright: pw, log: opts.log, allow, mirrors, trim: t, emulateAR: false, bootTimeoutMs: opts.bootMs });
+    const run = (t: typeof trim) => runTrace({ distDir: dist, iwerSource: readFileSync(iwer, 'utf8'), playwright: pw, log: opts.log, allow, mirrors, trim: t, emulateAR: declared.has('passthrough'), bootTimeoutMs: opts.bootMs });
     trace = await run(trim);
     traceAgain = async (roots: string[]) => {
       // one browser at a time; at most MAX_CONTROL_RUNS extra runs
@@ -101,7 +133,7 @@ export async function checkProject(opts: Omit<CompatCliOptions, 'stdout' | 'stde
   const iwsdkVersion = iwsdkCoreVersion(opts.projectRoot);
   // the baseline describes library code IWSDK builds carry: for a plain three.js (or other) bundle every hit is the app's
   const iwsdk = !!iwsdkVersion || dependsOnIwsdk(opts.projectRoot) || !!scan.iwsdk;
-  const evaluate = () => evaluateCompat({ scan, trace, app: projectSignals(opts.projectRoot), surface, surfaceOrigin: origin, allow, strict: opts.strict, baseline: iwsdk ? loadBaseline() : undefined, iwsdkVersion });
+  const evaluate = () => evaluateCompat({ scan, trace, app: projectSignals(opts.projectRoot), surface, surfaceOrigin: origin, allow, strict: opts.strict, baseline: iwsdk ? loadBaseline() : undefined, iwsdkVersion, declared });
   let report = evaluate();
   if (trace && traceAgain && report.controlCandidates?.length) {
     // a TypeError in the trimmed run and a removed root the app touched: re-run with the root left in place, so

@@ -80,6 +80,8 @@ class XrSystem {
   // Shutdown hook (PROC-7): ends everything, joins the XR thread and makes the system ready for the next start().
   void stop();
   bool started() const { return started_; }
+  // The OpenXR session is FOCUSED (the app has the input focus; a system dialog takes it). Any thread.
+  bool focused() const;
   // Waits until OpenXR initialisation finished (true when an XR session exists).
   bool wait_initialized(int timeout_ms);
 

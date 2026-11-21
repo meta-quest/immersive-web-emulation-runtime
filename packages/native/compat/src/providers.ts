@@ -85,6 +85,13 @@ export interface Rule {
   note?: string;
 }
 
+/** What the app declares, as the packer resolves it (native.features, or derived from the config and the dist). */
+export interface ResolveContext {
+  declared?: ReadonlySet<string>;
+}
+
+const PASSTHROUGH_DECLARE = 'declare passthrough (native.features.passthrough, or IWSDK\'s world.xr.mode "ar", from which pack derives it)';
+
 /**
  * Rules match the normalised base of a key (see parseKey): `Iface.member`,
  * a global name, `on:<Iface>.<type>`, `ext:<name>`, `feature:<name>`,
@@ -325,8 +332,8 @@ function imageFormatOf(p: ParsedKey): string | undefined {
  * Resolve the status of a key. `appCalls` tells whether the app called/constructed
  * it (vs only reading/probing), which decides absent-ok vs unsupported.
  */
-export function resolve(p: ParsedKey, surface: MeasuredSurface): Resolution {
-  const r = resolveMeasured(p, surface);
+export function resolve(p: ParsedKey, surface: MeasuredSurface, ctx: ResolveContext = {}): Resolution {
+  const r = resolveMeasured(p, surface, ctx);
   // the 0.1.0-alpha scope: present in a layer but not shipped as supported in the alpha,
   // so the checker warns as the README's support matrix (release/support-matrix.ts alphaLater rows) says "not yet".
   // A layer's NotSupportedError stub of such an API (web/audio's beyond-basic nodes without glue.audio.experimental)
@@ -355,7 +362,7 @@ const ALPHA_LATER: Array<{ re: RegExp; note: string }> = [
   },
 ];
 
-function resolveMeasured(p: ParsedKey, surface: MeasuredSurface): Resolution {
+function resolveMeasured(p: ParsedKey, surface: MeasuredSurface, ctx: ResolveContext): Resolution {
   // a miss probe (`probe:Navigator.gpu`) of an absent-by-design API resolves by that API's rule
   // (`miss:serviceWorker (in, Navigator chain)` is an `in` test on navigator: Navigator.serviceWorker)
   const bare = p.kind === 'probe' ? ruleFor(/\(in, (Navigator|WorkerNavigator) chain\)/.test(p.key) && !p.iface ? `Navigator.${p.member}` : p.base.replace(/^probe:/, '')) : undefined;
@@ -382,12 +389,17 @@ function resolveMeasured(p: ParsedKey, surface: MeasuredSurface): Resolution {
     const entry = allowEntryFor(origin);
     return { status: 'config', area: 'net', spec: ['NET-5'], note: `cross-origin: add ${entry} to native.network.allow (else blocked)${entry !== origin ? `; the runtime matches ${origin.split(':')[0]}:// URLs against the ${entry.split(':')[0]}:// origin` : ''}` };
   }
+  // XR-AR-1: pack turns immersive-ar on (xr.immersiveAr, passthrough under the projection layer) for an app that
+  // declares passthrough; for any other app the headset offers immersive-vr only
+  const ar = !!ctx.declared?.has('passthrough');
   if (p.base === 'XRSystem.isSessionSupported' && p.arg === 'immersive-ar') {
-    // asking is not needing: on the headset it resolves false and the app's VR path runs
-    return { status: 'absent-ok', area: 'iwer', spec: ['XR-AR-1'], note: 'isSessionSupported("immersive-ar") resolves false on the headset until XR-AR-1 lands, so the app takes its non-AR path' };
+    // asking is not needing: without passthrough it resolves false on the headset and the app's VR path runs
+    if (ar) return { status: 'iwer', area: 'iwer', spec: ['XR-AR-1'], note: 'resolves true: the app declares passthrough, so pack turns immersive-ar on' };
+    return { status: 'absent-ok', area: 'iwer', spec: ['XR-AR-1'], note: `isSessionSupported("immersive-ar") resolves false on the headset unless the app declares passthrough, so the app takes its non-AR path; to offer AR, ${PASSTHROUGH_DECLARE}` };
   }
   if (/^XRSystem\.(offerSession|requestSession)$/.test(p.base) && p.arg === 'immersive-ar') {
-    return { status: 'later', area: 'iwer', spec: ['XR-AR-1'], note: 'immersive-ar (passthrough) is specified for later; on the headset the request rejects or isSessionSupported is false' };
+    if (ar) return { status: 'iwer', area: 'iwer', spec: ['XR-AR-1'], note: 'the app declares passthrough, so pack turns immersive-ar on (passthrough under the projection layer)' };
+    return { status: 'config', area: 'iwer', spec: ['XR-AR-1'], note: `immersive-ar needs passthrough declared: ${PASSTHROUGH_DECLARE}; without it the request rejects with NotSupportedError` };
   }
   if (p.kind === 'feature' && /\(required\)/.test(p.key) && rule?.policy === 'later') {
     return { status: 'later', area: 'iwer', spec: rule.spec, note: `required feature: requestSession/offerSession reject on the headset until it lands${rule.note ? `; ${rule.note}` : ''}` };

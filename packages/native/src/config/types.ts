@@ -23,6 +23,7 @@ export const NATIVE_FEATURE_NAMES = [
   'depthSensing',
   'passthrough',
   'gazeTracking',
+  'camera',
 ] as const;
 export type NativeFeatureName = (typeof NATIVE_FEATURE_NAMES)[number];
 
@@ -118,7 +119,10 @@ export interface NativeTargetConfig {
   frameRate?: NativeFrameRate;
   /** Fixed foveated rendering applied before the first frame. */
   foveation?: NativeFoveationOption;
-  /** WebXR features to declare. Defaults to the ones in `world.xr.features`. */
+  /**
+   * WebXR features to declare. Defaults to the ones in `world.xr.features` (passthrough for `world.xr.mode: "ar"`,
+   * camera for `world.features.camera`). `camera` is the passthrough cameras through `getUserMedia`.
+   */
   features?: Partial<Record<NativeFeatureName, NativeFeatureFlag>>;
   /** Extra Android permissions, fully qualified. */
   permissions?: string[];
@@ -177,6 +181,11 @@ export interface ResolvedNativeTarget {
   frameRate: NativeFrameRate | null;
   foveation: { level: FoveationLevel; dynamic: boolean };
   features: Partial<Record<NativeFeatureName, FeatureRequirement>>;
+  /**
+   * The features were derived (no `native.features`): from `world`, and at pack time from the dist (a non-IWSDK
+   * bundle that calls `getUserMedia` gets `camera`). Absent or false: `native.features` is authoritative.
+   */
+  featuresDerived?: boolean;
   /** Sorted, de-duplicated `<uses-permission>` names. */
   permissions: string[];
   /** Sorted, de-duplicated `<uses-feature>` entries. */

@@ -43,8 +43,8 @@ XR-AR-*).
 **XR-LIFE-1 (MUST).** `requestSession('immersive-vr', init)`: required features not supported reject with
 `NotSupportedError`; optional unsupported ones are dropped; `enabledFeatures` lists what was granted.
 Supported at M3: `viewer`, `local`, `local-floor`, `bounded-floor`, `layers`, `hand-tracking`, and the
-Quest Browser foveation-level feature strings; later: `plane-detection`, `mesh-detection`, `anchors`,
-`hit-test`, `depth-sensing`. A second request while one session is active rejects with
+Quest Browser foveation-level feature strings; `plane-detection`, `mesh-detection`, `anchors`, `hit-test` and
+`depth-sensing` only when the native side reports support for each (XR-PERM-1). A second request while one session is active rejects with
 `InvalidStateError`. User activation is not required (there is no page gesture in a packaged app).
 *Check:* IWER host-mode tests plus a device test of each case.
 
@@ -298,10 +298,37 @@ depth swapchains) open: nothing in the frame record or swapchain management may 
 only.
 *Check:* design review of the record (XRF-*) shows room for depth/motion texture names.
 
-**XR-AR-1 (MAY, later).** `immersive-ar` over `XR_FB_passthrough` (passthrough composited beneath the app's projection layer, blended by alpha; `environmentBlendMode 'alpha-blend'`), `plane-detection`/
-`mesh-detection` from the scene model, `anchors`, `hit-test`. IWER host mode already models the swapchain
-options for passthrough and scene; the runtime implements them when AR is scheduled.
-*Check:* defined when scheduled.
+**XR-AR-1 (MUST for `immersive-ar`; MAY, later, for the rest).** `immersive-ar` over `XR_FB_passthrough`
+(passthrough composited beneath the app's projection layer, blended by alpha; `environmentBlendMode
+'alpha-blend'`) for apps that declare passthrough: the packer writes `xr.immersiveAr: true` into the runtime config
+when the resolved features include passthrough (`world.xr.mode: "ar"` implies it), and only then is
+`isSessionSupported('immersive-ar')` true. `plane-detection`/`mesh-detection` from the scene model, `anchors`,
+`hit-test`: IWER host mode already models the swapchain options for passthrough and scene; the runtime implements
+them when AR is scheduled.
+*Check:* packer tests (`xr.immersiveAr` with and without passthrough); a device run of an AR sample gets past
+`isSessionSupported`.
+
+**XR-PERM-1 (MUST).** Android runtime permissions (protection level "dangerous": `com.oculus.permission.USE_SCENE`
+for planes, meshes, hit test and depth; `android.permission.CAMERA` and `horizonos.permission.HEADSET_CAMERA` for the
+passthrough cameras) are asked for when first needed, not at launch. A feature that needs one is grantable only when
+the native side reports support for it (`capabilities()`); before a session gets such a feature the runtime asks for
+the permission through the system dialog (`Activity.requestPermissions`), once per process (a later page or a reload
+only re-checks it, so a grant made in Settings counts): granted, the feature is granted; denied, a required feature
+rejects the request with `NotSupportedError` and an optional one is dropped. A permission the manifest does not
+declare is never asked for and reads as denied (the error names the manifest). Android drops a request made while
+another is in flight, so the runtime keeps one in flight and asks for what came meanwhile in the next one. No dialog
+for a request that fails anyway (unsupported mode or required feature, an active session), and none for a non-immersive
+session: as in Quest Browser, `plane-detection`, `mesh-detection`, `hit-test`, `anchors`, `depth-sensing`,
+`hand-tracking`, `layers`, `bounded-floor` and `unbounded` are for immersive sessions only (required: rejected;
+optional: dropped). Session requests reach IWER in call order, so one waiting for the dialog is not overtaken by a later
+one. NativeActivity does not forward `onRequestPermissionsResult`, so the runtime polls `checkSelfPermission` and takes
+the dialog as answered when the app gets its input focus back; there is no time limit while the dialog is up. Other
+runtime code asks through the same function (`__iwnXR.requestPermissions`). Install-time permissions
+(`USE_ANCHOR_API`, hand tracking) need no dialog; eye tracking (`com.oculus.permission.EYE_TRACKING`, on newer OS
+versions also `horizonos.permission.EYE_TRACKING`) is a runtime permission and must be asked for like the others once
+gaze tracking is granted.
+*Check:* web/xr tests (granted, denied, required, optional, asked once, undeclared, inline, request order, overlapping
+requests); host tests of the wait and of the request order; a device run with the permission not granted at install.
 
 **XR-SEC-1 (MUST NOT).** No secondary views, no `dom-overlay`, no camera access in the first release;
 requesting them as required rejects; as optional, dropped.

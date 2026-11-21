@@ -3,12 +3,13 @@
 #
 # Targets
 #   iwn_xr_core           V8-free, OpenXR-call-free: frame record + layout, the composition-layer buffer, input
-#                         mapping, pacing, perf-level and session policies, config, PNG writer, XR/JS thread handoff.
-#                         Android + host.
+#                         mapping, pacing, perf-level and session policies, runtime-permission order, config, PNG
+#                         writer, XR/JS thread handoff. Android + host.
 #   iwn_openxr_loader     Android: the Khronos OpenXR loader built from source (OpenXR SDK 1.1.63) + jsoncpp,
 #                         static, symbols hidden.
 #   iwn_xr                Android: the XR thread (instance, session, swapchains, layers, quad and cylinder layers,
-#                         input, passthrough, screenshots) + the V8 binding iwn_register_xr (JS: globalThis.__iwn.xr).
+#                         input, passthrough, screenshots), runtime permissions + the V8 binding iwn_register_xr
+#                         (JS: globalThis.__iwn.xr).
 #   iwn_xr_core_tests     host unit tests (ctest).
 #   iwn_xr_record_dump    host tool: a known record written by the native writer (web/xr round-trip test).
 
@@ -31,6 +32,7 @@ add_library(iwn_xr_core STATIC
   src/core/loading.cc
   src/core/pacing.cc
   src/core/perf_policy.cc
+  src/core/permission_queue.cc
   src/core/png.cc
   src/core/session_policy.cc
   src/core/xr_config.cc
@@ -76,6 +78,7 @@ if(IWN_ANDROID)
     src/android/xr_input.cc
     src/android/xr_layers.cc
     src/android/xr_loading.cc
+    src/android/xr_permissions.cc
     src/android/xr_shot.cc
     src/v8/xr_binding.cc
   )

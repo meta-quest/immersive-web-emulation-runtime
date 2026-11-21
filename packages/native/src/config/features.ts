@@ -56,6 +56,15 @@ export const FEATURE_MANIFEST: Readonly<
     permissions: ['com.oculus.permission.EYE_TRACKING'],
     usesFeatures: ['oculus.software.eye_tracking'],
   },
+  // Passthrough Camera API: CAMERA (Camera2) and HEADSET_CAMERA (the headset's passthrough cameras), both runtime
+  // permissions; Horizon Store ingestion wants passthrough declared by apps that request HEADSET_CAMERA.
+  camera: {
+    permissions: [
+      'android.permission.CAMERA',
+      'horizonos.permission.HEADSET_CAMERA',
+    ],
+    usesFeatures: ['com.oculus.feature.PASSTHROUGH'],
+  },
 };
 
 /** Permission added whenever the network allowlist is non-empty. */

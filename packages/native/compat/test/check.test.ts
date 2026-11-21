@@ -421,6 +421,11 @@ test('check: asking whether AR is supported is not needing AR; a run without XR 
   // an AR-only app under the headset-like emulation: no session, and the reason is AR
   const ar = trace('ar', { 'XRSystem.offerSession("immersive-ar")': rec() }, [], { reachedXR: false, enteredVia: 'none', emulateAR: false });
   assert.match(evaluateCompat({ scan, surface, trace: ar }).findings.find((f) => f.key === 'no XR session (headless run)')!.message, /asked for an immersive-ar session/);
+  // XR-AR-1: without passthrough declared, an AR request needs configuration; with it, immersive-ar is offered
+  const req = [{ key: 'XRSystem.offerSession("immersive-ar")', origin: 'config' as const, evidence: 'world.xr.mode = "ar"' }];
+  const undeclared = evaluateCompat({ scan, surface, app: req }).findings.find((f) => f.key === 'XRSystem.offerSession("immersive-ar")')!;
+  assert.deepEqual([undeclared.status, undeclared.severity], ['config', 'warn']);
+  assert.equal(evaluateCompat({ scan, surface, app: req, declared: new Set(['passthrough']) }).findings.find((f) => f.key === 'XRSystem.offerSession("immersive-ar")'), undefined);
   // a slow app that never touched navigator.xr: suggest a longer boot timeout, not XR-LIFE-7
   const slow = trace('slow', { 'HTMLCanvasElement.getContext("webgl2")': rec() }, [], { reachedXR: false, enteredVia: 'none', bootTimeoutMs: 25_000 });
   const fs = evaluateCompat({ scan, surface, trace: slow }).findings.find((f) => f.key === 'no XR session (headless run)')!;

@@ -1,7 +1,8 @@
 // Host tests for the V8-free XR core (HL-3): frame record layout and writer (XRF-1..5), input mapping (XRF-IN-1,
 // IN-2..6), pacing (XR-LOOP-5, PERF-JS-3), perf-level policy (XR-PERF-1), session-lifetime policy (XR-LIFE-4/5/7),
-// config parsing, the PNG writer (DBG-SHOT), the XR-thread/JS-thread handoff and the loading screen (XR-IDLE-1:
-// when it is shown, the hand-over to the app's first frame, its placement, layout and spinner image).
+// the runtime-permission wait and order (XR-PERM-1), config parsing, the PNG writer (DBG-SHOT), the
+// XR-thread/JS-thread handoff and the loading screen (XR-IDLE-1: when it is shown, the hand-over to the app's first
+// frame, its placement, layout and spinner image).
 #include <zlib.h>
 
 #include <atomic>
@@ -19,6 +20,8 @@
 #include "iwn/xr/loading.h"
 #include "iwn/xr/pacing.h"
 #include "iwn/xr/perf_policy.h"
+#include "iwn/xr/permission_queue.h"
+#include "iwn/xr/permission_wait.h"
 #include "iwn/xr/png.h"
 #include "iwn/xr/session_policy.h"
 #include "iwn/xr/xr_config.h"
@@ -1995,4 +1998,114 @@ IWN_TEST(Layers, ContentOnlyPlansAndContentUnderTheProjectionLayer) {
   IWN_CHECK(!layers::plan_has_content(&proj, 1) && !layers::content_under_projection(&proj, 1));
   // a session that shows only quad or cylinder layers presents, with no projection layer to blend
   IWN_CHECK(layers::plan_has_content(only, 1) && !layers::content_under_projection(only, 1));
+}
+
+// --- runtime permissions (XR-PERM-1) ----------------------------------------------------------------------------------
+
+IWN_TEST(PermissionWait, AGrantCountsOnceTheAppHasTheFocusAgain) {
+  // granted with the app focused (no dialog in the way): at once
+  PermissionWait w(0, true);
+  IWN_CHECK(w.poll(100, false, true) == PermissionWait::State::kWaiting);
+  IWN_CHECK(w.poll(200, true, true) == PermissionWait::State::kGranted);
+  // granted while the dialog still shows (it has not handed its result to the activity, so Android would drop the next
+  // request): only once the focus is back
+  PermissionWait d(0, true);
+  IWN_CHECK(d.poll(300, false, false) == PermissionWait::State::kWaiting);
+  IWN_CHECK(d.poll(4000, true, false) == PermissionWait::State::kWaiting);
+  IWN_CHECK(d.poll(4400, true, true) == PermissionWait::State::kGranted);
+  // the same when asked at boot, before the session had the focus
+  PermissionWait boot(0, false);
+  IWN_CHECK(boot.poll(2000, true, false) == PermissionWait::State::kWaiting);
+  IWN_CHECK(boot.poll(2500, true, true) == PermissionWait::State::kGranted);
+}
+
+IWN_TEST(PermissionWait, DialogAnsweredWhenTheFocusComesBack) {
+  PermissionWait w(0, true);
+  IWN_CHECK(w.poll(400, false, false) == PermissionWait::State::kWaiting);   // the dialog took the focus
+  IWN_CHECK(w.dialog_seen());
+  IWN_CHECK(w.poll(9000, false, false) == PermissionWait::State::kWaiting);  // the user reads it (past appear_ms)
+  IWN_CHECK(w.poll(9100, false, true) == PermissionWait::State::kWaiting);   // focus back: settling
+  IWN_CHECK(w.poll(9300, false, false) == PermissionWait::State::kWaiting);  // lost again (a second dialog)
+  IWN_CHECK(w.poll(9400, false, true) == PermissionWait::State::kWaiting);
+  IWN_CHECK(w.poll(9700, false, true) == PermissionWait::State::kAnswered);  // denied
+}
+
+IWN_TEST(PermissionWait, NoDialogWhenTheFocusNeverGoes) {
+  PermissionWait w(0, true);
+  IWN_CHECK(w.poll(4900, false, true) == PermissionWait::State::kWaiting);
+  IWN_CHECK(w.poll(5000, false, true) == PermissionWait::State::kNoDialog);
+  IWN_CHECK(!w.dialog_seen());
+}
+
+IWN_TEST(PermissionWait, UnfocusedStartTakesTheFirstFocusAsTheBaseline) {
+  // asked at boot, before the session was FOCUSED; the dialog paused the app until it was answered (Quest 3)
+  PermissionWait w(0, false, PermissionWaitConfig{5000, 300});
+  IWN_CHECK(w.poll(6000, false, false) == PermissionWait::State::kWaiting);   // dialog up: no "no dialog" verdict
+  IWN_CHECK(w.poll(9000, false, true) == PermissionWait::State::kWaiting);    // denied, the app resumes: baseline
+  IWN_CHECK(w.poll(13900, false, true) == PermissionWait::State::kWaiting);
+  IWN_CHECK(w.poll(14000, false, true) == PermissionWait::State::kNoDialog);  // appear_ms after the first focus
+  // the session got FOCUSED first and the dialog came after: the normal path
+  PermissionWait v(0, false, PermissionWaitConfig{5000, 300});
+  IWN_CHECK(v.poll(100, false, true) == PermissionWait::State::kWaiting);
+  IWN_CHECK(v.poll(800, false, false) == PermissionWait::State::kWaiting);
+  IWN_CHECK(v.poll(7000, false, true) == PermissionWait::State::kWaiting);
+  IWN_CHECK(v.poll(7300, false, true) == PermissionWait::State::kAnswered);
+}
+
+IWN_TEST(PermissionWait, NoVerdictWhileTheDialogIsUp) {
+  // the user takes the headset off when the dialog appears and answers 90 s later: no "denied" while it shows
+  PermissionWait w(0, true);
+  IWN_CHECK(w.poll(400, false, false) == PermissionWait::State::kWaiting);
+  IWN_CHECK(w.poll(90000, false, false) == PermissionWait::State::kWaiting);
+  IWN_CHECK(w.poll(90200, true, true) == PermissionWait::State::kGranted);
+  // the same before the app ever had the focus (asked at boot)
+  PermissionWait boot(0, false);
+  IWN_CHECK(boot.poll(120000, false, false) == PermissionWait::State::kWaiting);
+}
+
+IWN_TEST(PermissionQueue, OneRequestInFlightTheRestMergedIntoTheNext) {
+  PermissionQueue q;
+  const std::string scene = "com.oculus.permission.USE_SCENE", cam = "android.permission.CAMERA",
+                    hcam = "horizonos.permission.HEADSET_CAMERA";
+  const uint64_t a = q.push({scene});
+  std::vector<std::string> names;
+  IWN_CHECK(q.begin(&names));
+  IWN_CHECK(names == std::vector<std::string>({scene}));
+  // asked for while the first dialog is up (getUserMedia ~16 ms after offerSession): waits, not sent to Android
+  const uint64_t b = q.push({cam, hcam});
+  const uint64_t c = q.push({hcam, scene});
+  IWN_CHECK(q.pending());
+  IWN_CHECK(q.to_ask({scene}, nullptr) == std::vector<std::string>({scene}));
+  auto done = q.finish(names, {false});
+  IWN_CHECK_EQ(done.size(), size_t{1});
+  IWN_CHECK(done[0].first == a && done[0].second == std::vector<bool>({false}));
+  // the next batch: both waiting requests, each name once; the denied USE_SCENE is re-checked but not asked again
+  IWN_CHECK(q.begin(&names));
+  IWN_CHECK(names == std::vector<std::string>({cam, hcam, scene}));
+  IWN_CHECK(q.to_ask(names, nullptr) == std::vector<std::string>({cam, hcam}));
+  done = q.finish(names, {true, true, false});
+  IWN_CHECK_EQ(done.size(), size_t{2});
+  IWN_CHECK(done[0].first == b && done[0].second == std::vector<bool>({true, true}));
+  IWN_CHECK(done[1].first == c && done[1].second == std::vector<bool>({true, false}));
+  IWN_CHECK(!q.pending());
+  IWN_CHECK(!q.begin(&names));
+}
+
+IWN_TEST(PermissionQueue, OncePerProcessAndNeverWhatTheManifestLacks) {
+  PermissionQueue q;
+  const auto declared = [](const std::string& n) { return n != "android.permission.CAMERA"; };
+  q.push({"com.oculus.permission.USE_SCENE", "android.permission.CAMERA"});
+  std::vector<std::string> names;
+  q.begin(&names);
+  // CAMERA is not in the manifest: never put to the user (it reads as denied)
+  IWN_CHECK(q.to_ask(names, declared) == std::vector<std::string>({"com.oculus.permission.USE_SCENE"}));
+  q.finish(names, {false, false});
+  // a reload (a new page) asks again: only re-checked, no second dialog
+  q.push({"com.oculus.permission.USE_SCENE"});
+  q.begin(&names);
+  IWN_CHECK(q.to_ask(names, declared).empty());
+  // shutdown with requests in flight and queued: all handed back
+  q.push({"x"});
+  IWN_CHECK_EQ(q.drain().size(), size_t{2});
+  IWN_CHECK(!q.pending());
 }

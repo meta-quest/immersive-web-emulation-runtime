@@ -21,6 +21,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import { CAMERA_SIGNAL, scanDist } from '../../compat/src/scan.ts';
+import { withFeature } from '../../src/config/resolve.ts';
 import type { ResolvedNativeTarget } from '../../src/config/types.ts';
 import { signApk, verifyApk, type VerifyResult } from './apk-sign.ts';
 import { decodeAxml, encodeAxml } from './axml.ts';
@@ -252,6 +254,26 @@ async function iconEntries(
   throw new PackError(`icon ${iconFile} is neither a PNG nor a WebP image`);
 }
 
+/**
+ * Features the dist implies when the config does not list them (no `native.features`): a bundle that calls
+ * getUserMedia uses the camera. Every IWSDK bundle carries IWSDK's camera code whether the app uses it or not, so
+ * for IWSDK apps only `world.features.camera` counts (resolve.ts featuresFromWorld).
+ */
+function distFeatures(
+  target: ResolvedNativeTarget,
+  distDir: string,
+  warnings: string[],
+): ResolvedNativeTarget {
+  if (!target.featuresDerived || target.features.camera) return target;
+  const scan = scanDist(distDir, [CAMERA_SIGNAL]);
+  const hit = scan.hits[0];
+  if (scan.iwsdk || !hit) return target;
+  warnings.push(
+    `${hit.files[0]?.file ?? 'the dist'} calls getUserMedia: declared the camera feature (optional; CAMERA and HEADSET_CAMERA, asked for on first use). Set native.features to leave it out`,
+  );
+  return withFeature(target, 'camera', 'optional');
+}
+
 /** Write the APK atomically; file-system problems become PackErrors. */
 function writeOutput(outFile: string, apk: Buffer): void {
   if (existsSync(outFile) && statSync(outFile).isDirectory())
@@ -273,7 +295,7 @@ function writeOutput(outFile: string, apk: Buffer): void {
 export async function pack(input: PackInput): Promise<PackResult> {
   const started = Date.now();
   const warnings: string[] = [];
-  const { template, target } = input;
+  const { template } = input;
 
   // ---- the app's dist -------------------------------------------------------
   const exclude = [
@@ -302,6 +324,7 @@ export async function pack(input: PackInput): Promise<PackResult> {
         'dev.emulator.injectOnBuild to false in iwsdk.config.json, then rebuild.',
       ].join('\n'),
     );
+  const target = distFeatures(input.target, input.distDir, warnings);
   if (template.meta.synthesized)
     warnings.push(
       `the template has no ${'assets/iwn/template.json'}: no launcher icon is set and its runtime version is unknown`,

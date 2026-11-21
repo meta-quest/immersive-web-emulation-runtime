@@ -64,23 +64,8 @@ export function resolveNativeTarget(
     ? normalizeFeatures(native.features)
     : featuresFromWorld(doc.world);
 
-  const permissions = new Set<string>(native.permissions ?? []);
-  const usesFeatures = new Map<string, boolean>();
-  for (const [name, requirement] of Object.entries(features) as [
-    NativeFeatureName,
-    FeatureRequirement,
-  ][]) {
-    const needs = FEATURE_MANIFEST[name];
-    for (const perm of needs.permissions) permissions.add(perm);
-    for (const feature of needs.usesFeatures) {
-      usesFeatures.set(
-        feature,
-        (usesFeatures.get(feature) ?? false) || requirement === 'required',
-      );
-    }
-  }
   const allow = [...new Set(native.network?.allow ?? [])];
-  if (allow.length > 0) permissions.add(INTERNET_PERMISSION);
+  const needs = manifestNeeds(features, native.permissions ?? [], allow);
 
   const foveation =
     typeof native.foveation === 'string'
@@ -100,10 +85,8 @@ export function resolveNativeTarget(
     frameRate: native.frameRate ?? null,
     foveation,
     features,
-    permissions: [...permissions].sort(),
-    usesFeatures: [...usesFeatures]
-      .map(([name, required]): ManifestFeature => ({ name, required }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+    featuresDerived: !native.features,
+    ...needs,
     network: { allow },
     signing: native.signing
       ? {
@@ -115,6 +98,59 @@ export function resolveNativeTarget(
             native.signing.keyPasswordEnv ?? native.signing.storePasswordEnv,
         }
       : { mode: 'debug' },
+  };
+}
+
+/**
+ * The manifest entries for a feature set: each feature's permissions and
+ * `<uses-feature>` names (required if any feature needing it is), the extra
+ * permissions, and INTERNET with a non-empty network allowlist.
+ */
+function manifestNeeds(
+  features: Partial<Record<NativeFeatureName, FeatureRequirement>>,
+  extraPermissions: readonly string[],
+  allow: readonly string[],
+): Pick<ResolvedNativeTarget, 'permissions' | 'usesFeatures'> {
+  const permissions = new Set<string>(extraPermissions);
+  const usesFeatures = new Map<string, boolean>();
+  for (const [name, requirement] of Object.entries(features) as [
+    NativeFeatureName,
+    FeatureRequirement,
+  ][]) {
+    const needs = FEATURE_MANIFEST[name];
+    for (const perm of needs.permissions) permissions.add(perm);
+    for (const feature of needs.usesFeatures) {
+      usesFeatures.set(
+        feature,
+        (usesFeatures.get(feature) ?? false) || requirement === 'required',
+      );
+    }
+  }
+  if (allow.length > 0) permissions.add(INTERNET_PERMISSION);
+  return {
+    permissions: [...permissions].sort(),
+    usesFeatures: [...usesFeatures]
+      .map(([name, required]): ManifestFeature => ({ name, required }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+/**
+ * `target` with one more feature and its manifest entries (pack-time
+ * derivation from the dist). A feature it already has keeps its requirement.
+ */
+export function withFeature(
+  target: ResolvedNativeTarget,
+  name: NativeFeatureName,
+  requirement: FeatureRequirement,
+): ResolvedNativeTarget {
+  if (target.features[name]) return target;
+  const features = { ...target.features, [name]: requirement };
+  // target.permissions already holds the other features' permissions, the extra ones and INTERNET
+  return {
+    ...target,
+    features,
+    ...manifestNeeds(features, target.permissions, []),
   };
 }
 
@@ -215,8 +251,9 @@ function normalizeFeatures(
 }
 
 /**
- * Derive features from IWSDK's `world.xr` (already validated by IWSDK). AR mode
- * implies passthrough.
+ * Derive features from IWSDK's `world` (already validated by IWSDK): `world.xr`
+ * (AR mode implies passthrough) and `world.features.camera` (IWSDK's camera
+ * feature, getUserMedia over the passthrough cameras).
  */
 export function featuresFromWorld(
   world: unknown,
@@ -241,6 +278,11 @@ export function featuresFromWorld(
     }
   }
   if (xr?.mode === 'ar') out.passthrough = 'required';
+  const camera = (world as { features?: { camera?: unknown } } | undefined)
+    ?.features?.camera;
+  // IWSDK starts the camera on demand (CameraSource), and the app runs without it
+  if (camera !== undefined && camera !== false && camera !== null)
+    out.camera = 'optional';
   return out;
 }
 
