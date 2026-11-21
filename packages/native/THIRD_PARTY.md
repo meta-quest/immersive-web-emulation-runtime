@@ -42,3 +42,39 @@ platform `android-34` `android.jar`, OpenJDK 17 (GPL-2.0 with Classpath Exceptio
 code-cache hash (own design: multiply-rotate lanes with the round and primes from the public xxHash64 format
 specification (BSD-2-Clause document), a different finalisation; no code copied), JSON, the URL subset, the HTML tag scanner and the WebSocket/HTTP server in `runtime/core/src/base/` are written from FIPS 180-4,
 RFC 4648, RFC 8259, the WHATWG URL/HTML/Fetch standards and RFC 6455/9110.
+
+## web/glue: shipped in `web/glue/dist/glue.min.js` and `web/glue/dist/glue-subtle.min.js`
+
+| component | version | license | source | used for |
+|---|---|---|---|---|
+| whatwg-url | 17.3.0 | MIT | npm, github.com/jsdom/whatwg-url | `URL`, `URLSearchParams` (the URL Standard's reference implementation) |
+| webidl-conversions | 8.0.1 | BSD-2-Clause | npm, dependency of whatwg-url | WebIDL argument conversion inside whatwg-url |
+| punycode | 2.3.1 | MIT | npm, github.com/mathiasbynens/punycode.js | IDNA label encode/decode in the tr46 shim |
+| @noble/hashes | 2.4.0 | MIT | npm, github.com/paulmillr/noble-hashes | `crypto.subtle.digest` (SHA-1, SHA-256, SHA-384, SHA-512). Only in the opt-in prelude `glue-subtle.min.js` (active with config `subtle: 'digest'`), not in `glue.min.js` |
+
+License notices: `npm run build` writes `web/glue/dist/glue.NOTICES.txt` with the copyright and license text of
+each bundled package (taken from its `node_modules/<pkg>/LICENSE*`). MIT and BSD-2-Clause require these notices
+in redistributed copies, so the APK packer must ship that file next to `glue.min.js` and `glue-subtle.min.js` (for example under
+`assets/licenses/`). The build also fails if the bundle contains a package or version not listed above
+(`BUNDLED` in `web/glue/build.mjs`); `web/glue/package.json` pins the transitive `webidl-conversions` with an
+npm `overrides` entry, so the bundled version does not depend on the lockfile.
+
+Swapped out at build time (not shipped; replaced by small shims in `web/glue/src/shims/`, see `web/glue/build.mjs`):
+
+| dependency of whatwg-url | version | license | why replaced |
+|---|---|---|---|
+| tr46 | 7.0.0 | MIT | its UTS #46 mapping table is ~240 KB minified; the shim approximates the mapping with NFKC + case folding and keeps the validity checks (WPT `toascii.json` 87/87, `urltestdata.json` 896/896 as of 2026-10-20). Measured gap: WPT `IdnaTestV2.json` 2619/2668 (98.2 %, inputs filtered as WPT's `IdnaTestV2.window.js` does; 97.7 % before the sigma/separator fixes of 2026-10-20). Of the 49 remaining failures, 39 reject a valid host (the CheckBidi approximation treats Arabic-Indic digits as RTL; code points newer than the engine's ICU data; ignored characters such as the Hangul fillers), 5 give a different encoding and 5 accept a host UTS #46 rejects; ASCII hosts are unaffected |
+| @exodus/bytes | 1.16.0 | MIT | legacy multi-byte encodings (~150 KB) only matter for non-UTF-8 documents; the runtime is UTF-8 only |
+
+Build/test only (not shipped): esbuild 0.28.2 (MIT, npm) bundles the glue; TypeScript 6.0.3 (Apache-2.0) type-checks it.
+
+Test fixtures: `web/glue/test/fixtures/wpt-*.json` are copies of web-platform-tests `url/resources/` files
+(`urltestdata.json`, `setters_tests.json`, `toascii.json`), 3-Clause BSD License
+(web-platform-tests contributors), fetched 2026-10-19 from Chromium's mirror
+`chromium.googlesource.com/chromium/src/+/refs/heads/main/third_party/blink/web_tests/external/wpt/url/resources/`.
+
+Considered and not used (size or fit): core-js-pure 3.50.0 (MIT): its URL polyfill passes only 95.2 % of
+`urltestdata.json` (file: and blob: edge cases), and DOMException + structuredClone + atob/btoa cost ~44 KB
+minified because core-js bundles its own ES runtime; event-target-shim 6.0.2 (MIT): no capture/bubble path
+for DOM stand-ins; fast-text-encoding 1.0.6 (Apache-2.0): no `fatal`, streaming or UTF-16; text-encoding
+(deprecated, large tables). These are implemented from the specs in `web/glue/src/` instead.

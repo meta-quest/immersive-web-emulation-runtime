@@ -1,0 +1,29 @@
+{
+  "name": "@iwer/native-web-glue",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Polyfill-first web platform glue for the @iwer/native runtime: URL, encoding, events, abort, blobs, structuredClone, crypto, performance, navigator, location/history, matchMedia.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "node build.mjs --breakdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --test-concurrency=8 --test-reporter=spec \"test/**/*.test.ts\"",
+    "verify": "npm run typecheck && npm run build && npm test",
+    "perf": "node perf/perf.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "punycode": "2.3.1",
+    "whatwg-url": "17.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "webidl-conversions": "8.0.1"
+  }
+}
