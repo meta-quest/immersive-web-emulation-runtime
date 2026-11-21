@@ -1,0 +1,213 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import {
+  DEFAULT_SPLASH_BACKGROUND,
+  defaultSplashBackground,
+  deriveVersionCode,
+  featuresFromWorld,
+  resolveNativeTarget,
+} from '../src/config/resolve.ts';
+import { NativeConfigError } from '../src/config/validate.ts';
+
+describe('resolveNativeTarget', () => {
+  test('fills defaults from package.json', () => {
+    const t = resolveNativeTarget(
+      { native: { packageId: 'com.a.showcase' } },
+      { packageJson: { name: '@scope/proto-showcase-vr', version: '2.3.4' } },
+    );
+    assert.equal(t.appName, 'proto-showcase-vr');
+    assert.equal(t.version, '2.3.4');
+    assert.equal(t.versionCode, 2_003_004);
+    assert.deepEqual(t.signing, { mode: 'debug' });
+    assert.deepEqual(t.foveation, { level: 'none', dynamic: false });
+    assert.equal(t.frameRate, null);
+    assert.equal(t.icon, null);
+    assert.deepEqual(t.permissions, []);
+  });
+
+  test('falls back without package.json', () => {
+    const t = resolveNativeTarget({ native: { packageId: 'com.a.showcase' } });
+    assert.equal(t.appName, 'showcase');
+    assert.equal(t.version, '1.0.0');
+    assert.equal(t.versionCode, 1_000_000);
+  });
+
+  test('derives features from world.xr and AR mode', () => {
+    const t = resolveNativeTarget({
+      world: {
+        xr: {
+          mode: 'ar',
+          features: {
+            handTracking: { required: true },
+            planeDetection: true,
+            layers: true,
+            eyeTracking: false,
+          },
+        },
+      },
+      native: {
+        packageId: 'com.a.b',
+        network: { allow: ['https://a.org', 'https://a.org'] },
+      },
+    });
+    assert.deepEqual(t.features, {
+      handTracking: 'required',
+      planeDetection: 'optional',
+      passthrough: 'required',
+    });
+    assert.deepEqual(t.permissions, [
+      'android.permission.INTERNET',
+      'com.oculus.permission.HAND_TRACKING',
+      'com.oculus.permission.USE_SCENE',
+    ]);
+    assert.deepEqual(t.usesFeatures, [
+      { name: 'com.oculus.feature.PASSTHROUGH', required: true },
+      { name: 'oculus.software.handtracking', required: true },
+    ]);
+    assert.deepEqual(t.network.allow, ['https://a.org']);
+  });
+
+  test('explicit features replace the derived ones', () => {
+    const t = resolveNativeTarget({
+      world: { xr: { mode: 'vr', features: { handTracking: true } } },
+      native: {
+        packageId: 'com.a.b',
+        features: {
+          gazeTracking: 'optional',
+          handTracking: false,
+          meshDetection: { required: true },
+        },
+      },
+    });
+    assert.deepEqual(t.features, {
+      gazeTracking: 'optional',
+      meshDetection: 'required',
+    });
+    assert.deepEqual(t.usesFeatures, [
+      { name: 'oculus.software.eye_tracking', required: false },
+    ]);
+  });
+
+  test('a uses-feature is required if any feature needing it is', () => {
+    const t = resolveNativeTarget({
+      native: {
+        packageId: 'com.a.b',
+        features: { planeDetection: 'optional', meshDetection: 'required' },
+      },
+    });
+    assert.deepEqual(t.permissions, ['com.oculus.permission.USE_SCENE']);
+  });
+
+  test('release signing defaults keyPasswordEnv to storePasswordEnv', () => {
+    const t = resolveNativeTarget({
+      native: {
+        packageId: 'com.a.b',
+        signing: { keystore: 'k.jks', storePasswordEnv: 'PW' },
+      },
+    });
+    assert.deepEqual(t.signing, {
+      mode: 'release',
+      keystore: 'k.jks',
+      keyAlias: null,
+      storePasswordEnv: 'PW',
+      keyPasswordEnv: 'PW',
+    });
+  });
+
+  test('foveation shorthand', () => {
+    const t = resolveNativeTarget({
+      native: { packageId: 'com.a.b', foveation: 'high' },
+    });
+    assert.deepEqual(t.foveation, { level: 'high', dynamic: false });
+  });
+
+  test('the launch splash is on by default, generated, on black (contextual with passthrough)', () => {
+    const splash = (value?: unknown, extra: Record<string, unknown> = {}, world?: unknown) =>
+      resolveNativeTarget({
+        ...(world ? { world } : {}),
+        native: {
+          packageId: 'com.a.b',
+          ...(value === undefined ? {} : { splash: value }),
+          ...extra,
+        },
+      }).splash;
+    // Black by default: an app without passthrough cannot show the room behind its loading screen.
+    const generated = { enabled: true, image: null, background: 'black' };
+    assert.deepEqual(splash(), generated);
+    assert.deepEqual(splash(true), generated);
+    assert.deepEqual(splash({}), generated);
+    assert.deepEqual(splash(undefined, {}, { xr: { mode: 'vr' } }), generated);
+    assert.equal(DEFAULT_SPLASH_BACKGROUND, 'black');
+    // false drops the image and the spinner; the background stays behind nothing.
+    assert.deepEqual(splash(false), {
+      enabled: false,
+      image: null,
+      background: 'black',
+    });
+    assert.deepEqual(
+      splash({ image: './public/splash.png', background: '#0B0C0E' }),
+      { enabled: true, image: './public/splash.png', background: '#0b0c0e' },
+    );
+    assert.equal(splash({ background: '#AbC' }).background, '#aabbcc');
+    assert.equal(splash({ background: 'black' }).background, 'black');
+    // An app that declares passthrough (or an AR world, which implies it): contextual by default.
+    const pt = { features: { passthrough: 'optional' } };
+    assert.equal(splash(undefined, pt).background, 'contextual');
+    assert.equal(splash(false, pt).background, 'contextual');
+    assert.equal(splash(undefined, {}, { xr: { mode: 'ar' } }).background, 'contextual');
+    assert.equal(splash({ background: 'contextual' }, pt).background, 'contextual');
+    assert.equal(splash({ background: 'black' }, pt).background, 'black');
+    assert.equal(defaultSplashBackground({ passthrough: 'required' }), 'contextual');
+    assert.equal(defaultSplashBackground({ handTracking: 'optional' }), 'black');
+    // "contextual" without passthrough is refused (validateIwsdkConfigNativeSection).
+    assert.throws(() => splash({ background: 'contextual' }), NativeConfigError);
+  });
+
+  test('throws NativeConfigError for invalid input', () => {
+    assert.throws(
+      () => resolveNativeTarget({ native: { packageId: 'bad' } }),
+      NativeConfigError,
+    );
+    assert.throws(() => resolveNativeTarget({}), NativeConfigError);
+  });
+
+  test('throws when versionCode cannot be derived', () => {
+    assert.throws(
+      () =>
+        resolveNativeTarget({
+          native: { packageId: 'com.a.b', version: 'beta' },
+        }),
+      /cannot derive a versionCode from version "beta".*set "versionCode"/,
+    );
+    const t = resolveNativeTarget({
+      native: { packageId: 'com.a.b', version: 'beta', versionCode: 7 },
+    });
+    assert.equal(t.versionCode, 7);
+  });
+});
+
+describe('deriveVersionCode', () => {
+  test('orders releases', () => {
+    assert.equal(deriveVersionCode('0.0.0'), 1);
+    assert.equal(deriveVersionCode('0.1.0'), 1_000);
+    assert.equal(deriveVersionCode('v1.2.3-rc.1'), 1_002_003);
+    assert.ok(deriveVersionCode('1.10.0') > deriveVersionCode('1.9.999'));
+  });
+  test('rejects what does not fit', () => {
+    assert.throws(() => deriveVersionCode('1.1000.0'), /below 1000/);
+    assert.throws(() => deriveVersionCode('2101.0.0'), /exceeds/);
+    assert.throws(() => deriveVersionCode('1.2'), /major\.minor\.patch/);
+  });
+});
+
+test('featuresFromWorld tolerates missing parts', () => {
+  assert.deepEqual(featuresFromWorld(undefined), {});
+  assert.deepEqual(featuresFromWorld({ xr: { mode: 'vr' } }), {});
+});

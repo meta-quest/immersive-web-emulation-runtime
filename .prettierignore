@@ -12,6 +12,7 @@ examples/**/node_modules
 examples/**/pnpm-lock.yaml
 examples/basic/cap.min.js
 packages/**/node_modules
+packages/native
 packages/sem/captures
 packages/sem/src/generated
 packages/sem/src/registry.ts

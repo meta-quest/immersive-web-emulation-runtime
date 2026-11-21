@@ -1,2 +1,4 @@
 packages:
   - 'packages/*'
+  # @iwer/native has its own package-lock.json and build (packages/native/DEVELOPING.md).
+  - '!packages/native'

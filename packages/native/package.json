@@ -1,0 +1,60 @@
+{
+  "name": "@iwer/native",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "description": "ALPHA. Run an unmodified WebXR (IWSDK / three.js) bundle natively on Meta Quest and other Android OpenXR headsets, with no browser: prebuilt runtime template APK, packer/signer, compat checker and CLI. Not every web API is supported yet.",
+  "type": "module",
+  "main": "lib/src/index.js",
+  "types": "lib/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/src/index.d.ts",
+      "default": "./lib/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/",
+    "!lib/**/*.map",
+    "!lib/**/*.d.ts.map",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\"",
+    "verify": "npm run typecheck && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=20.19.0 <21.0.0-0 || >=22.12.0 <23.0.0-0 || >=24.0.0"
+  },
+  "keywords": [
+    "webxr",
+    "openxr",
+    "android",
+    "iwer",
+    "iwsdk",
+    "native"
+  ],
+  "author": "Felix Zhang <fe1ix@meta.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "6.0.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meta-quest/immersive-web-emulation-runtime.git",
+    "directory": "packages/native"
+  },
+  "homepage": "https://github.com/meta-quest/immersive-web-emulation-runtime/tree/main/packages/native#readme",
+  "bugs": {
+    "url": "https://github.com/meta-quest/immersive-web-emulation-runtime/issues"
+  }
+}

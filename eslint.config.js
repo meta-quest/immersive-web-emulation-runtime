@@ -86,6 +86,7 @@ export default [
       '**/version.ts', // Generated version files
       '**/generated-profiles.ts', // Generated gamepad profiles
       'packages/sem/src/generated/**', // Generated protobuf sources
+      'packages/native/**', // Own toolchain and checks (packages/native/DEVELOPING.md)
     ],
   },
 

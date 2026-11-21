@@ -1,0 +1,5 @@
+node_modules/
+/lib/
+# build output: web preludes (node build.mjs in each web/<area>), local CMake and test-addon builds
+web/*/dist/
+/build/

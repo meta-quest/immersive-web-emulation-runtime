@@ -1,0 +1,75 @@
+# 16. Known gaps, regression guards, and testability
+
+## Known failure modes to design against
+
+Each failure mode below becomes a requirement the runtime meets from the start.
+
+| ID | failure mode | requirement(s) | acceptance |
+|---|---|---|---|
+| GAP-1 | Canvas2D `fillText` draws nothing, `measureText` is an estimate, path `stroke()` draws nothing: the showcase's map plates, pill outlines and sound-pad labels are blank | C2D-7, C2D-8, C2D-9, C2D-10, C2D-11 | the showcase's labels and outlines visible in an XR screenshot; golden tests |
+| GAP-2 | The first XR frame does all compiles, links, sync queries and texture uploads (112 / 56 / ~2,960 / 72 MB) | GL-20, GL-21, GL-22, PERF-FIRST-1, PERF-FIRST-2, PERF-BOOT-2 | first-frame profile and per-view first-second stale counts ≤ browser |
+| GAP-3 | No persistent shader cache (Quest Browser keeps one; a cold host recompiles every launch) | GL-22 | warm launch compiles ≥ 3× faster |
+| GAP-4 | Workers lack `import.meta.url` and dynamic `import()` | MOD-5, WRK-3 | module worker test |
+| GAP-5 | Inspector WebSocket handshake matches header names case-sensitively (Node's lowercase client fails) | CDP-3 | Node 24 global `WebSocket` connects |
+| GAP-6 | CPU level pinned high (4) while the browser holds the same content at 2 | XR-PERF-1, PERF-LVL-1 | VrApi CPU level ≤ 2 throughout the sweep |
+| GAP-7 | IWER injection from `dev.emulator.injectOnBuild` leaks into builds and takes over `navigator.xr` | XRF-P-2, PKG-6, plus `build:metavr` leaving the emulator out whatever `injectOnBuild` says | the packer refuses an injected dist; `build:metavr` output packs |
+| GAP-8 | IWER's full entry (emulator modules included) makes a 3.4 MB unminified prelude and costs ~0.3 ms JS/frame more than a lean WebXR object model | XRF-P-1, XRF-P-3 | CI size report; profile attribution |
+| GAP-9 | Per-frame allocation ~0.3–0.8 KB on the host + IWER path | XRF-1, XRF-IN-2, GL-PERF-3, PERF-ALLOC-1/2 | null-app measurement |
+| GAP-10 | Projection-layer depth resolved and stored every frame though nobody reads it | GL-PERF-5 | frame-end trace; App GPU A/B |
+| GAP-11 | Redundant state sets (21/frame) and uniform uploads (18/frame) reach the driver; ~720 calls, 149 draws per frame | GL-PERF-2, GL-PERF-4 | driver-level count 0 redundant |
+| GAP-12 | No `Intl.Segmenter` fallback, so a no-Intl V8 (a third smaller) cannot be used | JS-6 | Segmenter test in a no-Intl build |
+
+## Regression guards
+
+Behaviours a runtime of this kind easily gets wrong. Each row is justified by proto-showcase-vr, an IWSDK
+package or example, or a public spec (the "basis" column), and needs a test in the clean runtime's suite
+from day one. Only the rows marked "showcase" were seen with the showcase itself.
+
+| ID | failure to guard against | basis | requirement | regression test |
+|---|---|---|---|---|
+| REG-1 | `roundRect` missing, so a call at module top level stops boot | showcase | C2D-6 | `roundRect` with all radius forms |
+| REG-2 | MP3 decode missing; IWSDK retries a failed load every frame (13 % of the main thread) | showcase | AUD-8, AUD-9 | MP3 decode set; one log line per failing URL |
+| REG-3 | `_`-prefixed asset folders dropped by packaging | showcase | NET-1, PKG-4 | fixture dist with `_app/` |
+| REG-4 | `HTMLLinkElement.relList` missing, so Vite's modulepreload polyfill falls back to a MutationObserver and re-fetches preloads | Vite output | MOD-7 | `relList.supports('modulepreload')` true; no observer at boot |
+| REG-5 | Controller models from the input-profiles CDN blocked: no controller visuals | showcase | NET-5 (allowlist entry in the showcase config; the IWSDK template adds it by default) | showcase shows controller models |
+| REG-6 | Rendering goes to a stale swapchain image when the app attaches the layer's colour texture once (three.js does) | WebXR Layers (one opaque texture per sub-image); three.js | XR-SC-2 | 10 consecutive XR screenshots all show the scene |
+| REG-7 | `local-floor` origin not at the session-start position | WebXR reference-space definitions | XR-SPACE-1 | origin/height check against Quest Browser |
+| REG-8 | Crash freeing a transferred buffer after the worker that created it has gone | HTML transfer semantics; IWSDK's transcoder workers transfer buffers | JS-2 | transfer + terminate + exit cycles |
+| REG-9 | Native code running a nested event loop re-enters tasks | HTML event loop (no nesting) | LOOP-5, WRK-9 | awaiting eval during XR; worker cap |
+| REG-10 | A second WebGL context shares or clobbers the first one's state | WebGL (independent contexts) | C2D-2 | interleaved two-context test |
+| REG-11 | Worker globals missing (`FileReader`, `atob`, `AbortController`, `ImageData`) | HTML `WorkerGlobalScope` | WRK-2, NET-14 | worker `typeof` list |
+| REG-12 | `importScripts` of a `blob:` URL the worker created itself fails | HTML workers | WRK-4 | worker-minted blob `importScripts` |
+| REG-13 | `document.baseURI` missing | IWSDK `packages/core` resolves UI URLs against it | DOM-5 | `new URL('x/', document.baseURI)` |
+| REG-14 | WebP images fail to decode | glTF `EXT_texture_webp` via three's `GLTFLoader` | IMG-1 | WebP decode set |
+| REG-15 | Canvas gradients and path fills render nothing or wrongly | HTML canvas; the showcase's map and clay canvases | C2D-6 | golden images |
+| REG-16 | Image decode on the main thread stalls boot | showcase boot (many textures) | IMG-1, NET-3 | boot timeline: main thread blocked < 2 ms per decoded image |
+| REG-17 | Hand gamepad without the menu slot, or hand grip without a pose | HOST-INPUT.md; WebXR Hand Input | IN-6 | hand gamepad per XRF-P-4; palm grip |
+| REG-18 | Screenshots taken with `screencap` are black during XR | Quest platform behaviour | DBG-SHOT | shot during XR is not black |
+| REG-19 | Out-of-range `srcOffset`/`srcLength` throw instead of `INVALID_VALUE`; wrong typed-array kinds reinterpreted; reads past small views | WebGL 2.0 `srcOffset`/`srcLength` rules and WebIDL | GL-7 | argument fuzz test |
+| REG-20 | An uncaught rejection from the entry module is logged where nobody looks | showcase | PROC-9, LOG-1 | entry-throws test greps the JS tag |
+
+## Testability without a headset
+
+**HL-1 (MUST).** The runtime's JS (prelude, IWER host adapter, browser surface) boots in Node 24 with
+fake natives that honour the same contracts as the device natives (one realm per isolate, off-thread
+decode, structured clone between realms, the frame record of [09](09-iwer-host-frame-record.md), a fake GL
+with a truthful state machine and Adreno-like limits, a GL call recorder). This *headless runner* is part
+of the package and runs in CI on every change.
+*Check:* CI job boots the showcase dist to N XR frames with draws and no errors in ≤ 60 s.
+
+**HL-2 (MUST).** The headless runner reports: exceptions, unhandled rejections, never-settling boot
+promises (optional tracing), global/DOM misses (DOM-11), blocked network origins, missing assets, decode
+failures, and a per-frame GL profile (calls, draws, passes, uploads, sync queries, redundant state) in a
+JSON report.
+*Check:* report schema test; the showcase report matches the expected counts within tolerance.
+
+**HL-3 (MUST).** Every native component whose logic can run without GL, OpenXR or audio hardware (for
+example the scheduler, the frame-record writer, input mapping, audio graph maths, decoders, the packer
+and signer) has host-side tests that run on a Linux host in CI.
+*Check:* CI job.
+
+**HL-4 (MUST).** A nightly device suite on test headsets runs: hello-js equivalent (modules, fetch, wasm, timers,
+storage, inspector attach), GL-CTS-1 subset, two-colour multiview, XR-COL-1, input checks (human steps
+listed and recorded as pending until done), audio smoke, the showcase perf A/B, and the 23-sample sweep
+weekly.
+*Check:* nightly report archived.
