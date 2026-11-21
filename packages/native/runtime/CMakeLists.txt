@@ -96,6 +96,7 @@ add_subdirectory(core)
 # iwn_register_<module>. Order matters where a module builds optional parts against another one: image before
 # canvas2d and workers (decoded-image handles), gl before xr.
 add_subdirectory(gl)
+add_subdirectory(image)
 
 # --- Module registry ---------------------------------------------------------------------------------------------
 include(cmake/registry.cmake)
