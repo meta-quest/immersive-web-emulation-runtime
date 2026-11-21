@@ -48,6 +48,13 @@ export enum XRHostInputMode {
   None = 0,
   Controller = 1,
   Hand = 2,
+  /**
+   * A tracked hand used as a pointer, for sessions without the hand-tracking
+   * feature: a source with the hand profiles and the hand gamepad (pinch at
+   * button 0) but no `hand`, as browsers list it. The palm pose stands in for
+   * the grip pose.
+   */
+  HandPointer = 3,
 }
 
 /** Button slots per hand: the larger of the controller (8) and hand (10) gamepads. */
@@ -418,6 +425,42 @@ export class XRHostHand extends XRHostSource {
   }
 }
 
+/** A tracked hand used as a pointer (no joints), driven by host tracking. */
+export class XRHostHandPointer extends XRHostSource {
+  constructor(state: XRHostInputState, globalSpace: GlobalSpace) {
+    super(
+      new XRInputSource(
+        state.handedness,
+        XRTargetRayMode.TrackedPointer,
+        [oculusHandConfig.profileId, ...oculusHandConfig.fallbackProfileIds],
+        createHostSpace(globalSpace),
+        new Gamepad(hostHandGamepadConfig),
+        createHostSpace(globalSpace),
+      ),
+      state,
+    );
+  }
+
+  onFrameStart(frame: XRFrame): void {
+    const state = this.state;
+    const inputSource = this.inputSource;
+    writePose(
+      inputSource.targetRaySpace,
+      state.targetRay,
+      0,
+      state.targetRayValid,
+    );
+    if (state.gripValid) {
+      writePose(inputSource.gripSpace!, state.grip, 0, true);
+    } else {
+      writePose(inputSource.gripSpace!, state.palm, 0, state.palmValid);
+    }
+    this.applyButtons();
+    this.applyTimestamp(frame);
+    this.applyEdges(frame);
+  }
+}
+
 const HANDEDNESSES: XRHostHandedness[] = [
   XRHandedness.Left,
   XRHandedness.Right,
@@ -433,6 +476,7 @@ export class XRHostInput {
     states: Record<XRHostHandedness, XRHostInputState>;
     controllers: Record<XRHostHandedness, XRHostController>;
     hands: Record<XRHostHandedness, XRHostHand>;
+    pointers: Record<XRHostHandedness, XRHostHandPointer>;
     // What each hand lists now (left, right).
     listed: (XRHostSource | null)[];
     // Stable arrays, rewritten in place when the listed sources change.
@@ -506,6 +550,10 @@ export class XRHostInput {
         [XRHandedness.Left]: new XRHostHand(states.left, globalSpace),
         [XRHandedness.Right]: new XRHostHand(states.right, globalSpace),
       },
+      pointers: {
+        [XRHandedness.Left]: new XRHostHandPointer(states.left, globalSpace),
+        [XRHandedness.Right]: new XRHostHandPointer(states.right, globalSpace),
+      },
       listed: [null, null],
       activeInputs: [],
       inputSources: [],
@@ -541,6 +589,8 @@ export class XRHostInput {
               // Input), so it is not listed, as browsers do. Horizon OS can
               // report a hand it does not see with an aim pose and no joints.
               next = internal.hands[handedness];
+            } else if (mode === XRHostInputMode.HandPointer) {
+              next = internal.pointers[handedness];
             }
           }
           const prev = internal.listed[i];
@@ -614,6 +664,11 @@ export class XRHostInput {
   /** The hand source for a hand (listed while its mode is Hand). */
   getHand(handedness: 'left' | 'right'): XRHostHand {
     return this[P_HOST_INPUT].hands[handedness as XRHostHandedness];
+  }
+
+  /** The hand pointer source for a hand (listed while its mode is HandPointer). */
+  getHandPointer(handedness: 'left' | 'right'): XRHostHandPointer {
+    return this[P_HOST_INPUT].pointers[handedness as XRHostHandedness];
   }
 
   /** The sources listed now, in a stable array rewritten when they change. */

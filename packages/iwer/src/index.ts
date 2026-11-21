@@ -31,6 +31,7 @@ export {
   XRHostInputMode,
   XRHostController,
   XRHostHand,
+  XRHostHandPointer,
   HOST_INPUT_BUTTONS,
   HOST_INPUT_JOINTS,
   HOST_INPUT_JOINT_STRIDE,

@@ -1,0 +1,22 @@
+{
+  "name": "@iwer/native-web-xr",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WebXR for @iwer/native: IWER host mode (iwer/host) driven by the native OpenXR module through the shared frame record (runtime/xr).",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node build.mjs --quiet && node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\"",
+    "verify": "npm run typecheck && npm test"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "gl-matrix": "3.4.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "^6.0.3"
+  }
+}

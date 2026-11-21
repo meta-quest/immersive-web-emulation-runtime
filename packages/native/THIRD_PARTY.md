@@ -249,3 +249,15 @@ Build/test only (not shipped): esbuild 0.28.2 (MIT, npm) bundles `web/audio/dist
 (MIT, npm) for the optional three.js compatibility test (installed outside the repo); ffmpeg 8.0.1
 generates `runtime/audio/test/fixtures/` (our own 440/660 Hz test tones, `make-fixtures.sh`) and is the reference
 decoder in the SNR tests.
+
+## runtime/xr + web/xr: shipped in every APK
+
+| component | version | license | source | used for |
+|---|---|---|---|---|
+| Khronos OpenXR loader (OpenXR SDK `src/loader`, `src/common`, generated dispatch table) | OpenXR SDK 1.1.63 (KhronosGroup/OpenXR-SDK @ f2448a8797c85814aa892efc1ab8707900fbcc78) | Apache-2.0 OR MIT (SPDX header in every file; we use MIT) | github.com/KhronosGroup/OpenXR-SDK at that commit (`$IWN_THIRD_PARTY_DIR/openxr` or `IWN_OPENXR_SDK_DIR`) | the OpenXR loader, linked statically into `libiwernative.so` (`iwn_openxr_loader`, symbols hidden) |
+| jnipp | as vendored in OpenXR SDK 1.1.63 (`src/external/jnipp`) | MIT (Copyright (c) 2016 Mitchell Dowd, its `LICENSE`) | the same OpenXR SDK tree; upstream github.com/mitchdowd/jnipp | JNI helpers the Android loader uses |
+| android-jni-wrappers | as vendored in OpenXR SDK 1.1.63 (`src/external/android-jni-wrappers/wrap`) | BSL-1.0 (Copyright 2020-2021, Collabora, Ltd.; SPDX header) | the same OpenXR SDK tree; upstream gitlab.freedesktop.org/monado/utilities/android-jni-wrappers | Android Java class wrappers the loader uses to find the runtime broker |
+| jsoncpp | 1.9.6 (`include/json/version.h`) | MIT (or public domain, its `LICENSE`) | github.com/open-source-parsers/jsoncpp 1.9.6 (`$IWN_THIRD_PARTY_DIR/jsoncpp` or `IWN_JSONCPP_DIR`) | the loader's runtime/layer manifest parsing |
+| gl-matrix | 3.4.4 | MIT | npm, github.com/toji/gl-matrix; `BUNDLED` in `web/xr/build.mjs` | vector/matrix math inside IWER's host entry, bundled into `web/xr/dist/xr.min.js` |
+
+IWER itself (`iwer/host`, bundled into `xr.min.js`) is first-party code under the same MIT license as this package.

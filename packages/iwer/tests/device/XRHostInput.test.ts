@@ -255,6 +255,37 @@ describe('XRHostInput', () => {
       ]);
     });
 
+    test('a hand pointer lists a hand-profile source without joints, also without the hand-tracking feature', async () => {
+      const pointer = input.getHandPointer('left').inputSource;
+      expect(pointer.profiles).toEqual([
+        'oculus-hand',
+        'generic-hand',
+        'generic-hand-select',
+        'generic-trigger',
+      ]);
+      expect(pointer.hand).toBeUndefined();
+      expect(pointer.gamepad!.buttons.length).toBe(10);
+      expect(pointer.gamepad!.axes).toEqual([]);
+      session.end();
+      await start([]);
+      input.left.mode = XRHostInputMode.HandPointer;
+      setPose(input.left.targetRay, [0, 1, -0.5]);
+      input.left.targetRayValid = true;
+      setPose(input.left.palm, [0, 0.9, -0.3]);
+      input.left.palmValid = true;
+      runFrame();
+      expect(Array.from(session.inputSources)).toEqual([pointer]);
+      runFrame((frame) => {
+        const grip = frame.getPose(pointer.gripSpace!, local)!;
+        expect(grip.transform.position.y).toBeCloseTo(0.9);
+      });
+      // pinch at button 0 is select
+      input.left.buttonValues[0] = 1;
+      input.left.buttonPressed[0] = 1;
+      runFrame();
+      expect(types()).toContainEqual([frameIndex, 'selectstart']);
+    });
+
     test('a hidden session lists nothing and comes back without a click', () => {
       input.right.mode = XRHostInputMode.Controller;
       runFrame();

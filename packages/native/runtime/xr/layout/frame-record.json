@@ -1,0 +1,53 @@
+{
+  "$comment": [
+    "The XR frame record (docs/spec/09, XRF-1..7): one block of native memory the XR thread writes before each",
+    "XR frame and JS (web/xr + IWER host mode) reads in place through typed-array views. This file is the single",
+    "definition (XRF-4); gen/generate-layout.mjs turns it into include/iwn/xr/frame_record_layout.gen.h (C++ byte",
+    "offsets) and web/xr/src/layout.gen.ts (typed-array element indices). Bump `version` whenever an existing",
+    "offset changes; adding fields at the end of a type group without moving others still needs a bump, because",
+    "the generator orders groups by element size (f64, then 4-byte fields in declaration order, then u8).",
+    "perHand fields appear twice: left first, then right (HOST-INPUT.md order)."
+  ],
+  "name": "XRHostFrameRecord",
+  "version": 1,
+  "align": 64,
+  "fields": [
+    { "name": "layoutVersion", "type": "u32", "doc": "this file's version; JS refuses a record whose version differs (XRF-4)" },
+    { "name": "flags", "type": "u32", "doc": "bit 0 shouldRender, bit 1 baseIsStage" },
+    { "name": "viewCount", "type": "u32", "doc": "1 or 2" },
+    { "name": "colorTexture", "type": "u32", "doc": "GL name of the swapchain image acquired for this frame, 0 when none" },
+    { "name": "frameSerial", "type": "u32", "doc": "increments for every frame handed to JS" },
+    { "name": "imageArraySize", "type": "u32", "doc": "1 (side by side) or 2 (texture array) for the current swapchain, 0 when none" },
+    { "name": "sceneSerial", "type": "u32", "doc": "XRF-7: increments when the detected planes or meshes changed" },
+    { "name": "depthTexture", "type": "u32", "doc": "XR-DEPTH-1 reserve: depth swapchain image, 0 today" },
+    { "name": "motionTexture", "type": "u32", "doc": "XR_FB_space_warp reserve: motion-vector image, 0 today" },
+    { "name": "reservedU32", "type": "u32", "count": 7 },
+
+    { "name": "predictedDisplayTime", "type": "f64", "doc": "OpenXR predicted display time on the performance.now() clock, ms, strictly increasing (XR-LOOP-5)" },
+    { "name": "frameStartTime", "type": "f64", "doc": "when xrWaitFrame returned, performance.now() ms: window rAF time (TMR-5) and open question 12" },
+    { "name": "displayPeriod", "type": "f64", "doc": "predicted display period, ms" },
+    { "name": "reservedF64", "type": "f64", "count": 5 },
+
+    { "name": "frameRate", "type": "f32", "doc": "current display refresh rate, Hz (0 unknown)" },
+    { "name": "foveation", "type": "f32", "doc": "fixed foveation in effect, 0..1" },
+    { "name": "viewportScale", "type": "f32", "count": 2, "doc": "XRF-7 reserve: recommended viewport scale per view (1 today)" },
+    { "name": "views", "type": "f32", "count": 22, "doc": "per view: position xyz, orientation xyzw, fov angleLeft angleRight angleUp angleDown (radians), base space" },
+    { "name": "localPose", "type": "f32", "count": 7, "doc": "OpenXR LOCAL origin in the base space: xyz, xyzw" },
+    { "name": "viewerPose", "type": "f32", "count": 7, "doc": "OpenXR VIEW space pose in the base space (IWER derives the head from the eyes today)" },
+    { "name": "gazePose", "type": "f32", "count": 7, "doc": "XRF-7 reserve: eye-gaze pose" },
+    { "name": "reservedF32", "type": "f32", "count": 9 },
+
+    { "name": "inputMode", "type": "u32", "perHand": true, "doc": "XRHostInputMode: 0 none, 1 controller, 2 hand" },
+    { "name": "inputFlags", "type": "u32", "perHand": true, "doc": "bit 0 targetRayValid, bit 1 gripValid, bit 2 palmValid" },
+    { "name": "inputProfile", "type": "u32", "perHand": true, "doc": "native interaction profile id (src/core/input_map.h InputProfile)" },
+    { "name": "targetRay", "type": "f32", "count": 7, "perHand": true, "doc": "aim pose, base space" },
+    { "name": "grip", "type": "f32", "count": 7, "perHand": true, "doc": "grip pose, base space" },
+    { "name": "palm", "type": "f32", "count": 7, "perHand": true, "doc": "palm pose (hands), base space" },
+    { "name": "buttonValues", "type": "f32", "count": 10, "perHand": true, "doc": "gamepad index order of the current mode" },
+    { "name": "axes", "type": "f32", "count": 4, "perHand": true, "doc": "touchpad x y, thumbstick x y; +x right, +y toward the user" },
+    { "name": "joints", "type": "f32", "count": 200, "perHand": true, "doc": "25 WebXR joints x (xyz, xyzw, radius)" },
+    { "name": "buttonPressed", "type": "u8", "count": 10, "perHand": true },
+    { "name": "buttonTouched", "type": "u8", "count": 10, "perHand": true },
+    { "name": "jointValid", "type": "u8", "count": 25, "perHand": true }
+  ]
+}
