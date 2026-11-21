@@ -1,0 +1,26 @@
+{
+  "name": "@iwer/native-web-net",
+  "version": "0.0.0",
+  "private": true,
+  "description": "fetch (Headers/Request/Response/body streams), WebSocket and XMLHttpRequest for the @iwer/native runtime, over the native net module (globalThis.__iwn.net).",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "node scripts/build-bridge.mjs",
+    "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\"",
+    "verify": "npm run typecheck && npm run build && npm test"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "web-streams-polyfill": "4.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/ws": "^8.18.2",
+    "esbuild": "0.28.2",
+    "typescript": "^6.0.3",
+    "ws": "^8.22.0"
+  }
+}

@@ -172,3 +172,42 @@ Color 4, CSS Fonts 4, CSS Font Loading 3, Compositing and Blending 1, Filter Eff
 (scripts), OpenType and PNG specifications and the
 publicly described cell-coverage rasterization technique (see `runtime/canvas2d/README.md`). Skia and CanvasKit were
 considered and not used (size; see the same README).
+
+## runtime/net + runtime/storage + web/net + web/storage
+
+Shipped in the runtime library (Android arm64):
+
+| component | version | license | source | used for |
+|---|---|---|---|---|
+| SQLite (amalgamation) | 3.53.2 | public domain | sqlite.org amalgamation 3530200, `sqlite3.{c,h}` (`$IWN_THIRD_PARTY_DIR/sqlite` or CMake `IWN_SQLITE_DIR`) | IndexedDB and Cache API backend (`runtime/storage`), built with our own flags in `runtime/storage/CMakeLists.txt` (THREADSAFE=2, no extension loading) |
+| zlib (system `libz.so`) | OS | zlib | Android NDK sysroot (host: system zlib) | gzip/deflate response bodies (`runtime/net`), CRC-32 of the localStorage log (`runtime/storage`); not bundled |
+| Android platform TLS/sockets (`java.net.Socket`, `javax.net.ssl` / Conscrypt, `ProxySelector`, `HttpsURLConnection` hostname verifier) | OS (API 29+) | part of the OS | called through JNI from `runtime/net/android/jni_connector.cc`; no app dex code | TLS, system trust store + network security config, SNI, hostname verification, system proxy |
+
+Shipped in the web preludes:
+
+| component | version | license | source | ships in | used for |
+|---|---|---|---|---|---|
+| web-streams-polyfill | 4.3.0 | MIT | npm, github.com/MattiasBuelens/web-streams-polyfill | `web/net/dist/net.min.js` (installed only when `ReadableStream` is missing) | WHATWG Streams for `Response.body`, `Blob.stream()` |
+| indexeddbshim | 19.0.7 | MIT OR Apache-2.0 (we use MIT) | npm, github.com/indexeddbshim/IndexedDBShim | `web/storage/dist/idb.min.js` (opt-in) | IndexedDB over a WebSQL-style driver |
+| typeson-registry (+ bundled typeson) | 15.0.0 (typeson 10.3.0) | MIT | npm, dependency of indexeddbshim | idb.min.js | structured clone of IndexedDB values |
+| base64-arraybuffer-es6 | 3.1.0 | MIT | npm, inlined in typeson-registry's dist bundle | idb.min.js | base64 of ArrayBuffers inside typeson-registry |
+| eventtargeter | 0.12.1 | MIT | npm, dependency of indexeddbshim | idb.min.js | IndexedDB event dispatch |
+| sync-promise-expanded | 2.0.0 | ISC | npm, dependency of indexeddbshim | idb.min.js | indexeddbshim internals |
+| websql-configurable | 4.1.0 | Apache-2.0 | npm, github.com/brettz9/node-websql (only `custom/` + `lib/websql/`, not its better-sqlite3 driver) | idb.min.js | WebSQL transaction semantics over our native driver (`web/storage/src/websql.ts`) |
+| immediate | 3.3.0 | MIT | npm, dependency of websql-configurable | idb.min.js | default scheduler (we pass our own delays) |
+| tiny-queue | 0.2.1 | Apache-2.0 | npm, dependency of websql-configurable | idb.min.js | transaction queue |
+| noop-fn | 1.0.0 | MIT | npm, dependency of websql-configurable | idb.min.js | no-op callbacks |
+
+indexeddbshim's npm package also declares `canvas`, `@node-static/node-static`, `better-sqlite3` (via websql-configurable)
+and `argsarray` (WTFPL); none of them is bundled (installed with `--ignore-scripts`, never imported by the browser entry
+points we use). One local workaround patches `IDBTransaction.prototype.__executeRequests` at install time (an upstream
+race; see `web/storage/src/indexeddb.ts`).
+
+Build/test only (not shipped): ws 8.x (MIT; WebSocket server in the web/net tests and the device test's host
+servers), esbuild 0.28.2 (MIT), TypeScript 6.0.3 (Apache-2.0), Node's built-in `node:sqlite` (fake storage natives),
+OpenSSL (self-signed certificate for the device TLS rejection check), Android SDK build-tools 34.0.0 + JDK `keytool`
+(device test APK). Written from specifications, no library code: the HTTP/1.1 client and parser (RFC 9110/9112),
+redirect handling (Fetch §4.4), RFC 6455 framing/handshake, SHA-1 (FIPS 180-4), base64 (RFC 4648), UTF-8
+validation (Unicode table 3-7), the origin allowlist, the KV log format, Headers/Request/Response/fetch/
+XMLHttpRequest/WebSocket (WHATWG Fetch, XHR, WebSockets), Web Storage (HTML §12) and the Cache API (Service
+Workers §5).

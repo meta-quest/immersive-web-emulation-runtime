@@ -1,0 +1,24 @@
+{
+  "name": "@iwer/native-web-storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "localStorage/sessionStorage, navigator.storage, IndexedDB (indexeddbshim over native SQLite) and the Cache API for the @iwer/native runtime (globalThis.__iwn.storage).",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\"",
+    "verify": "npm run typecheck && npm run build && npm test"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "indexeddbshim": "19.0.7",
+    "websql-configurable": "4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "^6.0.3"
+  }
+}
