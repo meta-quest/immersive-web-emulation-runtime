@@ -15,7 +15,7 @@ XR_FB_color_space, XR_EXT_performance_settings, XR_EXT_hand_tracking, XR_FB_hand
 XR_EXT_hand_interaction, XR_META_hand_tracking_microgestures, XR_META_touch_controller_plus,
 XR_FB_touch_controller_pro, XR_FB_passthrough, XR_META_passthrough_preferences, XR_FB_spatial_entity,
 XR_FB_spatial_entity_query, XR_FB_spatial_entity_container, XR_FB_scene, XR_META_spatial_entity_mesh,
-XR_FB_scene_capture), QCOM_texture_foveated, EGL 1.5 and
+XR_FB_scene_capture, XR_META_environment_depth), QCOM_texture_foveated, EGL 1.5 and
 OpenGL ES 3.2 (shared objects, sync objects), the JNI specification and Android SDK/NDK references, V8 embedder
 headers, and our own runtime contracts (core `runtime.h`, `event_loop.h`, gl `iwn/gl.h`). Third-party code: the
 Khronos OpenXR loader 1.1.63 with its vendored jnipp and android-jni-wrappers, and jsoncpp (THIRD_PARTY.md,
@@ -28,6 +28,7 @@ Khronos OpenXR loader 1.1.63 with its vendored jnipp and android-jni-wrappers, a
 | `layout/frame-record.json` | the one definition of the frame record (XRF-4); `gen/generate-layout.mjs` writes `include/iwn/xr/frame_record_layout.gen.h` (C++ byte offsets) and `web/xr/src/layout.gen.ts` (typed-array indices); `--check` fails on a stale file |
 | `include/iwn/xr/*.h`, `src/core/*.cc` | **iwn_xr_core**, V8-free and OpenXR-call-free: the record writer, input mapping (HOST-INPUT layouts), frame pacing, the performance-level policy, the session-lifetime policy, the `xr` config section and foveation parameters, the PNG writer, the XR/JS thread handoff, the loading screen's policy, placement, layout and spinner image (`loading.h`), the composition-layer buffer and entry geometry (`layers.h`) |
 | `src/android/xr_system.{h,cc}` | the XR thread: instance, session, spaces, swapchain, foveation, passthrough, events, the frame loop, stats |
+| `src/android/xr_depth.{h,cc}` | environment depth for `depth-sensing` (XR_META_environment_depth): provider, depth swapchain, per-frame acquire into the depth record (`include/iwn/xr/depth_record.h`, its own buffer next to the frame record) |
 | `src/android/xr_input.{h,cc}` | OpenXR actions for Touch / Touch Plus / Touch Pro controllers and the hand interaction profile (poses, microgestures), hand tracking + aim, haptics |
 | `src/android/xr_layers.{h,cc}` | quad and cylinder layers (XR-LAYER-1): a swapchain per layer (sRGB, drawn through RGBA8 texture views), its acquired image, release of redrawn images, the frame's `XrCompositionLayerQuad` / `XrCompositionLayerCylinderKHR` structs in `renderState.layers` order |
 | `src/android/xr_loading.{h,cc}` | the loading screen's swapchains (static: the splash card, the spinner, the background colour) and its composition layers; the splash PNG's decode (image module) |
@@ -213,8 +214,21 @@ hand (profile ...)`). Haptics: amplitude, duration, unspecified frequency for 0;
 `pulse()` resolves true after the duration. Numbers from JS reach the natives range-checked (NaN or out of range
 falls back to the default; no undefined float-to-integer conversions).
 
-**What this release does not offer** (XR-LIFE-1 later features): `plane-detection`, `mesh-detection`, `hit-test`,
-`depth-sensing` and `anchors` are never granted (required -> `NotSupportedError`, optional -> dropped; the
+**Depth sensing** (XR-DEPTH-2): when the system has XR_META_environment_depth, `depth-sensing` is granted
+(`gpu-optimized`; `unsigned-short` or `float32`). A session that enables it starts one depth provider (hand removal
+off, as in Quest Browser; it needs `com.oculus.permission.USE_SCENE`, granted, or the provider is refused and frames
+carry no depth); each WebXR frame acquires the newest image for its predicted display time in the base space (about
+0.25 ms on Quest 3) and writes its swapchain name, size, near/far and both depth views into the depth record; web/xr
+hands it to IWER as `XRHostBackend.getDepth()`, one session-long texture re-pointed at each image, and for
+`matchDepthView` (the default) lays it out in the frame's render views with a pass on the page's context
+(`XRHostBackend.reprojectDepth`, web/xr `depth-reproject.ts`), as Quest Browser 156 does. The provider stops with the
+session, once a JS frame in flight is collected. While depth sensing runs, web/xr also clears the framebuffers holding
+the frame's image (projection layer or XRWebGLLayer) before the frame's callbacks (three.js skips its own clear then).
+Log: `xr: depth: ...` lines and a periodic `xr-depth` line (images, frames without one, acquire cost); stats: the
+`depth` section.
+
+**What this release does not offer** (XR-LIFE-1 later features): `plane-detection`, `mesh-detection`, `hit-test`
+and `anchors` are never granted (required -> `NotSupportedError`, optional -> dropped; the
 anchor calls reject with `NotSupportedError`), `bounded-floor` is withdrawn when the headset has no boundary,
 `immersive-ar` (passthrough under the projection layer, XR_FB_passthrough) exists behind `xr.immersiveAr: true`
 only and is not device-validated, equirect and cube layers are absent (quad and cylinder layers exist,

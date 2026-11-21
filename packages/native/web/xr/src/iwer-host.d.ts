@@ -69,6 +69,30 @@ declare module 'iwer/host' {
     id?: number;
   }
 
+  export type XRDepthUsage = 'cpu-optimized' | 'gpu-optimized';
+  export type XRDepthDataFormat = 'luminance-alpha' | 'float32' | 'unsigned-short';
+  /** WebXR Depth Sensing's choice for a session's depthSensing init, or null when the host cannot serve it. */
+  export function negotiateHostDepth(
+    init: { usagePreference?: unknown[]; dataFormatPreference?: unknown[] } | undefined,
+    support: XRHostDepthSupport,
+  ): { usage: string; dataFormat: XRDepthDataFormat } | null;
+
+  export interface XRHostDepthSupport {
+    usages: readonly XRDepthUsage[];
+    dataFormats: readonly XRDepthDataFormat[];
+  }
+
+  export interface XRHostDepth {
+    texture: object;
+    width: number;
+    height: number;
+    depthNear: number;
+    depthFar: number;
+    rawValueToMeters: number;
+    viewCount: number;
+    views: ArrayLike<number>;
+  }
+
   export type XRHostErrorSource = 'xr-frame-callback' | 'window-frame' | 'layer' | 'host-hook';
 
   /** A DOMPointReadOnly (the runtime's, web/xr geometry.ts); the adapter's type check has no DOM library. */
@@ -119,6 +143,9 @@ declare module 'iwer/host' {
     postTask?(callback: () => void): void;
     autoGrantOfferedSession?: boolean;
     invalidateDepth?: boolean;
+    depthSensing?: XRHostDepthSupport;
+    getDepth?(): XRHostDepth | null;
+    reprojectDepth?(depth: XRHostDepth, matrices: Float32Array): object | null;
     reportError?(error: unknown, source: XRHostErrorSource): void;
     getPlanes?(): ReadonlySet<NativePlane> | readonly NativePlane[] | null;
     getMeshes?(): ReadonlySet<NativeMesh> | readonly NativeMesh[] | null;

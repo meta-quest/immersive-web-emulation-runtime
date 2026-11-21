@@ -25,6 +25,14 @@ export class XRWebGLDepthInformation {
   readonly textureType: XRTextureType;
   readonly imageIndex: number | null;
   readonly isValid: boolean;
+  /**
+   * The depth view the image was sensed from, where it differs from the
+   * render view (host mode): its projection, and its pose in the space of
+   * the `XRView` passed to `getDepthInformation`. Null when the depth is laid
+   * out in the render view itself (the emulator).
+   */
+  readonly projectionMatrix: Float32Array | null;
+  readonly transform: XRRigidTransform | null;
 
   constructor(
     texture: WebGLTexture,
@@ -36,6 +44,8 @@ export class XRWebGLDepthInformation {
     depthFar: number,
     textureType: XRTextureType,
     imageIndex: number | null,
+    projectionMatrix: Float32Array | null = null,
+    transform: XRRigidTransform | null = null,
   ) {
     this.texture = texture;
     this.width = width;
@@ -47,6 +57,8 @@ export class XRWebGLDepthInformation {
     this.textureType = textureType;
     this.imageIndex = imageIndex;
     this.isValid = true;
+    this.projectionMatrix = projectionMatrix;
+    this.transform = transform;
   }
 }
 

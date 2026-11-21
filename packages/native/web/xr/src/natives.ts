@@ -37,7 +37,9 @@ export interface XrInfo {
   anchors?: boolean;
   /** Anchors can be persisted and restored by UUID (XR_FB_spatial_entity_storage + _query). */
   persistentAnchors?: boolean;
+  /** XR-DEPTH-2: environment depth (XR_META_environment_depth) for 'depth-sensing', and its hand removal. */
   depthSensing?: boolean;
+  depthHandRemoval?: boolean;
   explicitGrant?: boolean;
   /** XR-LAYER-1: quad and cylinder layers (cylinder needs XR_KHR_composition_layer_cylinder). */
   compositionLayers?: { quad: boolean; cylinder: boolean; maxLayers: number; bufferVersion: number };
@@ -176,6 +178,11 @@ export interface XrNatives {
   anchorDestroy?(anchor: number): void;
   anchorResults?(): NativeAnchorResult[] | undefined;
   anchorStats?(): Record<string, unknown>;
+  /** XR-DEPTH-2: the session enabled 'depth-sensing'; environment depth runs until it ends. */
+  startDepth?(handRemoval: boolean): void;
+  /** The depth record (depth.ts), the same memory every frame. */
+  depthRecord?(): ArrayBuffer;
+  readonly depthRecordVersion?: number;
 }
 
 /** The internal surface of a WebGL context the hooks below take (web/webgl Ctx). */
@@ -191,6 +198,8 @@ export interface WebGLHooks {
   wrapTexture(gl: GLContext, name: number, target?: number): object;
   retargetTexture(gl: GLContext, tex: object, name: number, framebuffers: Iterable<object>): void;
   invalidateDepthStencil(gl: GLContext, fb: object): void;
+  /** XR-DEPTH-2: clear a framebuffer holding the session image at frame start (older preludes lack it). */
+  clearSessionFramebuffer?(gl: GLContext, fb: object): void;
   frameBoundary(gl: GLContext | null): void;
   afterAnimationFrame(): void;
 }

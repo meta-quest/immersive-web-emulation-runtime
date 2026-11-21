@@ -16,6 +16,7 @@
 import {
   XRDevice,
   XRSystem,
+  negotiateHostDepth,
   metaQuestTouchPlus,
   metaQuestTouchPro,
   oculusTouchV2,
@@ -24,6 +25,8 @@ import {
 import type { XRControllerConfig, XRDeviceConfig, XRHostInput } from 'iwer/host';
 
 import { NativeHostBackend } from './backend.ts';
+import { DEPTH_SUPPORT, DEPTH_VERSION, DepthRecordView } from './depth.ts';
+import type { DepthState } from './depth.ts';
 import { installGeometry } from './geometry.ts';
 import { GraphicsBridge } from './graphics.ts';
 import { LayerBuffer } from './layers.ts';
@@ -54,6 +57,7 @@ export interface NativeXR {
     /** XR-LAYER-1: live quad and cylinder layer swapchains, entries of the latest layer list. */
     layerSwapchains: number;
     layerEntries: number;
+    clears: number;
   };
   /** The WebGL context the session renders with (diagnostics). */
   gl(): GLContext | null;
@@ -68,6 +72,8 @@ export interface NativeXR {
   scene(): Record<string, unknown>;
   /** Spatial anchor counters of the native side (diagnostics, XR-ANCHOR-1); null without anchor natives. */
   anchorStats(): Record<string, unknown> | null;
+  /** XR-DEPTH-2: the latest frame's depth record (null: the runtime writes none). */
+  depth(): DepthState | null;
 }
 
 // XR-LIFE-1's M3 set. 'bounded-floor' is withdrawn when the headset has no boundary (XR-SPACE-1); 'hand-tracking'
@@ -212,6 +218,10 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
   // the room for planes, meshes and hit test, read once per XR frame (frames: the counter below)
   const scene = new NativeScene(natives, () => frames);
   if (scene.supported) backend.scene = scene;
+  // XR-DEPTH-2: the depth record, read only with the layout this adapter knows
+  if (typeof natives.depthRecord === 'function' && natives.depthRecordVersion === DEPTH_VERSION) {
+    backend.depthRecord = new DepthRecordView(natives.depthRecord());
+  }
 
   // The device starts with a provisional configuration so navigator.xr exists before any page script (DBG-STAGE);
   // the capabilities fill it in on first use (they need OpenXR to be initialised, which runs in parallel with boot).
@@ -253,10 +263,13 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     if (caps.handTracking && !features.includes('hand-tracking')) features.push('hand-tracking');
     for (const [feature, flag] of Object.entries(NATIVE_FEATURES)) {
       if (SCENE_FEATURES.includes(feature) && !scene.supported) continue;  // an older runtime without the scene natives
+      if (feature === 'depth-sensing' && !backend.depthRecord) continue;  // no depth record this adapter can read
       if (caps[flag] === true && !features.includes(feature)) features.push(feature);
     }
     const bounded = features.indexOf('bounded-floor');
     if (caps.hasStage !== true && bounded >= 0) features.splice(bounded, 1);
+    // XR-DEPTH-2: 'depth-sensing' (gpu-optimized) when the system has environment depth and the record is readable
+    if (features.includes('depth-sensing')) backend.depthSensing = DEPTH_SUPPORT;
     if (caps.refreshRates && caps.refreshRates.length > 0) {
       config.supportedFrameRates.length = 0;
       for (const r of caps.refreshRates) config.supportedFrameRates.push(r);
@@ -285,6 +298,9 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     );
     // the room query starts with the session, not with the first hit-test source
     if (SCENE_FEATURES.some((f) => features.includes(f))) scene.start();
+    // XR-DEPTH-2: environment depth from now until the session ends (the frame-start clears begin with the first depth
+    // handed out: graphics.ts). Hand removal stays off, as in Quest Browser: real hands occlude virtual content
+    if (features.includes('depth-sensing') && backend.depthSensing) natives.startDepth?.(false);
     if (lastVisibility) device.dispatchHostEvent({ type: 'visibilitychange', ...lastVisibility });
     (session as EventTarget).addEventListener?.('end', () => gfx.onSessionEnd(), { once: true });
   }
@@ -330,11 +346,16 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
     const required = featureList(o.requiredFeatures);
     const optional = featureList(o.optionalFeatures);
     const supported = config.supportedFeatures as string[];
-    if (!required.every((f) => supported.includes(f))) return null;
+    // depth the runtime cannot serve in the usage or format asked for is not granted anyway (IWER negotiates it)
+    const servable = (f: string) =>
+      f !== 'depth-sensing' ||
+      !backend.depthSensing ||
+      negotiateHostDepth((init as { depthSensing?: never } | undefined)?.depthSensing, backend.depthSensing) !== null;
+    if (!required.every((f) => supported.includes(f) && servable(f))) return null;
     const needed = new Set<string>();
     for (const f of [...required, ...optional]) {
       const permission = FEATURE_PERMISSIONS[f];
-      if (permission && supported.includes(f)) needed.add(permission);
+      if (permission && supported.includes(f) && servable(f)) needed.add(permission);
     }
     if (needed.size === 0) return null;
     return permissions.request([...needed]).then((held) => {
@@ -516,6 +537,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       parks: gfx.parks,
       layerSwapchains: gfx.layerCount,
       layerEntries: layerBuffer?.lastCount ?? 0,
+      clears: gfx.clears,
     }),
     gl: () => gfx.gl,
     requestPermissions: (names) => permissions.request(names),
@@ -524,6 +546,7 @@ export function installNativeXR(g: Global, natives: XrNatives, hooks: WebGLHooks
       adapter: { ...scene.summary(), listedFrames: scene.listedFrames },
     }),
     anchorStats: () => natives.anchorStats?.() ?? null,
+    depth: () => backend.depthRecord?.state() ?? null,
   };
   Object.defineProperty(g, '__iwnXR', { value: api, configurable: true, enumerable: false, writable: false });
   return api;

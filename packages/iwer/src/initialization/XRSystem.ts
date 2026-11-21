@@ -16,6 +16,7 @@ import {
 } from '../session/XRSession.js';
 
 import { P_DEVICE, P_SYSTEM } from '../private.js';
+import { negotiateHostDepth } from '../host/depth.js';
 import {
   isGazeTrackingFeature,
   supportsGazeTracking,
@@ -55,10 +56,16 @@ export class XRSystem extends EventTarget {
         // Handle required and optional features
         const { requiredFeatures = [], optionalFeatures = [] } = options;
         const { supportedFeatures } = this[P_SYSTEM].device;
+        // a host that declares its depth sensing also needs a usage and a
+        // data format the page accepts (WebXR Depth Sensing)
+        const hostDepth = this[P_SYSTEM].device[P_DEVICE].host?.depthSensing;
         const isFeatureSupported = (feature: WebXRFeature): boolean =>
           isGazeTrackingFeature(feature)
             ? supportsGazeTracking(supportedFeatures)
-            : supportedFeatures.includes(feature);
+            : supportedFeatures.includes(feature) &&
+              (feature !== 'depth-sensing' ||
+                !hostDepth ||
+                negotiateHostDepth(options.depthSensing, hostDepth) !== null);
 
         // Check if all required features are supported
         const allRequiredSupported = requiredFeatures.every(isFeatureSupported);

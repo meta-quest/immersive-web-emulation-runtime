@@ -12,6 +12,8 @@ import type {
   NativePlane,
   XRHostAnchor,
   XRHostBackend,
+  XRHostDepth,
+  XRHostDepthSupport,
   XRHostErrorSource,
   XRHostLayer,
   XRHostSwapchain,
@@ -21,6 +23,7 @@ import type {
 import { NativeAnchors } from './anchors.ts';
 import type { RuntimeStore } from './anchors.ts';
 import type { NativeAnchor } from './anchors.ts';
+import type { DepthRecordView } from './depth.ts';
 import type { GraphicsBridge } from './graphics.ts';
 import type { LayerBuffer } from './layers.ts';
 import type { WebGLHooks, XrNatives } from './natives.ts';
@@ -35,6 +38,12 @@ export class NativeHostBackend implements XRHostBackend {
   invalidateDepth = true;
   /** Spatial anchors (XR-ANCHOR-1); the hooks below delegate to it. */
   readonly anchors: NativeAnchors;
+  /** XR-DEPTH-2: what 'depth-sensing' negotiates against, set from the capabilities when the runtime has depth. */
+  depthSensing: XRHostDepthSupport | undefined = undefined;
+  /** The depth record, when the runtime writes one this adapter can read. */
+  depthRecord: DepthRecordView | null = null;
+  // made once: getDepth runs every frame
+  private readonly depthTexture = (name: number) => this.gfx.depthTexture(name);
   private readonly natives: XrNatives;
   private readonly gfx: GraphicsBridge;
   private readonly hooks: WebGLHooks | null;
@@ -154,6 +163,22 @@ export class NativeHostBackend implements XRHostBackend {
   /** Mesh detection and hit test. */
   getMeshes(): readonly NativeMesh[] | null {
     return this.scene ? this.scene.meshes() : null;
+  }
+
+  /**
+   * XR-DEPTH-2: this frame's environment depth (the XR thread wrote the record with the frame), or null. IWER calls it
+   * once per frame of a depth-sensing session, after binding the layer image and before the callbacks: the frame-start
+   * clear runs here (graphics.ts).
+   */
+  getDepth(): XRHostDepth | null {
+    const depth = this.depthRecord ? this.depthRecord.read(this.depthTexture) : null;
+    this.gfx.clearSessionImage();
+    return depth;
+  }
+
+  /** XR-DEPTH-2 matchDepthView: the frame's depth laid out in the render views (depth-reproject.ts), or null. */
+  reprojectDepth(depth: XRHostDepth, matrices: Float32Array): object | null {
+    return this.gfx.reprojectDepth(depth.texture, depth.width, depth.height, depth.viewCount, matrices);
   }
 
   getOpaqueColorTexture(): object | null {

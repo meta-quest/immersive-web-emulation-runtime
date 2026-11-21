@@ -2,18 +2,50 @@
 // to a file. web/xr/test/record-roundtrip.test.ts loads it as the XRHostFrame and checks what IWER host mode makes
 // of it (XRF-2: XRView.transform.matrix, projectionMatrix, input poses and buttons).
 //
+// With --depth it writes a depth record instead (depth_record.h, XR-DEPTH-2), which web/xr/test/depth.test.ts reads
+// with depth.ts's offsets: the two layouts are written by hand in each language, so this is what keeps them equal.
+//
 //   iwn_xr_record_dump <out.bin>
+//   iwn_xr_record_dump --depth <out.bin>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <limits>
 
+#include "iwn/xr/depth_record.h"
 #include "iwn/xr/frame_record.h"
 #include "iwn/xr/input_map.h"
 
 using namespace iwn::xr;
 
+namespace {
+
+int dump_depth(const char* path) {
+  double record[depth_layout::kCount] = {};
+  DepthImage image;
+  image.texture = 77;
+  image.width = 320;
+  image.height = 288;
+  image.near_z = 0.1f;
+  image.far_z = std::numeric_limits<float>::infinity();
+  image.pose[0] = XrPosef{{0, 0.2588190f, 0, 0.9659258f}, {-0.031f, 1.65f, 0.02f}};
+  image.pose[1] = XrPosef{{0, 0.2588190f, 0, 0.9659258f}, {0.033f, 1.66f, -0.01f}};
+  image.fov[0] = XrFovf{-0.95f, 0.85f, 0.8f, -0.75f};
+  image.fov[1] = XrFovf{-0.85f, 0.95f, 0.81f, -0.76f};
+  write_depth_record(record, image, 0.25);
+  FILE* f = std::fopen(path, "wb");
+  if (!f) return 1;
+  const size_t n = std::fwrite(record, sizeof(double), depth_layout::kCount, f);
+  std::fclose(f);
+  return n == depth_layout::kCount ? 0 : 1;
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
+  if (argc >= 3 && std::strcmp(argv[1], "--depth") == 0) return dump_depth(argv[2]);
   if (argc < 2) {
-    std::fprintf(stderr, "usage: %s <out.bin>\n", argv[0]);
+    std::fprintf(stderr, "usage: %s [--depth] <out.bin>\n", argv[0]);
     return 2;
   }
   FrameRecord r;

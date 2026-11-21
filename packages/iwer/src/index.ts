@@ -184,6 +184,8 @@ export type {
 export type {
   XRHostBackend,
   XRHostContentLayerKind,
+  XRHostDepth,
+  XRHostDepthSupport,
   XRHostErrorSource,
   XRHostEvent,
   XRHostFrame,

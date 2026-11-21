@@ -27,7 +27,10 @@ import type { XRCompositionLayer } from '../layers/XRProjectionLayer.js';
 import type { XRFrame } from '../frameloop/XRFrame.js';
 import { XREye, XRView } from '../views/XRView.js';
 import { XRSession } from '../session/XRSession.js';
-import { XRWebGLBinding } from '../depth/XRWebGLBinding.js';
+import {
+  XRWebGLBinding,
+  XRWebGLDepthInformation,
+} from '../depth/XRWebGLBinding.js';
 import type { XRHostSession } from './XRHostSession.js';
 
 type GLContext = WebGLRenderingContext | WebGL2RenderingContext;
@@ -156,6 +159,19 @@ export class XRHostWebGLBinding extends XRWebGLBinding {
   ): XRWebGLSubImage {
     assertLive(this[P_WEBGL_BINDING].session);
     return this.hostSession().layers.subImage(layer, frame, eye);
+  }
+
+  /**
+   * WebXR Depth Sensing: the frame's depth for `view` (see host/depth.ts),
+   * its `transform` placed in the space of `view`'s own transform.
+   */
+  getDepthInformation(view: XRView): XRWebGLDepthInformation | null {
+    const info = super.getDepthInformation(view);
+    const host = this[P_WEBGL_BINDING].session[P_SESSION].host;
+    if (info !== null && host && view instanceof XRView) {
+      host.depth.placeTransform(info, view);
+    }
+    return info;
   }
 
   /**

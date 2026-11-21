@@ -23,6 +23,7 @@ export {
   afterAnimationFrame,
   resyncState,
   invalidateDepthStencil,
+  clearSessionFramebuffer,
   canvasResized,
   readStats,
   resetStats,

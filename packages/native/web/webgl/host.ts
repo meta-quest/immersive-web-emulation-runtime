@@ -218,6 +218,54 @@ export function invalidateDepthStencil(gl: Ctx, fb: WebGLFramebuffer): void {
   gl._restoreFramebufferBindings();
 }
 
+/**
+ * Clears a framebuffer that renders into the XR session's image as the frame starts (XR-DEPTH-2): colour
+ * attachment 0 (when draw buffer 0 writes it) to transparent black, depth to 1, stencil to 0, whatever the masks,
+ * scissor and rasterizer discard, as a browser clears a layer's textures before each frame. three.js
+ * relies on that while depth sensing runs: it then skips its own clear. Restores every binding and mask it touched.
+ */
+export function clearSessionFramebuffer(gl: Ctx, fb: WebGLFramebuffer): void {
+  if (gl._skip()) return;
+  const atts = fb._attachments;
+  const color = atts.has(E.COLOR_ATTACHMENT0) && fb._drawBuffers[0] === E.COLOR_ATTACHMENT0;
+  const depth = atts.has(E.DEPTH_ATTACHMENT);
+  const stencil = atts.has(E.STENCIL_ATTACHMENT);
+  if (!color && !depth && !stencil) return;
+  const n = gl._n;
+  const c = gl._caps;
+  n.bindFramebuffer(E.DRAW_FRAMEBUFFER, fb._name);
+  if (c[7] === 1) n.disable(E.SCISSOR_TEST);
+  if (c[9] === 1) n.disable(E.RASTERIZER_DISCARD);
+  const perBuffer = (gl._idxDiverged & 8) !== 0;
+  if (perBuffer) n.colorMaskiOES(0, true, true, true, true);
+  else n.colorMask(true, true, true, true);
+  n.depthMask(true);
+  n.stencilMaskSeparate(E.FRONT_AND_BACK, 0xffffffff);
+  const z = gl._f32;
+  if (color) {
+    z[0] = z[1] = z[2] = z[3] = 0;
+    n.clearBufferfv(E.COLOR, 0, z, 0, 16);
+  }
+  if (depth && stencil) {
+    n.clearBufferfi(E.DEPTH_STENCIL, 0, 1, 0);
+  } else if (depth) {
+    z[0] = 1;
+    n.clearBufferfv(E.DEPTH, 0, z, 0, 4);
+  } else if (stencil) {
+    gl._i32[0] = 0;
+    n.clearBufferiv(E.STENCIL, 0, gl._i32, 0, 4);
+  }
+  const m = gl._colorMask;
+  if (perBuffer) n.colorMaskiOES(0, m[0] === 1, m[1] === 1, m[2] === 1, m[3] === 1);
+  else n.colorMask(m[0] === 1, m[1] === 1, m[2] === 1, m[3] === 1);
+  n.depthMask(gl._depthMask);
+  n.stencilMaskSeparate(E.FRONT, gl._stencilMaskF >>> 0);
+  n.stencilMaskSeparate(E.BACK, gl._stencilMaskB >>> 0);
+  if (c[7] === 1) n.enable(E.SCISSOR_TEST);
+  if (c[9] === 1) n.enable(E.RASTERIZER_DISCARD);
+  gl._restoreFramebufferBindings();
+}
+
 /** Mark the canvas resized: the emulated default framebuffer is re-allocated on its next use. */
 export function canvasResized(gl: Ctx): void {
   gl._dfbReady = false;

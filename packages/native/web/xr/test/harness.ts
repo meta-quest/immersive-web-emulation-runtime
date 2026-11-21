@@ -123,6 +123,8 @@ export function createHarness(
     declared?: string[] | null;
     /** Provide the scene natives (sceneData, scenePoses, sceneStatus) of runtime/xr xr_scene.h. */
     scene?: boolean;
+    /** More natives (a feature's own calls), present before the prelude is evaluated. */
+    natives?: Record<string, unknown>;
   } = {},
 ): Harness {
   const buffer = new ArrayBuffer(RECORD_BYTES);
@@ -273,6 +275,7 @@ export function createHarness(
     entryEvaluated: () => calls.push(['entryEvaluated']),
     runWindowFrame: () => calls.push(['runWindowFrame']),
     endFrameGL: () => calls.push(['endFrameGL']),
+    ...opts.natives,
   };
 
   // A recording WebGL context with the internal surface the hooks touch. Like the WebGL binding it keeps the
@@ -334,6 +337,7 @@ export function createHarness(
           tex._name = name;
         },
         invalidateDepthStencil: (_ctx: unknown, fb: unknown) => glCalls.push(['invalidateDepthStencil', fb]),
+        clearSessionFramebuffer: (_ctx: unknown, fb: unknown) => glCalls.push(['clearSessionFramebuffer', fb]),
         frameBoundary: () => glCalls.push(['frameBoundary']),
         afterAnimationFrame: () => glCalls.push(['afterAnimationFrame']),
       };

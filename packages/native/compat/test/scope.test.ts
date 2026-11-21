@@ -140,10 +140,11 @@ test('scope: the static catalogue flags Web Audio beyond the basic set, window.o
 });
 
 test('scope: AR/depth members IWER defines are "later", not "iwer", until the headset backs them', () => {
-  for (const k of ['XRWebGLBinding.getDepthInformation()'])
+  for (const k of ['XRFrame.getDepthInformation()', 'XRSession.initiateRoomCapture()'])
     assert.equal(r(k).status, 'later', k);
-  // XR-AR-2, XR-ANCHOR-1: planes, meshes, hit test and anchors are backed by the scene model and spatial anchors
-  for (const k of ['XRSession.requestHitTestSource()', 'XRFrame.detectedMeshes', 'XRFrame.detectedPlanes', 'XRFrame.createAnchor()', 'XRSession.restorePersistentAnchor()'])
+  // XR-AR-2, XR-ANCHOR-1, XR-DEPTH-2: planes, meshes, hit test, anchors and gpu-optimized depth are backed by the
+  // scene model, spatial anchors and environment depth
+  for (const k of ['XRSession.requestHitTestSource()', 'XRFrame.detectedMeshes', 'XRFrame.detectedPlanes', 'XRFrame.createAnchor()', 'XRSession.restorePersistentAnchor()', 'XRWebGLBinding.getDepthInformation()'])
     assert.equal(r(k).status, 'iwer', k);
   assert.equal(r('XRFrame.getViewerPose()').status, 'iwer');
 });

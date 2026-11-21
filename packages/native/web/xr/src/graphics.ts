@@ -26,12 +26,23 @@
 // compositor once the frame is fenced. A layer the page draws in the frame it created it in has no image in the
 // buffer yet: one is acquired at once (natives.acquireLayerImage).
 //
+// Depth sensing (XR-DEPTH-2) gets the same model: one WebGLTexture (a 2D array) per session whose name follows the
+// frame's environment depth image (three.js keeps the first depth texture object it is given). It renders into no
+// framebuffer and the compositor never owns it, so it is not parked; it points at no image once the session ends.
+// From the first frame that hands out depth until the session ends, the framebuffers that render into the frame's
+// image (a projection layer's or an XRWebGLLayer's) are also cleared before the frame's callbacks (colour, depth,
+// stencil), as a browser clears a layer's textures before each frame: three.js skips its own clear once it has a
+// depth texture (it renders no background then), and IWSDK draws no depth of its own in its place, so without it the
+// last frame's depth (or the zeros of a new buffer) hides everything. A session whose depth never comes (the provider
+// was refused) is left to the page.
+//
 // The framebuffers that may hold the opaque texture are found by watching which framebuffers the session's context
 // binds (one JS call per bind on that context only; attaching needs the framebuffer bound, so every framebuffer that
 // can hold the session's image is seen). retargetTexture skips those without the texture attached. The list is
 // bounded: when it is full, deleted framebuffers go first, then the oldest one that holds no session image. One that
 // holds it is never dropped, or it would keep an image the compositor owns attached and miss the next re-pointing.
 
+import { DepthReprojection } from './depth-reproject.ts';
 import type { LayerBuffer } from './layers.ts';
 import type { GLContext, WebGLHooks, XrNatives } from './natives.ts';
 
@@ -39,6 +50,7 @@ const TEXTURE_2D = 0x0de1;
 const TEXTURE_2D_ARRAY = 0x8c1a;
 const FRAMEBUFFER_BINDING = 0x8ca6;  // = DRAW_FRAMEBUFFER_BINDING
 const MAX_TRACKED_FRAMEBUFFERS = 32;
+const NO_FRAMEBUFFERS: readonly object[] = [];
 
 interface FramebufferLike {
   _attachments?: Map<number, { object: unknown }>;
@@ -65,6 +77,13 @@ export class GraphicsBridge {
   /** Images parked after a frame so far (XR-SC-3 diagnostics). */
   parks = 0;
   private opaque: object | null = null;
+  private depth: object | null = null;
+  /** XR-DEPTH-2 matchDepthView's pass (depth-reproject.ts). */
+  readonly reprojection = new DepthReprojection((m) => console.error(m));
+  /** XR-DEPTH-2: clear the frame image's framebuffers before the callbacks; set by the first depth handed out. */
+  clearAtFrameStart = false;
+  /** Framebuffers cleared at frame start so far (diagnostics). */
+  clears = 0;
   private currentName = 0;
   private readonly framebuffers: object[] = [];
   private readonly wrapped = new Map<number, object>();
@@ -161,6 +180,7 @@ export class GraphicsBridge {
   noteContext(gl: GLContext): void {
     if (this.gl === gl) return;
     this.gl = gl;
+    this.depth = null;
     this.framebuffers.length = 0;
     this.reset();
     this.watchBinds(gl);
@@ -182,6 +202,9 @@ export class GraphicsBridge {
     this.layers.length = 0;
     this.layerTextures.clear();
     this.inFrame = false;
+    this.clearAtFrameStart = false;
+    if (this.depth && this.gl && this.hooks) this.hooks.retargetTexture(this.gl, this.depth, 0, NO_FRAMEBUFFERS);
+    this.depth = null;
   }
 
   private reset(): void {
@@ -202,6 +225,48 @@ export class GraphicsBridge {
       this.opaque = this.hooks.wrapTexture(this.gl, this.currentName, this.arraySize === 1 ? TEXTURE_2D : TEXTURE_2D_ARRAY);
     }
     return this.opaque;
+  }
+
+  /** XRHostBackend.getDepth's texture: the session's depth texture, pointed at the GL name `name` (file comment). */
+  depthTexture(name: number): object | null {
+    const gl = this.gl;
+    const hooks = this.hooks;
+    if (!gl || !hooks || name === 0) return null;
+    if (!this.depth) this.depth = hooks.wrapTexture(gl, name, TEXTURE_2D_ARRAY);
+    else hooks.retargetTexture(gl, this.depth, name, NO_FRAMEBUFFERS);
+    // three.js stops clearing once it has a depth texture, and keeps it until the session ends (file comment)
+    this.clearAtFrameStart = true;
+    return this.depth;
+  }
+
+  /** XR-DEPTH-2 matchDepthView: `source` (the frame's depth image) laid out in the render views; null when it cannot. */
+  reprojectDepth(source: object, width: number, height: number, views: number, matrices: Float32Array): object | null {
+    const gl = this.gl;
+    if (!gl) return null;
+    return this.reprojection.draw(gl, source, width, height, Math.min(views, 2), matrices);
+  }
+
+  /**
+   * XR-DEPTH-2: clears the framebuffers that render into this frame's image (the projection layer's opaque texture,
+   * or the XRWebGLLayer wrapper of this image), once depth has been handed out. Called from XRHostBackend.getDepth,
+   * which IWER runs every frame of a depth-sensing session after binding the frame's layer image and before the
+   * page's callbacks, so the frame that first hands out depth is cleared too.
+   */
+  clearSessionImage(): void {
+    const gl = this.gl;
+    const hooks = this.hooks;
+    const name = this.currentName;
+    if (!this.clearAtFrameStart || !gl || !hooks || !hooks.clearSessionFramebuffer || name === 0) return;
+    const fbs = this.framebuffers;
+    for (let i = 0; i < fbs.length; i++) {
+      const object = colorAttachment(fbs[i]);
+      if (object === undefined || object === null) continue;
+      const own =
+        object === this.opaque || (this.wrappers.has(object as object) && (object as TextureLike)._name === name);
+      if (!own) continue;
+      hooks.clearSessionFramebuffer(gl, fbs[i]);
+      this.clears++;
+    }
   }
 
   /** XRHostBackend.wrapTexture (the XRWebGLLayer path): one wrapper per swapchain image. */

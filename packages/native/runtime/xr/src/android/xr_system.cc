@@ -4,7 +4,7 @@
 // XR_KHR_convert_timespec_time, XR_FB_display_refresh_rate, XR_FB_foveation(_configuration),
 // XR_FB_swapchain_update_state, XR_FB_color_space, XR_EXT_performance_settings, XR_FB_passthrough,
 // XR_META_passthrough_preferences, XR_KHR_composition_layer_cylinder for xr_layers.cc; the scene extensions in
-// xr_scene.h), against
+// xr_scene.h, XR_META_environment_depth), against
 // docs/spec/08, 09, 10 and 14 (DBG-SHOT). See xr_system.h for the threading model. Spatial anchors live in
 // xr_anchors.cc; this file only enables their extensions and calls their hooks.
 #include "android/xr_system.h"
@@ -20,6 +20,7 @@
 #include <cstring>
 
 #include "android/egl_xr.h"
+#include "android/xr_depth.h"
 #include "android/jni_android.h"
 #include "android/xr_input.h"
 #include "android/xr_loading.h"
@@ -114,7 +115,7 @@ struct XrSystem::Impl {
   // extensions
   std::vector<std::string> available_exts, enabled_exts;
   bool ext_convert_time = false, ext_refresh = false, ext_foveation = false, ext_color_space = false,
-       ext_perf = false, ext_passthrough = false, ext_scale_bias = false, ext_pt_prefs = false;
+       ext_perf = false, ext_passthrough = false, ext_scale_bias = false, ext_pt_prefs = false, ext_depth = false;
   InputExtensions input_ext;
   bool sys_hand_tracking = false, sys_passthrough = false;
 
@@ -175,6 +176,11 @@ struct XrSystem::Impl {
   bool pt_visible = true;  // the layer runs (the page can hide its immersive-ar session's passthrough)
   bool unpremultiplied = false;
   XrCompositionLayerPassthroughFB pt_comp{XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB};
+
+  // environment depth for a session with 'depth-sensing' (xr_depth.h, XR-DEPTH-2); stopped once a JS frame still in
+  // flight (whose GL work may sample its image) is collected, as the swapchain's destruction waits (destroy_pending)
+  EnvironmentDepth depth;
+  bool depth_stop_pending = false;
 
   // Projection layer and the JS frame. A frame JS began and the frame loop has not collected yet (it may span
   // OpenXR frames) is the slot's kRunning/kDone state itself (FrameSlot), never a separate flag that could drift
@@ -245,6 +251,7 @@ struct XrSystem::Impl {
   double session_running_ms = -1, first_idle_frame_ms = -1, first_js_frame_ms = -1, session_granted_ms = -1;
   double first_loading_frame_ms = -1, openxr_ready_ms = -1;
   double first_visible_loading_ms = -1;
+  EnvironmentDepth::Stats depth_stat;  // published by publish_locked()
   // loading screen state for stats(), published by publish_locked()
   bool loading_ready = false;
   LoadingPhase loading_phase = LoadingPhase::kOff;
@@ -369,6 +376,7 @@ void XrSystem::Impl::publish_locked() {
   loading_bg_stat = loading_bg;
   pt_recommended_stat = pt_recommended;
   pt_available_stat = passthrough_available();
+  depth_stat = depth.stats();
 }
 
 void XrSystem::Impl::wake_js() {
@@ -504,6 +512,7 @@ void XrSystem::stop() {
   }
   set_js_wake(nullptr);
   js_fence_ = nullptr;  // deleted by the XR thread's teardown
+  clear_depth_record(depth_record_, 0);
   {
     std::lock_guard<std::mutex> lock(sc_mu_);
     sc_names_.clear();
@@ -597,7 +606,8 @@ bool XrSystem::Impl::initialize() {
                         XR_META_TOUCH_CONTROLLER_PLUS_EXTENSION_NAME,
                         XR_FB_TOUCH_CONTROLLER_PRO_EXTENSION_NAME, XR_FB_PASSTHROUGH_EXTENSION_NAME,
                         XR_KHR_COMPOSITION_LAYER_CYLINDER_EXTENSION_NAME,
-                        XR_KHR_COMPOSITION_LAYER_COLOR_SCALE_BIAS_EXTENSION_NAME}) {
+                        XR_KHR_COMPOSITION_LAYER_COLOR_SCALE_BIAS_EXTENSION_NAME,
+                        XR_META_ENVIRONMENT_DEPTH_EXTENSION_NAME}) {
     if (usable(e)) enabled_exts.push_back(e);
   }
   for (const char* e : XrAnchors::kExtensions) {  // spatial anchors (xr_anchors.h)
@@ -625,6 +635,7 @@ bool XrSystem::Impl::initialize() {
   ext_passthrough = has(enabled_exts, XR_FB_PASSTHROUGH_EXTENSION_NAME);
   ext_scale_bias = has(enabled_exts, XR_KHR_COMPOSITION_LAYER_COLOR_SCALE_BIAS_EXTENSION_NAME);
   ext_pt_prefs = has(enabled_exts, XR_META_PASSTHROUGH_PREFERENCES_EXTENSION_NAME);
+  ext_depth = has(enabled_exts, XR_META_ENVIRONMENT_DEPTH_EXTENSION_NAME);
   input_ext.hand_tracking = has(enabled_exts, XR_EXT_HAND_TRACKING_EXTENSION_NAME);
   input_ext.hand_tracking_aim = has(enabled_exts, XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME);
   input_ext.touch_controller_plus = has(enabled_exts, XR_META_TOUCH_CONTROLLER_PLUS_EXTENSION_NAME);
@@ -692,6 +703,7 @@ bool XrSystem::Impl::initialize() {
     load(instance, "xrPassthroughLayerPauseFB", &pt_layer_pause);
   }
   if (ext_pt_prefs) load(instance, "xrGetPassthroughPreferencesMETA", &get_pt_prefs);
+  if (ext_depth) depth.load(instance);
 
   // --- system (the headset may not be ready yet: retry) ---
   XrSystemGetInfo sgi{XR_TYPE_SYSTEM_GET_INFO};
@@ -718,6 +730,7 @@ bool XrSystem::Impl::initialize() {
     hp.next = chain;
     chain = &hp;
   }
+  if (ext_depth) chain = depth.chain_properties(chain);
   sp.next = chain;
   xrGetSystemProperties(instance, system, &sp);
   system_name = sp.systemName;
@@ -836,10 +849,10 @@ bool XrSystem::Impl::initialize() {
   if (has_bounds) std::snprintf(bounds, sizeof(bounds), " bounds %.2fx%.2f m", stage_w, stage_d);
   log(LogLevel::kInfo,
       "xr: OpenXR %s %s, system '%s' (%s); eye %ux%u (max %ux%u); base %s%s; rates [%s] current %.0f; hands %d "
-      "passthrough %d; extensions: %s",
+      "passthrough %d depth %d; extensions: %s",
       runtime_name.c_str(), runtime_version.c_str(), system_name.c_str(), model.c_str(), rec_w, rec_h, max_w, max_h,
       base_is_stage ? "STAGE" : "LOCAL", bounds, rate_list.c_str(), static_cast<double>(current_rate.load()),
-      sys_hand_tracking ? 1 : 0, sys_passthrough ? 1 : 0, ext_list.c_str());
+      sys_hand_tracking ? 1 : 0, sys_passthrough ? 1 : 0, depth.supported() ? 1 : 0, ext_list.c_str());
 
   {
     std::lock_guard<std::mutex> lock(info_mu);
@@ -870,6 +883,9 @@ bool XrSystem::Impl::initialize() {
     info.set("hitTest", scene.available());
     info.set("anchors", owner->anchors_.supported());
     info.set("persistentAnchors", owner->anchors_.persistence());
+    // XR-DEPTH-2: environment depth for 'depth-sensing' (and whether it can leave the user's hands out)
+    info.set("depthSensing", depth.supported());
+    info.set("depthHandRemoval", depth.hand_removal_supported());
     info.set("explicitGrant", cfg->explicit_grant);
     // XR-LAYER-1: quad and cylinder layers (the WebXR 'layers' feature itself is granted with projection layers)
     Json comp = Json::object();
@@ -1124,6 +1140,10 @@ void XrSystem::Impl::pause_frames() {
   if (slot.state() == FrameSlot::kIdle) release_image();  // nothing renders into the held image any more
   have_projection = false;  // never re-submit a frame from before the pause
   if (destroy_pending) destroy_swapchain();
+  if (depth_stop_pending && slot.state() == FrameSlot::kIdle) {
+    depth.stop();
+    depth_stop_pending = false;
+  }
 }
 
 void XrSystem::Impl::end_webxr(bool by_system) {
@@ -1140,6 +1160,11 @@ void XrSystem::Impl::end_webxr(bool by_system) {
   comp_layers.end_session(st == FrameSlot::kRunning || st == FrameSlot::kDone);
   scene.session_ended();
   owner->anchors_.end_session();
+  if (st == FrameSlot::kRunning || st == FrameSlot::kDone) {
+    depth_stop_pending = depth.running();
+  } else {
+    depth.stop();
+  }
   life.on_session_ended(now_ms());
   if (input_ok) input.stop_haptics();
   // No WebXR content any more: the loading screen comes back, in front of the user (a reload boots the page again),
@@ -1537,6 +1562,10 @@ void XrSystem::Impl::finish_js_frame() {
     have_projection = true;
   }
   if (destroy_pending) destroy_swapchain();
+  if (depth_stop_pending) {
+    depth.stop();  // the frame that might sample its image is collected (end_webxr)
+    depth_stop_pending = false;
+  }
 }
 
 // The eye views for the predicted display time in the base space; the same poses go to JS and to the projection
@@ -1644,6 +1673,8 @@ void XrSystem::Impl::run_frame() {
     if (input_ok) input.sample(fs.predictedDisplayTime, base, session_hand_tracking, visibility.focused, hands);
     scene.locate(base, fs.predictedDisplayTime);  // pose slots, read by JS during the frame like the record
     owner->anchors_.locate(fs.predictedDisplayTime);  // the anchor pose buffer, read by JS within this frame
+    // The frame's environment depth (XR-DEPTH-2), into its own record in the same window as the frame record.
+    depth.acquire(base, fs.predictedDisplayTime, owner->depth_record_);
 
     // The record (XRF-2), written while no JS frame is in flight.
     const double pdt = pacing.strictly_increasing(clock.to_perf_ms(fs.predictedDisplayTime));
@@ -1920,6 +1951,7 @@ void XrSystem::Impl::log_stats(double now) {
         input_ok ? input.profile_name(0) : "-", input_ok ? input.profile_name(1) : "-", withdrawn, untracked_frames,
         comp_layers.last_submitted(), comp_layers.live());
   }
+  depth.log_window(window);
   last_stats_log_ms = now;
   log_frames = 0;
   log_missed = 0;
@@ -1944,6 +1976,7 @@ void XrSystem::Impl::teardown() {
   if (swapchain != XR_NULL_HANDLE) xrDestroySwapchain(swapchain);
   swapchain = XR_NULL_HANDLE;
   comp_layers.destroy_all();
+  depth.stop();
   if (loading_decode.joinable()) loading_decode.join();  // initialisation failed before it was collected
   loading.destroy();
   destroy_passthrough();
@@ -2149,6 +2182,21 @@ void XrSystem::notify_session_started(bool immersive_ar, bool hand_tracking, boo
     }
     log(LogLevel::kInfo, "xr: WebXR session started (%s%s)", immersive_ar ? "immersive-ar" : "immersive-vr",
         hand_tracking ? ", hand-tracking" : "");
+  });
+}
+
+void XrSystem::start_depth(bool hand_removal) {
+  if (!impl_) return;
+  Impl* x = impl_.get();
+  commands_.push([x, hand_removal] {
+    // a previous session's provider whose stop waited for its last frame goes first
+    if (x->depth_stop_pending) {
+      x->depth.stop();
+      x->depth_stop_pending = false;
+    }
+    // only for the session that asked (the command runs after its sessionStarted, in order)
+    if (x->webxr_active) x->depth.start(x->session, hand_removal);
+    x->publish();
   });
 }
 
@@ -2469,6 +2517,7 @@ Json XrSystem::stats() {
   j.set("input", input);
   j.set("neverOfferedErrors", x.never_offered_errors);
   j.set("scene", x.scene.status());
+  j.set("depth", EnvironmentDepth::stats_json(x.depth_stat));
   return j;
 }
 

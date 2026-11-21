@@ -25,6 +25,9 @@
 //   scenePoses() -> ArrayBuffer         entity poses, 8 floats per slot, written before each frame (xr_scene.h)
 //   sceneStatus() -> object             the scene model's state (diagnostics)
 //   anchor*()                           spatial anchors (xr_anchors_binding.cc)
+//   startDepth(handRemoval)             the session enabled 'depth-sensing': environment depth runs (XR-DEPTH-2)
+//   depthRecord() -> ArrayBuffer        the depth record (iwn/xr/depth_record.h; doubles, the same memory every frame)
+//   depthRecordVersion                  its layout version (depth_layout::kDepthVersion)
 #include <v8.h>
 
 #include <cmath>
@@ -64,6 +67,7 @@ struct BindingState {
   v8::Global<v8::ArrayBuffer> record_buffer;
   v8::Global<v8::ArrayBuffer> layer_buffer;
   v8::Global<v8::ArrayBuffer> pose_buffer;
+  v8::Global<v8::ArrayBuffer> depth_buffer;
   const std::function<void(double)>* window_frame = nullptr;
   double window_time = 0;
   bool fence_created = false;
@@ -307,6 +311,20 @@ void AcquireLayerImage(const v8::FunctionCallbackInfo<v8::Value>& info) {
       v8::Integer::NewFromUnsigned(info.GetIsolate(), XrSystem::get().acquire_layer_image(
                                                           static_cast<uint32_t>(num_in(info, 0, 0, 1024, 0)))));
 }
+
+void DepthRecord(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* iso = info.GetIsolate();
+  BindingState& g = G();
+  if (g.depth_buffer.IsEmpty()) {
+    std::shared_ptr<v8::BackingStore> store =
+        v8::ArrayBuffer::NewBackingStore(XrSystem::get().depth_record(), iwn::xr::depth_layout::kCount * sizeof(double),
+                                         v8::BackingStore::EmptyDeleter, nullptr);
+    g.depth_buffer.Reset(iso, v8::ArrayBuffer::New(iso, std::move(store)));
+  }
+  info.GetReturnValue().Set(g.depth_buffer.Get(iso));
+}
+
+void StartDepth(const v8::FunctionCallbackInfo<v8::Value>& info) { XrSystem::get().start_depth(flag(info, 0)); }
 
 void SetFrameHandler(const v8::FunctionCallbackInfo<v8::Value>& info) {
   BindingState& g = G();
@@ -611,6 +629,7 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
       st.record_buffer.Reset();
       st.layer_buffer.Reset();
       st.pose_buffer.Reset();
+      st.depth_buffer.Reset();
       // The activity can be relaunched in this process (a new Runtime after onDestroy): the next registration must
       // start the XR system again.
       st.installed = false;
@@ -635,6 +654,7 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
     g.record_buffer.Reset();
     g.layer_buffer.Reset();
     g.pose_buffer.Reset();
+    g.depth_buffer.Reset();
   }
 
   v8::Local<v8::Object> o = v8::Object::New(isolate);
@@ -664,6 +684,11 @@ void iwn_register_xr(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local
   set_fn(isolate, ctx, o, "sceneData", SceneData);
   set_fn(isolate, ctx, o, "scenePoses", ScenePoses);
   set_fn(isolate, ctx, o, "sceneStatus", SceneStatus);
+  set_fn(isolate, ctx, o, "startDepth", StartDepth);
+  set_fn(isolate, ctx, o, "depthRecord", DepthRecord);
+  o->Set(ctx, str(isolate, "depthRecordVersion"),
+         v8::Integer::NewFromUnsigned(isolate, iwn::xr::depth_layout::kDepthVersion))
+      .Check();
   o->Set(ctx, str(isolate, "layoutVersion"), v8::Integer::NewFromUnsigned(isolate, L::kVersion)).Check();
   iwn_register_xr_anchors(isolate, ctx, o);
   natives->Set(ctx, str(isolate, "xr"), o).Check();

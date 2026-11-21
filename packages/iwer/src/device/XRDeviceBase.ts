@@ -69,7 +69,10 @@ import { NativePlane } from '../planes/XRPlane.js';
 import { XRAnchor, XRAnchorSet } from '../anchors/XRAnchor.js';
 import { NativeMesh } from '../meshes/XRMesh.js';
 import type { DepthSensingData } from '../depth/XRDepthInformation.js';
-import { XRWebGLBinding } from '../depth/XRWebGLBinding.js';
+import {
+  XRWebGLBinding,
+  XRWebGLDepthInformation,
+} from '../depth/XRWebGLBinding.js';
 import type { XRRuntimeAdapter } from '../types/runtime-session.js';
 import type { XRDevice } from './XRDevice.js';
 import type { XRHostBackend, XRHostEvent, XRHostFrame } from '../host/types.js';
@@ -1011,6 +1014,8 @@ export class XRDeviceBase {
       setGlobal('XRHitTestSource', XRHitTestSource);
       setGlobal('XRHitTestResult', XRHitTestResult);
       setGlobal('XRTransientInputHitTestSource', XRTransientInputHitTestSource);
+      // GPU depth sensing hands it out (feature detection, instanceof)
+      setGlobal('XRWebGLDepthInformation', XRWebGLDepthInformation);
       setGlobal('XRTransientInputHitTestResult', XRTransientInputHitTestResult);
       // WebXR Anchors: host mode's anchors are the host's (host/anchors.ts)
       setGlobal('XRAnchor', XRAnchor);

@@ -5,6 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import type {
+  XRDepthDataFormat,
+  XRDepthUsage,
+} from '../depth/XRDepthInformation.js';
 import type { NativeMesh } from '../meshes/XRMesh.js';
 import type { NativePlane } from '../planes/XRPlane.js';
 
@@ -206,13 +210,56 @@ export interface XRHostSwapchain {
 export type XRHostAnchor = object;
 
 /**
+ * The depth sensing a host offers (WebXR Depth Sensing). A session that asks
+ * for 'depth-sensing' gets the first usage and data format of its
+ * preference lists that appear here (the host's first ones when a list is
+ * empty or the page passed no `depthSensing`); when one of them has no match
+ * the feature is not supported for that session.
+ */
+export interface XRHostDepthSupport {
+  /** Usages in the host's order of preference; 'gpu-optimized' is the one `getDepth` serves. */
+  usages: readonly XRDepthUsage[];
+  /** Data formats in the host's order of preference. */
+  dataFormats: readonly XRDepthDataFormat[];
+}
+
+/**
+ * One frame's depth, from `XRHostBackend.getDepth`. Like `XRHostFrame` it
+ * belongs to the host, which may reuse it; IWER reads it during the frame.
+ */
+export interface XRHostDepth {
+  /**
+   * The depth image as a 2D array texture, layer i holding view i. Hosts
+   * return the same object every frame and re-point it at each frame's
+   * image, as for `getOpaqueColorTexture` (pages may keep it, and three.js
+   * does).
+   */
+  texture: WebGLTexture;
+  /** Size of one layer in pixels. */
+  width: number;
+  height: number;
+  /** Clip planes the depth was encoded with, in metres; `depthFar` may be `Infinity`. */
+  depthNear: number;
+  depthFar: number;
+  /** Factor from raw values to metres (1 for a depth texture). */
+  rawValueToMeters: number;
+  /** Number of depth views in `views`, normally 2. */
+  viewCount: number;
+  /**
+   * Where each depth view was, `HOST_VIEW_STRIDE` numbers per view in the
+   * order of `XRHostFrame.views`: pose in the base space and FOV angles.
+   */
+  views: ArrayLike<number>;
+}
+
+/**
  * Where an exception that IWER caught during a host frame came from:
  * - `xr-frame-callback`: an `XRSession.requestAnimationFrame` callback;
  * - `window-frame`: `XRHostBackend.runWindowFrame`;
  * - `layer`: IWER's own per-frame work for an `XRWebGLLayer`, or the
  *   frame's layer list for `submitLayers`;
  * - `host-hook`: a per-frame `XRHostBackend` hook (`getPlanes`, `getMeshes`,
- *   `getAnchorPose`, `setPassthroughVisible`), the frame-start input update
+ *   `getAnchorPose`, `getDepth`, `setPassthroughVisible`), the frame-start input update
  *   that reads the host's input state, or the hit test over the host's scene.
  *   The step that threw is skipped for that frame (no plane or mesh update,
  *   input left as far as it got); the frame goes on.
@@ -336,6 +383,35 @@ export interface XRHostBackend {
   erasePersistentAnchor?(uuid: string): Promise<void>;
   /** `XRSession.persistentAnchors`: the UUIDs this app has persisted. */
   getPersistentAnchors?(): readonly string[];
+  /**
+   * Depth sensing on offer. Without it a host session negotiates nothing:
+   * 'depth-sensing' is granted as the device config says and `getDepth` is
+   * not called.
+   */
+  depthSensing?: XRHostDepthSupport;
+  /**
+   * The depth for this frame, read once per visible frame while the session
+   * has 'depth-sensing' with 'gpu-optimized' usage; null while the host has
+   * none (startup, tracking lost), and `getDepthInformation` then returns
+   * null.
+   */
+  getDepth?(): XRHostDepth | null;
+  /**
+   * The frame's depth laid out in the render views (WebXR Depth Sensing's
+   * `matchDepthView`, the default, as Quest Browser does it): for each view
+   * `i < depth.viewCount`, `matrices[16 i .. 16 i + 15]` (column-major) takes
+   * a point in the render view's clip space to the depth view's clip space
+   * (depth projection * inverse(depth pose) * render pose * inverse(render
+   * projection)). Returns a 2D array texture of the depth image's size,
+   * layer i holding view i's depth sampled along each pixel's ray at the far
+   * plane (far where the depth view does not reach), the same object every
+   * frame; null when the host cannot (IWER then hands out the depth views'
+   * own images and geometry). Without it `matchDepthView` is not honoured.
+   */
+  reprojectDepth?(
+    depth: XRHostDepth,
+    matrices: Float32Array,
+  ): WebGLTexture | null;
   /**
    * Receives exceptions IWER catches while running a host frame (see
    * {@link XRHostErrorSource}). Without it they go to `console.error`. The

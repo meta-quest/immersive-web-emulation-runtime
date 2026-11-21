@@ -58,6 +58,8 @@ export type {
   XRHostAnchor,
   XRHostBackend,
   XRHostContentLayerKind,
+  XRHostDepth,
+  XRHostDepthSupport,
   XRHostErrorSource,
   XRHostEvent,
   XRHostFrame,
@@ -120,6 +122,13 @@ export {
   XRCylinderLayer,
 } from './layers/XRContentLayer.js';
 export { XRHostWebGLBinding } from './host/XRHostWebGLBinding.js';
+export { XRWebGLDepthInformation } from './depth/XRWebGLBinding.js';
+export { negotiateHostDepth } from './host/depth.js';
+export type {
+  XRDepthDataFormat,
+  XRDepthStateInit,
+  XRDepthUsage,
+} from './depth/XRDepthInformation.js';
 export { XRPlane, XRPlaneSet, NativePlane } from './planes/XRPlane.js';
 export { XRMesh, XRMeshSet, NativeMesh } from './meshes/XRMesh.js';
 export { XRSemanticLabels } from './labels/labels.js';

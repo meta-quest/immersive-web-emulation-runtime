@@ -10,12 +10,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { DEPTH_RECORD_COUNT, DEPTH_VERSION } from '../src/depth.ts';
 import { createHarness, type Harness } from './harness.ts';
 
 const XR = 'navigator.xr';
 const USE_SCENE = 'com.oculus.permission.USE_SCENE';
 const AR = { passthrough: true, immersiveAr: true };
 const SCENE = { planeDetection: true, meshDetection: true, hitTest: true, depthSensing: true };
+/** The depth record natives 'depth-sensing' also needs (XR-DEPTH-2). */
+const DEPTH = { depthRecordVersion: DEPTH_VERSION, depthRecord: () => new ArrayBuffer(DEPTH_RECORD_COUNT * 8), startDepth: () => {} };
 
 /** Requests a session; resolves to its enabled features (sorted) or the rejection's name and message. */
 async function request(h: Harness, init: string, mode = 'immersive-ar', how = 'requestSession') {
@@ -52,7 +55,7 @@ test('XR-PERM-1: AR features are grantable only when the native side reports sup
 });
 
 test('XR-PERM-1: granted -> the session gets the features; the permission is asked for once', async () => {
-  const h = createHarness({ info: { ...AR, ...SCENE }, scene: true, permissions: { [USE_SCENE]: true } });
+  const h = createHarness({ info: { ...AR, ...SCENE }, scene: true, natives: DEPTH, permissions: { [USE_SCENE]: true } });
   const r = await request(h, "{ requiredFeatures: ['hit-test'], optionalFeatures: ['plane-detection', 'mesh-detection', 'depth-sensing', 'hand-tracking'] }");
   assert.deepEqual(r.features, ['depth-sensing', 'hand-tracking', 'hit-test', 'local', 'mesh-detection', 'plane-detection', 'viewer']);
   // one permission for four features: one request

@@ -9,11 +9,21 @@ import { P_DEPTH_INFO } from '../private.js';
 import { XRRigidTransform } from '../primitives/XRRigidTransform.js';
 
 export type XRDepthUsage = 'cpu-optimized' | 'gpu-optimized';
-export type XRDepthDataFormat = 'luminance-alpha' | 'float32';
+export type XRDepthDataFormat =
+  | 'luminance-alpha'
+  | 'float32'
+  | 'unsigned-short';
 
 export interface XRDepthStateInit {
   usagePreference: XRDepthUsage[];
   dataFormatPreference: XRDepthDataFormat[];
+  /**
+   * Depth laid out in the render views (the default, as in Chromium): the
+   * depth information then shares the `XRView`'s projection and transform.
+   * false: the depth views' own images and geometry. Host mode honours it
+   * when the host reprojects (`XRHostBackend.reprojectDepth`).
+   */
+  matchDepthView?: boolean;
 }
 
 export interface DepthSensingData {
@@ -31,7 +41,7 @@ export class XRCPUDepthInformation {
     normDepthBufferFromNormView: XRRigidTransform;
     rawValueToMeters: number;
     dataFormat: XRDepthDataFormat;
-    view: Float32Array | Uint8Array;
+    view: Float32Array | Uint16Array | Uint8Array;
   };
 
   constructor(
@@ -52,7 +62,9 @@ export class XRCPUDepthInformation {
       view:
         dataFormat === 'float32'
           ? new Float32Array(data)
-          : new Uint8Array(data),
+          : dataFormat === 'unsigned-short'
+            ? new Uint16Array(data)
+            : new Uint8Array(data),
     };
   }
 

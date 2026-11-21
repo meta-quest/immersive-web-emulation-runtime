@@ -5,15 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { P_DEVICE, P_REF_SPACE, P_SESSION } from '../private.js';
+import { P_DEVICE, P_FRAME, P_REF_SPACE, P_SESSION } from '../private.js';
 import type {
   XRHostBackend,
+  XRHostDepth,
   XRHostErrorSource,
   XRHostEvent,
   XRHostFrame,
   XRHostSwapchain,
 } from './types.js';
 import { XRHostAnchors } from './anchors.js';
+import { XRHostDepthSensing } from './depth.js';
 import { invalidateHostPoses } from './frame.js';
 import { XRHostContentLayers } from './content-layers.js';
 import { XRHostFrameLoop, XRHostFrameRequest } from './frame-loop.js';
@@ -57,7 +59,7 @@ function visibilityOf(visible: boolean, focused: boolean): XRVisibilityState {
  * The host-mode side of an `XRSession` (`session[P_SESSION].host`). It turns
  * host frames and host events into WebXR behaviour and delegates the details
  * to small parts: views, output (swapchain, foveation, passthrough), frame
- * rate, reference spaces, scene, hit test, anchors, and the frame loop.
+ * rate, reference spaces, scene, hit test, anchors, depth, and the frame loop.
  */
 export class XRHostSession {
   readonly session: XRSession;
@@ -71,6 +73,7 @@ export class XRHostSession {
   readonly layers: XRHostContentLayers;
   readonly hitTest: XRHostHitTest;
   readonly anchors: XRHostAnchors;
+  readonly depth = new XRHostDepthSensing();
   private readonly loop: XRHostFrameLoop;
 
   /** The host frame being run; null outside `runFrame`. */
@@ -86,6 +89,11 @@ export class XRHostSession {
   private readonly reportCallbackError = (error: unknown) =>
     this.report(error, 'xr-frame-callback');
   private readonly closeAfterFrame = () => this.close(false);
+  private readonly reprojectDepth = (
+    depth: XRHostDepth,
+    matrices: Float32Array,
+  ): WebGLTexture | null =>
+    this.backend.reprojectDepth?.(depth, matrices) ?? null;
 
   constructor(session: XRSession, backend: XRHostBackend) {
     this.session = session;
@@ -265,6 +273,22 @@ export class XRHostSession {
             this.anchors.update();
           } catch (error) {
             this.report(error, 'host-hook');
+          }
+        }
+        if (s.hasDepth && s.depthSensingUsage === 'gpu-optimized') {
+          try {
+            this.depth.sync(
+              xrFrame,
+              frameId,
+              this.backend.getDepth?.(),
+              this.views,
+              s.depthMatchView && this.backend.reprojectDepth
+                ? this.reprojectDepth
+                : undefined,
+            );
+          } catch (error) {
+            this.report(error, 'host-hook');
+            xrFrame[P_FRAME].gpuDepthDataMap.clear();
           }
         }
         // input sources must reflect this frame before any callback runs

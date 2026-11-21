@@ -27,6 +27,7 @@
 #include "android/xr_anchors.h"
 #include "iwn/core/asset_source.h"
 #include "iwn/core/json.h"
+#include "iwn/xr/depth_record.h"
 #include "iwn/xr/frame_record.h"
 #include "iwn/xr/handoff.h"
 #include "iwn/xr/xr_config.h"
@@ -104,6 +105,10 @@ class XrSystem {
   void set_passthrough_visible(bool visible);
   void haptic(int hand, float intensity, double duration_ms, float frequency_hz);
   void notify_session_started(bool immersive_ar, bool hand_tracking, bool planes, bool meshes);
+  // The session enabled 'depth-sensing' (XR-DEPTH-2): environment depth runs until the session ends.
+  void start_depth(bool hand_removal);
+  // The depth record (iwn/xr/depth_record.h), written by the XR thread with each posted frame.
+  double* depth_record() { return depth_record_; }
   void notify_offered();
   // Every offerSession()/requestSession() the page still had pending was rejected and no session exists.
   void notify_offer_rejected();
@@ -171,6 +176,7 @@ class XrSystem {
   std::unique_ptr<Impl> impl_;
 
   FrameRecord record_;
+  double depth_record_[depth_layout::kCount] = {};
   FrameSlot slot_;
   uint32_t layer_words_[layers::kWords] = {};
   CommandQueue commands_;

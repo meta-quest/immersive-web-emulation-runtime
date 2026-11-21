@@ -387,6 +387,43 @@ manifest needs `com.oculus.permission.USE_ANCHOR_API` (a normal permission, no p
 device: grant, refusal and persistence paths without tracking; create, locate, persist, relaunch and restore by UUID
 on a headset that tracks in 6DoF.
 
+**XR-DEPTH-2 (SHOULD).** `depth-sensing` is granted when the system has `XR_META_environment_depth` (`capabilities()`
+`depthSensing`), for `immersive-ar` and `immersive-vr` sessions, as Quest Browser offers it:
+usage `gpu-optimized` only, data format `unsigned-short` (what Quest Browser 156 reports for this texture) or
+`float32` (IWSDK's choice; it samples the same texture either way), not `luminance-alpha` (a packed two-byte encoding
+this texture does not have); the page's `depthSensing` preferences are matched in order, and with no match a required
+`depth-sensing` rejects with `NotSupportedError` and an optional one is dropped, before any permission dialog. A
+request without a `depthSensing` dictionary (or with empty preference lists) gets the first usage and format offered
+(`gpu-optimized`, `unsigned-short`) instead of a rejection. While such a session runs, the runtime runs one depth
+provider (hand removal off, as in Quest Browser, so real hands occlude virtual content; it keeps running while the
+session is hidden or stopping, until the session ends) and acquires the newest depth image for each WebXR frame's
+predicted display time in the base space; the image's swapchain name, size, clip planes and per-eye depth-view pose
+and FOV reach JS in a depth record of its own (the frame record is unchanged; a host test tool writes one and web/xr
+reads it back field by field). `XRWebGLBinding.getDepthInformation(view)` returns, per eye, `textureType
+'texture-array'`, `imageIndex` 0/1, `rawValueToMeters` 1 (metres = `depthNear / (1 - d)`, the formula IWSDK's
+occlusion shaders use), `depthNear`/`depthFar` as OpenXR reports them (`depthFar` may be `Infinity`), an identity
+`normDepthBufferFromNormView`, and `null` for frames without an image. With `matchDepthView` (the default, as in
+Chromium) the depth is laid out in the eye's render view of this frame, as Quest Browser 156 does it: each frame a pass
+on the page's WebGL 2 context carries every pixel's ray, at the far plane, into the depth view and copies the raw depth
+found there (the far plane where the depth view does not reach) into a 2-layer DEPTH_COMPONENT16 texture of the
+context's own, restoring all GL state it touches; the depth information then has the view's own `projectionMatrix`
+and `transform`. Pages that sample depth by screen position (IWSDK) need this, because the image comes from the depth
+cameras' pose at their own rate (about 30 Hz). With `matchDepthView: false` (or WebGL 1) the texture is one
+session-long `WebGLTexture` re-pointed at each frame's image (NEAREST filtering), with the depth view's
+`projectionMatrix` and `transform`. From the first frame that hands out depth (that frame included) until the session
+ends, the framebuffers that render into the frame's image, a projection layer's or an XRWebGLLayer's, are cleared
+(colour, depth, stencil) before the frame's callbacks, as a browser clears a layer's textures: three.js renders no
+background, so does not clear, once it has a depth texture. The provider stops when the session ends, once a JS frame
+still in flight is collected (as the colour swapchain waits); a JS frame that outlives its OpenXR frame (a long
+first-sight compile) may sample an image the runtime has already released, which can show wrong occlusion in that
+frame. It needs `com.oculus.permission.USE_SCENE`, asked for before the session gets the feature (XR-PERM-1); without it
+the provider is refused and every frame has no depth. `XRWebGLDepthInformation` is a global in host mode.
+*Check:* web/xr and IWER host tests (negotiation, matched and raw geometry with turned heads, the reprojection pass's
+state restore, the record round trip, a second session); device: proto-occlusion shows virtual objects cut by real
+ones, the `xr-depth` log line reports the per-frame acquire cost. The display rate with occlusion in view follows the
+page's GPU cost from frame to frame, which the live depth changes 30 times a second; Quest Browser shows the same (the
+measurements are in the depth commit's test plan).
+
 **XR-SEC-1 (MUST NOT).** No secondary views, no `dom-overlay`, no camera access in the first release;
 requesting them as required rejects; as optional, dropped.
 *Check:* tests.

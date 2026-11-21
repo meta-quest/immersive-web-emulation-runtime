@@ -66,6 +66,7 @@ import {
 import { edgeEventTypes, resetButton } from '../gamepad/button-edges.js';
 import { GamepadButton } from '../gamepad/Gamepad.js';
 import { XRHostSession } from '../host/XRHostSession.js';
+import { negotiateHostDepth } from '../host/depth.js';
 import { truncateArray } from '../utils/arrays.js';
 import { XRCompositionLayer } from '../layers/XRProjectionLayer.js';
 import { mat4 } from 'gl-matrix';
@@ -224,6 +225,8 @@ export class XRSession extends EventTarget {
     // depth sensing
     depthSensingUsage: XRDepthUsage;
     depthSensingDataFormat: XRDepthDataFormat;
+    /** XRDepthStateInit.matchDepthView (host mode): depth laid out in the render views. */
+    depthMatchView: boolean;
     depthTexture: WebGLTexture | null;
     depthTextureWidth: number;
     depthTextureHeight: number;
@@ -644,6 +647,7 @@ export class XRSession extends EventTarget {
       depthSensingUsage: (_depthSensing?.usagePreference?.[0] ??
         'cpu-optimized') as XRDepthUsage,
       depthSensingDataFormat: 'float32' as XRDepthDataFormat,
+      depthMatchView: _depthSensing?.matchDepthView !== false,
       depthTexture: null,
       depthTextureWidth: 0,
       depthTextureHeight: 0,
@@ -885,6 +889,14 @@ export class XRSession extends EventTarget {
 
     const hostBackend = device[P_DEVICE].host;
     if (hostBackend) {
+      const depthChoice =
+        this[P_SESSION].hasDepth && hostBackend.depthSensing
+          ? negotiateHostDepth(_depthSensing, hostBackend.depthSensing)
+          : null;
+      if (depthChoice) {
+        this[P_SESSION].depthSensingUsage = depthChoice.usage;
+        this[P_SESSION].depthSensingDataFormat = depthChoice.dataFormat;
+      }
       // host mode: the host pushes frames through XRDevice.runHostFrame
       this[P_SESSION].host = new XRHostSession(this, hostBackend);
       this[P_SESSION].renderState = new XRRenderState({ layers: [] });
