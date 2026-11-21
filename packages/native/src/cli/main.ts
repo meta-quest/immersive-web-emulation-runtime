@@ -96,7 +96,8 @@ pack options:
                     signed with the "signing" keystore (else the debug key)
   --inspector       release build that still serves the inspector/debug endpoint
   --dist <dir>      Vite output to pack (default: <project>/dist)
-  --out <apk>       output (default: <project>/dist-metavr/<appName>.apk)
+  --out <apk>       output (default: <project>/dist-metavr/<appName>.apk,
+                    <appName>-release.apk with --release; install --release installs that one)
   --template <apk>  template APK (default: $IWER_NATIVE_TEMPLATE, the one bundled in the package, the pinned download, or a checkout build)
   --exclude <glob>  leave matching dist files out (repeatable)
   --install, --run  install and launch after packing
@@ -338,7 +339,8 @@ async function pack({
   if (!values.json) printWarnings(io, loaded);
   const out = path.resolve(
     io.cwd,
-    values.out ?? defaultApkPath(projectRoot, loaded.target.appName),
+    values.out ??
+      defaultApkPath(projectRoot, loaded.target.appName, !!values.release),
   );
   const distDir = path.resolve(projectRoot, values.dist ?? 'dist');
   const buildType = values.release ? 'release' : 'debug';
@@ -481,8 +483,17 @@ const PACK_ERRORS = new Set([
   'SplashError',
 ]);
 
-export function defaultApkPath(projectRoot: string, appName: string): string {
-  return path.join(projectRoot, 'dist-metavr', `${safeFileName(appName)}.apk`);
+/** dist-metavr/<appName>.apk, and <appName>-release.apk for release builds, so a release pack keeps the debug APK. */
+export function defaultApkPath(
+  projectRoot: string,
+  appName: string,
+  release = false,
+): string {
+  return path.join(
+    projectRoot,
+    'dist-metavr',
+    `${safeFileName(appName)}${release ? '-release' : ''}.apk`,
+  );
 }
 
 async function install({
@@ -497,7 +508,7 @@ async function install({
   if (!apk) {
     const loaded = load(io, projectRoot, false, { requireKeystore: false });
     if (!loaded) return EXIT.failure;
-    apk = defaultApkPath(projectRoot, loaded.target.appName);
+    apk = defaultApkPath(projectRoot, loaded.target.appName, !!values.release);
     packageId = loaded.target.packageId;
     if (!existsSync(apk) && !values['dry-run']) {
       io.stderr(
@@ -677,6 +688,26 @@ async function launch(
       );
   }
   const result = await adb(io, values, launchArgs(packageId, values), 60_000);
+  if (result.timedOut) {
+    // `am start -W` waits for the app's first frame; a system dialog in front of it holds the launch.
+    const quiet = { ...io, stdout: () => {}, stderr: () => {} };
+    const focus = await adb(
+      quiet,
+      values,
+      [
+        'shell',
+        'dumpsys',
+        'window',
+        '|',
+        'grep',
+        '-E',
+        "'mCurrentFocus|mFocusedApp'",
+      ],
+      10_000,
+    );
+    const hint = blockingDialogHint(focus.output, packageId);
+    if (hint) io.stderr(`iwer-native: ${hint}\n`);
+  }
   if (result.code !== EXIT.ok) return result.code;
   // `am start` exits 0 even when it fails; it says so in its output.
   if (/^Error:|Error type \d|does not exist/m.test(result.output)) {
@@ -686,6 +717,28 @@ async function launch(
     return EXIT.failure;
   }
   return EXIT.ok;
+}
+
+/**
+ * After a launch timed out: name the system dialog that holds it, from `dumpsys window`'s focus lines. Horizon OS
+ * shows these in front of a launching VR app: the "Turn on tracking" dialog when the headset has no 6DoF tracking
+ * (too dark, or tracking off), and the boundary (Guardian) setup when it has lost its position.
+ */
+export function blockingDialogHint(
+  dumpsys: string,
+  packageId: string,
+): string | null {
+  const focus =
+    /mCurrentFocus=Window\{[^}]*\s(\S+)\}/.exec(dumpsys)?.[1] ??
+    /mFocusedApp=.*?\s(\S+\/\S+)/.exec(dumpsys)?.[1];
+  if (!focus) return null;
+  if (/6dof|Tracking/i.test(focus))
+    return `the headset shows the "Turn on tracking" dialog (${focus}). It needs 6DoF tracking: turn tracking on, make the room brighter, and confirm the dialog on the headset; then run again.`;
+  if (/guardian|boundary/i.test(focus))
+    return `the headset shows the boundary (Guardian) setup (${focus}). Put the headset on and confirm or redraw the boundary; then run again.`;
+  if (!focus.startsWith(`${packageId}/`))
+    return `the headset's focused window is ${focus}, not ${packageId}: a system dialog may be holding the launch. Check the headset.`;
+  return null;
 }
 
 /** The runtime's inspector port on the device (assets/iwn/config.json inspector.port default). */
@@ -704,7 +757,7 @@ async function adb(
   values: CommandContext['values'],
   args: string[],
   timeoutMs: number,
-): Promise<{ code: number; output: string }> {
+): Promise<{ code: number; output: string; timedOut?: boolean }> {
   const location = locateAdb(io.env, io.isExecutable);
   let prefix: string[];
   try {
@@ -734,7 +787,7 @@ async function adb(
   }
   if (result.error === 'timeout') {
     io.stderr(`iwer-native: adb did not finish within ${timeoutMs / 1000} s\n`);
-    return { code: EXIT.failure, output };
+    return { code: EXIT.failure, output, timedOut: true };
   }
   return { code: result.code === 0 ? EXIT.ok : EXIT.failure, output };
 }

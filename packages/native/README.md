@@ -101,7 +101,8 @@ look up a different, unscoped package name on npm.
    ```
 
 6. For a release build, add a `signing` section and set the two password environment variables. Then run
-   `npx iwer-native pack --release`. See [Signing](#signing).
+   `npx iwer-native pack --release`, which writes `dist-metavr/<appName>-release.apk` next to the debug APK
+   (`npx iwer-native install --release` installs it). See [Signing](#signing).
 
 ### Without IWSDK
 
@@ -382,7 +383,8 @@ iwer-native doctor   [--project <dir>] [--json]      Node version, adb, connecte
 iwer-native validate [--project <dir>] [--json]      validate and print the resolved target
 iwer-native pack     [--project <dir>] [--release] [--out <apk>] [--template <apk>] [--install] [--run]
                                                      dist/ + template APK -> signed dist-metavr/<appName>.apk
-iwer-native install  [<apk>] [--serial <id>] [--dry-run]   adb install -r (default: the packed APK)
+                                                     (--release: <appName>-release.apk)
+iwer-native install  [<apk>] [--release] [--serial <id>] [--dry-run]   adb install -r (default: the packed APK)
 iwer-native run      [<packageId>] [--serial <id>] [--inspect] [--forward <port>] [--dry-run]
                                                      am start -n <pkg>/android.app.NativeActivity + debug extras
 iwer-native compat   [--dist <dir>] [--trace] [--strict] [--verbose] [--json]   web APIs the runtime lacks; pack runs the static part first (--skip-compat)
@@ -392,6 +394,40 @@ iwer-native compat   [--dist <dir>] [--trace] [--strict] [--verbose] [--json]   
 digits, `.`, `_` and `-` in `appName` becomes one `-`. adb is found through `$ADB`, then `$ANDROID_HOME/platform-tools`,
 `$ANDROID_SDK_ROOT/platform-tools`, then `PATH`. The CLI never sets `ANDROID_SERIAL` or `ADB_SERVER_SOCKET`; pass
 `--serial`. Exit codes: 0 ok, 1 failure, 2 usage.
+
+### Debug endpoint
+
+Debug builds (and release builds packed with `--inspector`) serve a small JSON-over-WebSocket endpoint next to the
+inspector, for scripts and agents: evaluate JS in the page, take an eye-buffer screenshot, read the runtime's stats.
+Forward it with `npx iwer-native run --forward 9229` (or `adb forward tcp:9229 localabstract:<packageId>_devtools_9229`),
+then connect to `ws://127.0.0.1:9229/host`.
+
+Each request is one text message `{"method": "...", "params": {...}, "id": 1}`; the reply is one text message (always
+a single WebSocket frame, however large) with the same `id` and the result, or `{"error": "..."}`. `id` is optional
+for one request per connection. Methods:
+
+| method  | params                                                                   | reply                                                                                                                                                                                         |
+| ------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `eval`  | `expression`, `awaitPromise` (default true), `timeoutMs` (default 30000) | `{result}`: the JSON value (a promise is awaited while frames keep running; values that do not serialise come back as their `String()`), or `{error}` with the message and stack              |
+| `shot`  | `eye`: `left`, `right` or `both`; `scale` (default 1)                    | `{png, width, height, frame}`: the app's eye buffer of the next frame as base64 PNG. Passthrough is composited by the system after the app, so in AR the areas the app leaves clear are blank |
+| `stats` | none                                                                     | versions, uptime, boot timeline, fps, session and visibility state, per-frame timing, GC and heap, workers, audio, blocked network origins                                                    |
+| `info`  | none                                                                     | device model and OS build, runtime/V8 versions, GL renderer, OpenXR runtime, package id and version, native modules                                                                           |
+
+```js
+// node, with Node's built-in WebSocket (Node 22+)
+const ws = new WebSocket('ws://127.0.0.1:9229/host');
+ws.onopen = () =>
+  ws.send(
+    JSON.stringify({
+      method: 'eval',
+      params: { expression: 'document.title' },
+    }),
+  );
+ws.onmessage = (e) => {
+  console.log(JSON.parse(e.data));
+  ws.close();
+};
+```
 
 ## How it works
 

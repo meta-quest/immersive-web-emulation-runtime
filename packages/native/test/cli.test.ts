@@ -24,7 +24,14 @@ import {
   FIXTURES,
   STORE_PASSWORD,
 } from '../packager/test/helpers.ts';
-import { EXIT, runCli, splitShellWords, type CliIo } from '../src/cli/main.ts';
+import {
+  blockingDialogHint,
+  defaultApkPath,
+  EXIT,
+  runCli,
+  splitShellWords,
+  type CliIo,
+} from '../src/cli/main.ts';
 import { runDoctor } from '../src/cli/doctor.ts';
 import { loadNativeProject } from '../src/config/load.ts';
 import { NativeConfigError } from '../src/config/validate.ts';
@@ -907,4 +914,43 @@ describe('helpers', () => {
     assert.equal(parseAdbVersion(ADB_VERSION), '1.0.41');
     assert.equal(parseAdbVersion('nope'), null);
   });
+});
+
+test('a launch held by a system dialog names it', () => {
+  const focus = (w: string) =>
+    `  mCurrentFocus=Window{a19a3f6 u0 ${w}}\n  mFocusedApp=ActivityRecord{1 u0 ${w} t1}`;
+  assert.match(
+    blockingDialogHint(
+      focus('com.oculus.vrshell/.LaunchCheckRequires6dofDialogActivity'),
+      'com.a.b',
+    )!,
+    /"Turn on tracking" dialog/,
+  );
+  assert.match(
+    blockingDialogHint(
+      focus('com.oculus.guardian/.GuardianActivity'),
+      'com.a.b',
+    )!,
+    /boundary \(Guardian\) setup/,
+  );
+  assert.match(
+    blockingDialogHint(focus('com.oculus.vrshell/.SomeDialog'), 'com.a.b')!,
+    /focused window is com\.oculus\.vrshell\/\.SomeDialog, not com\.a\.b/,
+  );
+  assert.equal(
+    blockingDialogHint(focus('com.a.b/android.app.NativeActivity'), 'com.a.b'),
+    null,
+  );
+  assert.equal(blockingDialogHint('', 'com.a.b'), null);
+});
+
+test('release builds default to their own APK path', () => {
+  assert.equal(
+    defaultApkPath('/p', 'IWSDK Showcase'),
+    path.join('/p', 'dist-metavr', 'IWSDK-Showcase.apk'),
+  );
+  assert.equal(
+    defaultApkPath('/p', 'IWSDK Showcase', true),
+    path.join('/p', 'dist-metavr', 'IWSDK-Showcase-release.apk'),
+  );
 });

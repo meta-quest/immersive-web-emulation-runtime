@@ -34,6 +34,12 @@ export interface ScanSignal {
   re: RegExp;
   /** 'call': constructing/calling it; 'probe': a mention that is usually feature detection. */
   strength: 'call' | 'probe';
+  /**
+   * A feature check that, when every file with a match also contains it, makes the hit a 'probe': the code checks
+   * for the API and has a fallback (Emscripten's `typeof WebAssembly.instantiateStreaming == "function"` before
+   * falling back to WebAssembly.instantiate).
+   */
+  guard?: RegExp;
 }
 
 export interface ScanHit {
@@ -80,7 +86,8 @@ const S = (
   key: string,
   re: RegExp,
   strength: 'call' | 'probe' = 'call',
-): ScanSignal => ({ key, re, strength });
+  guard?: RegExp,
+): ScanSignal => ({ key, re, strength, ...(guard ? { guard } : {}) });
 
 /** BaseAudioContext factories outside the alpha's basic Web Audio set. */
 const LATER_AUDIO_FACTORIES = [
@@ -246,6 +253,9 @@ export const SIGNALS: ScanSignal[] = [
   S(
     'WebAssembly.instantiateStreaming()',
     /\bWebAssembly\.(?:instantiate|compile)Streaming\s*\(/,
+    'call',
+    // Emscripten (IWSDK's physics and UI wasm) checks for it and falls back to WebAssembly.instantiate
+    /\btypeof\s+WebAssembly\.(?:instantiate|compile)Streaming\b/,
   ),
   S('XRSystem.requestSession()', /\.requestSession\s*\(/),
   S('XRSystem.offerSession()', /\.offerSession\s*\(/),
@@ -423,6 +433,11 @@ export function scanDist(
         count: 0,
         files: [],
       };
+      if (sig.guard) {
+        const guarded = sig.guard.test(text);
+        if (h.count === 0 && guarded) h.strength = 'probe';
+        else if (!guarded) h.strength = sig.strength;
+      }
       h.count += count;
       h.files.push({ file: rel, count, excerpt: excerpt(text, first) });
       hits.set(sig.key, h);

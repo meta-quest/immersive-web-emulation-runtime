@@ -1360,3 +1360,24 @@ test('check: a stubbed absent API fails when called (a guard does not help); Web
   assert.match(msgs, /WebSocket is not supported in this alpha/);
   assert.doesNotMatch(msgs, /native\.network\.allow/);
 });
+
+test('instantiateStreaming behind a feature check is a probe, a bare call is a call', () => {
+  const d = tempDir();
+  writeTree(d, {
+    'index.html': '<script type="module" src="./a.js"></script>',
+    // Emscripten's two shapes of the check, then its fallback
+    'a.js':
+      'if (typeof WebAssembly.instantiateStreaming == "function") WebAssembly.instantiateStreaming(r, i).catch(() => WebAssembly.instantiate(b, i));',
+    'b.js':
+      'if ("function" == typeof WebAssembly.instantiateStreaming) await WebAssembly.instantiateStreaming(c, a);',
+  });
+  const guarded = scanDist(d).hits.find(
+    (h) => h.key === 'WebAssembly.instantiateStreaming()',
+  );
+  assert.equal(guarded?.strength, 'probe');
+  writeTree(d, { 'c.js': 'WebAssembly.instantiateStreaming(fetch(u), i);' });
+  const bare = scanDist(d).hits.find(
+    (h) => h.key === 'WebAssembly.instantiateStreaming()',
+  );
+  assert.equal(bare?.strength, 'call');
+});
