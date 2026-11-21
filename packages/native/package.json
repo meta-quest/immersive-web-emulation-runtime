@@ -22,9 +22,11 @@
     "!lib/**/*.map",
     "!lib/**/*.d.ts.map",
     "packager/templates.json",
+    "prebuilt/iwer-native-template.apk",
     "compat/data/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.txt"
   ],
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\"",
@@ -32,7 +34,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-concurrency=4 --test-reporter=spec \"test/**/*.test.ts\" \"packager/test/**/*.test.ts\" \"compat/test/**/*.test.ts\"",
     "test:compat": "node --test --test-concurrency=4 --test-reporter=spec \"compat/test/**/*.test.ts\"",
-    "verify": "npm run typecheck && npm test && npm run build && node bin/iwer-native.mjs --help"
+    "verify": "npm run typecheck && npm test && npm run build && node bin/iwer-native.mjs --help",
+    "release:notices": "node release/notices.mjs",
+    "release:check": "node release/notices.mjs --check && node release/verify-third-party.mjs",
+    "release:matrix": "node release/support-matrix.ts --write",
+    "release:stage": "node release/stage-package.mjs"
   },
   "engines": {
     "node": ">=20.19.0 <21.0.0-0 || >=22.12.0 <23.0.0-0 || >=24.0.0"

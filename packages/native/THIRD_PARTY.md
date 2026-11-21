@@ -310,3 +310,19 @@ keystore fixtures in `packager/test/fixtures/`.
 
 Sweep inputs (scratch only, outside the repo, never shipped): `@webxr-input-profiles/assets` 1.0.20 (MIT; npm) and `@iwsdk/example-assets` 0.4.2 (local tarball) served as local mirrors of `cdn.jsdelivr.net` during the
 sweep.
+
+## Release notices
+
+`release/components.json` is the release inventory: every component the template APK or its preludes ship, with the
+license files its notice is built from. `npm run release:notices` writes `THIRD_PARTY_NOTICES.txt` (shipped in the npm
+package and, by `release/build-release.sh`, as `assets/iwn/licenses/NOTICES.txt` in the template APK).
+`npm run release:check` fails when a bundled native/JS dependency (CMake source dirs, vendored `third_party/` dirs,
+APK libraries, `web/<area>` dependencies, esbuild metafiles, fonts) has no entry here or in the inventory, or when the
+committed notices are stale.
+
+NOTICE handling for the V8 rows: `release/notices.mjs` generates
+`THIRD_PARTY_NOTICES.txt` from `release/components.json`, using the license texts in the V8 15.5.35.25 tree
+(`$IWN_V8_SRC`) for everything in this table. The file ships in the npm package and inside every APK
+(`assets/iwn/licenses/NOTICES.txt`). The V8 rows were rechecked on 2026-10-20 against `BUILD.gn` (`v8_base` deps
+and sources), `third_party/zlib/BUILD.gn` and `llvm-nm` of the unstripped library, which added rapidhash,
+Highway, cpu_features and HalfSipHash.

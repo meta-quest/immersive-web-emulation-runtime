@@ -1,0 +1,43 @@
+{
+  "//": [
+    "What release/build-release.sh puts into the template APK's assets/ besides the V8 snapshot.",
+    "preludes: classic runtime scripts in evaluation order (runtime/core config.preludes), each after the ones it",
+    "depends on, as the area READMEs state: glue first; dom right after glue (canvas2d and image attach to the",
+    "HTMLCanvasElement / HTMLElement / document it defines; a no-op in workers); net, storage and image after glue;",
+    "canvas2d after glue, net and image; webgl before xr; xr after glue and webgl; workers last. glue-subtle is",
+    "inert unless config subtle is 'digest'. NOT shipped (alpha scope): web/storage/dist/idb.min.js (IndexedDB +",
+    "Cache API).",
+    "workerPreludes: the subset worker globals evaluate (config workers.preludes; the default would be every page",
+    "prelude, but dom, storage, webgl, audio and xr do nothing in a worker: their natives are excluded there, and",
+    "skipping them halves worker boot, measured on a Quest 3S). Each must also be in preludes.",
+    "assetLists: per-module asset manifests ({from, to, compress}) copied verbatim (fonts + their licence texts)."
+  ],
+  "preludes": [
+    "web/glue/dist/glue.min.js",
+    "web/glue/dist/glue-subtle.min.js",
+    "web/dom/dist/dom.min.js",
+    "web/net/dist/net.min.js",
+    "web/storage/dist/storage.min.js",
+    "web/image/dist/image.min.js",
+    "web/canvas2d/dist/canvas2d.min.js",
+    "web/webgl/dist/webgl.min.js",
+    "web/audio/dist/audio.min.js",
+    "web/xr/dist/xr.min.js",
+    "web/workers/dist/workers.min.js"
+  ],
+  "workerPreludes": [
+    "web/glue/dist/glue.min.js",
+    "web/glue/dist/glue-subtle.min.js",
+    "web/net/dist/net.min.js",
+    "web/image/dist/image.min.js",
+    "web/canvas2d/dist/canvas2d.min.js",
+    "web/workers/dist/workers.min.js"
+  ],
+  "notShipped": ["web/storage/dist/idb.min.js"],
+  "assetLists": ["runtime/canvas2d/apk-assets.json"],
+  "licenses": [
+    { "from": "THIRD_PARTY_NOTICES.txt", "to": "iwn/licenses/NOTICES.txt" },
+    { "from": "LICENSE", "to": "iwn/licenses/LICENSE.txt" },
+    { "from": "web/glue/dist/glue.NOTICES.txt", "to": "iwn/licenses/glue.NOTICES.txt" }
+  ]
+}
