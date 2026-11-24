@@ -46,8 +46,13 @@ export type NativeFoveationOption =
   | FoveationLevel
   | { level?: FoveationLevel; dynamic?: boolean };
 
-/** Display refresh rates (Hz) a Quest-class OpenXR runtime may offer. */
-export const FRAME_RATES = [60, 72, 80, 90, 120] as const;
+/**
+ * Display refresh rates (Hz) the app may ask for: every rate a current Quest headset offers apps (Quest 2 and Pro:
+ * 60, 72, 80, 90, 120; Quest 3 and 3S add 96 and 100). Which of them a given headset offers is only known on the
+ * device (xrEnumerateDisplayRefreshRatesFB), so the runtime keeps its default rate when the headset lacks the one
+ * asked for; the list here still catches typos (75) when the config is validated without a device.
+ */
+export const FRAME_RATES = [60, 72, 80, 90, 96, 100, 120] as const;
 export type NativeFrameRate = (typeof FRAME_RATES)[number];
 
 /** The named `native.splash.background` values; any `#rrggbb` / `#rgb` colour is accepted too. */

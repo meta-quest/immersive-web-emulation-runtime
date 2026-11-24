@@ -162,10 +162,17 @@ iwer-native run     [<pkg>] [--inspect] [--inspect-brk] [--query <qs>] [--v8-fla
 - `run` is `adb shell am start -S -W -n <pkg>/android.app.NativeActivity` plus extras the runtime reads
   (runtime/core `RuntimeOptions`): `--ez iwn.inspector true`, `--ez iwn.inspectBrk true`, `--es iwn.query
 '<qs>'`, `--es iwn.v8flags '<flags>'` (string extras are quoted for the device shell; the runtime honours
-  `iwn.inspectBrk` and `iwn.v8flags` in debug builds only). `--forward 9508` runs
+  `iwn.inspectBrk` and `iwn.v8flags` in debug builds only, `iwn.inspector` and `iwn.query` also in release builds
+  packed with `--inspector`). After a launch with extras the build would ignore, `run` prints one warning line
+  saying which and how to enable them: after `pack --install --run` it reads the APK it just installed, otherwise
+  the installed app's `DEBUGGABLE` flag (`adb shell dumpsys package <pkg>`) plus, for a release build, the local
+  `dist-metavr/<app>-release.apk` runtime config (`launchOverrides.allowed`). `--forward 9508` runs
   `adb forward tcp:9508 localabstract:<pkg>_devtools_<device port>` first. The device port is the packed APK's `inspector.port`
   (`dist-metavr/<app>.apk`); with an explicit `<pkg>` it is read from the APK installed on the device
   (`pm path` + `adb pull`); `--device-port <p>` overrides both; 9229 is the last resort.
+- `install` and `run` without `--serial` (and without `$ANDROID_SERIAL`, or a device selector in
+  `IWER_NATIVE_ADB_ARGS`) run `adb devices -l` first and refuse, listing the serials, when more than one device is
+  ready.
 - `install` explains signature mismatches (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`: names the package and the
   uninstall command), version downgrades and ABI mismatches.
 - Some adb wrappers want a global option before every subcommand, for example `--reason "<why>"`:

@@ -400,8 +400,69 @@ test('check: a run that never reached XR says why and is not grouped as an IWER 
   assert.match(f.message, /native\.network\.allow/);
   assert.match(f.message, /--mirror/);
   const text = formatCompatReport(r);
-  assert.match(text, /\[warn\] no XR session \(headless run\)/);
+  // the runtime only shows WebXR content (XR-LIFE-7): a run that never got there fails the check (exit 1)
+  assert.equal(f.severity, 'error');
+  assert.equal(r.ok, false);
+  assert.match(text, /\[fail\] no XR session \(headless run\)/);
+  assert.match(text, /headless run: did not reach XR/);
   assert.doesNotMatch(text, /not implemented yet in IWER host mode/);
+  // a main thread that stopped answering before XR fails too; after XR it is a warning
+  const hung = (reachedXR: boolean) =>
+    evaluateCompat({
+      trace: trace('app', {}, [], { reachedXR, hung: 'x did not answer' }),
+      surface,
+    }).findings.find(
+      (x) => x.key === 'main thread stopped answering (headless run)',
+    )?.severity;
+  assert.equal(hung(false), 'error');
+  assert.equal(hung(true), 'warn');
+  assert.equal(evaluateCompat({ trace: trace('app', {}), surface }).ok, true);
+});
+
+test('check: a Vite dev-server /@fs/ URL in the build warns, naming the file and the URL', () => {
+  const d = tempDir();
+  writeTree(d, {
+    'index.html':
+      '<link rel="modulepreload" href="/@fs/home/me/proj/x.js"><script type="module" src="./assets/index.js"></script>',
+    'assets/index.js':
+      'const robot = "/@fs/home/me/sdk/packages/example-assets/assets/robot/robot.gltf"; load(robot, "/@fs/home/me/b.glb");',
+    // a regex or a bare prefix is not a URL
+    'assets/lib.js': 'const re = /^\\/@fs\\//; const p = "/@fs/";',
+  });
+  const scan = scanDist(d);
+  assert.deepEqual(scan.devServerUrls, [
+    {
+      file: 'assets/index.js',
+      url: '/@fs/home/me/sdk/packages/example-assets/assets/robot/robot.gltf',
+      count: 2,
+    },
+    { file: 'index.html', url: '/@fs/home/me/proj/x.js', count: 1 },
+  ]);
+  const r = evaluateCompat({ scan, surface: fakeSurface() });
+  const f = r.findings.find(
+    (x) => x.key === 'dev-server URL in assets/index.js',
+  )!;
+  assert.equal(f.severity, 'warn');
+  assert.equal(f.source, 'static');
+  assert.match(
+    f.message,
+    /names \/@fs\/home\/me\/sdk\/.*robot\.gltf \(\+1 more\)/,
+  );
+  assert.match(f.message, /404s/);
+  assert.match(f.message, /asset base points at the dev server's \/@fs\/ path/);
+  assert.match(f.message, /relative base/);
+  assert.equal(r.ok, true); // a warning, as pack treats every compat warning (--strict fails it)
+  assert.equal(r.warnings, 2);
+  assert.equal(
+    evaluateCompat({ scan, surface: fakeSurface(), strict: true }).warnings,
+    2,
+  );
+  const clean = tempDir();
+  writeTree(clean, {
+    'index.html': '<script src="./a.js"></script>',
+    'a.js': 'load("./assets/robot.gltf")',
+  });
+  assert.equal(scanDist(clean).devServerUrls, undefined);
 });
 
 test('check: cross-origin asset URLs on any host warn statically, other URLs are info', () => {
@@ -1380,4 +1441,58 @@ test('instantiateStreaming behind a feature check is a probe, a bare call is a c
     (h) => h.key === 'WebAssembly.instantiateStreaming()',
   );
   assert.equal(bare?.strength, 'call');
+});
+
+test('feature-detected instantiateStreaming is info in the static check and under --trace, with the same message', () => {
+  const surface = fakeSurface();
+  const d = tempDir();
+  writeTree(d, {
+    'index.html': '<script type="module" src="./a.js"></script>',
+    'a.js':
+      'if (typeof WebAssembly.instantiateStreaming == "function") WebAssembly.instantiateStreaming(r, i).catch(() => WebAssembly.instantiate(b, i));',
+  });
+  const scan = scanDist(d);
+  const key = 'WebAssembly.instantiateStreaming()';
+  const find = (r: ReturnType<typeof evaluateCompat>) =>
+    r.findings.find((f) => f.key === key)!;
+  const statik = find(evaluateCompat({ scan, surface }));
+  // headless Chromium has it, so the guarded call is a traced call
+  const traced = find(
+    evaluateCompat({
+      scan,
+      trace: trace('app', {}, [{ [key]: rec() }]),
+      surface,
+    }),
+  );
+  // with the baseline (every IWSDK build carries it) too
+  const dormant = find(
+    evaluateCompat({
+      scan,
+      surface,
+      baseline: { keys: new Set([key]), origins: new Set() },
+    }),
+  );
+  for (const f of [statik, traced, dormant]) {
+    assert.equal(f.severity, 'info');
+    assert.match(
+      f.message,
+      /^not provided by @iwer\/native yet .*feature-detects it, so it falls back to WebAssembly\.instantiate/,
+    );
+  }
+  assert.equal(statik.message, traced.message);
+  assert.equal(traced.source, 'both');
+  // a bare call (no check in that file) still warns, statically and traced
+  writeTree(d, { 'c.js': 'WebAssembly.instantiateStreaming(fetch(u), i);' });
+  const bare = scanDist(d);
+  assert.equal(find(evaluateCompat({ scan: bare, surface })).severity, 'warn');
+  assert.equal(
+    find(
+      evaluateCompat({
+        scan: bare,
+        trace: trace('app', { [key]: rec() }),
+        surface,
+      }),
+    ).severity,
+    'warn',
+  );
 });

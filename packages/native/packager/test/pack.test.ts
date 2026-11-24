@@ -561,6 +561,18 @@ describe('AR on and the camera feature (XR-AR-1, XR-PERM-1)', () => {
     );
   });
 
+  test("the report lists the manifest's uses-features next to the permissions", async () => {
+    const ar = await pack(input({ target: fromWorld({ xr: { mode: 'ar' } }) }));
+    const text = formatPackReport(ar);
+    assert.match(
+      text,
+      /\n {2}permissions [^\n]+\n {2}features {4}[^\n]*com\.oculus\.feature\.PASSTHROUGH \(required\)/,
+    );
+    const vr = await pack(input({ target: fromWorld({ xr: { mode: 'vr' } }) }));
+    assert.doesNotMatch(formatPackReport(vr), /PASSTHROUGH/);
+    assert.match(formatPackReport(vr), /\n {2}features {4}\S/);
+  });
+
   test('a non-IWSDK dist that calls getUserMedia gets camera unless native.features is set; IWSDK bundles do not', async () => {
     const camDist = buildTestDist(path.join(scratch, 'cam-plain'), {
       'assets/index.js':

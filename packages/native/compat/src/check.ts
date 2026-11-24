@@ -16,6 +16,7 @@ import { normaliseKey, scopedKey } from './matrix.ts';
 import {
   allowEntryFor,
   AREAS,
+  EMBEDDER_HOOKED,
   NAVIGATION_NOTE,
   parseKey,
   policyFor,
@@ -530,9 +531,36 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
     [...byKey].find(([k, u]) => u.guarded && rootName(k) === root)?.[1].guarded;
   const findings: CompatFinding[] = [];
   const supported: Partial<Record<Status, number>> = {};
+  // WebAssembly.instantiateStreaming/compileStreaming: absent on the headset until the runtime installs V8's
+  // streaming hook (NET-10). When every file of the bundle that calls it also checks for it (Emscripten's and
+  // IWSDK's `typeof WebAssembly.instantiateStreaming == "function"`), the WebAssembly.instantiate fallback runs: the
+  // static check and the trace (where headless Chromium has it, so the guarded call goes through) report it the
+  // same way, as info.
+  const wasmStreaming = opts.scan?.hits.find(
+    (h) => h.key === 'WebAssembly.instantiateStreaming()',
+  );
+  const wasmStreamingGuarded = wasmStreaming?.strength === 'probe';
   for (const [key, u] of byKey) {
     const p = parseKey(key);
     const r = resolve(p, opts.surface, ctx);
+    if (
+      wasmStreamingGuarded &&
+      !u.app &&
+      r.status === 'gap' &&
+      EMBEDDER_HOOKED.test(p.base)
+    ) {
+      findings.push({
+        key,
+        status: r.status,
+        severity: 'info',
+        source: label(u),
+        area: r.area,
+        spec: r.spec,
+        message: `not provided by @iwer/native yet (the runtime does not install V8's wasm streaming hook); the bundle feature-detects it, so it falls back to WebAssembly.instantiate, which works on the headset`,
+        evidence: u.evidence,
+      });
+      continue;
+    }
     if (r.status === 'config' && p.arg) {
       const origin = p.arg.split(' ')[1] ?? '';
       if (originAllowed(origin, allow)) {
@@ -793,6 +821,17 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
       evidence: [inj],
     });
   }
+  for (const d of opts.scan?.devServerUrls ?? [])
+    findings.push({
+      key: `dev-server URL in ${d.file}`,
+      status: 'config',
+      severity: 'warn',
+      source: 'static',
+      area: 'net',
+      spec: ['XR-LIFE-7'],
+      message: `the build names ${d.url}${d.count > 1 ? ` (+${d.count - 1} more)` : ''}, a Vite dev-server /@fs/ path: there is no dev server in the APK, so the request 404s and an app that needs the file never offers XR. The asset base points at the dev server's /@fs/ path (a file outside the project root resolved during dev); build with a relative base (Vite \`base: './'\`) and import the asset or copy it into public/, then rebuild`,
+      evidence: [`${d.file}: ${d.url}`],
+    });
   for (const u of opts.scan?.unreadable ?? [])
     findings.push({
       key: `unreadable file ${u}`,
@@ -913,7 +952,8 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
       findings.push({
         key: 'main thread stopped answering (headless run)',
         status: 'gap',
-        severity: 'warn',
+        // before XR, the run never got there: fails like "no XR session" (XR-LIFE-7)
+        severity: opts.trace.reachedXR ? 'warn' : 'error',
         source: 'trace',
         area: 'none',
         spec: ['PROC-9'],
@@ -958,10 +998,11 @@ export function evaluateCompat(opts: CompatOptions): CompatReport {
       } else {
         why = `the app touched navigator.xr and had gone quiet, but no "Enter XR" button was found either; on the headset it would sit in the idle presentation (if the app is just slow to load, re-run with a longer --boot-ms)`;
       }
+      // the runtime only shows WebXR content (XR-LIFE-7): a run that never got to XR fails the check
       findings.push({
         key: 'no XR session (headless run)',
         status: 'gap',
-        severity: 'warn',
+        severity: 'error',
         source: 'trace',
         area: 'none',
         spec,

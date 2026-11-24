@@ -76,7 +76,15 @@ export interface ScanResult {
   compressedAssets?: { ktx2: string[]; draco: string[] };
   /** The bundle carries IWSDK (its scene-runtime markers survive minification). */
   iwsdk?: boolean;
+  /**
+   * Vite dev-server URLs baked into the build (`/@fs/<absolute path>`, how the dev server serves files outside the
+   * project root): there is no dev server on the headset, so the request 404s. One entry per file.
+   */
+  devServerUrls?: Array<{ file: string; url: string; count: number }>;
 }
+
+/** A Vite dev-server `/@fs/<absolute path>` URL (DEV_SERVER_URL.exec(text)[0]). */
+export const DEV_SERVER_URL = /\/@fs\/[A-Za-z0-9_.~%$-][^\s"'`<>()\\,;]*/g;
 
 /** Strings IWSDK's runtime keeps through minification (scene metadata keys, the level file name). */
 export const IWSDK_MARKER =
@@ -399,6 +407,7 @@ export function scanDist(
   const injected = new Set<string>();
   let bytes = 0;
   let iwsdk = false;
+  const devServerUrls: NonNullable<ScanResult['devServerUrls']> = [];
   for (const file of files) {
     let text: string;
     try {
@@ -410,6 +419,14 @@ export function scanDist(
     bytes += text.length;
     if (!iwsdk && IWSDK_MARKER.test(text)) iwsdk = true;
     const rel = path.relative(distDir, file);
+    // before the HTML is cut down to its scripts: a <script src> or <link href> can name one too
+    const fs = [...text.matchAll(DEV_SERVER_URL)];
+    if (fs.length)
+      devServerUrls.push({
+        file: rel.split(path.sep).join('/'),
+        url: fs[0]![0].slice(0, 200),
+        count: fs.length,
+      });
     if (file.endsWith('.html')) {
       text = [...text.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
         .map((m) => m[1])
@@ -511,5 +528,6 @@ export function scanDist(
     unreadable,
     compressedAssets: findCompressedAssets(distDir),
     iwsdk,
+    ...(devServerUrls.length ? { devServerUrls } : {}),
   };
 }

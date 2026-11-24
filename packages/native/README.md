@@ -89,8 +89,11 @@ look up a different, unscoped package name on npm.
    (`"appName": "IWSDK Showcase"` packs to `dist-metavr/IWSDK-Showcase.apk`); `pack` prints the path.
 
    `pack` runs the static part of the compat checker first. It fails on an injected WebXR emulator and warns about
-   unsupported APIs the bundle calls (`pack --strict` turns those warnings into errors). `npx iwer-native compat
---trace` also runs the app headlessly and reports what it actually called.
+   unsupported APIs the bundle calls and about Vite dev-server `/@fs/...` URLs baked into the build (they 404 in the
+   APK; build with a relative `base`) (`pack --strict` turns those warnings into errors). `npx iwer-native compat
+--trace` also runs the app headlessly and reports what it actually called; it exits 1 when the app never reaches
+   XR, since the runtime only shows WebXR content. The `pack` summary lists the manifest's permissions and
+   uses-features (for example `com.oculus.feature.PASSTHROUGH (required)` for an AR app).
 
 5. Install and run it on the headset:
 
@@ -265,7 +268,8 @@ copy from this block.
     "splash": { "image": "./public/splash.png", "background": "black" },
     // default: on, generated from icon + appName, on "black" ("contextual" for apps that declare passthrough);
     // background "black", "contextual" or "#rrggbb"; false: no image or spinner (the background stays)
-    "frameRate": 90, // 60 | 72 | 80 | 90 | 120; default: runtime default
+    "frameRate": 90, // 60 | 72 | 80 | 90 | 96 | 100 | 120; default: runtime default. Quest 2/Pro offer 60-120
+    // without 96/100, Quest 3/3S 72-120 without 60; a rate the headset does not offer keeps the runtime default
     "foveation": { "level": "medium", "dynamic": true }, // or "none" | "low" | "medium" | "high"; default none
     "features": { "handTracking": "required", "planeDetection": true },
     // default: derived from world.xr.features (+ passthrough for AR)
@@ -385,15 +389,19 @@ iwer-native pack     [--project <dir>] [--release] [--out <apk>] [--template <ap
                                                      dist/ + template APK -> signed dist-metavr/<appName>.apk
                                                      (--release: <appName>-release.apk)
 iwer-native install  [<apk>] [--release] [--serial <id>] [--dry-run]   adb install -r (default: the packed APK)
-iwer-native run      [<packageId>] [--serial <id>] [--inspect] [--forward <port>] [--dry-run]
+iwer-native run      [<packageId>] [--serial <id>] [--inspect] [--query <qs>] [--forward <port>] [--dry-run]
                                                      am start -n <pkg>/android.app.NativeActivity + debug extras
+                                                     (--inspect/--query: debug builds, or release packed with
+                                                     --inspector; --inspect-brk/--v8-flags: debug builds only;
+                                                     run warns when the installed build ignores them)
 iwer-native compat   [--dist <dir>] [--trace] [--strict] [--verbose] [--json]   web APIs the runtime lacks; pack runs the static part first (--skip-compat)
 ```
 
 `iwer-native --help` lists every option. In the default APK name, each run of characters other than letters,
 digits, `.`, `_` and `-` in `appName` becomes one `-`. adb is found through `$ADB`, then `$ANDROID_HOME/platform-tools`,
 `$ANDROID_SDK_ROOT/platform-tools`, then `PATH`. The CLI never sets `ANDROID_SERIAL` or `ADB_SERVER_SOCKET`; pass
-`--serial`. Exit codes: 0 ok, 1 failure, 2 usage.
+`--serial`. With several devices connected, `install` and `run` refuse without `--serial` (or `$ANDROID_SERIAL`)
+and list the serials. Exit codes: 0 ok, 1 failure, 2 usage.
 
 ### Debug endpoint
 

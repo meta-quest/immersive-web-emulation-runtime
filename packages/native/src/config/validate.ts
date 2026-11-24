@@ -187,7 +187,7 @@ export function validateNativeTargetConfig(
       c.error(
         p,
         'enum',
-        `${root.frameRate} Hz is not a headset refresh rate; use one of ${FRAME_RATES.join(', ')}`,
+        `${root.frameRate} Hz is not a headset refresh rate; use one of ${FRAME_RATES.join(', ')} (which ones a headset offers varies by model: Quest 2/Pro 60-120, Quest 3/3S 72-120 without 60)`,
       );
     }
   }

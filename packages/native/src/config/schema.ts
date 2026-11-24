@@ -98,7 +98,8 @@ export const NATIVE_TARGET_JSON_SCHEMA = {
     },
     frameRate: {
       enum: [...FRAME_RATES],
-      description: 'Preferred display refresh rate (Hz).',
+      description:
+        "Preferred display refresh rate (Hz). Quest 2/Pro offer 60, 72, 80, 90, 120; Quest 3/3S offer 72, 80, 90, 96, 100, 120. A rate the headset does not offer keeps the runtime's default.",
     },
     foveation: {
       oneOf: [

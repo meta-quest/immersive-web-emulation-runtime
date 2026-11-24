@@ -576,6 +576,7 @@ export function formatPackReport(r: PackResult): string {
     `  entry       ${r.index.moduleScripts[0] ?? '(inline module)'}${r.index.title ? `  title "${r.index.title}"` : ''}`,
     `  largest     ${r.largest.map((l) => `${l.rel} ${formatBytes(l.stored)}${l.compressed ? '' : ' (stored)'}`).join(', ')}`,
     `  permissions ${r.manifest.permissions.join(', ') || '(none)'}`,
+    `  features    ${r.manifest.features.map((f) => `${f.name} (${f.required ? 'required' : 'optional'})`).join(', ') || '(none)'}`,
     `  splash      ${formatSplash(r.splash, r.splashBackground)}`,
     `  signed      v2${r.verify.v3 ? '+v3' : ''} with ${r.signing.description} (${r.verify.signers[0]?.certificateSha256 ?? '?'})`,
     `  sha256      ${r.sha256}`,

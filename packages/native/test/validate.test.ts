@@ -232,9 +232,16 @@ describe('validateNativeTargetConfig', () => {
   test('frameRate', () => {
     assert.match(
       only(withKey('frameRate', 75)).message,
-      /75 Hz is not a headset refresh rate/,
+      /75 Hz is not a headset refresh rate; use one of 60, 72, 80, 90, 96, 100, 120/,
     );
     assert.equal(only(withKey('frameRate', '90')).code, 'type');
+    // Quest 3/3S offer 96 and 100; Quest 2/Pro offer 60
+    for (const hz of [60, 72, 80, 90, 96, 100, 120])
+      assert.doesNotThrow(() =>
+        assertValidNativeTargetConfig({ packageId: 'com.a.b', frameRate: hz }),
+      );
+    for (const hz of [75, 144, 0, 90.5])
+      assert.equal(only(withKey('frameRate', hz)).code, 'enum');
   });
 
   test('foveation accepts a level or an object', () => {

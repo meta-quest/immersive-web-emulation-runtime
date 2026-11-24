@@ -27,7 +27,12 @@ import {
   type LoadNativeProjectOptions,
 } from '../config/load.ts';
 import { NativeConfigError } from '../config/validate.ts';
-import { defaultExec, locateAdb, type Exec } from '../util/exec.ts';
+import {
+  defaultExec,
+  locateAdb,
+  parseAdbDevices,
+  type Exec,
+} from '../util/exec.ts';
 import { VERSION } from '../version.ts';
 import { runDoctor, type CheckStatus } from './doctor.ts';
 import { checkProject, runCompatCommand } from '../../compat/src/cli.ts';
@@ -85,7 +90,8 @@ ${Object.entries(COMMANDS)
 
 Common options:
   --project <dir>   IWSDK project root (default: current directory)
-  --serial <id>     adb device serial (install, run)
+  --serial <id>     adb device serial (install, run; needed when several devices are
+                    connected, unless $ANDROID_SERIAL is set)
   --json            machine-readable output (doctor, validate, pack)
   --dry-run         print the adb commands instead of running them (install, run)
   -h, --help        show help
@@ -102,11 +108,13 @@ pack options:
   --exclude <glob>  leave matching dist files out (repeatable)
   --install, --run  install and launch after packing
 
-run options:
-  --inspect         turn the inspector on (extra iwn.inspector)
-  --inspect-brk     wait for the debugger before the entry module (extra iwn.inspectBrk; debug builds)
-  --query <qs>      URL query string the app sees (extra iwn.query)
-  --v8-flags <f>    diagnostic V8 flags (extra iwn.v8flags; debug builds)
+run options (launch extras: a release build ignores them, run warns when it does):
+  --inspect         turn the inspector on (extra iwn.inspector; debug builds, or
+                    release builds packed with --inspector)
+  --inspect-brk     wait for the debugger before the entry module (extra iwn.inspectBrk; debug builds only)
+  --query <qs>      URL query string the app sees (extra iwn.query; debug builds, or
+                    release builds packed with --inspector)
+  --v8-flags <f>    diagnostic V8 flags (extra iwn.v8flags; debug builds only)
   --forward <port>  adb forward tcp:<port> to the device's inspector port (read from
                     the packed APK, else from the installed APK's runtime config)
   --device-port <p> the device-side inspector port to forward to (overrides the lookup)
@@ -115,7 +123,8 @@ run options:
 compat options (pack runs the static check first; --skip-compat turns it off):
   --dist <dir>      Vite output to check (default: <project>/dist)
   --trace           also run the app headlessly (Playwright + IWER from the project);
-                    native.network.allow origins are let through, others blocked
+                    native.network.allow origins are let through, others blocked;
+                    a run that never reaches XR fails the check (exit 1)
   --mirror <p>=<d>  trace run: answer requests under URL prefix <p> from directory <d> (repeatable)
   --boot-ms <ms>    trace run: wait this long for the app to offer or request a session
                     (default 25000; heavy apps load slowly under SwiftShader)
@@ -431,12 +440,20 @@ async function pack({
     for (const w of result.warnings) io.stderr(`warning: ${w}\n`);
     io.stdout(formatPackReport(result));
   }
+  if (values.install || values.run) {
+    const refused = await refuseAmbiguousDevice(io, values);
+    if (refused !== null) return refused;
+  }
   if (values.install) {
     const code = await installApk(io, values, out, loaded.target.packageId);
     if (code !== EXIT.ok) return code;
   }
   if (values.run)
-    return launch(io, values, loaded.target.packageId, inspectorPortOf(out));
+    return launch(io, values, loaded.target.packageId, inspectorPortOf(out), {
+      // with --install the app on the device is the one just packed
+      installed: values.install ? apkBuildInfo(out) : null,
+      localRelease: values.release ? out : null,
+    });
   return EXIT.ok;
 }
 
@@ -518,6 +535,8 @@ async function install({
     }
   } else if (!apk.toLowerCase().endsWith('.apk'))
     return usage(io, `"${apk}" is not an .apk file`);
+  const refused = await refuseAmbiguousDevice(io, values);
+  if (refused !== null) return refused;
   return installApk(io, values, path.resolve(io.cwd, apk), packageId);
 }
 
@@ -571,6 +590,7 @@ async function run({
         `--device-port wants a TCP port, got "${values['device-port']}"`,
       );
   }
+  let localRelease: string | null = null;
   if (!packageId) {
     const loaded = load(io, projectRoot, false, { requireKeystore: false });
     if (!loaded) return EXIT.failure;
@@ -578,10 +598,143 @@ async function run({
     devicePort ??= inspectorPortOf(
       defaultApkPath(projectRoot, loaded.target.appName),
     );
+    localRelease = defaultApkPath(projectRoot, loaded.target.appName, true);
   }
+  const refused = await refuseAmbiguousDevice(io, values);
+  if (refused !== null) return refused;
   if (devicePort === null && values.forward !== undefined)
     devicePort = await installedInspectorPort(io, values, packageId);
-  return launch(io, values, packageId, devicePort ?? INSPECTOR_DEVICE_PORT);
+  return launch(io, values, packageId, devicePort ?? INSPECTOR_DEVICE_PORT, {
+    installed: null,
+    localRelease,
+  });
+}
+
+/**
+ * install/run without --serial: refuse when several devices are ready, listing them (adb would fail with "more than
+ * one device/emulator", or a wrapper could pick one). $ANDROID_SERIAL, or a device selector in
+ * IWER_NATIVE_ADB_ARGS, picks one as it does for adb. Returns the exit code when refused, else null; when
+ * `adb devices` itself fails the command goes ahead and reports adb's own error.
+ */
+async function refuseAmbiguousDevice(
+  io: CliIo,
+  values: CommandContext['values'],
+): Promise<number | null> {
+  if (values.serial || io.env.ANDROID_SERIAL || values['dry-run']) return null;
+  let prefix: string[];
+  try {
+    prefix = splitShellWords(io.env.IWER_NATIVE_ADB_ARGS ?? '');
+  } catch {
+    return null; // adb() reports the bad IWER_NATIVE_ADB_ARGS
+  }
+  if (prefix.some((a) => /^-[sdet]$/.test(a))) return null;
+  const quiet = { ...io, stdout: () => {}, stderr: () => {} };
+  const listed = await adb(quiet, values, ['devices', '-l'], 10_000);
+  if (listed.code !== EXIT.ok) return null;
+  const devices = parseAdbDevices(listed.output);
+  const ready = devices.filter((d) => d.state === 'device');
+  if (ready.length < 2) return null;
+  io.stderr(
+    [
+      `iwer-native: ${ready.length} devices are connected; pass --serial <id> (or set ANDROID_SERIAL) to pick one:`,
+      ...devices.map(
+        (d) => `  ${d.serial} ${d.state}${d.model ? ` (${d.model})` : ''}`,
+      ),
+      '',
+    ].join('\n'),
+  );
+  return EXIT.failure;
+}
+
+/** What a build does with launch extras (runtime/core runtime.cc): debuggable, and whether it honours overrides. */
+export interface LaunchBuildInfo {
+  debuggable: boolean;
+  /** --inspect/--query are honoured (debug builds, release builds packed with --inspector); null: unknown. */
+  overridesAllowed: boolean | null;
+}
+
+/** A local APK's build: the manifest's debuggable flag and its runtime config (launchOverrides.allowed). */
+function apkBuildInfo(apk: string): LaunchBuildInfo | null {
+  const manifest = readApkManifest(apk);
+  if (!manifest) return null;
+  const config = readApkRuntimeConfig(apk) as {
+    launchOverrides?: { allowed?: unknown };
+    inspector?: { enabled?: unknown };
+  } | null;
+  const allowed =
+    config?.launchOverrides?.allowed ?? config?.inspector?.enabled;
+  return {
+    debuggable: manifest.debuggable,
+    overridesAllowed:
+      manifest.debuggable || (typeof allowed === 'boolean' ? allowed : null),
+  };
+}
+
+/**
+ * The installed app's build, from `dumpsys package` (pkgFlags DEBUGGABLE). A release build honours --inspect and
+ * --query only when packed with --inspector, which the device does not show: the local release APK
+ * (dist-metavr/<app>-release.apk) answers that when it is the same package.
+ */
+async function installedBuildInfo(
+  io: CliIo,
+  values: CommandContext['values'],
+  packageId: string,
+  localRelease: string | null,
+): Promise<LaunchBuildInfo | null> {
+  const quiet = { ...io, stdout: () => {}, stderr: () => {} };
+  const dump = await adb(
+    quiet,
+    values,
+    ['shell', 'dumpsys', 'package', packageId],
+    15_000,
+  );
+  const flags = /pkgFlags=\[([^\]]*)\]/.exec(dump.output)?.[1];
+  if (dump.code !== EXIT.ok || flags === undefined) return null;
+  if (/\bDEBUGGABLE\b/.test(flags))
+    return { debuggable: true, overridesAllowed: true };
+  let overridesAllowed: boolean | null = null;
+  if (localRelease && existsSync(localRelease)) {
+    const local = apkBuildInfo(localRelease);
+    if (
+      local &&
+      !local.debuggable &&
+      readApkManifest(localRelease)?.packageId === packageId
+    )
+      overridesAllowed = local.overridesAllowed;
+  }
+  return { debuggable: false, overridesAllowed };
+}
+
+/**
+ * The one-line warning when the build ignores launch extras the user passed (PKG-CFG-3): --inspect-brk and
+ * --v8-flags need a debuggable build; --inspect and --query a debug build or a release build packed with
+ * --inspector. Null when nothing is ignored, or when the build is unknown.
+ */
+export function ignoredExtrasWarning(
+  packageId: string,
+  values: CommandContext['values'],
+  build: LaunchBuildInfo | null,
+): string | null {
+  if (!build || build.debuggable) return null;
+  const debugOnly = [
+    values['inspect-brk'] ? '--inspect-brk' : null,
+    values['v8-flags'] !== undefined ? '--v8-flags' : null,
+  ].filter((o): o is string => o !== null);
+  const overrides = [
+    values.inspect ? '--inspect' : null,
+    values.query !== undefined ? '--query' : null,
+  ].filter((o): o is string => o !== null);
+  const allowed = build.overridesAllowed;
+  const sure = allowed === false ? [...overrides, ...debugOnly] : debugOnly;
+  const maybe = allowed === null ? overrides : [];
+  if (sure.length === 0 && maybe.length === 0) return null;
+  const unless = maybe.length
+    ? `${maybe.join(', ')} unless it was packed with --inspector`
+    : '';
+  const what = sure.length
+    ? `${sure.join(', ')}${unless ? `, and ${unless}` : ''}`
+    : unless;
+  return `${packageId} is a release build: the runtime ignores ${what}. Launch extras need a debug build (pack without --release); --inspect and --query also work in a release build packed with --inspector`;
 }
 
 function parsePort(text: string): number | null {
@@ -670,6 +823,11 @@ async function launch(
   values: CommandContext['values'],
   packageId: string,
   devicePort = INSPECTOR_DEVICE_PORT,
+  build: {
+    /** The build on the device when known (pack --install --run), else read from the device. */
+    installed: LaunchBuildInfo | null;
+    localRelease: string | null;
+  } = { installed: null, localRelease: null },
 ): Promise<number> {
   if (values.forward !== undefined) {
     const port = parsePort(values.forward);
@@ -715,6 +873,18 @@ async function launch(
       `iwer-native: could not launch ${packageId}; is it installed? ("iwer-native install")\n`,
     );
     return EXIT.failure;
+  }
+  const extras =
+    values.inspect ||
+    values['inspect-brk'] ||
+    values.query !== undefined ||
+    values['v8-flags'] !== undefined;
+  if (extras && !values['dry-run']) {
+    const info =
+      build.installed ??
+      (await installedBuildInfo(io, values, packageId, build.localRelease));
+    const warning = ignoredExtrasWarning(packageId, values, info);
+    if (warning) io.stderr(`warning: ${warning}\n`);
   }
   return EXIT.ok;
 }

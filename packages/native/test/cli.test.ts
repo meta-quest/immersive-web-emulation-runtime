@@ -507,6 +507,61 @@ describe('pack', () => {
 });
 
 describe('install', () => {
+  test('pack --release --install --run warns that the packed build ignores --query', async () => {
+    const dir = project({
+      version: 'iwsdk.project.v1',
+      native: { packageId: 'com.a.b', appName: 'Rel' },
+    });
+    buildTestDist(dir);
+    mkdirSync(path.join(dir, 'tpl'));
+    const tpl = await buildTestTemplate(path.join(dir, 'tpl'));
+    const run = async (extra: string[]) => {
+      const calls: string[][] = [];
+      const t = io({
+        cwd: dir,
+        env: { IWER_NATIVE_CONFIG_DIR: path.join(scratch, 'cfg') },
+        exec: fakeExec(
+          {
+            install: { stdout: 'Success\n' },
+            shell: { stdout: 'Status: ok\n' },
+          },
+          calls,
+        ),
+      });
+      const code = await runCli(
+        [
+          'pack',
+          '--skip-compat',
+          '--template',
+          tpl.file,
+          '--release',
+          '--install',
+          '--run',
+          '-s',
+          'S1',
+          '--query',
+          'a=1',
+          ...extra,
+        ],
+        t.io,
+      );
+      return { code, calls, err: t.err() };
+    };
+    const plain = await run([]);
+    assert.equal(plain.code, EXIT.ok, plain.err);
+    // the packed APK answers: no dumpsys
+    assert.deepEqual(
+      plain.calls.map((c) => c[3]),
+      ['install', 'shell'],
+    );
+    assert.match(
+      plain.err,
+      /warning: com\.a\.b is a release build: the runtime ignores --query\. Launch extras/,
+    );
+    const inspector = await run(['--inspector']);
+    assert.equal(inspector.code, EXIT.ok, inspector.err);
+    assert.doesNotMatch(inspector.err, /ignores/);
+  });
   test('without an APK installs the packed one, or explains', async () => {
     const dir = project({ native: { packageId: 'com.a.b', appName: 'X' } });
     const t = io({ cwd: dir });
@@ -585,7 +640,9 @@ describe('run', () => {
       exec: fakeExec({ shell: { stdout: 'Status: ok\n' } }, calls),
     });
     assert.equal(await runCli(['run'], t.io), EXIT.ok);
+    // without --serial, `adb devices -l` first (no answer here: run goes ahead)
     assert.deepEqual(calls, [
+      ['/opt/adb', 'devices', '-l'],
       [
         '/opt/adb',
         'shell',
@@ -670,6 +727,180 @@ describe('run', () => {
     const t = io();
     assert.equal(await runCli(['run', 'com.x.y'], t.io), EXIT.failure);
     assert.match(t.err(), /adb not found/);
+  });
+  test('help marks the launch extras debug-only', async () => {
+    const t = io();
+    assert.equal(await runCli(['--help'], t.io), EXIT.ok);
+    assert.match(
+      t.out(),
+      /--inspect\s+turn the inspector on \(extra iwn\.inspector; debug builds, or\s+release builds packed with --inspector\)/,
+    );
+    assert.match(
+      t.out(),
+      /--query <qs>.*\(extra iwn\.query; debug builds, or\s+release builds packed with --inspector\)/s,
+    );
+    assert.match(t.out(), /--v8-flags <f>.*debug builds only/);
+  });
+  /** Fake adb for a launch: `dumpsys package` answers with the given pkgFlags. */
+  const launchExec =
+    (pkgFlags: string | null, calls: string[][] = []): Exec =>
+    async (_file, args) => {
+      calls.push([...args]);
+      const a = args[0] === '-s' ? args.slice(2) : args;
+      if (a[0] === 'shell' && a[1] === 'dumpsys' && a[2] === 'package')
+        return {
+          code: 0,
+          stdout:
+            pkgFlags === null
+              ? ''
+              : `Packages:\n  Package [com.x.y]\n    pkgFlags=[ ${pkgFlags} ]\n`,
+          stderr: '',
+        };
+      return { code: 0, stdout: 'Status: ok\n', stderr: '' };
+    };
+  test('a release build on the device: one warning that the launch extras are ignored', async () => {
+    const calls: string[][] = [];
+    const rel = io({
+      exec: launchExec('HAS_CODE ALLOW_CLEAR_USER_DATA', calls),
+    });
+    assert.equal(
+      await runCli(
+        ['run', 'com.x.y', '-s', 'S1', '--query', 'a=1', '--inspect'],
+        rel.io,
+      ),
+      EXIT.ok,
+    );
+    assert.deepEqual(calls[1], [
+      '-s',
+      'S1',
+      'shell',
+      'dumpsys',
+      'package',
+      'com.x.y',
+    ]);
+    const lines = rel.err().split('\n').filter(Boolean);
+    assert.equal(lines.length, 1, rel.err());
+    assert.match(
+      lines[0],
+      /^warning: com\.x\.y is a release build: the runtime ignores --inspect, --query unless it was packed with --inspector\. Launch extras need a debug build \(pack without --release\)/,
+    );
+    const brk = io({ exec: launchExec('HAS_CODE') });
+    assert.equal(
+      await runCli(
+        ['run', 'com.x.y', '-s', 'S1', '--v8-flags=--no-opt', '--query', 'a'],
+        brk.io,
+      ),
+      EXIT.ok,
+    );
+    assert.match(
+      brk.err(),
+      /ignores --v8-flags, and --query unless it was packed with --inspector/,
+    );
+    // debuggable, unknown package, or no extras: nothing to say, and no dumpsys without extras
+    const dbg = io({ exec: launchExec('DEBUGGABLE HAS_CODE') });
+    assert.equal(
+      await runCli(['run', 'com.x.y', '-s', 'S1', '--query', 'a=1'], dbg.io),
+      EXIT.ok,
+    );
+    assert.equal(dbg.err(), '');
+    const unknown = io({ exec: launchExec(null) });
+    assert.equal(
+      await runCli(['run', 'com.x.y', '-s', 'S1', '--inspect'], unknown.io),
+      EXIT.ok,
+    );
+    assert.equal(unknown.err(), '');
+    const none: string[][] = [];
+    assert.equal(
+      await runCli(
+        ['run', 'com.x.y', '-s', 'S1'],
+        io({ exec: launchExec('HAS_CODE', none) }).io,
+      ),
+      EXIT.ok,
+    );
+    assert.equal(none.length, 1);
+  });
+});
+
+describe('several devices', () => {
+  const two =
+    'List of devices attached\n2G0Y1 device usb:1-1 product:eureka model:Quest_3 device:eureka\n340Y2 device usb:1-2 product:panther model:Quest_3S device:panther\nZZZ unauthorized usb:1-3\n\n';
+  test('install and run refuse without --serial and list the devices', async () => {
+    for (const argv of [
+      ['install', 'a.apk'],
+      ['run', 'com.x.y'],
+    ]) {
+      const calls: string[][] = [];
+      const t = io({
+        exec: fakeExec(
+          { devices: { stdout: two }, '*': { stdout: 'Success\n' } },
+          calls,
+        ),
+      });
+      assert.equal(await runCli(argv, t.io), EXIT.failure);
+      assert.deepEqual(calls, [['adb', 'devices', '-l']]);
+      assert.match(
+        t.err(),
+        /2 devices are connected; pass --serial <id> \(or set ANDROID_SERIAL\) to pick one/,
+      );
+      assert.match(
+        t.err(),
+        /\n  2G0Y1 device \(Quest_3\)\n  340Y2 device \(Quest_3S\)\n  ZZZ unauthorized\n/,
+      );
+    }
+  });
+  test('--serial, ANDROID_SERIAL or one ready device go ahead', async () => {
+    const exec = (calls: string[][], devices = two) =>
+      fakeExec(
+        { devices: { stdout: devices }, install: { stdout: 'Success\n' } },
+        calls,
+      );
+    const a: string[][] = [];
+    assert.equal(
+      await runCli(
+        ['install', 'a.apk', '--serial', '340Y2'],
+        io({ exec: exec(a) }).io,
+      ),
+      EXIT.ok,
+    );
+    assert.deepEqual(
+      a.map((c) => c[3]),
+      ['install'],
+    );
+    const b: string[][] = [];
+    assert.equal(
+      await runCli(
+        ['install', 'a.apk'],
+        io({ exec: exec(b), env: { ANDROID_SERIAL: '340Y2' } }).io,
+      ),
+      EXIT.ok,
+    );
+    assert.deepEqual(
+      b.map((c) => c[1]),
+      ['install'],
+    );
+    const c: string[][] = [];
+    const one =
+      'List of devices attached\n2G0Y1 device model:Quest_3\nZZZ unauthorized\n';
+    assert.equal(
+      await runCli(['install', 'a.apk'], io({ exec: exec(c, one) }).io),
+      EXIT.ok,
+    );
+    assert.deepEqual(
+      c.map((x) => x[1]),
+      ['devices', 'install'],
+    );
+    const d: string[][] = [];
+    assert.equal(
+      await runCli(
+        ['install', 'a.apk'],
+        io({ exec: exec(d), env: { IWER_NATIVE_ADB_ARGS: '-s 2G0Y1' } }).io,
+      ),
+      EXIT.ok,
+    );
+    assert.deepEqual(
+      d.map((x) => x[3]),
+      ['install'],
+    );
   });
 });
 

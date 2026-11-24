@@ -25,8 +25,8 @@
  * MAX_CONTROL_RUNS control runs leave one root each in place, so only errors the removal causes count as an
  * unguarded use.
  * Exit 1 when there are errors (unsupported APIs the app calls, an injected
- * emulator); warnings never fail unless `--strict` (which also fails static
- * mentions of unsupported calls).
+ * emulator, a traced run that never reached XR); warnings never fail unless
+ * `--strict` (which also fails static mentions of unsupported calls).
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -307,7 +307,10 @@ export class CompatUsageError extends Error {
   }
 }
 
-/** Run the command; returns the exit code (0 ok, 1 errors or a failed check run, 2 usage). */
+/**
+ * Run the command; returns the exit code (0 ok, 1 errors or a failed check run, 2 usage). A `--trace` run that never
+ * reached XR is an error finding ("no XR session (headless run)"), so it exits 1 (XR-LIFE-7).
+ */
 export async function runCompatCommand(o: CompatCliOptions): Promise<number> {
   let report: CompatReport;
   try {
