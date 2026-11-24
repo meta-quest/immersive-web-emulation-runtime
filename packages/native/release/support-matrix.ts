@@ -105,7 +105,7 @@ export const ROWS: Row[] = [
     requires: [
       'navigator.xr, immersive-vr sessions, reference spaces, XRWebGLLayer',
     ],
-    note: "tested on Quest 3 and Quest 3S with simulated Touch Plus controllers (profiles, buttons, axes, press thresholds, events); the left menu button is buttons[7], and the grip pose is OpenXR's grip pose as is (see Known limitations)",
+    note: "tested on Quest 3 and Quest 3S with simulated Touch Plus controllers (profiles, buttons, press thresholds, events; poses and thumbstick axes compared with Quest Browser on an earlier OS build); the left menu button is buttons[7], and the grip pose is OpenXR's grip pose as is (see Known limitations)",
   },
   {
     group: 'WebXR',
@@ -174,8 +174,8 @@ export const ROWS: Row[] = [
     ],
     requires: ['immersive-ar (passthrough)'],
     deviceUntested:
-      'on a Quest 3 only without a room and with a synthetic room fed to the runtime; not yet against a real room from Space Setup',
-    note: 'from the room of Space Setup (none: empty lists and no hits, not even a floor); com.oculus.permission.USE_SCENE is asked for on first use',
+      'tested on a Quest 3 without a room (empty lists and no hits, not even a floor; no errors) and with a synthetic room fed to the runtime; not yet against a real room from Space Setup',
+    note: 'com.oculus.permission.USE_SCENE is asked for on first use (permission flow tested on a Quest 3: allow, deny)',
   },
   {
     group: 'WebXR',
@@ -201,7 +201,7 @@ export const ROWS: Row[] = [
       'XRWebGLDepthInformation',
     ],
     requires: ['immersive-ar (passthrough)'],
-    note: 'texture-array, one layer per eye; com.oculus.permission.USE_SCENE is asked for on first use; depthDataFormat reads float32',
+    note: 'texture-array, one layer per eye, tested on Quest 3 and Quest 3S (320x320 per eye); com.oculus.permission.USE_SCENE is asked for on first use; depthDataFormat reads float32',
   },
   {
     group: 'WebXR',
