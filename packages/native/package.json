@@ -1,6 +1,6 @@
 {
   "name": "@iwer/native",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "EXPERIMENTAL ALPHA, not production ready. Run an unmodified WebXR (IWSDK / three.js) bundle natively on Meta Quest and other Android OpenXR headsets, with no browser: prebuilt runtime template APK, packer/signer, compat checker and CLI. Not every web API is supported yet.",
   "type": "module",
   "main": "lib/src/index.js",

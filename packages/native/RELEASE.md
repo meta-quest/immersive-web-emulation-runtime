@@ -187,8 +187,8 @@ known limitation of the alpha.
      inside every APK;
    - the notices' Source lines name upstream projects only; `release/stage-package.mjs` rejects build-machine paths,
      review metadata and the names in `IWN_CONTENT_DENYLIST` in every shipped text file.
-4. **npm scope and name:** confirm that Meta's npm org owns `@iwer` (the IWER packages publish there) and that
-   `@iwer/native` is the final name. It publishes as `latest` at the group's version (`publishConfig:
+4. **npm scope and name:** settled. `@iwer` is the scope the IWER packages already publish to, and `@iwer/native`
+   is the name. Its first release is 2.9.0, published as `latest` at the group's version (`publishConfig:
 {access: public}`), with the README's alpha disclaimer.
 5. **Trademarks:** the description and README say "Meta Quest" and "Horizon OS"; check the wording.
 6. **Privacy/telemetry:** the runtime sends nothing off the device. The debug endpoint and inspector listen on
@@ -214,7 +214,7 @@ compat checker's inventory and the alpha scope in `release/support-matrix.ts`.
 - `@iwsdk/vite-plugin-dev`: never injects the emulator into `vite build --mode metavr` (or
   `IWSDK_BUILD_TARGET=metavr`) and keeps the `native` section out of the browser bundle
   (`packages/vite-plugin-dev/src/native-target.ts`);
-- `@iwsdk/create`: `--metavr-native` (VR only) adds `build:metavr`, `@iwer/native@0.1.0-alpha.0`, a `native` section
+- `@iwsdk/create`: `--metavr-native` (VR only) adds `build:metavr`, `@iwer/native@2.9.0`, a `native` section
   (`packageId`, `appName`, and `network.allow: ["https://cdn.jsdelivr.net"]` for the starter's controller models)
   and `dist-metavr/` in .gitignore (`packages/create/src/native-alpha.ts`).
 
@@ -232,7 +232,7 @@ Plan (IWSDK's own release process; nothing here publishes):
    README's minimum to that exact prerelease (for example `1.2.0-rc.0`, `npm create @iwsdk@next`) before staging.
    If these changes miss 1.2.0, change the README's minimum to the version that ships them. Whenever that version
    changes, make the compat baseline again for it (the gate in section 9).
-4. Order: @iwer/native first (the create template pins `@iwer/native@0.1.0-alpha.0`, which must resolve), then
+4. Order: @iwer/native first (the create template pins `@iwer/native@2.9.0`, which must resolve), then
    IWSDK 1.2.0 (or its prerelease). Between the two, the README's IWSDK path does not work yet; the plain Vite path
    does.
 
