@@ -128,7 +128,9 @@ cannot be pressed here) must not leave the user in black indefinitely. If no ses
 requested 10 s (configurable) after the entry module finished evaluating, the runtime logs one error line
 that names the likely causes (no `offerSession`/`requestSession`; for IWSDK, `xr.offer`) and counts it in
 `stats`; if there is still none 30 s after the entry finished (configurable; README open question 11), it
-exits to home as XR-LIFE-5 does. A held offer (XR-LIFE-2) counts as offered. The exit step is skipped
+exits to home as XR-LIFE-5 does. A held offer (XR-LIFE-2) counts as offered. Each rejected offer or request is
+logged once as a warning with the reason (`navigator.xr.offerSession('immersive-ar') was rejected: ...`), also when
+the page swallows the rejection; an offer IWER grants through `requestSession()` is logged as the offer only. The exit step is skipped
 when the build serves the inspector or the debug endpoint (debug builds, and builds packed with the
 inspector flag such as our perf tool's staged build, whose injected script holds the offer where the
 runtime cannot see it; DBG-STAGE); the error line is still logged. The developer page (PKG-14) states that apps
@@ -314,7 +316,8 @@ passthrough cameras) are asked for when first needed, not at launch. A feature t
 the native side reports support for it (`capabilities()`); before a session gets such a feature the runtime asks for
 the permission through the system dialog (`Activity.requestPermissions`), once per process (a later page or a reload
 only re-checks it, so a grant made in Settings counts): granted, the feature is granted; denied, a required feature
-rejects the request with `NotSupportedError` and an optional one is dropped. A permission the manifest does not
+rejects the request with `NotSupportedError` and an optional one is dropped (one warning line names the dropped
+features and the permission they need). A permission the manifest does not
 declare is never asked for and reads as denied (the error names the manifest). Android drops a request made while
 another is in flight, so the runtime keeps one in flight and asks for what came meanwhile in the next one. No dialog
 for a request that fails anyway (unsupported mode or required feature, an active session), and none for a non-immersive
@@ -393,7 +396,8 @@ on a headset that tracks in 6DoF.
 usage `gpu-optimized` only, data format `unsigned-short` (what Quest Browser 156 reports for this texture) or
 `float32` (IWSDK's choice; it samples the same texture either way), not `luminance-alpha` (a packed two-byte encoding
 this texture does not have); the page's `depthSensing` preferences are matched in order, and with no match a required
-`depth-sensing` rejects with `NotSupportedError` and an optional one is dropped, before any permission dialog. A
+`depth-sensing` rejects with `NotSupportedError` (its message names the feature and the usage or data format that
+cannot be served, and what the headset offers) and an optional one is dropped, before any permission dialog. A
 request without a `depthSensing` dictionary (or with empty preference lists) gets the first usage and format offered
 (`gpu-optimized`, `unsigned-short`) instead of a rejection. While such a session runs, the runtime runs one depth
 provider (hand removal off, as in Quest Browser, so real hands occlude virtual content; it keeps running while the
@@ -403,7 +407,10 @@ and FOV reach JS in a depth record of its own (the frame record is unchanged; a 
 reads it back field by field). `XRWebGLBinding.getDepthInformation(view)` returns, per eye, `textureType
 'texture-array'`, `imageIndex` 0/1, `rawValueToMeters` 1 (metres = `depthNear / (1 - d)`, the formula IWSDK's
 occlusion shaders use), `depthNear`/`depthFar` as OpenXR reports them (`depthFar` may be `Infinity`), an identity
-`normDepthBufferFromNormView`, and `null` for frames without an image. With `matchDepthView` (the default, as in
+`normDepthBufferFromNormView`, and `null` for frames without an image. As WebXR Depth Sensing says,
+`session.depthUsage` and `session.depthDataFormat` throw `InvalidStateError` on a session without `depth-sensing`
+(not granted, or dropped after a permission denial), and `XRFrame.getDepthInformation(view)` (cpu-optimized) throws:
+`NotSupportedError` without `depth-sensing`, `InvalidStateError` on these `gpu-optimized` sessions. With `matchDepthView` (the default, as in
 Chromium) the depth is laid out in the eye's render view of this frame, as Quest Browser 156 does it: each frame a pass
 on the page's WebGL 2 context carries every pixel's ray, at the far plane, into the depth view and copies the raw depth
 found there (the far plane where the depth view does not reach) into a 2-layer DEPTH*COMPONENT16 texture of the

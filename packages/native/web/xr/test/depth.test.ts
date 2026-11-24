@@ -107,6 +107,12 @@ test('XR-DEPTH-2: granted as gpu-optimized float32 (or unsigned-short), the nati
   );
   assert.equal(cpu.h.run('globalThis.__e'), 'NotSupportedError');
   assert.deepEqual(cpu.started, []);
+  // the rejection names the feature and what could not be served (depth-sensing is in supportedFeatures, so the
+  // "not available on this headset" suffix does not apply), and is logged once
+  const cpuWhy = cpu.h.logs.filter((l) => l.includes('was rejected'));
+  assert.deepEqual(cpuWhy, [
+    "warn: @iwer/native: navigator.xr.requestSession('immersive-ar') was rejected: NotSupportedError: The required feature 'depth-sensing' cannot be served with usagePreference [cpu-optimized]: this headset offers usage gpu-optimized and data formats unsigned-short, float32.",
+  ]);
   // a headset without depth sensing (Quest 3S): a required depth-sensing rejects, and the runtime logs the reason,
   // because apps often swallow it (an IWSDK app keeps showing its splash)
   const none = depthHarness({ depthSensing: false });
@@ -148,6 +154,50 @@ test('XR-DEPTH-2: granted as gpu-optimized float32 (or unsigned-short), the nati
   assert.equal(la.h.run('globalThis.__e'), 'NotSupportedError');
 });
 
+test('XR-DEPTH-2: depthUsage and depthDataFormat throw InvalidStateError without depth-sensing', async () => {
+  // the permission denied: depth-sensing is dropped, and the getters say so instead of reading gpu-optimized
+  const { h } = depthHarness();
+  h.permissions!.answer['com.oculus.permission.USE_SCENE'] = false;
+  await start(h, "{ optionalFeatures: ['depth-sensing'] }");
+  assert.ok(!h.run<string[]>('__s.enabledFeatures').includes('depth-sensing'));
+  for (const attr of ['depthUsage', 'depthDataFormat']) {
+    assert.equal(
+      h.run(
+        `(() => { try { return __s.${attr}; } catch (e) { return e.name; } })()`,
+      ),
+      'InvalidStateError',
+    );
+  }
+});
+
+test('XR-DEPTH-2: an offered session rejected for depth logs the rejection once (offerSession), not again for the grant', async () => {
+  const { h } = depthHarness();
+  h.run(
+    `${XR}.offerSession('immersive-ar', { requiredFeatures: ['depth-sensing'], depthSensing: { usagePreference: ['cpu-optimized'], dataFormatPreference: [] } }).catch((e) => { globalThis.__e = e.name; });`,
+  );
+  await h.settle();
+  assert.equal(h.run('globalThis.__e'), 'NotSupportedError');
+  const lines = h.logs.filter((l) => l.includes('was rejected'));
+  assert.equal(lines.length, 1, lines.join('\n'));
+  assert.match(
+    lines[0],
+    /navigator\.xr\.offerSession\('immersive-ar'\) was rejected: .*'depth-sensing'/,
+  );
+  // a permission-gated offer that is granted: one dialog, and the session is still started for the native side
+  const ok = depthHarness();
+  ok.h.run(
+    `${XR}.offerSession('immersive-ar', ${INIT}).then((s) => { globalThis.__s = s; });`,
+  );
+  await ok.h.settle();
+  assert.ok(ok.h.run('globalThis.__s'));
+  assert.deepEqual(ok.started, [false]);
+  assert.equal(
+    ok.h.calls.filter((c) => c[0] === 'requestPermissions').length,
+    1,
+  );
+  assert.equal(ok.h.calls.filter((c) => c[0] === 'sessionStarted').length, 1);
+});
+
 test('XR-DEPTH-2: each frame the record becomes one depth information per eye on one re-pointed texture', async () => {
   const { h, record } = depthHarness();
   h.g.__gl = h.gl;
@@ -164,6 +214,16 @@ test('XR-DEPTH-2: each frame the record becomes one depth information per eye on
       const views = frame.getViewerPose(__space).views;
       globalThis.__seen = views.map((v) => __binding.getDepthInformation(v));
     });`;
+
+  // XRFrame.getDepthInformation is for cpu-optimized sessions: this one is gpu-optimized, so it throws
+  h.run(`
+    globalThis.__cpu = null;
+    __s.requestAnimationFrame((t, frame) => {
+      try { frame.getDepthInformation(frame.getViewerPose(__space).views[0]); globalThis.__cpu = 'returned'; }
+      catch (e) { globalThis.__cpu = e.name; }
+    });`);
+  h.frame();
+  assert.equal(h.run('__cpu'), 'InvalidStateError');
 
   // no image yet (the provider has not produced one): null
   h.run(read);

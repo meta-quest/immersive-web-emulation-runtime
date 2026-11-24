@@ -334,6 +334,37 @@ describe('GamepadHapticActuator', () => {
     expect(lastPulse!.value).toBe(1);
     expect(lastPulse!.duration).toBe(200);
   });
+
+  test('effects lists the effect types playEffect plays, as one frozen array', async () => {
+    const actuator = new GamepadHapticActuator();
+    expect(actuator.effects).toEqual(['dual-rumble', 'trigger-rumble']);
+    expect(Object.isFrozen(actuator.effects)).toBe(true);
+    expect(actuator.effects).toBe(actuator.effects);
+    for (const type of actuator.effects) {
+      await expect(actuator.playEffect(type, { duration: 10 })).resolves.toBe(
+        'complete',
+      );
+    }
+    await expect(
+      actuator.playEffect('unknown-effect' as never),
+    ).rejects.toMatchObject({ name: 'NotSupportedError' });
+  });
+
+  test('trigger-rumble pulses at the strongest magnitude given, trigger ones included', async () => {
+    const actuator = new GamepadHapticActuator();
+    await actuator.playEffect('trigger-rumble', {
+      duration: 10,
+      rightTrigger: 0.6,
+      weakMagnitude: 0.2,
+    });
+    expect(actuator[P_GAMEPAD].lastPulse!.value).toBe(0.6);
+    await actuator.playEffect('dual-rumble', {
+      duration: 10,
+      rightTrigger: 0.9,
+      strongMagnitude: 0.3,
+    });
+    expect(actuator[P_GAMEPAD].lastPulse!.value).toBe(0.3);
+  });
 });
 
 describe('Gamepad haptics', () => {

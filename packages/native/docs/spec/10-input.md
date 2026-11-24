@@ -78,7 +78,9 @@ the hand grip follow the palm.
 **IN-7 (MUST).** IWER's `onHaptic(handedness, intensity, durationMs, frequencyHz)` applies an OpenXR
 vibration to that hand (amplitude = intensity, duration, `XR_FREQUENCY_UNSPECIFIED` when 0); a new pulse
 replaces a running one; `pulse()` resolves `true` after the duration (or at once, per HOST-INPUT, if the
-runtime returns no promise; pick one and document). Hands have no actuators.
+runtime returns no promise; pick one and document). Hands have no actuators. `vibrationActuator.effects` lists
+`['dual-rumble', 'trigger-rumble']`, the effect types `playEffect()` plays: each becomes one pulse at the strongest
+magnitude given (full strength when none is), for `duration` ms.
 _Check:_ `gamepad.hapticActuators[0].pulse(1, 100)` buzzes the right controller for ~100 ms.
 
 ## Non-XR input

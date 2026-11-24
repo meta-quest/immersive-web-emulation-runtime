@@ -632,6 +632,7 @@ describe('XRFrame', () => {
     beforeEach(() => {
       activeFrame = new XRFrame(mockSession, 1, true, true, 1000.5);
       inactiveFrame = new XRFrame(mockSession, 2, false, false, 2000.5);
+      mockSession[P_SESSION].depthSensingUsage = 'cpu-optimized';
       mockView = {
         [P_VIEW]: {
           eye: XREye.Left,
@@ -651,15 +652,34 @@ describe('XRFrame', () => {
       );
     });
 
-    it('should throw InvalidStateError when depth-sensing not enabled', () => {
+    it('should throw NotSupportedError when depth-sensing not enabled', () => {
       mockSession[P_SESSION].enabledFeatures = [];
       expect(() => {
         activeFrame.getDepthInformation(mockView);
       }).toThrow(
         new DOMException(
           'depth-sensing feature is not enabled on this session.',
-          'InvalidStateError',
+          'NotSupportedError',
         ),
+      );
+    });
+
+    it('should throw InvalidStateError outside an animation frame callback', () => {
+      mockSession[P_SESSION].enabledFeatures = ['depth-sensing'];
+      const frame = new XRFrame(mockSession, 3, true, false, 3000.5);
+      expect(() => frame.getDepthInformation(mockView)).toThrow(
+        expect.objectContaining({ name: 'InvalidStateError' }),
+      );
+    });
+
+    it('should throw InvalidStateError when depthUsage is gpu-optimized', () => {
+      mockSession[P_SESSION].enabledFeatures = ['depth-sensing'];
+      mockSession[P_SESSION].depthSensingUsage = 'gpu-optimized';
+      expect(() => activeFrame.getDepthInformation(mockView)).toThrow(
+        expect.objectContaining({
+          name: 'InvalidStateError',
+          message: expect.stringContaining("'cpu-optimized'"),
+        }),
       );
     });
 

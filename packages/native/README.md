@@ -414,12 +414,12 @@ Each request is one text message `{"method": "...", "params": {...}, "id": 1}`; 
 a single WebSocket frame, however large) with the same `id` and the result, or `{"error": "..."}`. `id` is optional
 for one request per connection. Methods:
 
-| method  | params                                                                   | reply                                                                                                                                                                                         |
-| ------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `eval`  | `expression`, `awaitPromise` (default true), `timeoutMs` (default 30000) | `{result}`: the JSON value (a promise is awaited while frames keep running; values that do not serialise come back as their `String()`), or `{error}` with the message and stack              |
-| `shot`  | `eye`: `left`, `right` or `both`; `scale` (default 1)                    | `{png, width, height, frame}`: the app's eye buffer of the next frame as base64 PNG. Passthrough is composited by the system after the app, so in AR the areas the app leaves clear are blank |
-| `stats` | none                                                                     | versions, uptime, boot timeline, fps, session and visibility state, per-frame timing, GC and heap, workers, audio, blocked network origins                                                    |
-| `info`  | none                                                                     | device model and OS build, runtime/V8 versions, GL renderer, OpenXR runtime, package id and version, native modules                                                                           |
+| method  | params                                                                   | reply                                                                                                                                                                                          |
+| ------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `eval`  | `expression`, `awaitPromise` (default true), `timeoutMs` (default 30000) | `{result}`: the JSON value (a promise is awaited while frames keep running; values that do not serialise come back as their `String()`), or `{error}` with the message and stack               |
+| `shot`  | `eye`: `left`, `right` or `both`; `scale` (default 1)                    | `{png, width, height, frame}`: the app's eye buffer of the next frame as base64 PNG. Passthrough is composited by the system after the app, so in AR the areas the app leaves clear are blank  |
+| `stats` | none                                                                     | versions, uptime, boot timeline, fps and refresh rate, session and visibility state, per-frame timing, GC and heap, workers, audio, blocked network origins (`blockedOrigins`, `[]` when none) |
+| `info`  | none                                                                     | device model and OS build, runtime/V8 versions, GL renderer, OpenXR runtime, package id and version, native modules                                                                            |
 
 ```js
 // node, with Node's built-in WebSocket (Node 22+)

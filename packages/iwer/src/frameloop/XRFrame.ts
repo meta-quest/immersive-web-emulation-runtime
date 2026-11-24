@@ -414,20 +414,26 @@ export class XRFrame {
     return [];
   }
 
+  // WebXR Depth Sensing "obtain depth information": NotSupportedError without
+  // depth sensing, InvalidStateError outside an animation frame callback or
+  // for a session whose depthUsage is not 'cpu-optimized'
   getDepthInformation(view: XRView): XRCPUDepthInformation | null {
-    if (!this[P_FRAME].active) {
+    const session = this[P_FRAME].session[P_SESSION];
+    if (!session.enabledFeatures.includes('depth-sensing')) {
+      throw new DOMException(
+        'depth-sensing feature is not enabled on this session.',
+        'NotSupportedError',
+      );
+    }
+    if (!this[P_FRAME].active || !this[P_FRAME].animationFrame) {
       throw new DOMException(
         'XRFrame access outside the callback that produced it is invalid.',
         'InvalidStateError',
       );
     }
-    if (
-      !this[P_FRAME].session[P_SESSION].enabledFeatures.includes(
-        'depth-sensing',
-      )
-    ) {
+    if (session.depthSensingUsage !== 'cpu-optimized') {
       throw new DOMException(
-        'depth-sensing feature is not enabled on this session.',
+        "XRFrame.getDepthInformation requires depthUsage 'cpu-optimized'; this session's is 'gpu-optimized' (use XRWebGLBinding.getDepthInformation).",
         'InvalidStateError',
       );
     }

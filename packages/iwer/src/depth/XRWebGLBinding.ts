@@ -69,23 +69,26 @@ export class XRWebGLBinding {
     this._session = session;
   }
 
+  // WebXR Depth Sensing: NotSupportedError without depth sensing,
+  // InvalidStateError for a usage other than 'gpu-optimized' or outside an
+  // animation frame callback
   getDepthInformation(view: XRView): XRWebGLDepthInformation | null {
-    const frame: XRFrame | null = this._session[P_SESSION].activeFrame;
-    if (!frame || !frame[P_FRAME].active) {
-      throw new DOMException(
-        'XRFrame access outside the callback that produced it is invalid.',
-        'InvalidStateError',
-      );
-    }
     if (!this._session[P_SESSION].enabledFeatures.includes('depth-sensing')) {
       throw new DOMException(
         'depth-sensing feature is not enabled on this session.',
-        'InvalidStateError',
+        'NotSupportedError',
       );
     }
     if (this._session[P_SESSION].depthSensingUsage !== 'gpu-optimized') {
       throw new DOMException(
         'getDepthInformation on XRWebGLBinding requires gpu-optimized depth sensing usage.',
+        'InvalidStateError',
+      );
+    }
+    const frame: XRFrame | null = this._session[P_SESSION].activeFrame;
+    if (!frame || !frame[P_FRAME].active || !frame[P_FRAME].animationFrame) {
+      throw new DOMException(
+        'XRFrame access outside the callback that produced it is invalid.',
         'InvalidStateError',
       );
     }

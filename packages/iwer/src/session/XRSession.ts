@@ -159,6 +159,15 @@ function diffActiveInputSources(session: XRSession): void {
   }
 }
 
+function assertDepthEnabled(session: XRSession): void {
+  if (!session[P_SESSION].hasDepth) {
+    throw new DOMException(
+      'depth-sensing feature is not enabled on this session.',
+      'InvalidStateError',
+    );
+  }
+}
+
 export class XRSession extends EventTarget {
   [P_SESSION]: {
     device: XRDevice;
@@ -975,11 +984,15 @@ export class XRSession extends EventTarget {
     return this[P_SESSION].device[P_DEVICE].interactionMode;
   }
 
+  // WebXR Depth Sensing: reading either attribute on a session without depth
+  // sensing enabled throws InvalidStateError (pages feature-detect with them)
   get depthUsage(): XRDepthUsage {
+    assertDepthEnabled(this);
     return this[P_SESSION].depthSensingUsage;
   }
 
   get depthDataFormat(): XRDepthDataFormat {
+    assertDepthEnabled(this);
     return this[P_SESSION].depthSensingDataFormat;
   }
 

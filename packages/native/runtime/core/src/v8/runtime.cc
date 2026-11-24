@@ -1105,11 +1105,43 @@ Json RuntimeImpl::stats_json() {
   j.set("errors", err);
   j.set("inspectorSessions", static_cast<uint64_t>(devtools_->session_count()));
   j.set("workers", 0);
+  j.set("blockedOrigins", blocked_origins());
   for (auto& kv : stats_providers_) {
     v8::TryCatch tc(isolate_);
     j.set(kv.first, kv.second());
   }
+  // The top-level summaries come from the module sections when those modules are in (DBG-STATS): the live worker
+  // count (workerStats.live) and the display refresh rate (xr.refreshRate; null until OpenXR reports one).
+  if (j.has("workerStats") && j["workerStats"]["live"].is_number()) j.set("workers", j["workerStats"]["live"]);
+  if (j.has("xr") && j["xr"]["refreshRate"].as_number() > 0) j.set("refreshRate", j["xr"]["refreshRate"]);
   return j;
+}
+
+// web/net's blocked network origins (NET-5) for stats: always an array, empty when nothing was blocked (or before
+// web/net is installed). Read from globalThis[Symbol.for('iwn.net')].blockedOrigins(); microtasks are explicit, so
+// the call runs no page code.
+Json RuntimeImpl::blocked_origins() {
+  Json list = Json::array();
+  if (context_.IsEmpty()) return list;
+  v8::HandleScope hs(isolate_);
+  v8::Local<v8::Context> ctx = context();
+  v8::Context::Scope cs(ctx);
+  v8::TryCatch tc(isolate_);
+  v8::Local<v8::Value> net;
+  v8::Local<v8::Value> fn;
+  v8::Local<v8::Value> result;
+  v8::Local<v8::Symbol> key = v8::Symbol::For(isolate_, v8u::str(isolate_, "iwn.net"));
+  if (!ctx->Global()->Get(ctx, key).ToLocal(&net) || !net->IsObject()) return list;
+  if (!net.As<v8::Object>()->Get(ctx, v8u::str(isolate_, "blockedOrigins")).ToLocal(&fn) || !fn->IsFunction()) {
+    return list;
+  }
+  if (!fn.As<v8::Function>()->Call(ctx, net, 0, nullptr).ToLocal(&result) || !result->IsArray()) return list;
+  v8::Local<v8::Array> origins = result.As<v8::Array>();
+  for (uint32_t i = 0; i < origins->Length(); ++i) {
+    v8::Local<v8::Value> origin;
+    if (origins->Get(ctx, i).ToLocal(&origin) && origin->IsString()) list.push(v8u::to_utf8(isolate_, origin));
+  }
+  return list;
 }
 
 }  // namespace iwn

@@ -497,9 +497,75 @@ export function installNativeXR(
           'NotSupportedError',
         );
       }
-      if (!optional.some(denied)) return init;
+      const dropped = optional.filter(denied);
+      if (dropped.length === 0) return init;
+      // one line, so a page that runs without the features shows why
+      const missing = [
+        ...new Set(dropped.map((f) => FEATURE_PERMISSIONS[f])),
+      ].map(
+        (p) =>
+          `${p}, ${permissions.declared(p) ? 'which the user did not grant' : "which the app's manifest does not declare"}`,
+      );
+      console.warn(
+        `@iwer/native: optional features dropped from the '${mode}' session request: ${dropped.join(', ')} ` +
+          `(need ${missing.join(', ')}).`,
+      );
       return { ...o, optionalFeatures: optional.filter((f) => !denied(f)) };
     });
+  }
+  // A required 'depth-sensing' the headset has but cannot serve in the usage or data format the page asks for: IWER's
+  // rejection does not say which feature or why, so this one does (NotSupportedError, as IWER's). Checked when the
+  // request reaches IWER, after the checks IWER makes first (an active session, the mode).
+  function depthRefusal(
+    mode: string,
+    init: object | undefined,
+  ): DOMException | null {
+    const support = backend.depthSensing;
+    if (
+      !support ||
+      device.activeSession ||
+      !config.supportedSessionModes.includes(mode as never)
+    )
+      return null;
+    const o = (init ?? {}) as {
+      requiredFeatures?: unknown;
+      depthSensing?: {
+        usagePreference?: unknown;
+        dataFormatPreference?: unknown;
+      };
+    };
+    if (
+      !featureList(o.requiredFeatures).includes('depth-sensing') ||
+      !(config.supportedFeatures as string[]).includes('depth-sensing') ||
+      negotiateHostDepth(o.depthSensing as never, support) !== null
+    )
+      return null;
+    const usages = featureList(o.depthSensing?.usagePreference);
+    const formats = featureList(o.depthSensing?.dataFormatPreference);
+    const asked: string[] = [];
+    if (
+      usages.length &&
+      !usages.some((u) => support.usages.includes(u as never))
+    )
+      asked.push(`usagePreference [${usages.join(', ')}]`);
+    if (
+      formats.length &&
+      !formats.some((f) => support.dataFormats.includes(f as never))
+    )
+      asked.push(`dataFormatPreference [${formats.join(', ')}]`);
+    return new DOMException(
+      `The required feature 'depth-sensing' cannot be served with ${asked.length ? asked.join(' and ') : 'the depthSensing preferences given'}: this headset offers ` +
+        `usage ${support.usages.join(', ')} and data format${support.dataFormats.length > 1 ? 's' : ''} ${support.dataFormats.join(', ')}.`,
+      'NotSupportedError',
+    );
+  }
+  function reach(
+    mode: string,
+    init: object | undefined,
+    call: (init: object | undefined) => Promise<object>,
+  ): Promise<object> {
+    const refusal = depthRefusal(mode, init);
+    return refusal ? Promise.reject(refusal) : call(init);
   }
   // Session requests reach IWER in the order they were made, as in a browser (a later immersive request is refused
   // while an earlier one is pending): a request waiting for the permission dialog holds back those made after it,
@@ -519,7 +585,7 @@ export function installNativeXR(
     }
     const before = waiting;
     const asking = before ? null : withPermissions(mode, valid);
-    if (!before && !asking) return call(valid);
+    if (!before && !asking) return reach(mode, valid, call);
     let reached!: () => void;
     const gate = new Promise<void>((resolve) => {
       reached = resolve;
@@ -534,7 +600,7 @@ export function installNativeXR(
     return ready.then(
       (i) => {
         reached();
-        return call(i);
+        return reach(mode, i, call);
       },
       (error: unknown) => {
         reached();
@@ -566,6 +632,23 @@ export function installNativeXR(
       return isSessionSupported.call(this, mode);
     },
   });
+  // IWER grants an offer (auto-grant, grantSession(), a test driver) through the public requestSession(). That call is
+  // the offer's own: the offer has been through the mode, permission and depth checks and is tracked and logged as
+  // offerSession() already, so it goes straight to IWER (no second permission pass, no second "was rejected" line).
+  let granting = 0;
+  const grantOfferedSession = device.grantOfferedSession.bind(device);
+  Object.defineProperty(device, 'grantOfferedSession', {
+    configurable: true,
+    writable: true,
+    value: function grantOfferedSessionNative(): void {
+      granting++;
+      try {
+        grantOfferedSession();
+      } finally {
+        granting--;
+      }
+    },
+  });
   Object.defineProperty(proto, 'requestSession', {
     configurable: true,
     writable: true,
@@ -575,6 +658,14 @@ export function installNativeXR(
       init?: object,
     ) {
       capabilities();
+      if (granting > 0) {
+        const granted = requestSession.call(this, mode, init);
+        granted.then(
+          (s) => onSession(s, String(mode)),
+          () => {},
+        );
+        return granted;
+      }
       const p = inOrder(String(mode), init, (i) =>
         requestSession.call(this, mode, i),
       );

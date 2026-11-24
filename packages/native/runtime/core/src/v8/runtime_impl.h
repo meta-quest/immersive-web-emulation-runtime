@@ -295,6 +295,7 @@ class RuntimeImpl : public Runtime, public RuntimeHost {
   // not in the app's origin keeps the current one.
   void request_reload(const std::string& url = {});
   Json stats_json();
+  Json blocked_origins();
   Json info_json();
   const Lifecycle& lifecycle() const { return lifecycle_; }
   const char* ready_state() const { return ready_state_; }

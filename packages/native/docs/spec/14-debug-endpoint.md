@@ -54,7 +54,10 @@ written), current fps and refresh rate, session/visibility state, swapchain size
 the last stats window (wait/JS/end ms, GL calls, draws, JS→native transitions), CPU/GPU performance
 levels, GC counts and pause time split into "during frame callbacks" and "outside them", heap used/limit,
 external memory, allocation per frame (PERF-ALLOC-2), worker count, pending tasks/timers, audio state and
-xrun count, blocked network origins, and the miss report (DOM-11) counts.
+xrun count, blocked network origins, and the miss report (DOM-11) counts. Top-level `workers` is the live worker
+count (`workerStats.live`), `refreshRate` the display rate (`xr.refreshRate`; null without the XR module or before
+OpenXR reports one), and `blockedOrigins` the origins web/net blocked this session (NET-5), always present (`[]`
+when none was blocked).
 _Check:_ the perf sweep against the APK stores it per view as `hostStats`.
 
 **DBG-LOG (withdrawn).** Log access through the endpoint is not required (logcat and CDP cover it).

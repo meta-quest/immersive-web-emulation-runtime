@@ -117,6 +117,11 @@ export type GamepadHapticPulseHook = (
   durationMs: number,
 ) => void | Promise<boolean>;
 
+const HAPTIC_EFFECTS: readonly GamepadHapticEffectType[] = Object.freeze([
+  'dual-rumble',
+  'trigger-rumble',
+] as GamepadHapticEffectType[]);
+
 export class GamepadHapticActuator {
   [P_GAMEPAD]: {
     type: GamepadHapticActuatorType;
@@ -140,6 +145,14 @@ export class GamepadHapticActuator {
     return this[P_GAMEPAD].type;
   }
 
+  /**
+   * Gamepad haptics `effects`: the effect types `playEffect` plays (both, as
+   * one pulse). The same frozen array on every read.
+   */
+  get effects(): readonly GamepadHapticEffectType[] {
+    return HAPTIC_EFFECTS;
+  }
+
   pulse(value: number, duration: number): Promise<boolean> {
     this[P_GAMEPAD].lastPulse = {
       value,
@@ -161,8 +174,9 @@ export class GamepadHapticActuator {
 
   /**
    * Gamepad haptics `playEffect`. Both effect types become one pulse; its
-   * strength is the stronger of the two rumble magnitudes, or full strength
-   * when the page gives neither.
+   * strength is the strongest magnitude given (the rumble magnitudes, and the
+   * trigger ones for 'trigger-rumble'), or full strength when the page gives
+   * none.
    */
   playEffect(
     type: GamepadHapticEffectType,
@@ -176,11 +190,12 @@ export class GamepadHapticActuator {
         ),
       );
     }
-    const { strongMagnitude, weakMagnitude } = params;
-    const strength =
-      strongMagnitude === undefined && weakMagnitude === undefined
-        ? 1
-        : Math.max(strongMagnitude ?? 0, weakMagnitude ?? 0);
+    const magnitudes = [params.strongMagnitude, params.weakMagnitude];
+    if (type === 'trigger-rumble') {
+      magnitudes.push(params.leftTrigger, params.rightTrigger);
+    }
+    const given = magnitudes.filter((m): m is number => m !== undefined);
+    const strength = given.length === 0 ? 1 : Math.max(...given);
     const done: GamepadHapticsResult = 'complete';
     return this.pulse(strength, params.duration ?? 0).then(() => done);
   }

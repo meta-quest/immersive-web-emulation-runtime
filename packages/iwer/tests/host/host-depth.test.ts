@@ -245,6 +245,23 @@ describe('host depth sensing', () => {
       expect(session.depthDataFormat).toBe('float32');
     });
 
+    test('depthUsage and depthDataFormat throw InvalidStateError when depth-sensing is not enabled', async () => {
+      const { session } = await start(makeBackend(), {
+        optionalFeatures: ['depth-sensing'],
+        depthSensing: {
+          usagePreference: ['cpu-optimized'],
+          dataFormatPreference: ['float32'],
+        },
+      });
+      expect(session.enabledFeatures).not.toContain('depth-sensing');
+      expect(() => session.depthUsage).toThrow(
+        expect.objectContaining({ name: 'InvalidStateError' }),
+      );
+      expect(() => session.depthDataFormat).toThrow(
+        expect.objectContaining({ name: 'InvalidStateError' }),
+      );
+    });
+
     test('a host without depthSensing keeps the old behaviour (first preference, no getDepth)', async () => {
       const getDepth = jest.fn(() => makeDepth());
       const { device, session } = await start(
@@ -464,6 +481,25 @@ describe('host depth sensing', () => {
       expect(globalObject.XRWebGLDepthInformation).toBe(
         XRWebGLDepthInformation,
       );
+    });
+
+    test('XRFrame.getDepthInformation throws InvalidStateError on a gpu-optimized session', async () => {
+      const { device, session } = await start(
+        makeBackend({ getDepth: () => makeDepth() }),
+        init,
+      );
+      const space = (await session.requestReferenceSpace(
+        'local' as never,
+      )) as unknown as XRReferenceSpace;
+      const error = frameWith(device, session, space, (frame, views) => {
+        try {
+          frame.getDepthInformation(views[0]);
+          return null;
+        } catch (e) {
+          return e as DOMException;
+        }
+      });
+      expect(error).toMatchObject({ name: 'InvalidStateError' });
     });
 
     test('no depth from the host (null) means getDepthInformation returns null', async () => {

@@ -161,6 +161,11 @@ test('XR-PERM-1: denied -> required features reject with NotSupportedError, opti
     1,
     'the dialog is not shown again after a denial',
   );
+  // the dropped optional features are named in one line
+  const dropped = h.logs.filter((l) => l.includes('optional features dropped'));
+  assert.deepEqual(dropped, [
+    "warn: @iwer/native: optional features dropped from the 'immersive-ar' session request: plane-detection, hit-test (need com.oculus.permission.USE_SCENE, which the user did not grant).",
+  ]);
   await end(h);
 
   // a grant made later (Settings) is picked up without another dialog
@@ -388,6 +393,14 @@ test('XR-PERM-1: a permission the manifest does not declare is never asked for; 
     "{ optionalFeatures: ['plane-detection', 'hit-test'] }",
   );
   assert.deepEqual(o.features, ['local', 'viewer']);
+  assert.ok(
+    h.logs.some((l) =>
+      l.endsWith(
+        "plane-detection, hit-test (need com.oculus.permission.USE_SCENE, which the app's manifest does not declare).",
+      ),
+    ),
+    h.logs.join('\n'),
+  );
   assert.equal(
     asks(h).length,
     0,
