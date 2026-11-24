@@ -60,7 +60,10 @@ A template is an **unsigned** (or signed; signatures are dropped) APK with:
    `com.oculus.supportedDevices`, `android:extractNativeLibs="false"`, `android:icon="@mipmap/ic_launcher"`,
    `minSdkVersion` 29 and the store's `targetSdkVersion`. `INTERNET` and `debuggable` are the packer's call per
    build: it adds them to debug builds and removes them from plain release builds even if the template has them. The packer sets `package`, `versionCode`, `versionName`, the application label (a literal
-   string; an activity label too if the template has one).
+   string; an activity label too if the template has one). The Horizon OS SDK declaration
+   `<horizonos:uses-horizonos-sdk horizonos:minSdkVersion="60" horizonos:targetSdkVersion="60"/>`
+   (`xmlns:horizonos="http://schemas.horizonos/sdk"`) is the template's; the packer adds that one to a template
+   without any (`uses-horizonos-sdk` or `uses-metavr-sdk`, such as the 2.9.0 template) and keeps a template's own.
 2. `resources.arsc` stored uncompressed (the packer fixes a compressed one: Android 11+ refuses it).
 3. `lib/arm64-v8a/*.so` stored uncompressed (the packer 16 KiB-aligns them; link with `-z max-page-size=16384`
    for PKG-3's `readelf` check).
@@ -105,6 +108,10 @@ and `out/template-info.json` (sha256/size to paste into `templates.json` when CI
   | `xr`                                 | `frameRate`, `foveation {level, dynamic}`, `features {name: required/optional}`, `loading {enabled, image: "vr_splash.png", background}` (the runtime's loading screen, from `native.splash`; `background` is `"black"`, `"contextual"` (apps that declare passthrough) or `"#rrggbb"`; with `splash: false`, `{enabled: true, image: null, spinner: false, background}`: the background alone) |
   | `page`                               | `title`, `entry` (from `index.html`)                                                                                                                                                                                                                                                                                                                                                            |
   | `pack`                               | packer and template versions                                                                                                                                                                                                                                                                                                                                                                    |
+
+  A release build started with extras it does not honour (`iwer-native run --query`, `--inspect`, `--inspect-brk`,
+  `--v8-flags`) logs one warning that names them and says to pack with `--inspector` or build a debug APK
+  (`launch extras ignored (iwn.query): this APK is a release build; ...`).
 
 - `assets/vr_splash.png` (stored) unless `native.splash` is `false`: Horizon OS shows it as the system splash while
   the app starts (the application's `<meta-data android:name="com.oculus.ossplash" android:value="true"/>`, a typed
@@ -224,8 +231,9 @@ checks only, the packer never calls them.
 Test fixtures: `test/fixtures/*.p12|.jks` are throwaway keys made with keytool 8/17 and OpenSSL 3.5 (store
 password `iwn-test-store`; `jdk8.jks` and `p12-jdk8.p12` are keytool 8 files kept to test their refusal);
 `two-keys.p12` (aliases `upload`/`second`) joins two OpenSSL-made PKCS#12 files (PBES2 AES-256) under one
-HMAC-SHA256 MAC; `template-manifest.axml` is aapt2 34's output for
-`template/AndroidManifest.xml`.
+HMAC-SHA256 MAC; `template-manifest.axml` is aapt2 2.19 (build-tools 35)'s output for
+`template/AndroidManifest.xml` (`--min-sdk-version 29 --target-sdk-version 32`, as build-template.mjs), and
+`template-manifest-2.9.0.axml` the 2.9.0 template's, which has no `uses-horizonos-sdk` element.
 
 ## Gaps and open questions
 

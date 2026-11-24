@@ -150,6 +150,7 @@ struct XrSystem::Impl {
   std::vector<int64_t> formats;
   std::vector<float> rates;
   std::atomic<float> current_rate{0};
+  bool frame_rate_warned = false;  // the configured rate is not one of the display's: warned once per process run
 
   // spaces
   XrSpace view_space = XR_NULL_HANDLE, local_space = XR_NULL_HANDLE, stage_space = XR_NULL_HANDLE;
@@ -289,7 +290,7 @@ struct XrSystem::Impl {
     size_t images = 0;
     double foveation = 0;
     PerfLevel cpu = PerfLevel::kUnset, gpu = PerfLevel::kUnset;
-    uint64_t raises = 0, lowers = 0, missed = 0;
+    uint64_t raises = 0, lowers = 0, missed = 0, stalls_ignored = 0;
     size_t layer_swapchains = 0;
     uint32_t layers_submitted = 0;
     uint64_t frames_with_layers = 0;
@@ -364,6 +365,7 @@ void XrSystem::Impl::publish_locked() {
   snap.gpu = applied_gpu;
   snap.raises = perf.raises();
   snap.lowers = perf.lowers();
+  snap.stalls_ignored = perf.stalls_ignored();
   snap.missed = pacing.missed();
   snap.layer_swapchains = comp_layers.live();
   snap.layers_submitted = comp_layers.last_submitted();
@@ -1361,8 +1363,26 @@ void XrSystem::Impl::begin_xr_session() {
     log(LogLevel::kInfo, "xr: colour space %s: %s", cfg->color_space.c_str(), result(r));
   }
   if (cfg->frame_rate > 0 && request_rate) {
-    r = request_rate(session, static_cast<float>(cfg->frame_rate));
-    log(LogLevel::kInfo, "xr: requested %.0f Hz at session start: %s", cfg->frame_rate, result(r));
+    // Checked against the display's rates first: the runtime only answers XR_ERROR_DISPLAY_REFRESH_RATE_UNSUPPORTED_FB
+    // and stays at its own rate, which the app's author should hear about (native.frameRate).
+    const bool listed = rates.empty() || std::any_of(rates.begin(), rates.end(), [&](float f) {
+                          return std::fabs(static_cast<double>(f) - cfg->frame_rate) < 0.5;
+                        });
+    if (!listed) {
+      if (!frame_rate_warned) {
+        frame_rate_warned = true;
+        std::string supported;
+        for (float f : rates) supported += (supported.empty() ? "" : ", ") + std::to_string(static_cast<int>(f));
+        log(LogLevel::kWarn,
+            "xr: native.frameRate %.0f Hz is not supported by this display (supported: %s Hz); not requested, the "
+            "system's rate is used (%.0f Hz now; later changes are logged as 'display refresh rate')",
+            cfg->frame_rate, supported.c_str(), static_cast<double>(current_rate.load()));
+      }
+    } else {
+      r = request_rate(session, static_cast<float>(cfg->frame_rate));
+      log(XR_FAILED(r) ? LogLevel::kWarn : LogLevel::kInfo, "xr: requested %.0f Hz at session start: %s",
+          cfg->frame_rate, result(r));
+    }
   }
   apply_perf(true);
   scene.resumed();  // the room may have changed while the app was paused
@@ -1391,7 +1411,11 @@ void XrSystem::Impl::handle_state(XrSessionState s) {
       if (XR_FAILED(r)) log(LogLevel::kWarn, "xr: xrEndSession: %s", result(r));
       running = false;
       push_event({XrEvent::kRunning, false, false, 0, false});
-      if (webxr_active) log(LogLevel::kInfo, "xr: paused; the WebXR session stays (hidden) until the app resumes");
+      // Not a promise: Horizon OS usually destroys the activity soon after Home (a fresh page on the next launch).
+      if (webxr_active) {
+        log(LogLevel::kInfo,
+            "xr: paused (session hidden); it resumes if the app returns, unless the system destroys the activity");
+      }
       break;
     }
     case XR_SESSION_STATE_EXITING:
@@ -1639,6 +1663,9 @@ void XrSystem::Impl::run_frame() {
   const bool render = fs.shouldRender == XR_TRUE;
   bool js_frame = webxr_active && render && visibility.visible && slot.state() == FrameSlot::kIdle;
   double js_cpu_ms = 0;
+  // The JS thread is behind (a long task, a GC pause): a frame of this XR frame's misses is the JS thread's, not the
+  // GPU's (PerfPolicy). Set while an earlier app frame is still running, or when this one is late or never began.
+  bool js_stalled = webxr_active && render && visibility.visible && slot.state() == FrameSlot::kRunning;
   if (js_frame) {
     // Image first: the record carries the GL name of the image this frame renders into.
     frame_has_image = false;
@@ -1716,6 +1743,7 @@ void XrSystem::Impl::run_frame() {
       case FrameSlot::Outcome::kCancelled: {
         // JS never began (a long task, a debugger pause): keep the image for the next frame.
         js_busy = true;
+        js_stalled = true;
         std::lock_guard<std::mutex> lock(stats_mu);
         ++cancelled;
         break;
@@ -1731,6 +1759,7 @@ void XrSystem::Impl::run_frame() {
       case FrameSlot::Outcome::kRunning: {
         // JS is still in the frame: it is collected, and its image submitted, in a later OpenXR frame.
         js_busy = false;
+        js_stalled = true;
         std::lock_guard<std::mutex> lock(stats_mu);
         ++late;
         break;
@@ -1898,7 +1927,7 @@ void XrSystem::Impl::run_frame() {
 
   // Performance levels (XR-PERF-1) adapt to missed frames while the app renders.
   if (webxr_active) {
-    PerfPolicy::Change ch = perf.on_frame(t_end1, skipped, js_cpu_ms, period_ms);
+    PerfPolicy::Change ch = perf.on_frame(t_end1, PerfPolicy::Frame{skipped, js_cpu_ms, period_ms, js_stalled});
     if (ch.any()) {
       log(LogLevel::kInfo, "xr: performance levels -> CPU %s, GPU %s (%s)", perf_level_name(perf.cpu()),
           perf_level_name(perf.gpu()), ch.reason);
@@ -2437,6 +2466,7 @@ Json XrSystem::stats() {
   perf.set("gpu", perf_level_name(s.gpu));
   perf.set("raises", s.raises);
   perf.set("lowers", s.lowers);
+  perf.set("stallsIgnored", s.stalls_ignored);  // missed frames put down to a system stall, not a level
   perf.set("runtimeNotifications", x.perf_events);
   j.set("perf", perf);
   Json frames = Json::object();

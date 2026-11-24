@@ -33,6 +33,11 @@ export function templateManifest(): Buffer {
   return readFileSync(path.join(FIXTURES, 'template-manifest.axml'));
 }
 
+/** The 2.9.0 template's manifest: no Horizon OS SDK declaration. */
+export function templateManifest290(): Buffer {
+  return readFileSync(path.join(FIXTURES, 'template-manifest-2.9.0.axml'));
+}
+
 export function scratchDir(name: string): string {
   return mkdtempSync(path.join(tmpdir(), `iwn-pack-${name}-`));
 }

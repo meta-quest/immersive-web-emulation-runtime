@@ -270,7 +270,9 @@ _Check:_ VrApi `Fov` field changes with the setting; the first VrApi line shows 
 **XR-PERF-1 (MUST).** CPU/GPU performance levels start at the level Quest Browser uses for the same
 content (CPU level 2 in the baseline measurements; GPU per the runtime default), and adapt upward on missed
 frames over a window (and back down after sustained headroom) through `XR_EXT_performance_settings`; they
-are never pinned at the maximum by default. (Regression guard: pinning CPU level 4 costs power and heat for nothing; GAP-6.)
+are never pinned at the maximum by default. Only the domain the misses point at is raised: a single burst (a GC
+pause, a system stall) raises nothing, and misses the JS thread explains (late or never-begun frames, JS time near
+the period) never raise the GPU. (Regression guard: pinning CPU level 4 costs power and heat for nothing; GAP-6.)
 _Check:_ the showcase holds 72 Hz with VrApi showing CPU level ≤ 2 throughout a 7-view sweep
 (PERF-LVL-1); forcing a heavy view raises the level within 2 s and stale frames stop.
 

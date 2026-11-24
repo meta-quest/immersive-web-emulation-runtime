@@ -11,10 +11,21 @@
   runtime-broker queries follow the Khronos OpenXR Android loader documentation.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:horizonos="http://schemas.horizonos/sdk"
     package="org.iwer.nativetemplate"
     android:versionCode="1"
     android:versionName="0.0.0"
     android:installLocation="auto">
+
+  <!--
+    Minimum / target Horizon OS SDK version (Meta's public "Meta VR OS SDK versioning" documentation). Without it
+    Horizon OS logs "the client's manifest does not specify a minimum HzOS SDK version" on every launch. 60 is the
+    lowest version Meta's own engine integrations offer (the Meta XR Unity SDK's default minimum), so no Horizon OS
+    that reads the element blocks the install; the target stays there too (no opted-in newer OS behaviour). The
+    legacy element name is used because every Horizon OS release that reads one reads this one (newer releases also
+    read uses-metavr-sdk). The packer adds the same element to templates built without it (packager/src/manifest.ts).
+  -->
+  <horizonos:uses-horizonos-sdk horizonos:minSdkVersion="60" horizonos:targetSdkVersion="60" />
 
   <uses-feature android:glEsVersion="0x00030002" android:required="true" />
   <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />

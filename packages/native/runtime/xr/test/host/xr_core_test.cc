@@ -509,31 +509,53 @@ IWN_TEST(Pacing, TaskBudget) {
 
 // --- perf policy ----------------------------------------------------------------------------------------------------
 
+namespace {
+
+// A sustained load at 72 Hz: every other frame misses one display period, for up to `ms`; the first change.
+PerfPolicy::Change sustained_misses(PerfPolicy& p, double& t, double js_ms, double ms = 800, bool js_stalled = false) {
+  for (double end = t + ms; t < end;) {
+    p.on_frame(t += 13.9, PerfPolicy::Frame{0, js_ms, 13.9, false});
+    PerfPolicy::Change c = p.on_frame(t += 27.8, PerfPolicy::Frame{1, js_ms, 13.9, js_stalled});
+    if (c.any()) return c;
+  }
+  return {};
+}
+
+PerfPolicy::Change steady(PerfPolicy& p, double& t, double ms, double js_ms = 6.0) {
+  PerfPolicy::Change last;
+  for (double end = t + ms; t < end;) {
+    PerfPolicy::Change c = p.on_frame(t += 13.9, 0, js_ms, 13.9);
+    if (c.any()) last = c;
+  }
+  return last;
+}
+
+}  // namespace
+
 IWN_TEST(Perf, StartsAtConfiguredLevelsAndRaisesTheLimitingDomain) {
   PerfPolicy p;  // CPU sustained low, GPU default
   IWN_CHECK(p.cpu() == PerfLevel::kSustainedLow);
   IWN_CHECK(p.gpu() == PerfLevel::kUnset);
   double t = 0;
-  // steady, GPU-bound (JS 6 ms of 13.9): no change
+  // steady, JS 6 ms of 13.9: no change
   for (int i = 0; i < 100; ++i) IWN_CHECK(!p.on_frame(t += 13.9, 0, 6.0, 13.9).any());
-  // three misses inside a second -> GPU raised from the runtime default
-  p.on_frame(t += 27.8, 1, 6.0, 13.9);
-  p.on_frame(t += 27.8, 1, 6.0, 13.9);
-  PerfPolicy::Change c = p.on_frame(t += 27.8, 1, 6.0, 13.9);
+  // GPU-bound: JS frames on time and short, one period missed every other frame, steadily -> GPU raised from the
+  // runtime default once the misses span the minimum (not at the first three)
+  const double start = t;
+  PerfPolicy::Change c = sustained_misses(p, t, 6.0);
   IWN_CHECK(c.gpu && !c.cpu);
+  IWN_CHECK(t - start >= 500);
+  IWN_CHECK(t - start <= 700);
   IWN_CHECK(p.gpu() == PerfLevel::kSustainedHigh);
-  // CPU-bound misses after the cooldown raise the CPU
-  for (int i = 0; i < 200; ++i) p.on_frame(t += 13.9, 0, 13.0, 13.9);
-  p.on_frame(t += 27.8, 1, 13.0, 13.9);
-  p.on_frame(t += 27.8, 1, 13.0, 13.9);
-  c = p.on_frame(t += 27.8, 1, 13.0, 13.9);
-  IWN_CHECK(c.cpu);
+  IWN_CHECK_EQ(std::string(c.reason), std::string("missed frames, GPU-bound: JS frames on time"));
+  // CPU-bound misses (JS 13 ms of 13.9) after the cooldown raise the CPU
+  steady(p, t, 2800, 13.0);
+  c = sustained_misses(p, t, 13.0);
+  IWN_CHECK(c.cpu && !c.gpu);
   IWN_CHECK(p.cpu() == PerfLevel::kSustainedHigh);
-  // at the maxima nothing more happens
-  for (int i = 0; i < 200; ++i) p.on_frame(t += 13.9, 0, 13.0, 13.9);
-  p.on_frame(t += 27.8, 1, 13.0, 13.9);
-  p.on_frame(t += 27.8, 1, 13.0, 13.9);
-  IWN_CHECK(!p.on_frame(t += 27.8, 1, 13.0, 13.9).any());
+  // at the maxima nothing more happens, and a CPU-bound load at the CPU maximum does not raise the GPU instead
+  steady(p, t, 2800, 13.0);
+  IWN_CHECK(!sustained_misses(p, t, 13.0, 2000).any());
   // 10 s of headroom steps back toward the start, never below it
   for (int i = 0; i < 3000; ++i) p.on_frame(t += 13.9, 0, 3.0, 13.9);
   IWN_CHECK(p.cpu() == PerfLevel::kSustainedLow);
@@ -553,46 +575,107 @@ IWN_TEST(Perf, SpreadOutMissesDoNotRaise) {
   for (int i = 0; i < 20; ++i) IWN_CHECK(!q.on_frame(t += 10, 2, 5, 13.9).any());
 }
 
+IWN_TEST(Perf, ASingleJsStallDoesNotRaise) {
+  // A GC pause or long task (a forced GC over CDP): app frames late or never begun for ~150 ms, misses around it,
+  // then the app keeps up again. Formerly "GPU-bound" (JS frame time was short): now neither domain.
+  PerfPolicy p;
+  double t = 0;
+  steady(p, t, 5000, 5.0);
+  for (int i = 0; i < 6; ++i) IWN_CHECK(!p.on_frame(t += 27.8, PerfPolicy::Frame{1, 0, 13.9, true}).any());
+  // the frames right after the stall miss too (the late frame collected), JS time short again
+  IWN_CHECK(!p.on_frame(t += 27.8, PerfPolicy::Frame{1, 5.0, 13.9, false}).any());
+  IWN_CHECK(!p.on_frame(t += 41.7, PerfPolicy::Frame{2, 5.0, 13.9, false}).any());
+  IWN_CHECK(!steady(p, t, 20000, 5.0).any());
+  IWN_CHECK(p.cpu() == PerfLevel::kSustainedLow);
+  IWN_CHECK(p.gpu() == PerfLevel::kUnset);
+  IWN_CHECK_EQ(p.raises(), 0u);
+  // the same stall every minute (the device-matrix soak) never raises either
+  for (int round = 0; round < 5; ++round) {
+    for (int i = 0; i < 6; ++i) IWN_CHECK(!p.on_frame(t += 27.8, PerfPolicy::Frame{1, 0, 13.9, true}).any());
+    IWN_CHECK(!steady(p, t, 60000, 5.0).any());
+  }
+  IWN_CHECK_EQ(p.raises(), 0u);
+}
+
+IWN_TEST(Perf, ASystemStallBurstDoesNotRaiseTheGpu) {
+  // A system stall (a proximity toggle): JS 5 ms and on time, 24 periods missed in a few frames within ~350 ms
+  // (xr-stats: jsMs=5.16 missed=24), then 72 Hz again.
+  PerfPolicy p;
+  double t = 0;
+  steady(p, t, 5000, 5.0);
+  IWN_CHECK(!p.on_frame(t += 139, PerfPolicy::Frame{9, 5.0, 13.9, false}).any());   // one long hitch
+  IWN_CHECK(!p.on_frame(t += 83, PerfPolicy::Frame{5, 5.0, 13.9, false}).any());
+  IWN_CHECK(!p.on_frame(t += 28, PerfPolicy::Frame{1, 5.0, 13.9, false}).any());
+  IWN_CHECK(!p.on_frame(t += 70, PerfPolicy::Frame{4, 5.0, 13.9, false}).any());
+  IWN_CHECK(!p.on_frame(t += 28, PerfPolicy::Frame{1, 5.0, 13.9, false}).any());
+  IWN_CHECK(!p.on_frame(t += 28, PerfPolicy::Frame{1, 5.0, 13.9, false}).any());
+  IWN_CHECK(!p.on_frame(t += 42, PerfPolicy::Frame{2, 5.0, 13.9, false}).any());
+  IWN_CHECK_EQ(p.stalls_ignored(), 3u);  // the multi-period misses: not counted at all
+  IWN_CHECK(!steady(p, t, 20000, 5.0).any());
+  IWN_CHECK(p.gpu() == PerfLevel::kUnset);
+  IWN_CHECK_EQ(p.raises(), 0u);
+  // a burst of single-period misses shorter than the minimum span does not raise either
+  for (int i = 0; i < 10; ++i) IWN_CHECK(!p.on_frame(t += 27.8, PerfPolicy::Frame{1, 5.0, 13.9, false}).any());
+  IWN_CHECK(!steady(p, t, 5000, 5.0).any());
+  IWN_CHECK_EQ(p.raises(), 0u);
+}
+
+IWN_TEST(Perf, AGpuBoundLoadStillRaisesTheGpuAndAJsBoundOneTheCpu) {
+  {
+    PerfPolicy p;
+    double t = 0;
+    steady(p, t, 5000, 5.0);
+    // a heavy view: JS 5 ms, every other frame one period late, for seconds
+    PerfPolicy::Change c = sustained_misses(p, t, 5.0, 2000);
+    IWN_CHECK(c.gpu && !c.cpu);
+    IWN_CHECK(p.gpu() == PerfLevel::kSustainedHigh);
+    IWN_CHECK(p.cpu() == PerfLevel::kSustainedLow);
+    // the load goes on at the GPU maximum: nothing more, and nothing put down to a system stall
+    IWN_CHECK(!sustained_misses(p, t, 5.0, 3000).any());
+    IWN_CHECK_EQ(p.stalls_ignored(), 0u);
+  }
+  {
+    // the same misses with the JS thread late (long tasks every other frame): CPU, never GPU
+    PerfPolicy p;
+    double t = 0;
+    steady(p, t, 5000, 5.0);
+    PerfPolicy::Change c = sustained_misses(p, t, 5.0, 2000, true);
+    IWN_CHECK(c.cpu && !c.gpu);
+    IWN_CHECK(p.gpu() == PerfLevel::kUnset);
+    // at the CPU maximum the GPU is not raised in its place
+    steady(p, t, 3000, 5.0);
+    IWN_CHECK(!sustained_misses(p, t, 5.0, 3000, true).any());
+    IWN_CHECK(p.gpu() == PerfLevel::kUnset);
+  }
+}
+
 IWN_TEST(Perf, WarmupMissesAreIgnored) {
   PerfPolicy p;
   double t = 1000;
   p.restart_warmup(t);
   // a first-frame stall right after the session started: many misses, no raise
-  for (int i = 0; i < 10; ++i) IWN_CHECK(!p.on_frame(t += 100, 5, 6.0, 13.9).any());
-  // after the warm-up the same misses raise
+  for (int i = 0; i < 10; ++i) IWN_CHECK(!p.on_frame(t += 100, 1, 6.0, 13.9).any());
+  // after the warm-up the same kind of misses, sustained, raise
   t += 3000;
-  p.on_frame(t += 27.8, 1, 6.0, 13.9);
-  p.on_frame(t += 27.8, 1, 6.0, 13.9);
-  IWN_CHECK(p.on_frame(t += 27.8, 1, 6.0, 13.9).gpu);
+  IWN_CHECK(sustained_misses(p, t, 6.0).gpu);
 }
 
 IWN_TEST(Perf, RelapseAfterAStepDownDoublesTheHeadroom) {
   PerfPolicy p;
   double t = 0;
-  auto three_misses = [&] {
-    p.on_frame(t += 27.8, 1, 6.0, 13.9);
-    p.on_frame(t += 27.8, 1, 6.0, 13.9);
-    return p.on_frame(t += 27.8, 1, 6.0, 13.9);
-  };
-  auto idle = [&](double ms) {
-    PerfPolicy::Change last;
-    for (double end = t + ms; t < end;) {
-      PerfPolicy::Change c = p.on_frame(t += 13.9, 0, 6.0, 13.9);
-      if (c.any()) last = c;
-    }
-    return last;
-  };
-  IWN_CHECK(three_misses().gpu);                 // default -> sustained high
+  auto misses = [&] { return sustained_misses(p, t, 6.0); };
+  auto idle = [&](double ms) { return steady(p, t, ms); };
+  IWN_CHECK(misses().gpu);                       // default -> sustained high
   IWN_CHECK_EQ(p.headroom_ms(), 10000.0);
   IWN_CHECK(idle(10500).gpu);                    // headroom: down to the floor
   IWN_CHECK(p.gpu() == PerfLevel::kSustainedLow);
   idle(5000);
-  IWN_CHECK(three_misses().gpu);                 // relapse 5 s after the step down
+  IWN_CHECK(misses().gpu);                       // relapse 5 s after the step down
   IWN_CHECK_EQ(p.headroom_ms(), 20000.0);
   IWN_CHECK(!idle(15000).any());                 // 10 s is no longer enough
   IWN_CHECK(idle(6000).gpu);                     // 20 s is
   idle(40000);                                   // a raise long after the step down starts over
-  IWN_CHECK(three_misses().gpu);
+  IWN_CHECK(misses().gpu);
   IWN_CHECK_EQ(p.headroom_ms(), 10000.0);
 }
 

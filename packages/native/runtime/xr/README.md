@@ -120,12 +120,18 @@ change of level reaches the XR thread (IWER forwards every `fixedFoveation` assi
 frame costs nothing extra).
 
 **Performance levels (XR-PERF-1/2).** XR_EXT_performance_settings: CPU starts at `sustained-low` (VrApi CPU level 2,
-Quest Browser's), GPU at the runtime default (VrApi level 2). Three missed display periods within 1 s raise the
-domain that looks limiting (CPU when the JS frame time is above 80 % of the period); 10 s without a miss steps down
-one level, never below the start (a GPU raised from the default comes back to `sustained-low`). Misses in the 3 s
-after a session starts, its first frame, a resume or a refresh-rate switch are ignored (compiles, uploads, the
-compositor resuming or changing rate). A
-raise within 30 s of a step down doubles the headroom needed for the next one (up to 5 min), so levels do not
+Quest Browser's), GPU at the runtime default (VrApi level 2). Each frame with missed display periods is one miss,
+attributed when it happens (`perf_policy.h`): to the CPU when the JS thread explains it (the app's frame was late or
+never began, a JS stall in the last 100 ms, or a JS frame time above 80 % of the period); to the GPU when the JS
+frames were on time and short and fewer than 4 periods were missed at once; otherwise (4 or more periods at once, JS
+on time) to a system stall, which is not counted (`perf.stallsIgnored` in `stats`). Three misses within 1 s that are
+spread over at least 500 ms raise the domain with the most misses (the GPU only with three GPU misses; a domain at its
+maximum is not replaced by the other); one burst, such as a GC pause or a system hitch, raises nothing. There is no
+GPU timer: a GPU miss means the frame loop and JS kept up while frames were still missed, steadily. 10 s without a
+miss steps down one level, never below the start (a GPU raised from the default comes back to `sustained-low`).
+Misses in the 3 s after a session starts, its first frame, a resume or a refresh-rate switch are ignored (compiles,
+uploads, the compositor resuming or changing rate). A raise within 30 s of a step down doubles the headroom needed
+for the next one (up to 5 min), so levels do not
 oscillate. Runtime notifications are logged and counted.
 
 **Loading screen (XR-IDLE-1, `loading.h`, `xr_loading.cc`).** Before the app's first projection layer, and whenever the
@@ -181,7 +187,10 @@ unless the config (`xr.grant: "explicit"`) or the launch extra (`am start --es i
 builds) holds it until `__iwnXR.grantSession()`. Between sessions and before the first one the runtime keeps
 submitting frames (the loading screen, or no layers when it is off) and drives window rAF at the display rate. **Pause** (sleep, the system
 taking over the display: OpenXR STOPPING) keeps the page's WebXR session: it turns `hidden`, its swapchain stays,
-`xrEndSession` is called, and frames resume on READY with the same session (XR-LIFE-4). **System end** (EXITING,
+`xrEndSession` is called, and frames resume on READY with the same session (XR-LIFE-4); the log says `xr: paused
+(session hidden); it resumes if the app returns, unless the system destroys the activity`. After Home, Horizon OS
+usually destroys the activity 130-200 ms later (`activity onDestroy: the page is discarded; the next launch starts a
+fresh page`), so the session does not come back. **System end** (EXITING,
 LOSS_PENDING) fires `end` and exits. **Page end**: the swapchain is freed, the idle presentation follows, and with
 no new session requested within `xr.endGraceMs` (2 s) the runtime asks OpenXR to exit (XR-LIFE-5). A
 `requestSession`/`offerSession` within it starts a new session at once and stops the clock while it is pending (a
@@ -252,12 +261,14 @@ XR-LAYER-1), no dom-overlay/secondary views/camera (XR-SEC-1).
 ```
 
 The packer writes `frameRate`, `foveation`, `features` and `loading` (`enabled`, `image`, `background`, from
-`native.splash`) from `iwsdk.config.json`; the rest are runtime defaults.
+`native.splash`) from `iwsdk.config.json`; the rest are runtime defaults. `frameRate` is requested at each session
+start only when the display lists it; otherwise the runtime warns once (`xr: native.frameRate 60 Hz is not supported
+by this display (supported: 72, 80, 90, ... Hz); not requested, the system's rate is used (72 Hz now; ...)`).
 
 ## Debug surface
 
 `stats` has an `xr` section: OpenXR state and visibility, swapchain, foveation, performance levels (raises, lowers,
-runtime notifications), frame counters (XR frames, JS frames, ticks, frames JS never began (`cancelled`), frames a
+misses put down to a system stall, runtime notifications), frame counters (XR frames, JS frames, ticks, frames JS never began (`cancelled`), frames a
 command took back (`withdrawn`), frames with no valid pose yet (`untracked`), late frames, stale re-submits, a
 session's frames without an app frame that carried the opaque background (`covered`), missed periods), wait/JS/end
 timings, boot marks (OpenXR ready, session running, first idle frame, first loading frame and
@@ -285,7 +296,7 @@ in the page's context without touching its GL error state).
 ```bash
 # host (V8-free core) and the JS adapter
 cmake -S runtime -B <host-build> -G Ninja -DIWN_TOOLCHAIN_DIR=<clean toolchain> -DIWN_THIRD_PARTY_DIR=<third-party trees> && ninja -C <host-build> iwn_xr_core_tests iwn_xr_record_dump
-<host-build>/xr/iwn_xr_core_tests                        # 84 tests
+<host-build>/xr/iwn_xr_core_tests                        # 92 tests
 node runtime/xr/gen/generate-layout.mjs --check
 (cd web/xr && IWN_XR_RECORD_DUMP=<host-build>/xr/iwn_xr_record_dump npm run verify)   # typecheck + 35 tests
 

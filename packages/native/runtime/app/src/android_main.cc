@@ -25,6 +25,8 @@
 
 #include "apk_assets.h"
 #include "iwn/core/clock.h"
+#include "iwn/core/config.h"
+#include "iwn/core/json.h"
 #include "iwn/core/log.h"
 #include "iwn/core/runtime_host.h"
 
@@ -158,6 +160,38 @@ IntentExtras read_extras(JNIEnv* env, jobject activity) {
   return out;
 }
 
+// A release build honours no launch extras unless it was packed with the inspector (the runtime's rule in
+// RuntimeImpl::boot_engine: overrides apply when debuggable or the config enables the inspector; iwn.v8flags and
+// iwn.inspectBrk only when debuggable). Without this line `iwer-native run --query/--inspect` on a release build did
+// nothing and said nothing (PKG-CFG-3).
+void log_ignored_extras(const IntentExtras& e, const iwn::RuntimeOptions& o) {
+  if (o.debuggable) return;
+  const bool engine = !e.v8_flags.empty() || e.inspect_brk >= 0;  // debuggable builds only
+  const bool overrides = !e.query.empty() || e.inspector >= 0;    // or a release build packed with --inspector
+  if (!engine && !overrides) return;
+  bool inspector_build = false;
+  if (overrides && o.assets) {
+    if (auto bytes = o.assets->read(o.config_asset)) {
+      if (auto json = iwn::Json::parse(bytes->view())) {
+        std::vector<std::string> ignored_warnings;
+        inspector_build = iwn::parse_runtime_config(*json, &ignored_warnings).inspector_enabled;
+      }
+    }
+  }
+  std::string names;
+  auto add = [&](bool present, const char* name) {
+    if (present) names += (names.empty() ? "" : ", ") + std::string(name);
+  };
+  add(!inspector_build && !e.query.empty(), "iwn.query");
+  add(!inspector_build && e.inspector >= 0, "iwn.inspector");
+  add(!e.v8_flags.empty(), "iwn.v8flags");
+  add(e.inspect_brk >= 0, "iwn.inspectBrk");
+  if (names.empty()) return;
+  iwn::log(LogLevel::kWarn, "launch extras ignored (%s): this APK is a release build; %s", names.c_str(),
+           engine ? "iwn.v8flags and iwn.inspectBrk need a debug build, the others a debug build or pack --inspector"
+                  : "pack it with --inspector (or build a debug APK) to honour them");
+}
+
 void read_package(JNIEnv* env, jobject activity, iwn::RuntimeOptions& o) {
   auto pkg = static_cast<jstring>(call_object(env, activity, "getPackageName", "()Ljava/lang/String;"));
   o.package_name = jstring_to(env, pkg);
@@ -272,7 +306,8 @@ void on_input_destroyed(ANativeActivity* a, AInputQueue* queue) {
 
 void on_destroy(ANativeActivity* a) {
   AppState* s = state_of(a);
-  iwn::log(LogLevel::kInfo, "activity onDestroy");
+  // Horizon OS usually destroys the activity soon after Home (the xr "paused" line): say what that means for the page.
+  iwn::log(LogLevel::kInfo, "activity onDestroy: the page is discarded; the next launch starts a fresh page");
   {
     std::lock_guard<std::mutex> lock(s->guard->mu);
     s->guard->destroyed = true;  // from here no finish() starts; one in progress has completed
@@ -335,6 +370,7 @@ extern "C" JNIEXPORT void ANativeActivity_onCreate(ANativeActivity* activity, vo
   o.extra_query = extras.query;
   o.inspect_brk = extras.inspect_brk;
   o.inspector = extras.inspector;
+  log_ignored_extras(extras, o);
   o.device.model = prop("ro.product.model");
   o.device.manufacturer = prop("ro.product.manufacturer");
   o.device.fingerprint = prop("ro.build.fingerprint");

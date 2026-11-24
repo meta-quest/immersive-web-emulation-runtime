@@ -20,6 +20,8 @@ import {
 } from '../src/axml.ts';
 import { decode, int, oid, readInt, readOid, seq, time } from '../src/der.ts';
 import {
+  HORIZONOS_NS,
+  METAVR_NS,
   applyManifest,
   summarizeManifest,
   templateContractWarnings,
@@ -41,7 +43,7 @@ import {
   writeZip,
 } from '../src/zip.ts';
 import { resolveNativeTarget } from '../../src/config/resolve.ts';
-import { templateManifest } from './helpers.ts';
+import { templateManifest, templateManifest290 } from './helpers.ts';
 
 describe('zip', () => {
   test('round trip with alignment, UTF-8 names and both methods', async () => {
@@ -261,6 +263,117 @@ describe('manifest rewrite (PKG-8)', () => {
     );
     assert.equal(childElements(doc.root, 'queries').length, 1);
     assert.equal(summary.debuggable, false);
+  });
+  test('Horizon OS SDK: the template declares it in its own namespace, and it survives decode/rewrite/encode', () => {
+    // aapt2's output for packager/template/AndroidManifest.xml: a custom-namespace element with typed int attributes.
+    const doc = decodeAxml(templateManifest());
+    assert.ok(
+      doc.namespaces.some(
+        (n) => n.prefix === 'horizonos' && n.uri === HORIZONOS_NS,
+      ),
+    );
+    const el = childElements(doc.root).find(
+      (c) => c.name === 'uses-horizonos-sdk',
+    );
+    assert.ok(el);
+    assert.equal(el.ns, HORIZONOS_NS);
+    assert.deepEqual(findAttr(el, 'minSdkVersion', HORIZONOS_NS)?.value, {
+      type: 'int',
+      value: 60,
+    });
+    assert.equal(findAttr(el, 'minSdkVersion', HORIZONOS_NS)?.resId, 0);
+    const { doc: rewritten, summary } = rewrite(
+      target({ packageId: 'com.example.app' }),
+      false,
+    );
+    assert.deepEqual(summary.horizonOsSdk, { min: 60, target: 60 });
+    // exactly one declaration, and the text form an installer's parser sees
+    const again = decodeAxml(encodeAxml(rewritten));
+    assert.equal(
+      childElements(again.root).filter((c) => c.name === 'uses-horizonos-sdk')
+        .length,
+      1,
+    );
+    assert.match(
+      axmlToText(again),
+      /<horizonos:uses-horizonos-sdk horizonos:minSdkVersion="60" horizonos:targetSdkVersion="60"\/>/,
+    );
+    assert.match(
+      axmlToText(again),
+      /xmlns:horizonos="http:\/\/schemas\.horizonos\/sdk"/,
+    );
+  });
+  test('Horizon OS SDK: added to a template without it (2.9.0), right after uses-sdk; a template value wins', () => {
+    const t = target({ packageId: 'com.example.app' });
+    const old = decodeAxml(templateManifest290());
+    assert.equal(summarizeManifest(old).horizonOsSdk, null);
+    assert.ok(!old.namespaces.some((n) => n.uri === HORIZONOS_NS));
+    applyManifest(old, {
+      target: t,
+      debuggable: false,
+      servesInspector: false,
+    });
+    const again = decodeAxml(encodeAxml(old));
+    assert.deepEqual(summarizeManifest(again).horizonOsSdk, {
+      min: 60,
+      target: 60,
+    });
+    const names = childElements(again.root).map((c) => c.name);
+    assert.equal(names[names.indexOf('uses-sdk') + 1], 'uses-horizonos-sdk');
+    assert.match(
+      axmlToText(again),
+      /xmlns:horizonos="http:\/\/schemas\.horizonos\/sdk"/,
+    );
+    // the rewrite is stable: a second pass adds nothing
+    applyManifest(again, {
+      target: t,
+      debuggable: false,
+      servesInspector: false,
+    });
+    assert.equal(
+      childElements(again.root).filter((c) => c.name === 'uses-horizonos-sdk')
+        .length,
+      1,
+    );
+    // a template that declares the newer element (or other values) keeps its own
+    const own = decodeAxml(templateManifest290());
+    own.namespaces.push({ prefix: 'metavr', uri: METAVR_NS });
+    own.root.children.unshift({
+      kind: 'element',
+      ns: METAVR_NS,
+      name: 'uses-metavr-sdk',
+      attributes: [
+        {
+          ns: METAVR_NS,
+          name: 'minSdkVersion',
+          resId: 0,
+          value: { type: 'int', value: 69 },
+        },
+        {
+          ns: METAVR_NS,
+          name: 'targetSdkVersion',
+          resId: 0,
+          value: { type: 'int', value: 207 },
+        },
+      ],
+      children: [],
+      line: 0,
+    });
+    applyManifest(own, {
+      target: t,
+      debuggable: false,
+      servesInspector: false,
+    });
+    const ownAgain = decodeAxml(encodeAxml(own));
+    assert.deepEqual(summarizeManifest(ownAgain).horizonOsSdk, {
+      min: 69,
+      target: 207,
+    });
+    assert.ok(
+      !childElements(ownAgain.root).some(
+        (c) => c.name === 'uses-horizonos-sdk',
+      ),
+    );
   });
   test('relative class names are qualified with the template package; alias labels follow', () => {
     const doc = decodeAxml(templateManifest());

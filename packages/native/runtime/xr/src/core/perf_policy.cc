@@ -43,25 +43,22 @@ void PerfPolicy::restart_warmup(double now) {
 
 static int as_int(PerfLevel l) { return static_cast<int>(l); }
 
-bool PerfPolicy::raise(bool prefer_cpu) {
-  auto try_cpu = [&] {
+bool PerfPolicy::raise(bool cpu) {
+  // Only the domain the misses point at: raising the other one would cost power without helping.
+  if (cpu) {
     if (cpu_ != PerfLevel::kUnset && as_int(cpu_) >= as_int(config_.cpu_max)) return false;
     cpu_ = cpu_ == PerfLevel::kUnset ? PerfLevel::kSustainedHigh : static_cast<PerfLevel>(as_int(cpu_) + 1);
     last_raised_cpu_ = true;
     return true;
-  };
-  auto try_gpu = [&] {
-    if (gpu_ == PerfLevel::kUnset) {
-      gpu_ = config_.gpu_raise_from_default;
-      last_raised_cpu_ = false;
-      return true;
-    }
+  }
+  if (gpu_ == PerfLevel::kUnset) {
+    gpu_ = config_.gpu_raise_from_default;
+  } else {
     if (as_int(gpu_) >= as_int(config_.gpu_max)) return false;
     gpu_ = static_cast<PerfLevel>(as_int(gpu_) + 1);
-    last_raised_cpu_ = false;
-    return true;
-  };
-  return prefer_cpu ? (try_cpu() || try_gpu()) : (try_gpu() || try_cpu());
+  }
+  last_raised_cpu_ = false;
+  return true;
 }
 
 bool PerfPolicy::lower() {
@@ -83,36 +80,56 @@ bool PerfPolicy::lower() {
   return last_raised_cpu_ ? (lower_cpu() || lower_gpu()) : (lower_gpu() || lower_cpu());
 }
 
-PerfPolicy::Change PerfPolicy::on_frame(double now, int skipped, double cpu_ms, double period_ms) {
+PerfPolicy::Change PerfPolicy::on_frame(double now, const Frame& f) {
   Change change;
-  if (period_ms > 0) ema_period_ms_ = ema_period_ms_ == 0 ? period_ms : ema_period_ms_ * 0.95 + period_ms * 0.05;
-  if (cpu_ms > 0) ema_cpu_ms_ = ema_cpu_ms_ == 0 ? cpu_ms : ema_cpu_ms_ * 0.9 + cpu_ms * 0.1;
   if (!config_.adaptive) return change;
-  if (now < warmup_until_ms_) skipped = 0;  // a transient (session start, resume), not a lack of clock
-  for (int i = 0; i < skipped && i < kMaxRing; ++i) {
-    miss_times_[miss_count_ % kMaxRing] = now;
-    ++miss_count_;
+  if (f.js_stalled) last_js_stall_ms_ = now;
+  // Misses during the warm-up are a transient (session start, resume, rate switch), not a lack of clock.
+  if (f.skipped > 0 && now >= warmup_until_ms_) {
+    const bool js = f.js_stalled || now - last_js_stall_ms_ <= config_.js_stall_memory_ms ||
+                    (f.period_ms > 0 && f.js_ms > config_.cpu_bound_ratio * f.period_ms);
+    if (!js && f.skipped >= config_.stall_periods) {
+      ++stalls_ignored_;  // a system stall: no clock level fixes it
+    } else {
+      miss_times_[miss_count_ % kMaxRing] = now;
+      miss_cpu_[miss_count_ % kMaxRing] = js;
+      ++miss_count_;
+      last_miss_ms_ = now;
+    }
   }
-  if (skipped > 0) last_miss_ms_ = now;
-  const int n = config_.misses_to_raise;
-  if (miss_count_ >= n && now - last_change_ms_ >= config_.cooldown_ms) {
-    const double oldest = miss_times_[(miss_count_ - n) % kMaxRing];
-    if (now - oldest <= config_.window_ms) {
-      const PerfLevel cpu_before = cpu_, gpu_before = gpu_;
-      const bool cpu_bound = ema_period_ms_ > 0 && ema_cpu_ms_ > config_.cpu_bound_ratio * ema_period_ms_;
-      if (raise(cpu_bound)) {
-        change.cpu = cpu_ != cpu_before;
-        change.gpu = gpu_ != gpu_before;
-        change.reason = cpu_bound ? "missed frames, CPU-bound" : "missed frames, GPU-bound";
-        // Relapse after a step down: wait longer before the next one.
-        headroom_cur_ms_ = now - last_lower_ms_ <= config_.relapse_ms
-                               ? std::min(headroom_cur_ms_ * 2, std::max(config_.max_headroom_ms, config_.headroom_ms))
-                               : config_.headroom_ms;
-        last_change_ms_ = now;
-        miss_count_ = 0;
-        ++raises_;
+  if (miss_count_ >= config_.misses_to_raise && now - last_change_ms_ >= config_.cooldown_ms) {
+    // The misses inside the window, newest first.
+    int in_window = 0, cpu_misses = 0;
+    double oldest = now, newest = now;
+    const int stored = std::min(miss_count_, kMaxRing);
+    for (int k = 1; k <= stored; ++k) {
+      const int idx = (miss_count_ - k) % kMaxRing;
+      if (now - miss_times_[idx] > config_.window_ms) break;
+      if (in_window++ == 0) newest = miss_times_[idx];
+      if (miss_cpu_[idx]) ++cpu_misses;
+      oldest = miss_times_[idx];
+    }
+    const int gpu_misses = in_window - cpu_misses;
+    const bool sustained = newest - oldest >= config_.min_span_ms || in_window == kMaxRing;
+    if (in_window >= config_.misses_to_raise && sustained) {
+      const bool cpu_bound = cpu_misses >= gpu_misses;
+      if (cpu_bound || gpu_misses >= config_.misses_to_raise) {
+        const PerfLevel cpu_before = cpu_, gpu_before = gpu_;
+        if (raise(cpu_bound)) {
+          change.cpu = cpu_ != cpu_before;
+          change.gpu = gpu_ != gpu_before;
+          change.reason = cpu_bound ? "missed frames, CPU-bound: JS frames late or near the display period"
+                                    : "missed frames, GPU-bound: JS frames on time";
+          // Relapse after a step down: wait longer before the next one.
+          const double max_headroom = std::max(config_.max_headroom_ms, config_.headroom_ms);
+          headroom_cur_ms_ = now - last_lower_ms_ <= config_.relapse_ms ? std::min(headroom_cur_ms_ * 2, max_headroom)
+                                                                        : config_.headroom_ms;
+          last_change_ms_ = now;
+          miss_count_ = 0;
+          ++raises_;
+        }
+        return change;
       }
-      return change;
     }
   }
   if (now - last_miss_ms_ >= headroom_cur_ms_ && now - last_change_ms_ >= headroom_cur_ms_) {

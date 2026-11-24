@@ -52,6 +52,24 @@ export const OS_SPLASH_KEY = 'com.oculus.ossplash';
  */
 export const OS_SPLASH_BACKGROUND_KEY = 'com.oculus.ossplash.background';
 export type OsSplashBackground = 'black' | 'passthrough-contextual';
+/**
+ * The Horizon OS SDK version declaration (Meta's "Meta VR OS SDK versioning"
+ * documentation): `<horizonos:uses-horizonos-sdk horizonos:minSdkVersion
+ * horizonos:targetSdkVersion/>` in this namespace, the legacy name that every
+ * Horizon OS release reading the element accepts (newer ones also read
+ * `metavr:uses-metavr-sdk`). Without it Horizon OS logs "the client's manifest
+ * does not specify a minimum HzOS SDK version" on every launch. Horizon OS
+ * blocks an install whose minimum is above the device's SDK version: 60 is the
+ * lowest Meta's engine integrations offer (the Meta XR Unity SDK's default), so
+ * no release that reads the element refuses the APK. The target stays at the
+ * minimum: no newer OS behaviour is opted into.
+ */
+export const HORIZONOS_NS = 'http://schemas.horizonos/sdk';
+export const METAVR_NS = 'http://schemas.meta.com/metavr-sdk';
+export const HORIZONOS_SDK_ELEMENT = 'uses-horizonos-sdk';
+export const METAVR_SDK_ELEMENT = 'uses-metavr-sdk';
+export const HORIZONOS_MIN_SDK = 60;
+export const HORIZONOS_TARGET_SDK = 60;
 
 export interface ManifestEdit {
   target: ResolvedNativeTarget;
@@ -90,6 +108,58 @@ export interface ManifestSummary {
   osSplash: boolean;
   /** `com.oculus.ossplash.background`, or null when not declared (Horizon OS then uses black). */
   osSplashBackground: string | null;
+  /** The Horizon OS SDK declaration (`uses-horizonos-sdk` / `uses-metavr-sdk`), or null when absent. */
+  horizonOsSdk: { min: number | null; target: number | null } | null;
+}
+
+function horizonOsSdkElement(manifest: XmlElement): XmlElement | undefined {
+  return childElements(manifest).find(
+    (c) =>
+      (c.ns === HORIZONOS_NS && c.name === HORIZONOS_SDK_ELEMENT) ||
+      (c.ns === METAVR_NS && c.name === METAVR_SDK_ELEMENT),
+  );
+}
+
+/**
+ * Declare the Horizon OS SDK versions unless the template already does (a
+ * template built from packager/template/AndroidManifest.xml carries them; a
+ * 2.9.0 one does not). The template's declaration wins.
+ */
+export function ensureHorizonOsSdk(doc: XmlDocument): void {
+  const manifest = doc.root;
+  if (horizonOsSdkElement(manifest)) return;
+  if (!doc.namespaces.some((n) => n.uri === HORIZONOS_NS)) {
+    const taken = new Set(doc.namespaces.map((n) => n.prefix));
+    let prefix = 'horizonos';
+    for (let i = 2; taken.has(prefix); i++) prefix = `horizonos${i}`;
+    doc.namespaces.push({ prefix, uri: HORIZONOS_NS });
+  }
+  const el: XmlElement = {
+    kind: 'element',
+    ns: HORIZONOS_NS,
+    name: HORIZONOS_SDK_ELEMENT,
+    attributes: [],
+    children: [],
+    line: 0,
+  };
+  // Typed integers, as aapt2 compiles horizonos:minSdkVersion="60".
+  setAttr(
+    el,
+    'minSdkVersion',
+    { type: 'int', value: HORIZONOS_MIN_SDK },
+    HORIZONOS_NS,
+  );
+  setAttr(
+    el,
+    'targetSdkVersion',
+    { type: 'int', value: HORIZONOS_TARGET_SDK },
+    HORIZONOS_NS,
+  );
+  // Right after <uses-sdk> (aapt2 puts it first), else first.
+  const sdk = manifest.children.findIndex(
+    (c) => c.kind === 'element' && c.ns === null && c.name === 'uses-sdk',
+  );
+  manifest.children.splice(sdk + 1, 0, el);
 }
 
 /** Edit the decoded template manifest in place. */
@@ -115,6 +185,7 @@ export function applyManifest(doc: XmlDocument, edit: ManifestEdit): void {
   );
   setAttr(manifest, 'versionCode', { type: 'int', value: target.versionCode });
   setAttr(manifest, 'versionName', { type: 'string', value: target.version });
+  ensureHorizonOsSdk(doc);
 
   const application = childElements(manifest, 'application')[0];
   if (!application)
@@ -377,9 +448,13 @@ export function summarizeManifest(doc: XmlDocument): ManifestSummary {
   const m = doc.root;
   const app = childElements(m, 'application')[0];
   const sdk = childElements(m, 'uses-sdk')[0];
-  const intAttr = (el: XmlElement | undefined, name: string): number | null => {
+  const intAttr = (
+    el: XmlElement | undefined,
+    name: string,
+    ns: string | null = ANDROID_NS,
+  ): number | null => {
     if (!el) return null;
-    const a = findAttr(el, name);
+    const a = findAttr(el, name, ns);
     if (!a) return null;
     if (a.value.type === 'int') return a.value.value;
     if (a.value.type === 'typed') return a.value.data;
@@ -405,6 +480,7 @@ export function summarizeManifest(doc: XmlDocument): ManifestSummary {
     }
   }
   const dbg = app ? findAttr(app, 'debuggable') : undefined;
+  const hzos = horizonOsSdkElement(m);
   const splashMeta = app
     ? childElements(app, 'meta-data').find(
         (e) => attrString(e, 'name') === OS_SPLASH_KEY,
@@ -442,6 +518,12 @@ export function summarizeManifest(doc: XmlDocument): ManifestSummary {
       splashValue?.value.type === 'bool' ? splashValue.value.value : false,
     osSplashBackground: splashBackgroundMeta
       ? (attrString(splashBackgroundMeta, 'value') ?? null)
+      : null,
+    horizonOsSdk: hzos
+      ? {
+          min: intAttr(hzos, 'minSdkVersion', hzos.ns),
+          target: intAttr(hzos, 'targetSdkVersion', hzos.ns),
+        }
       : null,
   };
 }
