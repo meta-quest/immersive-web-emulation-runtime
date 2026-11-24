@@ -265,6 +265,7 @@ class RuntimeImpl : public Runtime, public RuntimeHost {
   uint64_t context_generation() const override { return generation_; }
   EventLoop& loop() override { return loop_; }
   AssetSource& assets() override { return *options_.assets; }
+  std::string cache_dir() const override { return options_.cache_dir; }
   const RuntimeConfig& config() const override { return config_; }
   const Url& app_origin() const override { return origin_url_; }
   const Url& document_url() const override { return document_url_; }

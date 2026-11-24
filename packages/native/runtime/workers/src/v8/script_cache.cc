@@ -5,81 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// In-process V8 code cache for worker isolates (CC-5). Worker pools start several isolates that compile the same
-// runtime preludes (web glue, net, image, ...) and the same worker script (three's KTX2/Draco/MSDF workers are blob:
-// scripts posted to 2-4 workers). The first isolate produces V8's code cache right after compiling; later isolates
-// consume it (V8 ScriptCompiler::CachedData, v8-script.h). Entries are keyed by URL and checked against a content
-// hash and the length of the source; LRU-bounded by bytes. Process lifetime only: the page's on-disk cache (CC-1)
-// belongs to the core and is not shared with worker threads.
-#include <algorithm>
-
+// Compiling worker scripts with the worker code cache (CC-5, iwn/workers/script_cache.h): a hit is consumed (V8
+// ScriptCompiler::CachedData, v8-script.h); after a miss or a rejected entry the code cache is produced right after
+// compiling and stored (in memory, and on disk when the page set up the disk tier: the next launch consumes it).
 #include "iwn/core/log.h"
 #include "iwn/core/text.h"
 #include "v8/internal.h"
 
 namespace iwn::workers {
-
-ScriptCache& ScriptCache::shared() {
-  static ScriptCache* cache = new ScriptCache();  // never destroyed (worker threads)
-  return *cache;
-}
-
-void ScriptCache::set_limit(size_t bytes) {
-  std::lock_guard<std::mutex> lock(mu_);
-  limit_ = bytes;
-}
-
-std::shared_ptr<const std::vector<uint8_t>> ScriptCache::lookup(const std::string& url, const std::string& source) {
-  if (limit_ == 0) return nullptr;
-  auto hash = fast_hash128(source.data(), source.size());
-  std::lock_guard<std::mutex> lock(mu_);
-  auto it = entries_.find(url);
-  if (it == entries_.end() || it->second.hash != hash || it->second.length != source.size()) {
-    stats_.misses++;
-    return nullptr;
-  }
-  it->second.last_use = ++clock_;
-  stats_.hits++;
-  return it->second.data;
-}
-
-void ScriptCache::store(const std::string& url, const std::string& source, const uint8_t* data, size_t len) {
-  if (limit_ == 0 || len == 0 || len > limit_) return;
-  auto hash = fast_hash128(source.data(), source.size());
-  auto bytes = std::make_shared<std::vector<uint8_t>>(data, data + len);
-  std::lock_guard<std::mutex> lock(mu_);
-  auto& e = entries_[url];
-  if (e.data) bytes_ -= e.data->size();
-  e.hash = hash;
-  e.length = source.size();
-  e.data = std::move(bytes);
-  e.last_use = ++clock_;
-  bytes_ += len;
-  stats_.stored++;
-  while (bytes_ > limit_ && !entries_.empty()) {
-    auto oldest = std::min_element(entries_.begin(), entries_.end(),
-                                   [](const auto& a, const auto& b) { return a.second.last_use < b.second.last_use; });
-    bytes_ -= oldest->second.data ? oldest->second.data->size() : 0;
-    entries_.erase(oldest);
-  }
-}
-
-void ScriptCache::reject(const std::string& url) {
-  std::lock_guard<std::mutex> lock(mu_);
-  auto it = entries_.find(url);
-  if (it == entries_.end()) return;
-  bytes_ -= it->second.data ? it->second.data->size() : 0;
-  entries_.erase(it);
-  stats_.rejected++;
-}
-
-ScriptCache::Stats ScriptCache::stats() {
-  std::lock_guard<std::mutex> lock(mu_);
-  Stats s = stats_;
-  s.bytes = bytes_;
-  s.entries = entries_.size();
-  return s;
-}
 
 namespace {
 // Inline-ish scripts (tiny) are not worth caching.
@@ -105,7 +38,7 @@ v8::MaybeLocal<v8::Script> compile_classic(v8::Isolate* isolate, v8::Local<v8::C
     return {};
   }
   if (hit && src.GetCachedData()->rejected) {
-    cache.reject(url);
+    cache.reject(url, source);
     hit = nullptr;
   }
   if (cacheable && !hit) {
@@ -135,7 +68,7 @@ v8::MaybeLocal<v8::Module> compile_module(v8::Isolate* isolate, const std::strin
     return {};
   }
   if (hit && src.GetCachedData()->rejected) {
-    cache.reject(url);
+    cache.reject(url, source);
     hit = nullptr;
   }
   if (cacheable && !hit) {

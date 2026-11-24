@@ -7,7 +7,7 @@
 #
 # Targets:
 #   iwn_workers_core        V8-free: port hub (entangled ports, queues, transfer), policy (config, limits, URL checks,
-#                           script fetch, thread names). Android + host.
+#                           script fetch, thread names), the worker code cache (memory + disk tiers). Android + host.
 #   iwn_workers             the V8 binding (iwn_register_workers): worker threads with their own isolate and event
 #                           loop, the cross-isolate serializer, module loading in workers. Android only.
 #   iwn_workers_core_tests  host unit tests (ctest).
@@ -18,6 +18,7 @@
 add_library(iwn_workers_core STATIC
   src/core/port_hub.cc
   src/core/policy.cc
+  src/core/script_cache.cc
 )
 target_include_directories(iwn_workers_core PUBLIC include)
 target_link_libraries(iwn_workers_core PUBLIC iwn_core_base)
@@ -38,7 +39,8 @@ if(IWN_ANDROID)
   target_link_libraries(iwn_workers PUBLIC iwn_workers_core iwn_core iwn::v8)
   # libv8android.so has no RTTI: classes deriving from V8 interfaces (ValueSerializer::Delegate) need -fno-rtti.
   target_compile_options(iwn_workers PRIVATE ${IWN_WARNINGS} -fno-rtti)
-  target_compile_definitions(iwn_workers PRIVATE IWN_RUNTIME_VERSION="${IWN_RUNTIME_VERSION}")
+  target_compile_definitions(iwn_workers PRIVATE IWN_RUNTIME_VERSION="${IWN_RUNTIME_VERSION}"
+    IWN_BUILD_ID="${IWN_BUILD_ID}")
   # ImageBitmap transfer tokens that are never delivered are discarded through the image module's registry.
   if(TARGET iwn_image_core)
     target_link_libraries(iwn_workers PRIVATE iwn_image_core)
@@ -50,4 +52,5 @@ iwn_add_host_test(iwn_workers_core_tests
   SOURCES
     test/host/port_hub_test.cc
     test/host/policy_test.cc
+    test/host/script_cache_test.cc
   LIBS iwn_workers_core)

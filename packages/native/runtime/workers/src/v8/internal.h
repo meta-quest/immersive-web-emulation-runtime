@@ -13,7 +13,7 @@
 //   BindingOwner     PortOwner of one isolate: posts closures (ids only, no V8 handles) to that isolate's JS thread.
 //   IsolateBinding   the per-isolate (per-context) JS-side state: hooks, pending serialized messages, children.
 //   WorkerRuntime    a worker thread: isolate, event loop (iwn::EventLoop), context, bootstrap, preludes, modules.
-//   ScriptCache      in-process V8 code cache shared by worker isolates (CC-5).
+//   compile_*        compiling with the worker code cache (CC-5, iwn/workers/script_cache.h).
 #pragma once
 
 #include <pthread.h>
@@ -38,6 +38,7 @@
 #include "iwn/loop_hooks.h"
 #include "iwn/workers/policy.h"
 #include "iwn/workers/port_hub.h"
+#include "iwn/workers/script_cache.h"
 
 namespace iwn::workers {
 
@@ -249,36 +250,7 @@ v8::MaybeLocal<v8::Value> deserialize_message(IsolateBinding& binding, v8::Local
                                               SerializedMessage& message, v8::Local<v8::Array> ports,
                                               v8::Local<v8::Array> bitmaps);
 
-// --- in-process code cache (CC-5) --------------------------------------------------------------------------------
-class ScriptCache {
- public:
-  static ScriptCache& shared();
-  void set_limit(size_t bytes);
-  // Copy of the cached data for (url, source), or empty.
-  std::shared_ptr<const std::vector<uint8_t>> lookup(const std::string& url, const std::string& source);
-  void store(const std::string& url, const std::string& source, const uint8_t* data, size_t len);
-  void reject(const std::string& url);
-  struct Stats {
-    uint64_t hits = 0, misses = 0, rejected = 0, stored = 0;
-    size_t bytes = 0, entries = 0;
-  };
-  Stats stats();
-
- private:
-  struct Entry {
-    std::array<uint8_t, 16> hash{};
-    size_t length = 0;
-    std::shared_ptr<const std::vector<uint8_t>> data;
-    uint64_t last_use = 0;
-  };
-  std::mutex mu_;
-  std::unordered_map<std::string, Entry> entries_;
-  size_t limit_ = 32u << 20;
-  size_t bytes_ = 0;
-  uint64_t clock_ = 0;
-  Stats stats_;
-};
-
+// --- worker code cache (CC-5): iwn/workers/script_cache.h ---------------------------------------------------
 // Compiles a classic script with the shared code cache (consumes a hit, produces after a miss).
 v8::MaybeLocal<v8::Script> compile_classic(v8::Isolate* isolate, v8::Local<v8::Context> ctx, const std::string& url,
                                            const std::string& source);

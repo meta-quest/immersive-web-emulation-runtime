@@ -46,6 +46,9 @@ class Runtime {
   virtual const Url& document_url() const = 0;
   // Reads a file of the app's dist by its path inside the dist ("assets/x.js"); nullptr if missing.
   virtual std::shared_ptr<AssetBytes> read_app_file(std::string_view dist_path) = 0;
+  // The app's private cache directory (Context.getCacheDir()), empty if unknown. Modules keep their own caches in
+  // subdirectories (the worker code cache: iwn-worker-code-cache/).
+  virtual std::string cache_dir() const { return {}; }
 
   // Any thread. Runs fn on the JS thread as a task: isolate + HandleScope + Context::Scope + TryCatch (uncaught
   // exceptions are reported as page errors) + a microtask checkpoint afterwards (LOOP-1). Dropped if the page

@@ -24,8 +24,8 @@ messaging, §10 workers, §2.7 structured data), ECMA-262 module semantics, WebI
 | `src/v8/worker_runtime.cc`                               | the worker thread: isolate, loop hooks, worker core natives, bootstrap, preludes, script, errors, teardown                                                                          |
 | `src/v8/worker_modules.cc`                               | module workers, static/dynamic import, `import.meta`                                                                                                                                |
 | `src/v8/serializer.cc`                                   | cross-isolate serialize/deserialize (transfer, SAB, wasm modules, host objects)                                                                                                     |
-| `src/v8/script_cache.cc`                                 | in-process code cache shared by worker isolates (CC-5)                                                                                                                              |
-| `test/host/`                                             | host unit tests (`iwn_workers_core_tests`, 18 tests)                                                                                                                                |
+| `src/v8/script_cache.cc`                                 | compiling with the worker code cache (CC-5); the cache itself (memory + disk tiers, V8-free): `src/core/script_cache.cc`                                                            |
+| `test/host/`                                             | host unit tests (`iwn_workers_core_tests`, 26 tests)                                                                                                                                |
 | `test/device/`                                           | device test app (`app/`), runner (`run.mjs`), wasm feature probe (`wasm-features.mjs`)                                                                                              |
 
 ## How it works
@@ -84,7 +84,14 @@ App exit (PROC-7): a core shutdown hook terminates every worker and joins the th
 paused or hidden, like the page's timers (core policy); no worker is suspended or restarted.
 
 **Code cache (CC-5).** The first isolate that compiles a script of at least 1 KB (prelude, worker script, worker
-module) produces V8's code cache right away; later worker isolates consume it (in-process, LRU, 32 MB). On device:
+module) produces V8's code cache right away; later worker isolates consume it (in memory, LRU, 32 MB). Entries are
+also written to `<cacheDir>/iwn-worker-code-cache/` (`CodeCacheStore`: source hash and V8 version/flags tag per
+entry, corrupt files detected, LRU-bounded by `codeCacheMB`, wiped when the version code, runtime build or V8
+changes; off when the page's `codeCache.enabled` is false), so the next launch consumes them too. `blob:` and
+`data:` scripts are keyed by their source's hash (a `blob:` URL is new on every launch). Stats (`workerStats.codeCache`):
+`hits` (including `diskHits`), `misses`, `diskWrites`. Quest 3, IWSDK app with a physics and a locomotion worker:
+cold launch 8 misses, 8 disk writes; warm launches 14 hits (8 from disk), 0 misses (before: 8 misses on every
+launch); the physics worker's preludes 68 → 48-56 ms. Earlier in-process measurement:
 497 hits, 12 misses over a test run; a worker boots in ~59 ms median (first one ~104 ms), of which ~4 ms are
 isolate + context + natives + bootstrap and ~55 ms the preludes (the web glue dominates): the next lever if worker
 startup matters (a startup snapshot with the glue, or a smaller worker prelude set).
@@ -134,7 +141,7 @@ whichever way.
 | WRK-11                 | done                                    | `ps -T`: workers NI 10 (PRI 9), page JS thread NI -10; no affinity is used                                                                                                                                                                                                                                                            |
 | WRK-12                 | done                                    | `navigator.hardwareConcurrency` = min(cores, 4) in the page and workers                                                                                                                                                                                                                                                               |
 | JS-2, REG-8            | done                                    | transferred memory freed by the last owner (shared allocator), workers terminated with buffers in flight                                                                                                                                                                                                                              |
-| CC-5                   | done (SHOULD), in-process               | see Code cache                                                                                                                                                                                                                                                                                                                        |
+| CC-5                   | done (SHOULD), in memory + on disk      | see Code cache                                                                                                                                                                                                                                                                                                                        |
 | PROC-4, PROC-6, PROC-7 | done for workers                        | thread names; workers run through pause/resume (ticks continued, state kept); exit joins them                                                                                                                                                                                                                                         |
 | SIMD + threads         | verified with real libraries            | Rapier SIMD build in a worker == on the page (bit-identical); Havok (IWSDK's engine) in a worker; wasm-vips pthreads: 6 `em-pthread` module workers, 1 thread 1084 ms vs 4 threads 342 ms (3.2x)                                                                                                                                      |
 

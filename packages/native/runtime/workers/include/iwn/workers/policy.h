@@ -22,7 +22,7 @@
 //     "messageLog": 0,               // WRK-10: keep the last N messages (debug endpoint "workers"); -1 = 256 in
 //                                    // debuggable builds, 0 elsewhere (default -1)
 //     "joinTimeoutMs": 2000,         // PROC-7: how long app exit waits for worker threads
-//     "codeCacheMB": 32              // CC-5: in-process code cache shared by worker isolates (0 = off)
+//     "codeCacheMB": 32              // CC-5: worker code cache, in memory and on disk, bound of each (0 = off)
 //   }
 #pragma once
 

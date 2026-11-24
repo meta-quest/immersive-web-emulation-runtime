@@ -7,9 +7,14 @@
 
 #include "egl_context.h"
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
+#include <string>
 #include <memory>
 #include <thread>
 #include <unordered_map>
@@ -75,6 +80,45 @@ EGLsizeiANDROID BlobGet(const void* k, EGLsizeiANDROID ks, void* v, EGLsizeiANDR
   return EGLsizeiANDROID(BlobCache::EglGet(k, long(ks), v, long(vs)));
 }
 
+// Without our own blob cache: say which shader cache applies, and whether the platform's file exists yet.
+void LogPlatformShaderCache(bool advertised, bool settable, const std::string& cacheDir) {
+#if defined(__ANDROID__)
+  // Android's EGL loader writes com.android.opengl.shaders_cache into the directory ActivityThread passes it: the
+  // device-protected cache directory on recent releases (/data/user_de/<user>/<package>/cache), the code cache
+  // directory on older ones. Derived from the process name and uid; the first file found is reported.
+  char cmdline[256] = {};
+  if (FILE* f = fopen("/proc/self/cmdline", "rb")) {
+    (void)!fread(cmdline, 1, sizeof(cmdline) - 1, f);
+    fclose(f);
+  }
+  std::string pkg(cmdline);
+  pkg = pkg.substr(0, pkg.find(':'));
+  const std::string user = std::to_string(getuid() / 100000);
+  std::vector<std::string> candidates;
+  if (!pkg.empty()) {
+    for (const char* sub : {"cache", "code_cache"}) {
+      candidates.push_back("/data/user_de/" + user + "/" + pkg + "/" + sub + "/com.android.opengl.shaders_cache");
+    }
+  }
+  if (!cacheDir.empty()) candidates.push_back(cacheDir + "/com.android.opengl.shaders_cache");
+  for (const std::string& path : candidates) {
+    struct stat st {};
+    if (stat(path.c_str(), &st) == 0) {
+      IWN_GL_LOG_INFO("shader cache: Android's EGL cache (%s, %lld bytes); EGL_ANDROID_blob_cache is reserved by the "
+                      "platform (advertised=%d settable=%d)",
+                      path.c_str(), static_cast<long long>(st.st_size), advertised ? 1 : 0, settable ? 1 : 0);
+      return;
+    }
+  }
+  IWN_GL_LOG_INFO("shader cache: Android's EGL cache (not written yet: first launch); EGL_ANDROID_blob_cache is "
+                  "reserved by the platform (advertised=%d settable=%d)",
+                  advertised ? 1 : 0, settable ? 1 : 0);
+#else
+  IWN_GL_LOG_INFO("shader cache: none (EGL_ANDROID_blob_cache advertised=%d settable=%d, dir='%s')", advertised ? 1 : 0,
+                  settable ? 1 : 0, cacheDir.c_str());
+#endif
+}
+
 }  // namespace
 
 EglEnvironment& EglEnvironment::Get() {
@@ -102,18 +146,32 @@ bool EglEnvironment::Init(const EglInitOptions& options) {
   surfaceless_ = HasExt(exts, "EGL_KHR_surfaceless_context");
   robust_available_ = HasExt(exts, "EGL_EXT_create_context_robustness");
 
-  // GL-22: the blob cache must be installed before the first context is created on the display.
+  // GL-22: the blob cache must be installed before the first context is created on the display. On Android, the
+  // platform's EGL loader keeps EGL_ANDROID_blob_cache for its own per-app shader cache: it leaves the extension out
+  // of the string apps see and eglGetProcAddress("eglSetBlobCacheFuncsANDROID") returns null (measured on Quest 3,
+  // Horizon OS / Android 14). That cache (ActivityThread sets it up for every app process) then persists the
+  // driver's compiled shaders across launches. Elsewhere (Mesa hosts) the runtime installs its own.
   const bool blobExt = HasExt(exts, "EGL_ANDROID_blob_cache");
-  IWN_GL_LOG_INFO("blob cache: dir='%s' EGL_ANDROID_blob_cache=%d", options.shaderCacheDir.c_str(), blobExt ? 1 : 0);
-  if (!options.shaderCacheDir.empty() && blobExt) {
-    auto setFuncs = reinterpret_cast<SetBlobCacheFuncsFn>(eglGetProcAddress("eglSetBlobCacheFuncsANDROID"));
-    if (setFuncs) {
-      g_blob_cache = std::make_unique<BlobCache>(options.shaderCacheDir + "/iwn-gl-blobs.bin",
-                                                 options.shaderCacheKey, options.shaderCacheMaxBytes);
-      g_blob_cache->Load();
-      BlobCache::SetGlobal(g_blob_cache.get());
-      setFuncs(display_, BlobSet, BlobGet);
+  auto setFuncs = reinterpret_cast<SetBlobCacheFuncsFn>(eglGetProcAddress("eglSetBlobCacheFuncsANDROID"));
+  if (!options.shaderCacheDir.empty() && setFuncs) {
+    g_blob_cache = std::make_unique<BlobCache>(options.shaderCacheDir + "/iwn-gl-blobs.bin", options.shaderCacheKey,
+                                               options.shaderCacheMaxBytes);
+    g_blob_cache->Load();
+    BlobCache::SetGlobal(g_blob_cache.get());
+    (void)eglGetError();
+    setFuncs(display_, BlobSet, BlobGet);
+    if (const EGLint err = eglGetError(); err != EGL_SUCCESS) {  // e.g. funcs already set on this display
+      IWN_GL_LOG_WARN("shader cache: eglSetBlobCacheFuncsANDROID failed (0x%x)", err);
+      BlobCache::SetGlobal(nullptr);
+      g_blob_cache.reset();
     }
+  }
+  if (g_blob_cache) {
+    IWN_GL_LOG_INFO("shader cache: runtime blob cache %s/iwn-gl-blobs.bin (%zu entries, %llu bytes)",
+                    options.shaderCacheDir.c_str(), g_blob_cache->entries(),
+                    static_cast<unsigned long long>(g_blob_cache->bytes()));
+  } else {
+    LogPlatformShaderCache(blobExt, setFuncs != nullptr, options.shaderCacheDir);
   }
 
   eglBindAPI(EGL_OPENGL_ES_API);

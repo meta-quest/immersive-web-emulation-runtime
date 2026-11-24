@@ -21,6 +21,9 @@
 #ifndef IWN_RUNTIME_VERSION
 #define IWN_RUNTIME_VERSION "0.0.0"
 #endif
+#ifndef IWN_BUILD_ID
+#define IWN_BUILD_ID "unknown"
+#endif
 
 namespace iwn::workers {
 namespace {
@@ -76,6 +79,8 @@ Json workers_json(bool with_log) {
   cache.set("hits", c.hits);
   cache.set("misses", c.misses);
   cache.set("rejected", c.rejected);
+  cache.set("diskHits", c.disk_hits);
+  cache.set("diskWrites", c.disk_writes);
   cache.set("entries", static_cast<uint64_t>(c.entries));
   cache.set("bytes", static_cast<uint64_t>(c.bytes));
   j.set("codeCache", cache);
@@ -114,6 +119,17 @@ void register_page(v8::Isolate* isolate, v8::Local<v8::Context> ctx, v8::Local<v
   for (const auto& w : warnings) log(LogLevel::kWarn, "config: %s", w.c_str());
   worker_limiter().set_max(env->config.max_workers);
   ScriptCache::shared().set_limit(env->config.code_cache_bytes);
+  // CC-5: the disk tier, so a warm launch consumes the worker preludes' and worker scripts' code cache too (the
+  // memory tier alone only helps the second and later workers of one process). Off with the page's code cache.
+  if (rc.code_cache_enabled && env->config.code_cache_bytes > 0 && !ScriptCache::shared().has_disk() &&
+      !rt->cache_dir().empty()) {
+    std::string stamp = "versionCode=" + std::to_string(rc.version_code) + ";build=" + IWN_BUILD_ID +
+                        ";v8=" + v8::V8::GetVersion();
+    ScriptCache::shared().set_disk(
+        std::make_shared<CodeCacheStore>(rt->cache_dir() + "/iwn-worker-code-cache", stamp,
+                                         env->config.code_cache_bytes),
+        v8::ScriptCompiler::CachedDataVersionTag());
+  }
   int log_capacity = env->config.message_log < 0 ? (env->debuggable ? 256 : 0) : env->config.message_log;
   PortHub::shared().set_log_capacity(static_cast<size_t>(log_capacity));
   double join_ms = env->config.join_timeout_ms;
